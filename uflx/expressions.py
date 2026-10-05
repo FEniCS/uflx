@@ -236,6 +236,14 @@ class RealScalar(AbstractScalar):
         """Negation."""
         return RealScalar(-self.value)
 
+    def simplified_sum(self, other: AbstractExpression) -> AbstractExpression | None:
+        """Return a single expression representing the simplified sum.
+
+        This function should return None if no simplification can be made.
+        """
+        if self.value == 0:
+            return other
+
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
