@@ -9,13 +9,15 @@ from uflx import (
     coordinate_element,
     dx,
     function_space,
+    grad,
     inner,
 )
 from uflx.algorithms import simplify
-from uflx.expressions import MatrixProduct, Product
+from uflx.expressions import AbstractExpression, Integer, MatrixProduct, Product
 from uflx.geometry import Jacobian, JacobianInverse, JacobianInverseTranspose, JacobianTranspose
 from uflx.integrals import Integral
 from uflx.operators import Inner
+from uflx.tensors import Vector, zero
 
 
 def test_add_and_subtract_integer(lagrange_element):
@@ -213,3 +215,34 @@ def test_jacobian_and_inverse_form(lagrange_element):
     else:
         assert isinstance(simpler_form.integrand.first, TestFunction)
         assert isinstance(simpler_form.integrand.second, TrialFunction)
+
+
+def test_zero_tensor_products(lagrange_element):
+    """Test that zero tensors propagate through matrix and inner products."""
+    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    K = JacobianInverseTranspose(domain)
+    expression = inner(K @ zero((2,)), K @ zero((2,)))
+
+    simplified = simplify(expression)
+
+    assert not expression.is_zero
+    assert isinstance(simplified, AbstractExpression)
+    assert simplified.is_zero
+
+
+def test_zero_tensor_sum(lagrange_element):
+    """Test that a zero tensor term is removed from a sum."""
+    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    K = JacobianInverseTranspose(domain)
+    e = Vector([Integer(1), Integer(0)])
+
+    assert isinstance(simplify(K @ e + zero((2,))), MatrixProduct)
+
+
+def test_zero_keeps_arguments(lagrange_element):
+    """Test that a zero factor does not remove an argument from a form."""
+    element = lagrange_element("triangle", 2)
+    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    v = TestFunction(function_space(domain, element))
+
+    assert isinstance(simplify(inner(grad(v), zero((2,)))), Inner)

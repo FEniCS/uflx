@@ -7,7 +7,12 @@
 
 from uflx.complex import conj
 from uflx.domains import AbstractCoordinateElement, AbstractDomain
-from uflx.expressions import AbstractExpression, BinaryOperator, UnaryOperator
+from uflx.expressions import (
+    AbstractExpression,
+    BinaryOperator,
+    UnaryOperator,
+    is_zero_product,
+)
 from uflx.functions import AbstractFunction
 from uflx.geometry import JacobianInverseTranspose
 from uflx.graphs import GraphNode, as_graph
@@ -29,6 +34,12 @@ class Inner(BinaryOperator):
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise ValueError("Cannot get a component of a scalar expression")
+
+    def simplify(self) -> GraphNode:
+        """Simplify this expression."""
+        if is_zero_product([self.first, self.second]):
+            return zero(())
+        return self
 
 
 class Grad(UnaryOperator):
