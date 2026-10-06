@@ -24,6 +24,11 @@ from uflx.tensors import zero
 class AbstractFunction(AbstractExpression):
     """Abstract base class for a function."""
 
+    @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return self.function_space.real_valued
+
     @abstractmethod
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""

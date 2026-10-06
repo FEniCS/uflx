@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from uflx import Coefficient, coordinate_element, function_space
 from uflx.complex import take_imaginary_part, take_real_part
 from uflx.expressions import ComplexScalar, Integer, to_scalar
 
@@ -77,3 +78,17 @@ def test_complex_scalar_neg():
 
     assert np.isclose((-z).re.as_float(), -3)
     assert np.isclose((-z).im.as_float(), 2)
+
+
+def test_is_real_valued(lagrange_element):
+    """Test which expressions are known to be real-valued."""
+    element = lagrange_element("triangle", 2)
+    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    f = Coefficient(function_space(domain, element))
+    z = ComplexScalar(Integer(1), Integer(2))
+
+    assert f.is_real_valued
+    assert (2 * f + 1).is_real_valued
+    assert not z.is_real_valued
+    assert not (z * f).is_real_valued
+    assert abs(z * f).is_real_valued
