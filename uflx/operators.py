@@ -5,6 +5,10 @@
 # SPDX-License-Identifier:    MIT
 """Operators."""
 
+from __future__ import annotations
+
+from collections.abc import Sequence
+
 from uflx.complex import conj
 from uflx.domains import AbstractCoordinateElement, AbstractDomain
 from uflx.expressions import AbstractExpression, BinaryOperator, UnaryOperator
@@ -29,6 +33,23 @@ class Inner(BinaryOperator):
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise ValueError("Cannot get a component of a scalar expression")
+
+    @property
+    def is_commutative(self) -> bool:
+        """Whether the operands of this expression can be reordered.
+
+        The second operand is conjugated, so only real-valued operands commute.
+        """
+        return self.first.is_real_valued and self.second.is_real_valued
+
+    @property
+    def operands(self) -> tuple[AbstractExpression, ...]:
+        """The operands."""
+        return self.first, self.second
+
+    def with_operands(self, operands: Sequence[AbstractExpression]) -> Inner:
+        """Create the same expression with different operands."""
+        return Inner(*operands)
 
 
 class Grad(UnaryOperator):
