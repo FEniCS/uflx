@@ -1,6 +1,7 @@
 """Simplifying expressions."""
 
 from collections.abc import Sequence
+from hashlib import blake2b
 from itertools import pairwise
 from typing import Any, Protocol, runtime_checkable
 
@@ -93,26 +94,48 @@ class Commutative(Protocol):
         """Create the same expression with different operands."""
 
 
-def sort_key(value: Any) -> tuple:
-    """A structural key that orders expressions in the same way in every run.
+def digest(*parts: str | bytes) -> bytes:
+    """Digest a sequence of parts, each prefixed by its length so the encoding is unambiguous."""
+    h = blake2b(digest_size=16)
+    for part in parts:
+        data = part.encode() if isinstance(part, str) else part
+        h.update(len(data).to_bytes(8, "little"))
+        h.update(data)
+    return h.digest()
 
-    The key does not use hash, as Python randomises the hashes of strings.
+
+class Fingerprints:
+    """Digests of the structure of values that are the same in every run.
+
+    Python randomises the hashes of strings, so hash cannot order expressions
+    reproducibly. The digest of a node combines its type with the digests of its
+    initialisation arguments, in order. Digests of nodes are stored, so shared
+    subexpressions are only visited once.
     """
-    if isinstance(value, tuple | list):
-        return ("tuple", tuple(sort_key(i) for i in value))
-    if isinstance(value, GraphNode):
-        return (type(value).__name__, sort_key(value.init_args))
-    return (type(value).__name__, repr(value))
+
+    def __init__(self):
+        """Initialise."""
+        self._nodes: dict[GraphNode, bytes] = {}
+
+    def __call__(self, value: Any) -> bytes:
+        """Get the digest of a value."""
+        if isinstance(value, GraphNode):
+            if value not in self._nodes:
+                self._nodes[value] = digest(type(value).__name__, self(value.init_args))
+            return self._nodes[value]
+        if isinstance(value, tuple | list):
+            return digest("tuple", *(self(i) for i in value))
+        return digest(type(value).__name__, repr(value))
 
 
-def sort_operands(node: GraphNode) -> GraphNode:
+def sort_operands(node: GraphNode, fingerprints: Fingerprints) -> GraphNode:
     """Sort the operands of a commutative expression into a canonical order.
 
     Expressions that differ only in the order of these operands are then equal.
     """
     if not (isinstance(node, Commutative) and node.is_commutative):
         return node
-    operands = sorted(node.operands, key=sort_key)
+    operands = sorted(node.operands, key=fingerprints)
     if operands == list(node.operands):
         return node
     return node.with_operands(operands)
@@ -124,6 +147,7 @@ def simplify(expression: GraphNode) -> GraphNode:
     assert graph.is_dag()
 
     node_map: dict[GraphNode, GraphNode] = {}
+    fingerprints = Fingerprints()
     for node in graph.ordered_nodes():
         new_node = node
         if isinstance(node, Simplifiable):
@@ -132,7 +156,7 @@ def simplify(expression: GraphNode) -> GraphNode:
             new_node = new_node.simplify()
         elif any(a in node_map for a in node.successors):
             new_node = reconstruct_node(node, node_map)
-        new_node = sort_operands(new_node)
+        new_node = sort_operands(new_node, fingerprints)
         if new_node is not node:
             node_map[node] = new_node
 
