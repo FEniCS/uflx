@@ -51,6 +51,9 @@ def take_imaginary_part(
 def conj(value: AbstractExpression) -> AbstractExpression:
     """Get the complex conjugate."""
     if isinstance(value, ComplexValued):
+        # A real-valued node is its own real part.
+        if value.re is value:
+            return value
         return value.re - value.im
     else:
         return Conj(value)

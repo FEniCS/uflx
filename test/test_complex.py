@@ -2,7 +2,8 @@
 
 import numpy as np
 
-from uflx.complex import take_imaginary_part, take_real_part
+from uflx import TestFunction, coordinate_element, function_space
+from uflx.complex import conj, take_imaginary_part, take_real_part
 from uflx.expressions import ComplexScalar, Integer, to_scalar
 
 
@@ -77,3 +78,12 @@ def test_complex_scalar_neg():
 
     assert np.isclose((-z).re.as_float(), -3)
     assert np.isclose((-z).im.as_float(), 2)
+
+
+def test_conj_real_function(lagrange_element):
+    """Test that the conjugate of a real-valued function is the function."""
+    element = lagrange_element("triangle", 2)
+    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    v = TestFunction(function_space(domain, element))
+
+    assert conj(v) is v
