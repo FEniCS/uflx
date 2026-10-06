@@ -13,7 +13,7 @@ from uflx import (
     inner,
 )
 from uflx.algorithms import simplify
-from uflx.expressions import AbstractExpression, Integer, MatrixProduct, Product
+from uflx.expressions import AbstractExpression, ComplexScalar, Integer, MatrixProduct, Product
 from uflx.geometry import Jacobian, JacobianInverse, JacobianInverseTranspose, JacobianTranspose
 from uflx.integrals import Integral
 from uflx.operators import Inner
@@ -246,3 +246,29 @@ def test_zero_keeps_arguments(lagrange_element):
     v = TestFunction(function_space(domain, element))
 
     assert isinstance(simplify(inner(grad(v), zero((2,)))), Inner)
+
+
+def test_commutative_operands_are_sorted(lagrange_element):
+    """Test that sums and products equal up to the order of operands simplify equally."""
+    element = lagrange_element("triangle", 2)
+    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    space = function_space(domain, element)
+    u = TrialFunction(space)
+    f = Coefficient(space)
+    g = Coefficient(space)
+
+    assert u * f + g != g + f * u
+    assert simplify(u * f + g) == simplify(g + f * u)
+
+
+def test_inner_product_operands_are_sorted_if_real(lagrange_element):
+    """Test that inner products are only reordered if their operands are real-valued."""
+    element = lagrange_element("triangle", 2)
+    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    space = function_space(domain, element)
+    u = TrialFunction(space)
+    f = Coefficient(space)
+    z = ComplexScalar(Integer(1), Integer(2)) * f
+
+    assert simplify(Inner(u, f)) == simplify(Inner(f, u))
+    assert simplify(Inner(u, z)) != simplify(Inner(z, u))

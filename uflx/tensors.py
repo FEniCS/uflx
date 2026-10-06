@@ -285,6 +285,11 @@ class IdentityMatrix(AbstractExpression):
         self.size = size
 
     @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
+
+    @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return (self.size, self.size)

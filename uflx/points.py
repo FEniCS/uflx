@@ -44,6 +44,11 @@ class AbstractPoint(AbstractExpression):
     """Base class for a single point in R^d."""
 
     @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
+
+    @property
     @abstractmethod
     def dim(self) -> int:
         """The dimension of the point."""
