@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Hashable, Iterable
 from enum import Enum
 from typing import Any, Protocol, cast, runtime_checkable
@@ -119,14 +120,19 @@ def generate_graph(node: GraphNode) -> Graph:
     """Generate the graph that represents the construction of a node."""
     graph = Graph()
 
-    added_nodes = {node}
+    # Breadth-first, expanding each node once: a node reachable along paths of different
+    # lengths would otherwise be expanded once per length.
     graph.add_root_node(node)
-    while len(added_nodes) > 0:
-        for n in added_nodes:
-            for successor in n.successors:
-                graph.add_node(successor)
-                graph.add_edge(n, successor)
-        added_nodes = set().union(*[n.successors for n in added_nodes])
+    expanded = {node}
+    queue = deque([node])
+    while queue:
+        n = queue.popleft()
+        for successor in n.successors:
+            graph.add_node(successor)
+            graph.add_edge(n, successor)
+            if successor not in expanded:
+                expanded.add(successor)
+                queue.append(successor)
 
     return graph
 

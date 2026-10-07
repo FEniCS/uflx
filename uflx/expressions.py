@@ -10,10 +10,12 @@ An expression is any algebraic expression that could be used as an integrand.
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+import math
+from abc import ABCMeta, abstractmethod
 from collections.abc import Iterable, Sequence
 from math import gcd, prod
 from typing import Any, cast
+from weakref import WeakValueDictionary
 
 from uflx.algorithms.simplify import (
     simplify_matrix_product_items,
@@ -22,9 +24,69 @@ from uflx.algorithms.simplify import (
 )
 from uflx.graphs.graphs import GraphNode
 
+# Interned expressions, keyed on (class, interning key of init_args). Values are held weakly, so
+# the table never keeps an expression alive.
+_interned: WeakValueDictionary[tuple[Any, ...], AbstractExpression] = WeakValueDictionary()
 
-class AbstractExpression(ABC):
-    """Abstract base class for expressions."""
+
+def _interning_key(arg: Any) -> Any:
+    """Convert an init arg into a hashable key.
+
+    Expressions are keyed on identity: their children are already interned, so structurally
+    equal children are the same object. Containers are converted recursively, and any other
+    value is keyed on its own value. Numbers are also keyed on their type, and floats on their
+    sign, so that values which compare equal but generate different code (1 and 1.0, 0.0 and
+    -0.0) are not merged.
+    """
+    if isinstance(arg, AbstractExpression):
+        return (AbstractExpression, id(arg))
+    if isinstance(arg, float):
+        return (float, arg, math.copysign(1.0, arg))
+    if isinstance(arg, complex):
+        return (complex, _interning_key(arg.real), _interning_key(arg.imag))
+    if isinstance(arg, int):
+        return (type(arg), arg)
+    if isinstance(arg, (tuple, list)):
+        return (type(arg), tuple(_interning_key(i) for i in arg))
+    if isinstance(arg, dict):
+        return (dict, frozenset((_interning_key(k), _interning_key(v)) for k, v in arg.items()))
+    return arg
+
+
+class _InterningMeta(ABCMeta):
+    """Metaclass that hash-conses expressions.
+
+    Constructing an expression whose class and init args match a live expression returns that
+    expression instead, so structurally equal expressions are the same object. The key is taken
+    from init_args after __init__, so constructors that normalise their input (eg Rational)
+    intern on the normalised value. Expressions must therefore not be mutated after
+    construction.
+    """
+
+    def __call__(cls, *args, **kwargs):
+        """Construct an expression, or return the existing equal expression."""
+        node = super().__call__(*args, **kwargs)
+        try:
+            key = (cls, _interning_key(node.init_args))
+            existing = _interned.get(key)
+        except TypeError:
+            # An init arg is unhashable: leave this expression un-interned.
+            return node
+        if existing is not None:
+            return existing
+        _interned[key] = node
+        node.__dict__["_uflx_interned"] = True
+        # Hash eagerly: the children's hashes are already cached, so this costs O(len(init_args))
+        # and never recurses into the expression.
+        hash(node)
+        return node
+
+
+class AbstractExpression(metaclass=_InterningMeta):
+    """Abstract base class for expressions.
+
+    Expressions are hash-consed (see _InterningMeta) and immutable.
+    """
 
     @property
     @abstractmethod
@@ -62,11 +124,30 @@ class AbstractExpression(ABC):
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
-        return isinstance(other, self.__class__) and self.init_args == other.init_args
+        if self is other:
+            return True
+        if not isinstance(other, self.__class__):
+            return False
+        if (
+            type(other) is type(self)
+            and self.__dict__.get("_uflx_interned", False)
+            and other.__dict__.get("_uflx_interned", False)
+        ):
+            # Two distinct interned expressions of the same class differ structurally.
+            return False
+        return self.init_args == other.init_args
 
     def __hash__(self) -> int:
-        """Hash."""
-        return hash((f"uflx.{self.__class__.__name__}", *self.init_args))
+        """Hash.
+
+        Computed once from the (cached) hashes of the init args and cached on the expression.
+        """
+        try:
+            return self.__dict__["_uflx_hash"]
+        except KeyError:
+            h = hash((f"uflx.{self.__class__.__name__}", *self.init_args))
+            self.__dict__["_uflx_hash"] = h
+            return h
 
     def __matmul__(self, other: Any) -> AbstractExpression:
         """Matrix multiply."""
