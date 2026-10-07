@@ -9,10 +9,10 @@ def handles(*types: type) -> Callable[[Callable[..., str]], Callable[..., str]]:
 
     Note:
         This is used instead of functools.singledispatchmethod, which adds several Python
-        frames to every call (and, before Python 3.13, builds a new bound function on every
-        attribute access). Code generation recurses once per node, so those frames exhaust the
-        recursion limit on deep expressions. Generators call the handler directly from their
-        operand method (eg CGenerator.emit), which keeps the recursion at two frames per node.
+        frames to every call and, before Python 3.13, builds a new bound function on every
+        attribute access. Handlers run once or twice per node, so that overhead adds up, and a
+        generator that recurses through expressions would also hit the recursion limit sooner.
+        CGenerator does not recurse through expressions at all (see CGenerator._evaluate).
     """
 
     def mark(method: Callable[..., str]) -> Callable[..., str]:

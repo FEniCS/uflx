@@ -91,6 +91,28 @@ def test_cse_code_is_linear_in_the_number_of_nodes():
     assert len(code) + sum(len(d) for d in declarations) < 100 * n
 
 
+@pytest.mark.parametrize("cse", [True, False])
+def test_deep_expressions_do_not_hit_the_recursion_limit(cse):
+    """Expressions are generated without recursion, so their depth is not limited by Python.
+
+    The chain is 6000 nodes deep, well beyond the default recursion limit of 1000.
+    """
+    a, b = ArrayEntry("w", (0,)), ArrayEntry("w", (1,))
+    chain = a
+    for _ in range(3000):
+        chain = (chain + a) * b  # alternating Sum and Product: no flattening
+    declarations, code = CGenerator(cse=cse).statement(chain)
+    assert declarations == []
+    assert code.count("w[0]") == 3001
+
+
+def test_deep_shared_expression_with_cse_does_not_hit_the_recursion_limit():
+    """A deep expression with sharing is bound to temporaries without recursion."""
+    n = 2000
+    declarations, _ = CGenerator(cse=True).statement(_build(ArrayEntry("w", (0,)), n))
+    assert 0 < len(declarations) <= 4 * n
+
+
 def test_generator_does_not_patch_expression_classes():
     """C generation lives on the generator, not as methods added to UFLx's classes."""
     assert not hasattr(Sum, "generate_c")
