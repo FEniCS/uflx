@@ -5,10 +5,6 @@ from typing import Any
 from uflx.expressions import AbstractExpression
 from uflx.graphs import GraphNode
 
-from uflx_codegeneration import symbols
-from uflx_codegeneration.c import GenerateC
-from uflx_codegeneration.utils import indented
-
 
 def flatten_component(
     indices: tuple[int | str, ...],
@@ -53,15 +49,6 @@ class Loop:
         """The arguments used to initialise this object."""
         return self.variable, self.start, self.end, self.body
 
-    def generate_c(self) -> str:
-        """Generate code for this object."""
-        assert isinstance(self.body, GenerateC)
-        return (
-            f"for (int {self.variable}={self.start}; {self.variable}!={self.end}; "
-            f"++{self.variable})\n"
-            "{\n" + indented(self.body.generate_c(), 2) + "\n}"
-        )
-
 
 class AddToLocalTensor:
     """Add to an entry in the local tensor for the current cell."""
@@ -91,17 +78,6 @@ class AddToLocalTensor:
         """Representation."""
         return f"AddToLocalTensor({self.component})"
 
-    def generate_c(self) -> str:
-        """Generate code for this object."""
-        assert isinstance(self.body, GenerateC)
-        return (
-            f"{symbols.local_tensor}["
-            + flatten_component(self.component, self.shape)
-            + "] += "
-            + self.body.generate_c()
-            + ";"
-        )
-
 
 class ArrayEntry(AbstractExpression):
     """A single item in an array."""
@@ -129,10 +105,6 @@ class ArrayEntry(AbstractExpression):
     def __repr__(self):
         """Representation."""
         return f"{self.array}[{','.join(str(i) for i in self.index)}]"
-
-    def generate_c(self) -> str:
-        """Generate code for this object."""
-        return f"{self.array}[" + "][".join(f"{i}" for i in self.index) + "]"
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -166,14 +138,6 @@ class FunctionCall(AbstractExpression):
         """Representation."""
         return f"FunctionCall({self.function}, (" + ", ".join(f"{i!r}" for i in self.inputs) + "))"
 
-    def generate_c(self) -> str:
-        """Generate code for this object."""
-        return (
-            f"{self.function}("
-            + ", ".join(i.generate_c() if isinstance(i, GenerateC) else f"{i}" for i in self.inputs)
-            + ")"
-        )
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise ValueError("Cannot get a component of a scalar expression")
@@ -205,10 +169,6 @@ class Variable(AbstractExpression):
     def __repr__(self):
         """Representation."""
         return f"Variable({self._dtype}, {self._variable})"
-
-    def generate_c(self) -> str:
-        """Generate code for this object."""
-        return self._variable
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""

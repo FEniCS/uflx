@@ -17,7 +17,7 @@ from uflx_codegeneration.algorithms import (
     insert_geometry_functions,
     tabulate_finite_elements,
 )
-from uflx_codegeneration.c import GenerateC, tables_to_c
+from uflx_codegeneration.c import CGenerator, tables_to_c
 from uflx_codegeneration.quadrature import (
     QuadratureRule,
     integrals_to_quadrature,
@@ -30,12 +30,14 @@ from uflx_codegeneration.utils import indented
 def generate(
     form: GraphNode,
     language: str = "C",
+    cse: bool = True,
 ) -> tuple[str, str]:
     """Generate code.
 
     Args:
         form: The form or other object to be assembled
         language: The programming language to use
+        cse: Evaluate each common subexpression of a statement once, into a temporary
 
     Returns:
         Code
@@ -69,16 +71,22 @@ def generate(
     fe_tables, form = tabulate_finite_elements(form)
     tables = {**q_tables, **fe_tables}
 
-    code = ""
+    # Tabulate the finite elements used by each geometry function
+    lowered_geometry_functions = {}
     for fname, (dtype, inputs, function) in geometry_functions.items():
+        ftables, function = tabulate_finite_elements(function)
+        lowered_geometry_functions[fname] = (dtype, inputs, ftables, function)
+    generator = CGenerator(cse)
+    code = ""
+    for fname, (dtype, inputs, ftables, function) in lowered_geometry_functions.items():
         code += f"{dtype} {fname}("
         code += ", ".join(f"{i._dtype} {i._variable}" for i in inputs)
         code += ") {\n"
-        ftables, function = tabulate_finite_elements(function)
         code += indented(tables_to_c(ftables), 2)
         code += "\n\n"
-        assert isinstance(function, GenerateC)
-        code += f"  return {function.generate_c()};\n"
+        declarations, value = generator.statement(function)
+        code += "".join(f"  {d}\n" for d in declarations)
+        code += f"  return {value};\n"
         code += "}\n\n"
     code += (
         "void tabulate_tensor_f64(\n"
@@ -94,8 +102,7 @@ def generate(
 
     code += indented(tables_to_c(tables), 2)
     code += "\n\n"
-    assert isinstance(form, GenerateC)
-    code += indented(form.generate_c(), 2)
+    code += indented(generator.code(form), 2)
     code += "\n}\n"
 
     signature = (
