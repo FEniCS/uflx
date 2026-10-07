@@ -43,3 +43,22 @@ def test_compute_inverse_not_implemented_for_4x4():
     matrix = _to_matrix(np.eye(4))
     with pytest.raises(NotImplementedError):
         matrix.compute_inverse()
+
+
+@pytest.mark.parametrize("shape", [(2, 1), (3, 1), (3, 2), (1, 2), (1, 3), (2, 3)])
+def test_compute_determinant_non_square(shape):
+    """For a non-square matrix, compute_determinant() is the pseudo-determinant."""
+    rng = np.random.default_rng(2)
+    values = rng.uniform(0.5, 2.0, shape)
+    gram = values.T @ values if shape[0] > shape[1] else values @ values.T
+
+    det = _to_matrix(values).compute_determinant().as_float()
+
+    np.testing.assert_allclose(det, np.sqrt(np.linalg.det(gram)), rtol=1e-12)
+
+
+def test_compute_determinant_interval_in_2d():
+    """The Jacobian (3, 4)^T of an interval in 2D scales lengths by 5."""
+    det = _to_matrix(np.array([[3.0], [4.0]])).compute_determinant().as_float()
+
+    assert det == pytest.approx(5.0, rel=1e-14)
