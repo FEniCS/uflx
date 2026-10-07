@@ -18,6 +18,7 @@ from uflx_codegeneration.algorithms import (
     tabulate_finite_elements,
 )
 from uflx_codegeneration.c import CGenerator, tables_to_c
+from uflx_codegeneration.mlir import MLIRGenerator
 from uflx_codegeneration.quadrature import (
     QuadratureRule,
     integrals_to_quadrature,
@@ -36,14 +37,16 @@ def generate(
 
     Args:
         form: The form or other object to be assembled
-        language: The programming language to use
-        cse: Evaluate each common subexpression of a statement once, into a temporary
+        language: The language to generate: "C", or "MLIR" (func, scf, arith, math and memref
+            dialects)
+        cse: Evaluate each common subexpression of a statement once, into a temporary. This
+            only affects C: in MLIR's SSA form every value is computed once regardless.
 
     Returns:
-        Code
+        The code, and the signature of the kernel (a C declaration, or an MLIR function type)
     """
-    if language != "C":
-        raise NotImplementedError("Only generation of C is supported for now")
+    if language not in ("C", "MLIR"):
+        raise NotImplementedError(f"Generation of {language} is not supported")
 
     # TODO: get this from somewhere
     rules: dict[AbstractMeasure, QuadratureRule] = {}
@@ -76,6 +79,18 @@ def generate(
     for fname, (dtype, inputs, function) in geometry_functions.items():
         ftables, function = tabulate_finite_elements(function)
         lowered_geometry_functions[fname] = (dtype, inputs, ftables, function)
+
+    if language == "MLIR":
+        all_tables = {**tables}
+        for _, _, ftables, _ in lowered_geometry_functions.values():
+            all_tables.update(ftables)
+        mlir = MLIRGenerator(all_tables).module(lowered_geometry_functions, tables, form)
+        mlir_signature = (
+            "(memref<?xf64>, memref<?xf64>, memref<?xf64>, memref<?xf64>, memref<?xi32>, "
+            "memref<?xi8>, !llvm.ptr) -> ()"
+        )
+        return mlir, mlir_signature
+
     generator = CGenerator(cse)
     code = ""
     for fname, (dtype, inputs, ftables, function) in lowered_geometry_functions.items():
