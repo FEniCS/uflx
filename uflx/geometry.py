@@ -9,7 +9,7 @@ from uflx.expressions import AbstractExpression, expression_sum
 from uflx.function_spaces import function_space
 from uflx.graphs import GraphNode, as_graph
 from uflx.points import AbstractPoint, Point
-from uflx.tensors import IdentityMatrix, Matrix
+from uflx.tensors import Identity, Matrix
 
 
 @runtime_checkable
@@ -287,7 +287,7 @@ class Jacobian(AbstractExpression):
             and self.domain == other.domain
             and self.point == other.point
         ):
-            return IdentityMatrix(self.value_shape[0])
+            return Identity(self.value_shape[0])
 
 
 class JacobianDeterminant(AbstractExpression):
@@ -373,7 +373,7 @@ class JacobianInverse(AbstractExpression):
             and self.domain == other.domain
             and self.point == other.point
         ):
-            return IdentityMatrix(self.value_shape[0])
+            return Identity(self.value_shape[0])
 
 
 class JacobianTranspose(AbstractExpression):
@@ -424,7 +424,7 @@ class JacobianTranspose(AbstractExpression):
             and self.domain == other.domain
             and self.point == other.point
         ):
-            return IdentityMatrix(self.value_shape[0])
+            return Identity(self.value_shape[0])
 
 
 class JacobianInverseTranspose(AbstractExpression):
@@ -475,7 +475,7 @@ class JacobianInverseTranspose(AbstractExpression):
             and self.domain == other.domain
             and self.point == other.point
         ):
-            return IdentityMatrix(self.value_shape[0])
+            return Identity(self.value_shape[0])
 
 
 class CoordinateDofComponent(AbstractExpression):
