@@ -168,11 +168,7 @@ def test_sigma_isotropic_elasticity_matches_numpy():
 
 
 def test_reference_grad_expand_geometry_vector_shape_regression(lagrange_element):
-    """ReferenceGrad.expand_geometry() must match shapes for a vector-valued argument.
-
-    Previously it silently claimed (*value_shape, domain_size) but actually
-    built a plain (domain_size,) Vector of non-scalar entries.
-    """
+    """ReferenceGrad.expand_geometry() must match shapes for a vector-valued argument."""
     domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 1, (2,)))
     point = Point([RealScalar(0.25), RealScalar(0.25)])

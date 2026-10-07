@@ -1,23 +1,11 @@
 """Test that the full isotropic linear-elasticity weak form composes end to end.
 
-Everything in uflx/operators.py and uflx/tensors.py added for linear elasticity
-(sym/skew/tr/dev/transpose/Identity) has so far only been checked in isolation,
-against literal numpy matrices (test_tensor_ops.py) or against a single detached
-ReferenceGrad call. This module instead builds the real bilinear form
+This module instead builds the real bilinear form
 
     a(u, v) = inner(sigma(u), sym(grad(v))) * dx
 
-out of real vector-valued TrialFunction/TestFunction arguments and runs it
-through the same algorithms the code-generation pipeline applies before
-handing a form to quadrature lowering (see
-external/codegeneration/uflx_codegeneration/generate.py): pull_back_to_reference,
-apply_push_forwards, simplify. No codegen, no basix, and no numeric evaluation
-is involved -- this is a pure-Python, shape- and graph-structure-level check
-that the new tensor-op nodes (Transpose, Tr, and the sym/skew/dev compositions
-built from them) survive that pipeline correctly, in particular that they are
-correctly reconstructed around a pulled-back Grad via the generic
-reconstruct_node mechanism, since neither Transpose nor Tr implements a custom
-PullBackToReference rule of its own.
+with real vector-valued TrialFunction/TestFunction arguments and applies the
+pull_back_to_reference, apply_push_forwards, and simplify algorithms.
 """
 
 import pytest
@@ -60,13 +48,7 @@ def test_elasticity_bilinear_form_composes(lagrange_element, cell, dim):
 
 @pytest.mark.parametrize(("cell", "dim"), [("triangle", 2), ("tetrahedron", 3)])
 def test_elasticity_bilinear_form_pulls_back_to_reference(lagrange_element, cell, dim):
-    """The whole form must pull back to the reference cell and stay well-shaped.
-
-    This is the generic-reconstruction check Gap 1 of the implementation plan
-    called for: sym/tr/Identity are coordinate-free, so pulling grad(u) back to
-    the reference cell should "just work" through reconstruct_node without a
-    bespoke pullback rule for Transpose/Tr -- this test is the proof.
-    """
+    """The whole form must pull back to the reference cell and stay well-shaped."""
     domain = coordinate_element(lagrange_element(cell, 1, (dim,)))
     space = function_space(domain, lagrange_element(cell, 1, (dim,)))
 
