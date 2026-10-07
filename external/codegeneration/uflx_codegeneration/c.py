@@ -1,6 +1,7 @@
 """Generation of C code."""
 
 import re
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -35,30 +36,8 @@ from uflx_codegeneration.utils import indented
 # Code that is a literal, a name or an array entry with simple indices: never worth binding to
 # a temporary.
 _ATOMIC = re.compile(r"-?[\w.]+(\[[^\[\]\x00]*\])*")
-# Placeholder for an operand in the counting pass of common-subexpression elimination.
-_PLACEHOLDER = re.compile(r"\x00(\d+)\x00")
-
-
-class _CSEScope:
-    """State of common-subexpression elimination for one statement.
-
-    In the counting pass, CGenerator.emit records how often each expression is used and returns
-    a placeholder instead of the expression's code, so no code is duplicated even for heavily
-    shared expressions. In the emission pass, the expressions chosen as temporaries are declared
-    on first use and referred to by name afterwards.
-    """
-
-    def __init__(self, counting: bool, temporaries: set[Any]):
-        """Initialise."""
-        self.counting = counting
-        self.temporaries = temporaries
-        self.uses: dict[Any, int] = {}
-        self.code: dict[Any, str] = {}
-        self.ids: dict[Any, int] = {}
-        self.by_id: list[Any] = []
-        self.alias: dict[Any, Any] = {}
-        self.names: dict[Any, str] = {}
-        self.declarations: list[str] = []
+# Stand-in for the code of an operand that has not been generated yet.
+_MISSING = "\x01"
 
 
 class CGenerator(Generator):
@@ -66,6 +45,9 @@ class CGenerator(Generator):
 
     Expressions are generated as nested C expressions. With common-subexpression elimination,
     each statement first binds the subexpressions it uses more than once to temporaries.
+
+    Expressions are generated without recursion (see _evaluate), so the depth of an expression
+    is not limited by Python's recursion limit.
     """
 
     target = "C"
@@ -77,45 +59,65 @@ class CGenerator(Generator):
             cse: Evaluate each common subexpression of a statement once, into a temporary.
         """
         self.cse = cse
-        self._scope: _CSEScope | None = None
+        # While _evaluate runs a handler: gives the code of each operand the handler asks for.
+        self._operand: Callable[[Any], str] | None = None
 
     def emit(self, expression: Any) -> str:
-        """Generate code for an expression that is the operand of another expression.
+        """Generate code for an expression that is the operand of another expression."""
+        if self._operand is not None:
+            return self._operand(expression)
+        return self._expand(expression)
 
-        Inside a statement with common-subexpression elimination, this counts the uses of the
-        expression (counting pass), or returns the name of its temporary (emission pass).
+    def _evaluate(
+        self, root: Any, operand_code: Callable[[Any, dict[Any, tuple[str, list[Any]]]], str]
+    ) -> dict[Any, tuple[str, list[Any]]]:
+        """Run the handler of root and of every expression its code needs, without recursion.
+
+        A handler gets the code of each operand from operand_code. If an operand's handler has
+        not run yet, the handler is run again once it has: handlers only build strings, so
+        running one twice is harmless.
+
+        Args:
+            root: The expression.
+            operand_code: The code to use for an operand, given the results so far.
+
+        Returns:
+            For each expression, its code and the operands its handler asked for, in order.
         """
-        scope = self._scope
-        if scope is None:
-            return self._handler(type(expression))(self, expression)
+        results: dict[Any, tuple[str, list[Any]]] = {}
+        operands: list[Any] = []
+        missing: list[Any] = []
 
-        if scope.counting:
-            if expression in scope.uses:
-                # A node whose code is exactly its operand's code (eg a PointComponent) is an
-                # alias: reusing it also reuses the node it forwards to.
-                node: Any = expression
-                while node is not None:
-                    scope.uses[node] += 1
-                    node = scope.alias.get(node)
-            else:
-                scope.uses[expression] = 1
-                code = self._handler(type(expression))(self, expression)
-                scope.code[expression] = code
-                if match := _PLACEHOLDER.fullmatch(code):
-                    scope.alias[expression] = scope.by_id[int(match[1])]
-                scope.ids[expression] = len(scope.by_id)
-                scope.by_id.append(expression)
-            return f"\x00{scope.ids[expression]}\x00"
+        def operand(expression: Any) -> str:
+            operands.append(expression)
+            if expression in results:
+                return operand_code(expression, results)
+            missing.append(expression)
+            return _MISSING
 
-        if expression in scope.names:
-            return scope.names[expression]
-        code = self._handler(type(expression))(self, expression)
-        if expression in scope.temporaries:
-            name = symbols.global_variable_namer.temporary()
-            scope.declarations.append(f"const double {name} = {code};")
-            scope.names[expression] = name
-            return name
-        return code
+        outer, self._operand = self._operand, operand
+        try:
+            stack = [root]
+            while stack:
+                node = stack[-1]
+                if node in results:
+                    stack.pop()
+                    continue
+                operands.clear()
+                missing.clear()
+                code = self._handler(type(node))(self, node)
+                if missing:
+                    stack.extend(missing)
+                else:
+                    results[node] = (code, list(operands))
+                    stack.pop()
+        finally:
+            self._operand = outer
+        return results
+
+    def _expand(self, expression: Any) -> str:
+        """Generate code for an expression, with every subexpression written out in place."""
+        return self._evaluate(expression, lambda e, results: results[e][0])[expression][0]
 
     def statement(self, expression: Any) -> tuple[list[str], str]:
         """Generate code for the scalar expression of one statement.
@@ -132,26 +134,70 @@ class CGenerator(Generator):
             The declarations of the temporaries, and the code for the expression.
         """
         if not self.cse:
-            return [], self.code(expression)
+            return [], self._expand(expression)
 
-        outer = self._scope
-        try:
-            self._scope = counting = _CSEScope(True, set())
-            self.emit(expression)
-            self._scope = emission = _CSEScope(
-                False,
-                {
-                    node
-                    for node, uses in counting.uses.items()
-                    if uses > 1
-                    and node not in counting.alias
-                    and not _ATOMIC.fullmatch(counting.code[node])
-                },
-            )
-            code = self.emit(expression)
-        finally:
-            self._scope = outer
-        return emission.declarations, code
+        # Counting pass: each expression's code with placeholders for its operands, so no code
+        # is duplicated even for heavily shared expressions.
+        ids: dict[Any, int] = {}
+
+        def placeholder(e: Any, results: Any) -> str:
+            return f"\x00{ids.setdefault(e, len(ids))}\x00"
+
+        counting = self._evaluate(expression, placeholder)
+        # An expression whose code is exactly its operand's code (eg a PointComponent) is an
+        # alias: reusing it also reuses the expression it forwards to.
+        alias = {
+            node: operands[0]
+            for node, (code, operands) in counting.items()
+            if len(operands) == 1 and code == placeholder(operands[0], counting)
+        }
+
+        # Count the uses of each expression, visiting operands in the order the handlers ask
+        # for them and expanding each expression on its first use.
+        uses = {expression: 1}
+        iterators = [iter(counting[expression][1])]
+        while iterators:
+            operand = next(iterators[-1], None)
+            if operand is None:
+                iterators.pop()
+            elif operand in uses:
+                node: Any = operand
+                while node is not None:
+                    uses[node] += 1
+                    node = alias.get(node)
+            else:
+                uses[operand] = 1
+                iterators.append(iter(counting[operand][1]))
+        temporaries = {
+            node
+            for node, n in uses.items()
+            if n > 1 and node not in alias and not _ATOMIC.fullmatch(counting[node][0])
+        }
+
+        # Name the temporaries in the order of their declarations: on first use, after the
+        # temporaries they depend on.
+        names: dict[Any, str] = {}
+        visited = {expression}
+        stack = [(expression, iter(counting[expression][1]))]
+        while stack:
+            node, operands = stack[-1]
+            operand = next(operands, None)
+            if operand is None:
+                stack.pop()
+                if node in temporaries:
+                    names[node] = symbols.global_variable_namer.temporary()
+            elif operand not in visited:
+                visited.add(operand)
+                stack.append((operand, iter(counting[operand][1])))
+
+        # Emission pass: refer to temporaries by name.
+        emission = self._evaluate(
+            expression, lambda e, results: names[e] if e in names else results[e][0]
+        )
+        declarations = [
+            f"const double {name} = {emission[node][0]};" for node, name in names.items()
+        ]
+        return declarations, emission[expression][0]
 
     # Expressions
 
