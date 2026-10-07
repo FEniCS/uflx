@@ -15,6 +15,12 @@ class VariableNamer:
         self.geo_i = -1
         self.fe_i = -1
         self.qr_i = -1
+        self.t_i = -1
+
+    def temporary(self) -> str:
+        """Get a new name for a temporary holding a common subexpression."""
+        self.t_i += 1
+        return f"cse{self.t_i}"
 
     def variable(self) -> str:
         """Get a new variable name."""
