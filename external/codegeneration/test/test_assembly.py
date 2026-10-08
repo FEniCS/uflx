@@ -1687,3 +1687,51 @@ def test_linear_form(lagrange_element, code_dir, degree, expected_vectors):
             ffi.NULL,
         )
         assert np.allclose(vec, expected_vec)
+
+
+@pytest.mark.parametrize(
+    "vertices",
+    [
+        pytest.param([[0.0, 0.0, 0.0], [1.0, 0.0, 1.0], [0.0, 2.0, 1.0]], id="tilted"),
+        pytest.param([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], id="flat"),
+    ],
+)
+def test_mass_matrix_triangle_in_3d(lagrange_element, code_dir, vertices):
+    """Test the P1 mass matrix and load vector of a triangle embedded in 3D.
+
+    The integral is scaled by the pseudo-determinant sqrt(det(J^T J)), so
+    the P1 mass matrix is area / 12 * (1 + delta_ij) and the load vector of
+    the constant 1 is area / 3.
+    """
+    element = lagrange_element("triangle", 1)
+    space = function_space(coordinate_element(lagrange_element("triangle", 1, (3,))), element)
+    u = TrialFunction(space)
+    v = TestFunction(space)
+
+    coords = np.array(vertices)
+    area = 0.5 * np.linalg.norm(np.cross(coords[1] - coords[0], coords[2] - coords[0]))
+    empty = np.zeros(0)
+
+    for name, form, expected in [
+        ("mass", inner(u, v) * dx, area / 12 * (np.ones((3, 3)) + np.eye(3))),
+        ("load", v * dx, np.full(3, area / 3)),
+    ]:
+        code, signature = uflx_codegeneration.generate(form)
+
+        ffi = FFI()
+        ffi.cdef(signature)
+        ffi.set_source(f"test_triangle_in_3d_{name}_{abs(hash(str(vertices)))}", code)
+        so = ffi.compile(code_dir)
+        lib: Any = ffi.dlopen(so)
+
+        result = np.zeros(expected.shape)
+        lib.tabulate_tensor_f64(
+            ffi.cast("double*", result.ctypes.data),
+            ffi.cast("double*", empty.ctypes.data),
+            ffi.cast("double*", empty.ctypes.data),
+            ffi.cast("double*", coords.ctypes.data),
+            ffi.NULL,
+            ffi.NULL,
+            ffi.NULL,
+        )
+        assert np.allclose(result, expected, rtol=1e-13, atol=0)

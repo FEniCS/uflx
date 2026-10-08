@@ -7,7 +7,7 @@
 
 from uflx.complex import conj
 from uflx.domains import AbstractCoordinateElement, AbstractDomain
-from uflx.expressions import AbstractExpression, BinaryOperator, UnaryOperator
+from uflx.expressions import AbstractExpression, BinaryOperator, Sqrt, UnaryOperator
 from uflx.functions import AbstractFunction
 from uflx.geometry import JacobianInverseTranspose
 from uflx.graphs import GraphNode, as_graph
@@ -212,6 +212,11 @@ def inner(a: AbstractExpression, b: AbstractExpression) -> AbstractExpression:
         return a * conj(b)
 
     return Inner(a, b)
+
+
+def sqrt(a: AbstractExpression) -> AbstractExpression:
+    """The square root of a scalar expression."""
+    return Sqrt(a)
 
 
 def transpose(a: AbstractExpression) -> AbstractExpression:
