@@ -26,8 +26,6 @@ from uflx_codegeneration import symbols
 class GenerateC(Protocol):
     """Protocol for objects that can be converted to C code.
 
-    Objects defined outside the UFLx core (eg the code structures in uflx_codegeneration.nodes)
-    implement this to generate their own code.
     """
 
     def generate_c(self, generator: "CGenerator") -> str:
