@@ -203,3 +203,16 @@ def test_jacobian_and_inverse_form(lagrange_element):
     else:
         assert isinstance(simpler_form.integrand.first, TestFunction)
         assert isinstance(simpler_form.integrand.second, TrialFunction)
+
+
+def test_commutative_operands_are_sorted(lagrange_element):
+    """Test that sums and products equal up to the order of operands simplify equally."""
+    element = lagrange_element("triangle", 2)
+    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    space = function_space(domain, element)
+    u = TrialFunction(space)
+    f = Coefficient(space)
+    g = Coefficient(space)
+
+    assert u * f + g != g + f * u
+    assert simplify(u * f + g) == simplify(g + f * u)

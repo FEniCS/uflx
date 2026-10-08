@@ -656,6 +656,20 @@ class Product(AbstractExpression):
         return Product(cast(list[AbstractExpression], items))
 
     @property
+    def is_commutative(self) -> bool:
+        """Whether the operands of this expression can be reordered."""
+        return True
+
+    @property
+    def operands(self) -> tuple[AbstractExpression, ...]:
+        """The operands."""
+        return self._items
+
+    def with_operands(self, operands: Sequence[AbstractExpression]) -> Product:
+        """Create the same expression with different operands."""
+        return Product(operands)
+
+    @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set(self._items)
@@ -807,6 +821,20 @@ class Sum(AbstractExpression):
         if len(items) == 1:
             return items[0]
         return Sum(cast(list[AbstractExpression], items))
+
+    @property
+    def is_commutative(self) -> bool:
+        """Whether the operands of this expression can be reordered."""
+        return True
+
+    @property
+    def operands(self) -> tuple[AbstractExpression, ...]:
+        """The operands."""
+        return self._items
+
+    def with_operands(self, operands: Sequence[AbstractExpression]) -> Sum:
+        """Create the same expression with different operands."""
+        return Sum(operands)
 
     @property
     def successors(self) -> set[GraphNode]:
