@@ -20,7 +20,7 @@ from uflx.algorithms.simplify import (
     simplify_product_items,
     simplify_sum_items,
 )
-from uflx.graphs.graphs import GraphNode
+from uflx.graphs.graphs import GraphNode, as_graph
 
 
 class AbstractExpression(ABC):
@@ -40,6 +40,11 @@ class AbstractExpression(ABC):
     @abstractmethod
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
+
+    @property
+    def is_zero(self) -> bool:
+        """Whether this expression is known to be identically zero."""
+        return False
 
     def __mul__(self, other: Any) -> AbstractExpression:
         """Multiply."""
@@ -236,13 +241,10 @@ class RealScalar(AbstractScalar):
         """Negation."""
         return RealScalar(-self.value)
 
-    def simplified_sum(self, other: AbstractExpression) -> AbstractExpression | None:
-        """Return a single expression representing the simplified sum.
-
-        This function should return None if no simplification can be made.
-        """
-        if self.value == 0:
-            return other
+    @property
+    def is_zero(self) -> bool:
+        """Whether this expression is known to be identically zero."""
+        return self.value == 0
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -276,6 +278,11 @@ class ComplexScalar(AbstractScalar):
         """Initialise."""
         self._re = real_part
         self._im = imag_part
+
+    @property
+    def is_zero(self) -> bool:
+        """Whether this expression is known to be identically zero."""
+        return self._re.is_zero and self._im.is_zero
 
     def __repr__(self):
         """Representation."""
@@ -331,6 +338,11 @@ class Integer(AbstractInteger):
     def __init__(self, value: int):
         """Initialise."""
         self.value = value
+
+    @property
+    def is_zero(self) -> bool:
+        """Whether this expression is known to be identically zero."""
+        return self.value == 0
 
     def simplified_product(self, other: AbstractExpression) -> AbstractExpression | None:
         """Return a single expression representing the simplified product.
@@ -401,6 +413,11 @@ class Rational(AbstractScalar):
         factor = gcd(numerator, denominator)
         self.numerator = numerator // factor
         self.denominator = denominator // factor
+
+    @property
+    def is_zero(self) -> bool:
+        """Whether this expression is known to be identically zero."""
+        return self.numerator == 0
 
     def simplified_product(self, other: AbstractExpression) -> AbstractExpression | None:
         """Return a single expression representing the simplified product.
@@ -657,11 +674,13 @@ class Product(AbstractExpression):
 
     def simplify(self) -> GraphNode:
         """Simplify this expression."""
-        items = simplify_product_items(self._items)
+        items = cast(list[AbstractExpression], simplify_product_items(self._items))
 
+        if is_zero_product(items):
+            return zero_of_shape(self.value_shape)
         if len(items) == 1:
             return items[0]
-        return Product(cast(list[AbstractExpression], items))
+        return Product(items)
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -762,11 +781,13 @@ class MatrixProduct(AbstractExpression):
 
     def simplify(self) -> GraphNode:
         """Simplify this expression."""
-        items = simplify_matrix_product_items(self._items)
+        items = cast(list[AbstractExpression], simplify_matrix_product_items(self._items))
 
+        if is_zero_product(items):
+            return zero_of_shape(self.value_shape)
         if len(items) == 1:
             return items[0]
-        return MatrixProduct(cast(list[AbstractExpression], items))
+        return MatrixProduct(items)
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -810,11 +831,14 @@ class Sum(AbstractExpression):
 
     def simplify(self) -> GraphNode:
         """Simplify this expression."""
-        items = simplify_sum_items(self._items)
+        items = cast(list[AbstractExpression], simplify_sum_items(self._items))
+        items = [i for i in items if not i.is_zero]
 
+        if len(items) == 0:
+            return zero_of_shape(self.value_shape)
         if len(items) == 1:
             return items[0]
-        return Sum(cast(list[AbstractExpression], items))
+        return Sum(items)
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -864,6 +888,12 @@ class ScalarMult(BinaryOperator):
         assert first.value_shape == ()
         assert second.value_shape != ()
         super().__init__(first, second)
+
+    def simplify(self) -> GraphNode:
+        """Simplify this expression."""
+        if is_zero_product([self.first, self.second]):
+            return zero_of_shape(self.value_shape)
+        return self
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -1096,3 +1126,24 @@ def expression_sum(
             raise ValueError("Cannot sum an empty sequence without a default return value")
         return default
     return result
+
+
+def is_zero_product(factors: Sequence[AbstractExpression]) -> bool:
+    """Check whether a product of these factors can be simplified to zero.
+
+    A zero factor does not make the product zero if another factor contains an
+    argument, so that simplifying a form does not change its arity.
+    """
+    from uflx.functions import Argument
+
+    return any(f.is_zero for f in factors) and not any(
+        isinstance(node, Argument) for f in factors for node in as_graph(f).nodes
+    )
+
+
+def zero_of_shape(shape: tuple[int, ...]) -> AbstractExpression:
+    """Create a zero expression of the given value shape."""
+    # uflx.tensors imports this module.
+    from uflx.tensors import zero
+
+    return zero(shape)

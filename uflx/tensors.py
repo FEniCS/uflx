@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import Any, TypeAlias, cast
 
 from uflx.expressions import AbstractExpression, RealScalar, expression_sum
@@ -58,6 +58,19 @@ class Tensor(AbstractExpression):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self._shape
+
+    @property
+    def is_zero(self) -> bool:
+        """Whether this expression is known to be identically zero."""
+
+        def entries(items: NestedTuple) -> Iterator[AbstractExpression]:
+            if isinstance(items, AbstractExpression):
+                yield items
+            else:
+                for i in items:
+                    yield from entries(i)
+
+        return all(e.is_zero for e in entries(self._entries))
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
