@@ -1084,14 +1084,14 @@ class MatVec(BinaryOperator):
         assert (
             len(first.value_shape) == 2
             and len(second.value_shape) == 1
-            and first.value_shape[0] == second.value_shape[0]
+            and first.value_shape[1] == second.value_shape[0]
         )
         super().__init__(first, second)
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        return self.second.value_shape
+        return (self.first.value_shape[0],)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
