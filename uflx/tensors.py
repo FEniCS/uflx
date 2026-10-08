@@ -20,14 +20,16 @@ class Tensor(AbstractExpression):
 
         def to_shape_and_tuple(items) -> tuple[tuple[int, ...], NestedTuple]:
             if isinstance(items, AbstractExpression):
-                return (), items
+                # A non-scalar entry is stacked: its shape is appended.
+                return items.value_shape, items
             s: tuple[int, ...] | None = None
             t = []
             for i in items:
                 sub_s, sub_t = to_shape_and_tuple(i)
                 if s is None:
                     s = sub_s
-                assert s == sub_s
+                if s != sub_s:
+                    raise ValueError(f"Tensor entries of shapes {s} and {sub_s} cannot be stacked.")
                 t.append(sub_t)
             assert s is not None
             return (len(t), *s), tuple(t)
@@ -64,8 +66,7 @@ class Tensor(AbstractExpression):
 
         def extract_component(items: NestedTuple, indices: tuple[int, ...]) -> AbstractExpression:
             if isinstance(items, AbstractExpression):
-                assert len(indices) == 0
-                return items
+                return items.component(*indices) if len(indices) > 0 else items
             assert len(indices) > 0
             return extract_component(items[indices[0]], indices[1:])
 
@@ -88,7 +89,8 @@ class Vector(Tensor):
     def __init__(self, entries: Sequence[AbstractExpression]):
         """Initalise."""
         super().__init__(entries)
-        assert self._shape == (len(entries),)
+        if self._shape != (len(entries),):
+            raise ValueError("Vector entries must be scalars; stack tensors with Tensor.")
 
     def __repr__(self):
         """Representation."""
@@ -101,7 +103,8 @@ class Matrix(Tensor):
     def __init__(self, entries: Sequence[Sequence[AbstractExpression]]):
         """Initalise."""
         super().__init__(entries)
-        assert self._shape == (len(entries), len(entries[0]))
+        if self._shape != (len(entries), len(entries[0])):
+            raise ValueError("Matrix entries must be scalars; stack tensors with Tensor.")
 
     def __repr__(self):
         """Representation."""
