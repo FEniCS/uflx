@@ -258,7 +258,7 @@ class Jacobian(AbstractExpression):
                             function_space(self.domain, element),
                             i,
                             self.point,
-                            derivative=tuple(1 if d == col else 0 for d in range(gdim)),
+                            derivative=tuple(1 if d == col else 0 for d in range(tdim)),
                             component=row,
                         )
                         for i in range(element.dim)
