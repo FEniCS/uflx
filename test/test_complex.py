@@ -2,8 +2,9 @@
 
 import numpy as np
 
-from uflx.complex import take_imaginary_part, take_real_part
-from uflx.expressions import ComplexScalar, Integer, to_scalar
+from uflx import Coefficient, coordinate_element, function_space, inner
+from uflx.complex import conj, take_imaginary_part, take_real_part
+from uflx.expressions import ComplexScalar, Integer, RealScalar, to_scalar
 
 
 def test_real_part():
@@ -77,3 +78,24 @@ def test_complex_scalar_neg():
 
     assert np.isclose((-z).re.as_float(), -3)
     assert np.isclose((-z).im.as_float(), 2)
+
+
+def test_conj_of_complex_scalar():
+    """conj(1 + 2j) = 1 - 2j."""
+    z = ComplexScalar(RealScalar(1.0), RealScalar(2.0))
+    assert conj(z).as_complex() == 1 - 2j
+
+
+def test_inner_of_complex_scalars():
+    """inner(z, z) = |z|^2."""
+    z = ComplexScalar(RealScalar(1.0), RealScalar(2.0))
+    assert inner(z, z).as_complex() == 5
+    i = ComplexScalar(RealScalar(0.0), RealScalar(1.0))
+    assert inner(i, i).as_complex() == 1
+
+
+def test_conj_of_real_function(lagrange_element):
+    """A real-valued function is its own conjugate."""
+    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    u = Coefficient(function_space(domain, lagrange_element("triangle", 1)))
+    assert conj(u) == u
