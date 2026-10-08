@@ -9,7 +9,7 @@ from uflx.complex import conj
 from uflx.domains import AbstractCoordinateElement, AbstractDomain
 from uflx.expressions import AbstractExpression, BinaryOperator, Sqrt, UnaryOperator
 from uflx.functions import AbstractFunction
-from uflx.geometry import JacobianInverseTranspose
+from uflx.geometry import JacobianInverse
 from uflx.graphs import GraphNode, as_graph
 from uflx.maps import PushedForward
 from uflx.tensors import Identity, Tensor, Vector, zero
@@ -138,7 +138,8 @@ class Grad(UnaryOperator):
         domain = extract_domain(self)
         assert isinstance(domain, AbstractCoordinateElement)
         if isinstance(argument, PushedForward):
-            return JacobianInverseTranspose(domain) @ ReferenceGrad(argument.function)
+            # The last index of the reference gradient is the derivative direction.
+            return ReferenceGrad(argument.function) @ JacobianInverse(domain)
         raise NotImplementedError()
 
 
