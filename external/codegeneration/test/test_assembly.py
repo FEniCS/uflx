@@ -15,6 +15,7 @@ from uflx import (
     grad,
     inner,
 )
+from uflx.integrals import Measure
 
 import uflx_codegeneration
 
@@ -1735,3 +1736,36 @@ def test_mass_matrix_triangle_in_3d(lagrange_element, code_dir, vertices):
             ffi.NULL,
         )
         assert np.allclose(result, expected, rtol=1e-13, atol=0)
+
+
+def test_measure_equal_to_dx(lagrange_element, code_dir):
+    """A form over Measure(codim=0) has the same element matrix as over dx."""
+    element = lagrange_element("triangle", 1)
+    space = function_space(coordinate_element(lagrange_element("triangle", 1, (2,))), element)
+    u = TrialFunction(space)
+    v = TestFunction(space)
+    integrand = inner(grad(u), grad(v)) + u * v
+    coords = np.array([[0.0, 0.0], [1.0, 0.2], [0.3, 1.0]])
+    empty = np.zeros(0)
+
+    matrices = []
+    for name, measure in [("dx", dx), ("codim0", Measure(codim=0))]:
+        code, signature = uflx_codegeneration.generate(integrand * measure)
+
+        ffi = FFI()
+        ffi.cdef(signature)
+        ffi.set_source(f"test_measure_{name}", code)
+        lib: Any = ffi.dlopen(ffi.compile(code_dir))
+
+        A = np.zeros((3, 3))
+        lib.tabulate_tensor_f64(
+            ffi.cast("double*", A.ctypes.data),
+            ffi.cast("double*", empty.ctypes.data),
+            ffi.cast("double*", empty.ctypes.data),
+            ffi.cast("double*", coords.ctypes.data),
+            ffi.NULL,
+            ffi.NULL,
+            ffi.NULL,
+        )
+        matrices.append(A)
+    assert np.allclose(matrices[1], matrices[0], rtol=1e-14, atol=0)
