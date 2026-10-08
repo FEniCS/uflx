@@ -17,7 +17,7 @@ from uflx_codegeneration.algorithms import (
     insert_geometry_functions,
     tabulate_finite_elements,
 )
-from uflx_codegeneration.c import GenerateC, tables_to_c
+from uflx_codegeneration.c import CGenerator, tables_to_c
 from uflx_codegeneration.quadrature import (
     QuadratureRule,
     integrals_to_quadrature,
@@ -30,18 +30,22 @@ from uflx_codegeneration.utils import indented
 def generate(
     form: GraphNode,
     language: str = "C",
+    generator: CGenerator | None = None,
 ) -> tuple[str, str]:
     """Generate code.
 
     Args:
         form: The form or other object to be assembled
         language: The programming language to use
+        generator: The generator of C code. If None, a CGenerator is used
 
     Returns:
         Code
     """
     if language != "C":
         raise NotImplementedError("Only generation of C is supported for now")
+    if generator is None:
+        generator = CGenerator()
 
     # TODO: get this from somewhere
     rules: dict[AbstractMeasure, QuadratureRule] = {}
@@ -79,8 +83,7 @@ def generate(
         ftables, function = tabulate_finite_elements(function)
         code += indented(tables_to_c(ftables), 2)
         code += "\n\n"
-        assert isinstance(function, GenerateC)
-        code += f"  return {function.generate_c()};\n"
+        code += f"  return {generator.generate(function)};\n"
         code += "}\n\n"
     code += (
         "void tabulate_tensor_f64(\n"
@@ -96,8 +99,7 @@ def generate(
 
     code += indented(tables_to_c(tables), 2)
     code += "\n\n"
-    assert isinstance(form, GenerateC)
-    code += indented(form.generate_c(), 2)
+    code += indented(generator.generate(form), 2)
     code += "\n}\n"
 
     signature = (
