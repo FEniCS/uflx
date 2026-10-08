@@ -15,8 +15,8 @@ from uflx.expressions import (
     Subtract,
     Sum,
 )
-from uflx.geometry import CoordinateDofComponent
 from uflx.points import PointComponent
+from uflx.tensors import FlattenedTensorMap
 
 from uflx_codegeneration import symbols
 
@@ -153,12 +153,12 @@ def pc_generate_c(self) -> str:
 setattr(PointComponent, "generate_c", pc_generate_c)
 
 
-def cdc_generate_c(self) -> str:
-    """Generate code for this object."""
-    return f"{symbols.coordinate_dofs}[{self._tdim * self._point + self._component}]"
+def ftm_generate_c(self) -> str:
+    """Generate code for this object, an entry of the coordinate DOFs."""
+    return f"{symbols.coordinate_dofs}[{self.flat_index}]"
 
 
-setattr(CoordinateDofComponent, "generate_c", cdc_generate_c)
+setattr(FlattenedTensorMap, "generate_c", ftm_generate_c)
 
 
 def scalar_generate_c(self) -> str:

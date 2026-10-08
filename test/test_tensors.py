@@ -1,10 +1,12 @@
 """Test uflx.tensors.Matrix's compute_inverse/compute_determinant."""
 
+from itertools import product
+
 import numpy as np
 import pytest
 
 from uflx.expressions import RealScalar
-from uflx.tensors import Matrix
+from uflx.tensors import FlattenedTensorMap, Matrix
 
 
 def _to_matrix(values: np.ndarray) -> Matrix:
@@ -62,3 +64,52 @@ def test_compute_determinant_interval_in_2d():
     det = _to_matrix(np.array([[3.0], [4.0]])).compute_determinant().as_float()
 
     assert det == pytest.approx(5.0, rel=1e-14)
+
+
+@pytest.mark.parametrize("shape", [(4,), (5, 3), (2, 3, 4), (2, 3, 1, 2)])
+def test_flattened_tensor_map_matches_numpy(shape):
+    """The flat index of an entry is that of a C-ordered numpy array."""
+    for indices in product(*(range(n) for n in shape)):
+        expected = int(np.ravel_multi_index(indices, shape))
+        assert FlattenedTensorMap(indices, shape[1:]).flat_index == expected
+
+
+@pytest.mark.parametrize("index, trailing_shape", [((7, 2), (3,)), ((1, 2, 3), (3, 4)), ((5,), ())])
+def test_flattened_tensor_map_any_number_of_rows(index, trailing_shape):
+    """Get the flat index of an entry `index` in a (Z, trailing) shaped tensor."""
+    exact_flat_index = 0
+    for i in range(len(index)):
+        exact_flat_index += index[i] * np.prod(trailing_shape[i:])
+    assert FlattenedTensorMap(index, trailing_shape).flat_index == int(exact_flat_index)
+
+
+def test_flattened_tensor_map_is_a_scalar():
+    """An entry is a scalar, without components or successors."""
+    entry = FlattenedTensorMap((1, 2), (3,))
+    assert entry.value_shape == ()
+    assert entry.successors == set()
+    with pytest.raises(ValueError, match="scalar"):
+        entry.component(0)
+
+
+def test_flattened_tensor_map_invalid():
+    """Invalid indices and extents raise."""
+    with pytest.raises(ValueError, match="one more"):
+        FlattenedTensorMap((0,), (3,))
+    with pytest.raises(ValueError, match="one more"):
+        FlattenedTensorMap((), ())
+    with pytest.raises(ValueError, match="positive"):
+        FlattenedTensorMap((0, 0), (0,))
+    with pytest.raises(IndexError):
+        FlattenedTensorMap((0, 3), (3,))
+    with pytest.raises(IndexError):
+        FlattenedTensorMap((-1, 0), (3,))
+
+
+def test_flattened_tensor_map_equality():
+    """Entries are equal if their indices and extents are."""
+    entry = FlattenedTensorMap((1, 2), (3,))
+    assert entry == FlattenedTensorMap((1, 2), (3,))
+    assert hash(entry) == hash(FlattenedTensorMap((1, 2), (3,)))
+    assert entry != FlattenedTensorMap((2, 1), (3,))
+    assert entry != FlattenedTensorMap((1, 2), (4,))
