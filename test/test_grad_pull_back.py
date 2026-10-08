@@ -27,8 +27,8 @@ def test_grad_pull_back(cell, gdim, vector, lagrange_element):
     w = Coefficient(function_space(domain, lagrange_element(cell, 1, shape)))
 
     pulled_back = pull_back_to_reference(grad(w))
-    assert pulled_back.value_shape == grad(w).value_shape
     assert isinstance(pulled_back, MatrixProduct)
+    assert pulled_back.value_shape == grad(w).value_shape
     first, second = pulled_back.init_args[0]
     assert isinstance(first, ReferenceGrad)
     assert isinstance(second, JacobianInverse)
