@@ -24,6 +24,11 @@ class AbstractEvaluatedBasisFunction(AbstractFunction):
     """Base class for a basis function evaluated at a point on the reference cell."""
 
     @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return self.element.real_valued
+
+    @property
     @abstractmethod
     def element(self) -> AbstractFiniteElement:
         """The finite element containing this basis function."""

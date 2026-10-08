@@ -41,6 +41,18 @@ class AbstractExpression(ABC):
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
 
+    @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued.
+
+        An operator is real-valued if all of its operands are. Expressions without
+        operands override this to say whether they are real-valued.
+        """
+        operands = self.successors
+        return len(operands) > 0 and all(
+            isinstance(o, AbstractExpression) and o.is_real_valued for o in operands
+        )
+
     def __mul__(self, other: Any) -> AbstractExpression:
         """Multiply."""
         if isinstance(other, AbstractExpression):
@@ -207,6 +219,11 @@ class AbstractInteger(AbstractScalar):
     """Abstract base class for integer values."""
 
     @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
+
+    @property
     def re(self) -> AbstractExpression:
         """Get real part."""
         return self
@@ -223,6 +240,11 @@ class RealScalar(AbstractScalar):
     def __init__(self, value: float):
         """Initialise."""
         self.value = value
+
+    @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
 
     def __repr__(self):
         """Representation."""
@@ -394,6 +416,11 @@ class Rational(AbstractScalar):
         self.numerator = numerator // factor
         self.denominator = denominator // factor
 
+    @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
+
     def simplified_product(self, other: AbstractExpression) -> AbstractExpression | None:
         """Return a single expression representing the simplified product.
 
@@ -517,6 +544,11 @@ class Re(UnaryOperator):
     """Real part."""
 
     @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
+
+    @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self.argument.value_shape
@@ -542,6 +574,11 @@ class Re(UnaryOperator):
 
 class Im(UnaryOperator):
     """Imaginary part."""
+
+    @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -976,6 +1013,11 @@ class Subtract(BinaryOperator):
 
 class Abs(UnaryOperator):
     """Absolute value operator."""
+
+    @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
 
     @property
     def value_shape(self) -> tuple[int, ...]:

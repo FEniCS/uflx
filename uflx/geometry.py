@@ -29,6 +29,11 @@ class SingleSpatialCoordinate(AbstractExpression):
         self._component = component
 
     @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
+
+    @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return ()
@@ -54,6 +59,11 @@ class SpatialCoordinate(AbstractExpression):
     def __init__(self, dimension: int):
         """Initialise."""
         self._dimension = dimension
+
+    @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
 
     def __getitem__(self, component: int) -> SingleSpatialCoordinate:
         """Get item."""
@@ -199,6 +209,11 @@ class Jacobian(AbstractExpression):
         self.point = point
 
     @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
+
+    @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         if not isinstance(self.domain, AbstractCoordinateElement):
@@ -279,6 +294,11 @@ class JacobianDeterminant(AbstractExpression):
         self.point = point
 
     @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
+
+    @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return ()
@@ -312,6 +332,11 @@ class JacobianInverse(AbstractExpression):
         self._jacobian = Jacobian(domain, point)
         self.domain = domain
         self.point = point
+
+    @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -365,6 +390,11 @@ class JacobianTranspose(AbstractExpression):
         self.point = point
 
     @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
+
+    @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self._jacobian.value_shape[::-1]
@@ -416,6 +446,11 @@ class JacobianInverseTranspose(AbstractExpression):
         self.point = point
 
     @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
+
+    @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self._jacobian.value_shape
@@ -465,6 +500,11 @@ class CoordinateDofComponent(AbstractExpression):
         self._point = point
         self._component = component
         self._tdim = tdim
+
+    @property
+    def is_real_valued(self) -> bool:
+        """Whether this expression is known to be real-valued."""
+        return True
 
     @property
     def value_shape(self) -> tuple[int, ...]:
