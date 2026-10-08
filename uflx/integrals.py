@@ -180,6 +180,14 @@ class Measure(AbstractMeasure):
         """The arguments used to initialise this object."""
         return self._dim, self._codim, self._boundary_only
 
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return type(other) is type(self) and other.init_args == self.init_args
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash((type(self).__name__, self.init_args))
+
     def __repr__(self) -> str:
         """Representation."""
         kwargs = {}
