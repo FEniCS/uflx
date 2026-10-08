@@ -173,6 +173,11 @@ class PhysicalToReference(AbstractPoint):
         return self._point
 
     @property
+    def is_reference(self) -> bool:
+        """Check if this point is on a reference cell."""
+        return True
+
+    @property
     def domain(self) -> AbstractCoordinateElement:
         """The domain."""
         return self._domain
@@ -200,14 +205,14 @@ class PhysicalToReference(AbstractPoint):
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
-            isinstance(other, ReferenceToPhysical)
+            isinstance(other, PhysicalToReference)
             and self._point == other._point
             and self._domain == other._domain
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.ReferenceToPhysical", hash(self._point), hash(self._domain)))
+        return hash(("uflx.PhysicalToReference", hash(self._point), hash(self._domain)))
 
     @property
     def index(self) -> int | str:
