@@ -68,7 +68,6 @@ def generate(
     q_tables, form = tabulate_quadrature(form)
 
     fe_tables, form = tabulate_finite_elements(form)
-    print(fe_tables)
     tables = {**q_tables, **fe_tables}
 
     code = ""
