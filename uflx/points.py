@@ -75,13 +75,15 @@ class Point(AbstractPoint):
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
-        return isinstance(other, Point) and all(
-            i == j for i, j in zip(self._components, other._components)
+        return (
+            isinstance(other, Point)
+            and self._is_reference == other._is_reference
+            and self._components == other._components
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.Point", *[hash(c) for c in self._components]))
+        return hash(("uflx.Point", self._is_reference, *[hash(c) for c in self._components]))
 
 
 class PointComponent(AbstractExpression):
