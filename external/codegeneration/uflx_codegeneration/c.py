@@ -24,9 +24,7 @@ from uflx_codegeneration import symbols
 
 @runtime_checkable
 class GenerateC(Protocol):
-    """Protocol for objects that can be converted to C code.
-
-    """
+    """Protocol for objects that can be converted to C code."""
 
     def generate_c(self, generator: "CGenerator") -> str:
         """Generate code for this object, using generator for the code of its operands."""
