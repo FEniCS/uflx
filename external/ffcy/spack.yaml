@@ -16,13 +16,8 @@ spack:
   - py-networkx
   - py-numpy
   - py-pytest
-  develop:
-    fenics-basix:
-      spec: fenics-basix@main
-      path: /home/jhale/dolfinx-main/basix
-    py-fenics-basix:
-      spec: py-fenics-basix@main
-      path: /home/jhale/dolfinx-main/basix
+  - ninja
+  - cmake
 
   view: true
   concretizer:
