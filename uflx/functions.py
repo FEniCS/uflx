@@ -169,7 +169,7 @@ class FiniteElementVariable(AbstractVariable):
 
     def to_physical(self) -> FiniteElementVariable:
         """Make a version of this variable on physical cells."""
-        return FiniteElementVariable(self._domain, self._label, True)
+        return FiniteElementVariable(self._domain, self._label, False)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
