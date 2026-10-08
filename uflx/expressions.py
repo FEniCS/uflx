@@ -10,6 +10,8 @@ An expression is any algebraic expression that could be used as an integrand.
 
 from __future__ import annotations
 
+import cmath
+import math
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
 from math import gcd, prod
@@ -970,6 +972,35 @@ class Abs(UnaryOperator):
     def as_int(self) -> int:
         """Convert to an integer."""
         return abs(self.argument.as_int())
+
+
+class Sqrt(UnaryOperator):
+    """Square root operator."""
+
+    def __init__(self, argument: AbstractExpression):
+        """Initialise."""
+        if argument.value_shape != ():
+            raise ValueError(
+                f"Cannot take the square root of an expression with shape {argument.value_shape}"
+            )
+        super().__init__(argument)
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        return ()
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get a component of the expression."""
+        raise ValueError("Cannot get a component of a scalar expression")
+
+    def as_complex(self) -> complex:
+        """Convert to a complex number."""
+        return cmath.sqrt(self.argument.as_complex())
+
+    def as_float(self) -> float:
+        """Convert to a floating point number."""
+        return math.sqrt(self.argument.as_float())
 
 
 class Reciprocal(UnaryOperator):

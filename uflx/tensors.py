@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, TypeAlias, cast
 
-from uflx.expressions import AbstractExpression, RealScalar, expression_sum
+from uflx.expressions import AbstractExpression, RealScalar, Sqrt, expression_sum
 from uflx.graphs import GraphNode
 
 NestedSequence: TypeAlias = AbstractExpression | Sequence["NestedSequence"]
@@ -189,12 +189,17 @@ class Matrix(Tensor):
                     raise NotImplementedError(f"Inverting of {rows}x{rows} not implemented.")
 
     def compute_determinant(self) -> AbstractExpression:
-        """Compute the inverse of the matrix."""
+        """Compute the determinant of the matrix.
+
+        For a non-square matrix A this is the pseudo-determinant sqrt(det(A^T A)) (tall A) or
+        sqrt(det(A A^T)) (wide A), i.e. the volume scaling of the reference-to-physical map of a
+        manifold cell.
+        """
         rows, cols = self._shape
         if rows > cols:
-            return self.transpose().matmat(self).compute_determinant()
+            return Sqrt(self.transpose().matmat(self).compute_determinant())
         elif rows < cols:
-            return self.matmat(self.transpose()).compute_determinant()
+            return Sqrt(self.matmat(self.transpose()).compute_determinant())
         else:
             entries = cast(tuple[tuple[AbstractExpression, ...], ...], self._entries)
             match rows:

@@ -3,7 +3,18 @@
 from typing import Protocol, runtime_checkable
 
 import numpy as np
-from uflx.expressions import Abs, Div, Integer, Neg, Product, RealScalar, Reciprocal, Subtract, Sum
+from uflx.expressions import (
+    Abs,
+    Div,
+    Integer,
+    Neg,
+    Product,
+    RealScalar,
+    Reciprocal,
+    Sqrt,
+    Subtract,
+    Sum,
+)
 from uflx.geometry import CoordinateDofComponent
 from uflx.points import PointComponent
 
@@ -107,6 +118,16 @@ def abs_generate_c(self) -> str:
 
 
 setattr(Abs, "generate_c", abs_generate_c)
+
+
+def sqrt_generate_c(self) -> str:
+    """Generate code for this object."""
+    if not isinstance(self.argument, GenerateC):
+        raise NotImplementedError(f"GenerateC is not implemented for {self.argument.__class__}")
+    return f"sqrt({self.argument.generate_c()})"
+
+
+setattr(Sqrt, "generate_c", sqrt_generate_c)
 
 
 def neg_generate_c(self) -> str:
