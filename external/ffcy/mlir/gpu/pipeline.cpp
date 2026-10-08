@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // Registers ffcy-gpu-pipeline, which compiles an emitted action to the LLVM dialect
 // with a GPU binary, and ffcy-check-mapped, which it uses.
 //

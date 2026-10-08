@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 """Count PTX instruction kinds in the kernels of built benchmarks."""
 
 import argparse

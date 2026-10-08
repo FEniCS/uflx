@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 from dataclasses import dataclass
 
 from xdsl.context import Context

@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // Tiles each stage from ffcy-annotate-stages into one loop over pencils, on cells
 // interleaved by ffcy-interleave-cells.
 //

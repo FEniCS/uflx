@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // Checks and times an action compiled by MLIR, for any form.
 //
 // The kernel is a shared library. A case written by bench/cases.py gives the arguments

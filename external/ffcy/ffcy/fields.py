@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 """Arithmetic on scalar fields at quadrature points, folding known constants.
 
 A field is either a tensor value of shape [cells, nq, ..., nq] or a float that is

@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // Upstream elementwise fusion, limited to pointwise consumers and producers with
 // one use. Fusing into a contraction would recompute the producer for each
 // reduction iteration, and a producer with other uses would be computed twice.

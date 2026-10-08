@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 # An mlir-opt pass plugin. mlir-opt provides the MLIR symbols when it loads it.
 find_package(MLIR REQUIRED CONFIG)
 

@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 from ffcy.reference import helmholtz_action, laplace_action, mass_action
 from forms.helmholtz import helmholtz_form
 from forms.laplace import laplace_form

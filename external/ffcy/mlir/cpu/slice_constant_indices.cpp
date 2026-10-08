@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // Reads operands of linalg.generic at constant indices through slices instead.
 //
 // An indexing map with a constant result, such as one field of the geometry data,

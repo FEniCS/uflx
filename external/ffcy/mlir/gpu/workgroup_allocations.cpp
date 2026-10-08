@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // An mlir-opt pass plugin that moves static allocations inside GPU launches into
 // workgroup memory, reusing buffers whose lifetimes do not overlap.
 

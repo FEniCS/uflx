@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 # The action of a form chosen on the command line, for bench/emit.py and bench/cases.py.
 
 import argparse

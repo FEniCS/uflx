@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // Sorts the ops of each block by the stages that ffcy-annotate-stages assigned, so
 // that the ops of a stage are contiguous and their loops can be fused as siblings.
 //

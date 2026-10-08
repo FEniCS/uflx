@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 """UFLx operations on a batch of quadrilateral or hexahedral cells.
 
 E-vectors are in Basix tensor product DOF ordering and values at quadrature

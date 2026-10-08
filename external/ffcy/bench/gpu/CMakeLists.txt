@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 cmake_minimum_required(VERSION 3.24)
 # The driver scatters with CUDA kernels, and nvcc supports this host compiler.
 set(CMAKE_CUDA_COMPILER /usr/bin/nvcc CACHE FILEPATH "CUDA compiler")

@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // The parts of the staged pencil schedule that depend on the form, built as
 // transform dialect sequences from the IR's annotations and applied directly.
 //

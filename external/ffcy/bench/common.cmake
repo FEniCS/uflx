@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 # Options, plugins and pipeline steps shared by the benchmarks of every target.
 #
 # Configure from a shell where the Spack environment and the venv are active, so

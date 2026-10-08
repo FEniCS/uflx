@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // Tiles each stage of a block of interleaved cells into one loop over pencils.
 // The input is Laplace on quadrilaterals at Q1 with inline geometry, after
 // @__blocks and ffcy-sort-stages. Its second stage computes the inverse Jacobian,

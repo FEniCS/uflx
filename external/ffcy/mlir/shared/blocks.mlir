@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // Tiles the cells into blocks and fuses each block's whole computation, for every
 // target. Each block handles the cells of one block from ffcy-split-cells.
 module attributes {transform.with_named_sequence} {

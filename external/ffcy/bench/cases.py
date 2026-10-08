@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 """Write a case that checks and times a form's action.
 
 A case holds the action's arguments and expected result for a few cells, which a

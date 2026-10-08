@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 from basix import CellType, ElementFamily, LagrangeVariant
 from basix.cell import topology
 from basix.finite_element import tp_dof_ordering

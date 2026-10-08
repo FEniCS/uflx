@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // The CPU schedule after @__blocks in mlir/shared/blocks.mlir, on cells interleaved by
 // ffcy-interleave-cells. ffcy-sort-stages, ffcy-tile-stage-pencils and
 // ffcy-slice-constant-indices run before @__vectorize. After @__bufferize,

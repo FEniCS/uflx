@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // The GPU parts of the staged pencil schedule that do not depend on the form.
 //
 // @__bufferize bufferizes and prepares the block loops from @__blocks in

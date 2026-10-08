@@ -1,3 +1,9 @@
+// Copyright (C) 2026 Jack S. Hale
+//
+// This file is part of FFCy (https://www.fenicsproject.org)
+//
+// SPDX-License-Identifier:    MIT
+
 // Sums an action's values on cells into an assembled vector with atomic adds.
 //
 // ffcy-assemble tags an action whose values are to be scattered with

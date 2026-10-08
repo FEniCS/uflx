@@ -1,3 +1,9 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of FFCy (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+
 """Emit a form's action as MLIR for a target's pipeline.
 
 The action's cells are split into blocks for GPUs or interleaved for CPUs, its ops
