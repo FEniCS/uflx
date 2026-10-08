@@ -171,8 +171,8 @@ def test_reference_grad_expand_geometry_vector_shape_regression(lagrange_element
     """ReferenceGrad.expand_geometry() must match shapes for a vector-valued argument."""
     domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 1, (2,)))
-    point = Point([RealScalar(0.25), RealScalar(0.25)])
-    basis_function = EvaluatedBasisFunction(space, 0, point, True)
+    point = Point([RealScalar(0.25), RealScalar(0.25)], is_reference=True)
+    basis_function = EvaluatedBasisFunction(space, 0, point)
 
     reference_grad = ReferenceGrad(basis_function)
     expanded = reference_grad.expand_geometry()
@@ -188,8 +188,8 @@ def test_reference_grad_expand_geometry_scalar_unchanged(lagrange_element):
     """The pre-existing scalar-argument path is untouched by the vector-shape fix."""
     domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 1))
-    point = Point([RealScalar(0.25), RealScalar(0.25)])
-    basis_function = EvaluatedBasisFunction(space, 0, point, True)
+    point = Point([RealScalar(0.25), RealScalar(0.25)], is_reference=True)
+    basis_function = EvaluatedBasisFunction(space, 0, point)
 
     reference_grad = ReferenceGrad(basis_function)
     expanded = reference_grad.expand_geometry()
@@ -200,8 +200,8 @@ def test_reference_grad_cellwise_constant_vector(lagrange_element):
     """A cellwise-constant vector argument's reference gradient is still exactly zero."""
     domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 0, (2,)))
-    point = Point([RealScalar(0.25), RealScalar(0.25)])
-    basis_function = EvaluatedBasisFunction(space, 0, point, True)
+    point = Point([RealScalar(0.25), RealScalar(0.25)], is_reference=True)
+    basis_function = EvaluatedBasisFunction(space, 0, point)
     assert basis_function.is_cellwise_constant
 
     reference_grad = ReferenceGrad(basis_function)
