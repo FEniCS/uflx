@@ -1,0 +1,38 @@
+# Basix without UFL and the packages FFCy and UFLx need from Spack. Basix is
+# built from a local checkout of main, so change its develop path or remove the
+# develop section to fetch main instead. UFLx, xDSL and FFCy are installed with pip
+# into a venv on top of the view, as the README describes.
+#
+# Usage (from this directory):
+#   source ~/spack/share/spack/setup-env.sh
+#   spack env activate .
+#   spack install
+spack:
+  specs:
+  - python
+  - py-pip
+  - fenics-basix@main
+  - py-fenics-basix@main ~ufl
+  - py-networkx
+  - py-numpy
+  - py-pytest
+  develop:
+    fenics-basix:
+      spec: fenics-basix@main
+      path: /home/jhale/dolfinx-main/basix
+    py-fenics-basix:
+      spec: py-fenics-basix@main
+      path: /home/jhale/dolfinx-main/basix
+
+  view: true
+  concretizer:
+    unify: true
+
+  packages:
+    all:
+      prefer:
+      - '%gcc@12'
+
+  config:
+    build_stage:
+    - $tempdir/$user/spack-stage

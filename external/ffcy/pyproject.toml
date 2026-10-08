@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ffcy"
+version = "0.0.1"
+requires-python = ">=3.11"
+dependencies = ["basix-uflx", "fenics-basix", "numpy", "uflx", "xdsl"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["ffcy*"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["uflx", "xdsl"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "RUF", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["bench", "forms", "ffcy"]
+known-third-party = ["uflx"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]
+# Run the slow tests with -m slow, or everything with -m "".
+addopts = "-m 'not slow'"
+markers = ["slow: high degree cases, which take minutes in the interpreter"]
