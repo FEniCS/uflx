@@ -102,13 +102,18 @@ class AbstractParametrizedDomain(AbstractCellularDomain):
     """
 
     @abstractmethod
-    def parametrization(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
-        """Get the element describing the geometry of the given cell type."""
+    def parametrization_element(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
+        """Get the element giving the basis of the given cell type's parametrization.
+
+        The parametrization itself cannot be returned: it is this basis
+        summed against a particular cell's coordinate dofs, and those
+        come from the external mesh.
+        """
 
     @property
     def has_affine_parametrization(self) -> bool:
         """Is the parametrization of this domain affine?"""
-        return all(self.parametrization(c).describes_affine_map for c in self.cell_types)
+        return all(self.parametrization_element(c).describes_affine_map for c in self.cell_types)
 
 
 class RD(AbstractCoordinateDomain):
@@ -220,8 +225,8 @@ class ParametrizedDomain(AbstractParametrizedDomain):
         """Get the cell types in this domain."""
         return tuple(self._elements.keys())
 
-    def parametrization(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
-        """Get the element describing the geometry of the given cell type."""
+    def parametrization_element(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
+        """Get the element giving the basis of the given cell type's parametrization."""
         return self._elements[cell]
 
     def __repr__(self) -> str:

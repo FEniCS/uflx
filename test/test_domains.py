@@ -56,7 +56,7 @@ def test_entity_domain_has_no_parametrization(lagrange_element):
     """An entity domain carries no parametrization, unlike a parametrized domain."""
     (entity,) = parametrized_domain(lagrange_element("triangle", 1, (2,))).cell_types
 
-    assert not hasattr(entity_domain(entity), "parametrization")
+    assert not hasattr(entity_domain(entity), "parametrization_element")
 
 
 @pytest.mark.parametrize("dim", range(1, 4))
