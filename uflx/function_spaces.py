@@ -14,7 +14,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
-from uflx.domains import AbstractDomain
+from uflx.domains import AbstractCellularDomain, AbstractDomain
 from uflx.finite_elements import AbstractMappedFiniteElement
 
 
@@ -51,12 +51,17 @@ class FunctionSpace(AbstractMappedFunctionSpace):
 
     def __init__(
         self,
-        domain: AbstractDomain,
+        domain: AbstractCellularDomain,
         elements: tuple[AbstractMappedFiniteElement, ...],
     ):
         """Initialise."""
         self._domain = domain
         self._elements = elements
+        for element in elements:
+            if element.cell not in domain.cells:
+                raise ValueError(
+                    f"Element on cell {element.cell} is not defined on a cell of its domain."
+                )
         gdim = domain.geometric_dimension
         shape = elements[0].ambient_value_shape(gdim)
         for element in elements[1:]:
@@ -66,7 +71,7 @@ class FunctionSpace(AbstractMappedFunctionSpace):
                 )
 
     @property
-    def domain(self) -> AbstractDomain:
+    def domain(self) -> AbstractCellularDomain:
         """Domain of the function space."""
         return self._domain
 
@@ -87,7 +92,7 @@ class FunctionSpace(AbstractMappedFunctionSpace):
 
 
 def function_space(
-    domain: AbstractDomain,
+    domain: AbstractCellularDomain,
     elements: Sequence[AbstractMappedFiniteElement] | AbstractMappedFiniteElement,
 ) -> FunctionSpace:
     """Create a function space.

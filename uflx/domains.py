@@ -75,8 +75,12 @@ class AbstractCoordinateDomain(AbstractDomain):
         return self.geometric_dimension
 
 
-class AbstractFiniteElementDomain(AbstractDomain):
-    """Base class for a domain of a finite element function."""
+class AbstractCellularDomain(AbstractDomain):
+    """Base class for a domain decomposed into cells.
+
+    Having cells is what lets a finite element be attached per cell, so
+    these are the domains a finite element function space can live on.
+    """
 
     @property
     @abstractmethod
@@ -84,7 +88,7 @@ class AbstractFiniteElementDomain(AbstractDomain):
         """Get the cell types in this domain."""
 
 
-class AbstractParametrizedDomain(AbstractFiniteElementDomain):
+class AbstractParametrizedDomain(AbstractCellularDomain):
     """Base class for a domain presented as the image of a map.
 
     The map out of each cell's coordinate domain is the parametrization,
@@ -128,7 +132,7 @@ class RD(AbstractCoordinateDomain):
         return hash(("uflx.RD", self._dim))
 
 
-class EntityDomain(AbstractCoordinateDomain, AbstractFiniteElementDomain):
+class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
     """The coordinate realization of a single topological entity.
 
     The geometry of an entity domain is the identity, so unlike a

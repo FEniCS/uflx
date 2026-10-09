@@ -14,7 +14,7 @@ from abc import abstractmethod
 from itertools import count
 from typing import Any, Self, cast
 
-from uflx.domains import AbstractDomain, AbstractFiniteElementDomain, EntityDomain
+from uflx.domains import AbstractCellularDomain, AbstractDomain, EntityDomain
 from uflx.expressions import AbstractExpression, Im, Re
 from uflx.function_spaces import AbstractFunctionSpace, AbstractMappedFunctionSpace
 from uflx.graphs import GraphNode
@@ -110,7 +110,7 @@ class FiniteElementVariable(AbstractVariable):
 
     def __init__(
         self,
-        domain: AbstractFiniteElementDomain,
+        domain: AbstractCellularDomain,
         label: str | None = None,
         in_entity_coordinates: bool = False,
     ):
@@ -572,7 +572,7 @@ class TrialFunction(Argument):
 
 def create_variable(domain: AbstractDomain) -> AbstractVariable:
     """Create a new variable in a domain."""
-    if isinstance(domain, AbstractFiniteElementDomain):
+    if isinstance(domain, AbstractCellularDomain):
         return FiniteElementVariable(domain)
     else:
         return Variable(domain)
