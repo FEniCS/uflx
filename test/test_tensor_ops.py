@@ -5,6 +5,7 @@ import pytest
 
 from uflx import function_space, parametrized_domain
 from uflx.basis_functions import EvaluatedBasisFunction
+from uflx.domains import EntityDomain
 from uflx.expressions import Product, RealScalar
 from uflx.operators import EntityGrad, Tr, dev, skew, sym, tr, transpose
 from uflx.points import Point
@@ -171,7 +172,7 @@ def test_reference_grad_expand_geometry_vector_shape_regression(lagrange_element
     """EntityGrad.expand_geometry() must match shapes for a vector-valued argument."""
     domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 1, (2,)))
-    point = Point([RealScalar(0.25), RealScalar(0.25)], in_entity_coordinates=True)
+    point = Point([RealScalar(0.25), RealScalar(0.25)], EntityDomain(domain.cells[0]))
     basis_function = EvaluatedBasisFunction(space, 0, point)
 
     reference_grad = EntityGrad(basis_function)
@@ -188,7 +189,7 @@ def test_reference_grad_expand_geometry_scalar_unchanged(lagrange_element):
     """The pre-existing scalar-argument path is untouched by the vector-shape fix."""
     domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 1))
-    point = Point([RealScalar(0.25), RealScalar(0.25)], in_entity_coordinates=True)
+    point = Point([RealScalar(0.25), RealScalar(0.25)], EntityDomain(domain.cells[0]))
     basis_function = EvaluatedBasisFunction(space, 0, point)
 
     reference_grad = EntityGrad(basis_function)
@@ -200,7 +201,7 @@ def test_reference_grad_cellwise_constant_vector(lagrange_element):
     """A cellwise-constant vector argument's reference gradient is still exactly zero."""
     domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 0, (2,)))
-    point = Point([RealScalar(0.25), RealScalar(0.25)], in_entity_coordinates=True)
+    point = Point([RealScalar(0.25), RealScalar(0.25)], EntityDomain(domain.cells[0]))
     basis_function = EvaluatedBasisFunction(space, 0, point)
     assert basis_function.is_cellwise_constant
 

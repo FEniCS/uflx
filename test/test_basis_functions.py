@@ -5,19 +5,20 @@ from uflx.basis_functions import (
     AbstractEvaluatedBasisFunction,
     EvaluatedBasisFunction,
 )
+from uflx.domains import EntityDomain
 from uflx.expressions import RealScalar
-from uflx.points import Point
+from uflx.points import Point, point
 
 
-def test_physical_basis_function(lagrange_element):
-    """Test physical basis function."""
+def test_ambient_basis_function(lagrange_element):
+    """Test a basis function evaluated at a point in ambient coordinates."""
     element = lagrange_element("triangle", 1)
     domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
     space = function_space(domain, element)
 
-    point = Point([RealScalar(1.0)] * 3, in_entity_coordinates=False)
+    ambient_point = point([RealScalar(1.0)] * 3)
 
-    phys_f = EvaluatedBasisFunction(space, 0, point)
+    phys_f = EvaluatedBasisFunction(space, 0, ambient_point)
 
     assert phys_f.derivative == (0, 0)
     assert phys_f.domain_size == 2
@@ -34,15 +35,15 @@ def test_physical_basis_function(lagrange_element):
     assert d101.derivative == (1, 2)
 
 
-def test_reference_basis_function(lagrange_element):
-    """Test reference basis function."""
+def test_entity_basis_function(lagrange_element):
+    """Test a basis function evaluated at a point in the entity's coordinates."""
     element = lagrange_element("triangle", 1)
     domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
     space = function_space(domain, element)
 
-    point = Point([RealScalar(1.0)] * 3, in_entity_coordinates=True)
+    entity_point = Point([RealScalar(0.25)] * 2, EntityDomain(domain.cells[0]))
 
-    ref_f = EvaluatedBasisFunction(space, 0, point)
+    ref_f = EvaluatedBasisFunction(space, 0, entity_point)
 
     assert ref_f.derivative == (0, 0)
     assert ref_f.domain_size == 2
