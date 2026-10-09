@@ -7,8 +7,8 @@
 
 import pytest
 
-from uflx import coordinate_element, function_space
-from uflx.domains import AbstractCoordinateElement
+from uflx import function_space, parametrized_domain
+from uflx.domains import AbstractParametrizedDomain
 
 
 @pytest.mark.parametrize(
@@ -23,16 +23,16 @@ from uflx.domains import AbstractCoordinateElement
 )
 def test_function_space(cell_name, gdim, lagrange_element):
     """Test function space with single cell."""
-    domain = coordinate_element(lagrange_element(cell_name, 1, (3,)))
+    domain = parametrized_domain(lagrange_element(cell_name, 1, (3,)))
     space = function_space(domain, lagrange_element(cell_name, 1))
-    assert isinstance(space.domain, AbstractCoordinateElement)
+    assert isinstance(space.domain, AbstractParametrizedDomain)
     assert len(space.elements) == len(space.domain.cells) == 1
 
 
 @pytest.mark.parametrize("gdim", [2, 3])
 def test_function_space_multiple_cells(gdim, lagrange_element):
     """Test function space with multiple cells."""
-    domain = coordinate_element(
+    domain = parametrized_domain(
         [
             lagrange_element("triangle", 1, (3,)),
             lagrange_element("quadrilateral", 1, (3,)),
@@ -42,5 +42,5 @@ def test_function_space_multiple_cells(gdim, lagrange_element):
         domain,
         [lagrange_element("triangle", 2), lagrange_element("quadrilateral", 2)],
     )
-    assert isinstance(space.domain, AbstractCoordinateElement)
+    assert isinstance(space.domain, AbstractParametrizedDomain)
     assert len(space.elements) == len(space.domain.cells) == 2

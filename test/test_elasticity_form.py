@@ -5,13 +5,13 @@ This module instead builds the real bilinear form
     a(u, v) = inner(sigma(u), sym(grad(v))) * dx
 
 with real vector-valued TrialFunction/TestFunction arguments and applies the
-pull_back_to_reference, apply_push_forwards, and simplify algorithms.
+pull_back_to_entity, apply_push_forwards, and simplify algorithms.
 """
 
 import pytest
 
-from uflx import TestFunction, TrialFunction, coordinate_element, dx, function_space, grad, inner
-from uflx.algorithms import pull_back_to_reference, simplify
+from uflx import TestFunction, TrialFunction, dx, function_space, grad, inner, parametrized_domain
+from uflx.algorithms import pull_back_to_entity, simplify
 from uflx.functions import Argument
 from uflx.graphs import as_graph
 from uflx.integrals import Integral
@@ -30,7 +30,7 @@ def _sigma(displacement, lambda_, mu):
 @pytest.mark.parametrize(("cell", "dim"), [("triangle", 2), ("tetrahedron", 3)])
 def test_elasticity_bilinear_form_composes(lagrange_element, cell, dim):
     """inner(sigma(u), sym(grad(v))) * dx should build without error and stay scalar."""
-    domain = coordinate_element(lagrange_element(cell, 1, (dim,)))
+    domain = parametrized_domain(lagrange_element(cell, 1, (dim,)))
     space = function_space(domain, lagrange_element(cell, 1, (dim,)))
 
     u = TrialFunction(space)
@@ -49,7 +49,7 @@ def test_elasticity_bilinear_form_composes(lagrange_element, cell, dim):
 @pytest.mark.parametrize(("cell", "dim"), [("triangle", 2), ("tetrahedron", 3)])
 def test_elasticity_bilinear_form_pulls_back_to_reference(lagrange_element, cell, dim):
     """The whole form must pull back to the reference cell and stay well-shaped."""
-    domain = coordinate_element(lagrange_element(cell, 1, (dim,)))
+    domain = parametrized_domain(lagrange_element(cell, 1, (dim,)))
     space = function_space(domain, lagrange_element(cell, 1, (dim,)))
 
     u = TrialFunction(space)
@@ -58,7 +58,7 @@ def test_elasticity_bilinear_form_pulls_back_to_reference(lagrange_element, cell
 
     form = inner(_sigma(u, lambda_, mu), sym(grad(v))) * dx
 
-    pulled_back = pull_back_to_reference(form)
+    pulled_back = pull_back_to_entity(form)
     assert isinstance(pulled_back, Integral)
     assert pulled_back.integrand.value_shape == ()
 
@@ -73,7 +73,7 @@ def test_elasticity_bilinear_form_pulls_back_to_reference(lagrange_element, cell
     # the real pipeline every Grad must have been replaced by a reference-cell
     # equivalent, and every Argument must be reference-valued.
     assert not any(isinstance(n, Grad) for n in nodes)
-    assert not any(isinstance(n, Argument) and not n.is_reference for n in nodes)
+    assert not any(isinstance(n, Argument) and not n.in_entity_coordinates for n in nodes)
 
     # The tensor-op nodes themselves must have survived the round trip -- not
     # been silently dropped or left wrapping a stale (physical) Grad.

@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from uflx import Coefficient, coordinate_element, function_space, inner
+from uflx import Coefficient, parametrized_domain, function_space, inner
 from uflx.complex import conj, take_imaginary_part, take_real_part
 from uflx.expressions import ComplexScalar, Integer, RealScalar, to_scalar
 
@@ -96,6 +96,6 @@ def test_inner_of_complex_scalars():
 
 def test_conj_of_real_function(lagrange_element):
     """A real-valued function is its own conjugate."""
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     u = Coefficient(function_space(domain, lagrange_element("triangle", 1)))
     assert conj(u) == u

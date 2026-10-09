@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from math import prod
 
 from uflx.entities import AbstractEntity
-from uflx.maps import AbstractReferenceMap
+from uflx.maps import AbstractValueMap
 
 
 class AbstractFiniteElement(ABC):
@@ -43,12 +43,12 @@ class AbstractFiniteElement(ABC):
         """Check if this element is real-valued."""
 
     @abstractmethod
-    def physical_value_shape(self, geometric_dimension: int) -> tuple[int, ...]:
-        """Return the shape of the value space on a physical cell."""
+    def ambient_value_shape(self, geometric_dimension: int) -> tuple[int, ...]:
+        """Return the shape of the value space in ambient coordinates."""
 
-    def physical_value_size(self, geometric_dimension: int) -> int:
-        """Return the value size of the value space on a physical cell."""
-        return prod(self.physical_value_shape(geometric_dimension))
+    def ambient_value_size(self, geometric_dimension: int) -> int:
+        """Return the value size of the value space in ambient coordinates."""
+        return prod(self.ambient_value_shape(geometric_dimension))
 
     @property
     @abstractmethod
@@ -81,8 +81,8 @@ class AbstractFiniteElement(ABC):
         """Representation."""
 
 
-class AbstractReferenceMappedFiniteElement(AbstractFiniteElement):
-    """Abstract base class for a reference-mapped finite element.
+class AbstractMappedFiniteElement(AbstractFiniteElement):
+    """Abstract base class for a finite element whose values are mapped from an entity.
 
     To make your element library compatible with UFL, you should make a
     subclass of AbstractFiniteElement and provide implementations of all
@@ -93,21 +93,19 @@ class AbstractReferenceMappedFiniteElement(AbstractFiniteElement):
 
     @property
     @abstractmethod
-    def reference_value_shape(self) -> tuple[int, ...]:
-        """Return the shape of the value space on the reference cell."""
+    def entity_value_shape(self) -> tuple[int, ...]:
+        """Return the shape of the value space in the entity's coordinates."""
 
     @property
-    def reference_value_size(self) -> int:
-        """Return the value size of the value space on the reference cell."""
-        return prod(self.reference_value_shape)
+    def entity_value_size(self) -> int:
+        """Return the value size of the value space in the entity's coordinates."""
+        return prod(self.entity_value_shape)
 
     @property
     @abstractmethod
-    def reference_map(self) -> AbstractReferenceMap:
+    def value_map(self) -> AbstractValueMap:
         """Get the push forward and pull back map."""
 
-    def physical_value_shape(self, geometric_dimension: int) -> tuple[int, ...]:
-        """Return the shape of the value space on a physical cell."""
-        return self.reference_map.physical_value_shape(
-            self.reference_value_shape, geometric_dimension
-        )
+    def ambient_value_shape(self, geometric_dimension: int) -> tuple[int, ...]:
+        """Return the shape of the value space in ambient coordinates."""
+        return self.value_map.ambient_value_shape(self.entity_value_shape, geometric_dimension)

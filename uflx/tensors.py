@@ -246,7 +246,7 @@ class Matrix(Tensor):
         """Compute the determinant of the matrix.
 
         For a non-square matrix A this is the pseudo-determinant sqrt(det(A^T A)) (tall A) or
-        sqrt(det(A A^T)) (wide A), i.e. the volume scaling of the reference-to-physical map of a
+        sqrt(det(A A^T)) (wide A), i.e. the volume scaling of the parametrization of a
         manifold cell.
         """
         rows, cols = self._shape

@@ -11,8 +11,8 @@ from abc import abstractmethod
 from typing import Any, Self
 
 from uflx.expressions import AbstractExpression, Im, Re
-from uflx.finite_elements import AbstractFiniteElement, AbstractReferenceMappedFiniteElement
-from uflx.function_spaces import AbstractFunctionSpace, AbstractReferenceMappedFunctionSpace
+from uflx.finite_elements import AbstractFiniteElement, AbstractMappedFiniteElement
+from uflx.function_spaces import AbstractFunctionSpace, AbstractMappedFunctionSpace
 from uflx.functions import AbstractFunction, AbstractVariable
 from uflx.graphs import GraphNode
 from uflx.tensors import zero
@@ -68,7 +68,7 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
 
     def __init__(
         self,
-        space: AbstractReferenceMappedFunctionSpace,
+        space: AbstractMappedFunctionSpace,
         basis_index: int | str,
         variable: AbstractVariable,
         element_index: int | None = None,
@@ -93,7 +93,7 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
             self._derivative = tuple(0 for _ in range(self._element.cell.topological_dimension))
         else:
             self._derivative = derivative
-        if component is None and self._element.reference_value_size == 1:
+        if component is None and self._element.entity_value_size == 1:
             self._component: int | None = 0
         else:
             self._component = component
@@ -133,14 +133,12 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         if self._component is None:
-            if self.is_reference:
-                assert isinstance(self.element, AbstractReferenceMappedFiniteElement)
-                return self.element.reference_value_shape
+            if self.in_entity_coordinates:
+                assert isinstance(self.element, AbstractMappedFiniteElement)
+                return self.element.entity_value_shape
             else:
                 assert self._variable.domain.topological_dimension is not None
-                return self.element.physical_value_shape(
-                    self._variable.domain.topological_dimension
-                )
+                return self.element.ambient_value_shape(self._variable.domain.topological_dimension)
         else:
             return ()
 
@@ -148,7 +146,8 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
         """Representation."""
         repr = (
             "EvaluatedBasisFunction("
-            f"{self._space!r}, {self._basis_index}, {self._variable!r}, {self.is_reference}"
+            f"{self._space!r}, {self._basis_index}, {self._variable!r}, "
+            f"{self.in_entity_coordinates}"
         )
         if self._element_index is not None:
             repr += f", {self._element_index}"

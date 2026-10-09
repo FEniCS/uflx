@@ -45,7 +45,7 @@ A domain is the integration domain of a form. For a minimal language definition,
 
 - topological dimension,
 - geometric dimension,
-- and a coordinate element, if geometry is represented using a finite element.
+- and a parametrization, if geometry is represented using a finite element.
 
 The actual mesh is still external to UFLx.
 
@@ -259,10 +259,10 @@ In UFLx, the set of static attributes is extensible. This allows for cleaner lan
 ### Poisson equation
 
 ```python
-coordinate_element = FiniteElement("Lagrange", triangle, 1, shape=(2,))
+parametrization = FiniteElement("Lagrange", triangle, 1, shape=(2,))
 element = FiniteElement("Lagrange", triangle, 1)
 
-mesh = Mesh(coordinate_element)
+mesh = Mesh(parametrization)
 V = FunctionSpace(mesh, element)
 
 u = TrialFunction(V, name="u")

@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
 from uflx.domains import AbstractDomain
-from uflx.finite_elements import AbstractReferenceMappedFiniteElement
+from uflx.finite_elements import AbstractMappedFiniteElement
 
 
 class AbstractFunctionSpace(ABC):
@@ -37,32 +37,32 @@ class AbstractFunctionSpace(ABC):
         """Check if this space is real-valued."""
 
 
-class AbstractReferenceMappedFunctionSpace(AbstractFunctionSpace):
-    """Abstract base class for a function space whose functions are mapped from a reference cell."""
+class AbstractMappedFunctionSpace(AbstractFunctionSpace):
+    """Abstract base class for a function space whose functions are mapped from an entity."""
 
     @property
     @abstractmethod
-    def elements(self) -> tuple[AbstractReferenceMappedFiniteElement, ...]:
+    def elements(self) -> tuple[AbstractMappedFiniteElement, ...]:
         """Elements in the function space."""
 
 
-class FunctionSpace(AbstractReferenceMappedFunctionSpace):
+class FunctionSpace(AbstractMappedFunctionSpace):
     """Function space."""
 
     def __init__(
         self,
         domain: AbstractDomain,
-        elements: tuple[AbstractReferenceMappedFiniteElement, ...],
+        elements: tuple[AbstractMappedFiniteElement, ...],
     ):
         """Initialise."""
         self._domain = domain
         self._elements = elements
         gdim = domain.geometric_dimension
-        shape = elements[0].physical_value_shape(gdim)
+        shape = elements[0].ambient_value_shape(gdim)
         for element in elements[1:]:
-            if element.physical_value_shape(gdim) != shape:
+            if element.ambient_value_shape(gdim) != shape:
                 raise ValueError(
-                    "Elements in a functions space must have the same physical value shape."
+                    "Elements in a functions space must have the same ambient value shape."
                 )
 
     @property
@@ -76,19 +76,19 @@ class FunctionSpace(AbstractReferenceMappedFunctionSpace):
         return all(e.real_valued for e in self._elements)
 
     @property
-    def elements(self) -> tuple[AbstractReferenceMappedFiniteElement, ...]:
+    def elements(self) -> tuple[AbstractMappedFiniteElement, ...]:
         """Elements in the function space."""
         return self._elements
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the function space."""
-        return self.elements[0].physical_value_shape(self.domain.geometric_dimension)
+        return self.elements[0].ambient_value_shape(self.domain.geometric_dimension)
 
 
 def function_space(
     domain: AbstractDomain,
-    elements: Sequence[AbstractReferenceMappedFiniteElement] | AbstractReferenceMappedFiniteElement,
+    elements: Sequence[AbstractMappedFiniteElement] | AbstractMappedFiniteElement,
 ) -> FunctionSpace:
     """Create a function space.
 
@@ -96,6 +96,6 @@ def function_space(
         domain: The domain on which the function space is defined.
         elements: The elements in the function space.
     """
-    if isinstance(elements, AbstractReferenceMappedFiniteElement):
+    if isinstance(elements, AbstractMappedFiniteElement):
         elements = (elements,)
     return FunctionSpace(domain, tuple(elements))

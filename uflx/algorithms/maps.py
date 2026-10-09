@@ -7,21 +7,21 @@ from uflx.graphs import GraphNode, as_graph
 
 
 @runtime_checkable
-class PullBackToReference(Protocol):
-    """Pull a node back to the reference cell."""
+class PullBackToEntity(Protocol):
+    """Pull a node back to the entity's coordinates."""
 
-    def pull_back_to_reference(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
-        """Pull the node back to the reference cell."""
+    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
+        """Pull the node back to the entity's coordinates."""
 
 
-def pull_back_to_reference(
+def pull_back_to_entity(
     expression: GraphNode,
 ) -> GraphNode:
-    """Pull terms in integrals back to reference values."""
+    """Pull terms in integrals back to the entity's coordinates."""
     node_map: dict[GraphNode, GraphNode] = {}
     for node in as_graph(expression).ordered_nodes():
-        if isinstance(node, PullBackToReference):
-            node_map[node] = node.pull_back_to_reference(node_map)
+        if isinstance(node, PullBackToEntity):
+            node_map[node] = node.pull_back_to_entity(node_map)
         elif any(a in node_map for a in node.successors):
             node_map[node] = reconstruct_node(node, node_map)
 

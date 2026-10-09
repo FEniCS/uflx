@@ -2,7 +2,7 @@
 
 import pytest
 
-from uflx import coordinate_element
+from uflx import parametrized_domain
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.expressions import RealScalar
 from uflx.geometry import (
@@ -37,7 +37,7 @@ cells_and_gdims = [
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
 def test_jacobian_expand_geometry(cell, gdim, lagrange_element):
     """Test expansion of Jacobian."""
-    domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
 
     point = Point([RealScalar(1.0)] * tdim, is_reference=True)
@@ -51,7 +51,7 @@ def test_jacobian_expand_geometry(cell, gdim, lagrange_element):
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
 def test_jacobian_inverse_expand_geometry(cell, gdim, lagrange_element):
     """Test expansion of Jacobian inverse."""
-    domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
 
     point = Point([RealScalar(1.0)] * tdim, is_reference=True)
@@ -65,7 +65,7 @@ def test_jacobian_inverse_expand_geometry(cell, gdim, lagrange_element):
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
 def test_jacobian_tranpose_expand_geometry(cell, gdim, lagrange_element):
     """Test expansion of Jacobian inverse transpose."""
-    domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
 
     point = Point([RealScalar(1.0)] * tdim, is_reference=True)
@@ -79,7 +79,7 @@ def test_jacobian_tranpose_expand_geometry(cell, gdim, lagrange_element):
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
 def test_jacobian_inverse_transpose_expand_geometry(cell, gdim, lagrange_element):
     """Test expansion of Jacobian inverse transpose."""
-    domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
 
     point = Point([RealScalar(1.0)] * tdim, is_reference=True)
