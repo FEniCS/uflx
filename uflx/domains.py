@@ -15,34 +15,17 @@ tuples, and naming one means naming a tuple in the source domain and
 composing. A mesh is a parametrized domain, and the mesh itself stays
 external to UFLx.
 
-For example, take a surface mesh of triangles in three dimensions, whose
-geometry is described by a degree 1 Lagrange element with three
-components::
+In finite element terms, the two are the reference cell and the mesh. For
+a surface mesh of triangles in three dimensions::
 
-    domain = parametrized_domain(P1_vector)   # tdim 2, gdim 3
+    mesh = parametrized_domain(P1_vector)              # tdim 2, gdim 3
+    X = point([a, b], entity_domain(triangle))         # tdim == gdim == 2
+    x = PushedForwardPoint(X, mesh).expand_geometry()  # a point in RD(3)
 
-That domain is parametrized. The tuple (0.25, 0.25) does not name one of
-its points: the mesh has many triangles, so there is no one point those
-two numbers refer to, and a point of the surface needs three ambient
-coordinates anyway. What (0.25, 0.25) does name is a point of the
-triangle's own coordinate domain::
-
-    a = b = RealScalar(0.25)
-    X = point([a, b], entity_domain(triangle))   # tdim == gdim == 2
-
-A point of the mesh is that tuple carried through the parametrization of
-one cell, which is what PushedForwardPoint does: given the coordinate
-dofs of a cell, it evaluates the geometry element's basis at X and sums,
-giving three explicit ambient coordinates in R^3. So the two kinds of
-domain are what a finite element method already distinguishes as the
-reference cell and the mesh, and the distinction here is about which of
-them a tuple of numbers can name.
-
-The dimensions follow from this. A coordinate domain's geometry is the
-identity, so its topological and geometric dimensions always agree --
-the triangle's coordinate domain has both equal to 2. A parametrized
-domain is where they come apart, with tdim 2 and gdim 3 for the surface
-mesh above.
+The pair (a, b) names no point of the mesh: it has many triangles, and a
+point of the surface needs three ambient coordinates. It names a point of
+the triangle's coordinate domain, and the push forward carries it through
+one cell's parametrization to get ambient coordinates.
 
 There is no assumption that a domain only contains cells of a single type:
 one could contain (eg) a mixture of triangles and quadrilaterals, or even
