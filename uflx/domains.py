@@ -27,9 +27,9 @@ point of the surface needs three ambient coordinates. It names a point of
 the triangle's coordinate domain, and the push forward carries it through
 one cell's parametrization to get ambient coordinates.
 
-There is no assumption that a domain only contains cells of a single type:
-one could contain (eg) a mixture of triangles and quadrilaterals, or even
-a mixture of (eq) tetrahedra and intervals.
+A parametrized domain makes no assumption that it only contains cells of
+a single type: one could contain (eg) a mixture of triangles and
+quadrilaterals, or even a mixture of (eq) tetrahedra and intervals.
 """
 
 from abc import ABC, abstractmethod
@@ -45,7 +45,7 @@ class AbstractDomain(ABC):
     @property
     @abstractmethod
     def geometric_dimension(self) -> int:
-        """The dimension of the space this domain is embedded in."""
+        """The number of coordinates needed to name a point of this domain."""
 
     @property
     @abstractmethod
@@ -62,9 +62,17 @@ class AbstractCoordinateDomain(AbstractDomain):
 
     A tuple of numbers names a point of such a domain outright, so tuple
     equality is point equality and arithmetic on components is
-    meaningful. Its geometry is the identity, which means its geometric
-    and topological dimensions always agree.
+    meaningful. Its geometry is the identity, so its topological and
+    geometric dimensions agree and a subclass need only give one of them.
     """
+
+    @property
+    def topological_dimension(self) -> int:
+        """The topological dimension of the domain.
+
+        The geometry is the identity, so this is the geometric dimension.
+        """
+        return self.geometric_dimension
 
 
 class AbstractFiniteElementDomain(AbstractDomain):
@@ -73,14 +81,14 @@ class AbstractFiniteElementDomain(AbstractDomain):
     @property
     @abstractmethod
     def cells(self) -> tuple[AbstractEntity, ...]:
-        """Get the cell types in the finite element mesh."""
+        """Get the cell types in this domain."""
 
 
 class AbstractParametrizedDomain(AbstractFiniteElementDomain):
-    """Base class for a coordinate element.
+    """Base class for a domain presented as the image of a map.
 
-    In a coordinate element, the geometry of the domain is defined using a
-    finite element.
+    The map out of each cell's coordinate domain is the parametrization,
+    and is itself described by a finite element.
     """
 
     @abstractmethod
@@ -88,68 +96,36 @@ class AbstractParametrizedDomain(AbstractFiniteElementDomain):
         """Get the element describing the geometry of the given cell type."""
 
     @property
-    def is_affine_map(self) -> bool:
+    def has_affine_parametrization(self) -> bool:
         """Is the parametrization of this domain affine?"""
         return all(
             c.is_simplex and self.parametrization(c).lagrange_superdegree == 1 for c in self.cells
         )
 
 
-class ParametrizedDomain(AbstractParametrizedDomain):
-    """A coordinate element."""
+class RD(AbstractCoordinateDomain):
+    """R^d, the ambient coordinate domain."""
 
-    def __init__(self, elements: tuple[AbstractMappedFiniteElement, ...]):
+    def __init__(self, dim: int):
         """Initialise."""
-        self._elements = {e.cell: e for e in elements}
-        (self._gdim,) = elements[0].entity_value_shape
-        for e in elements[1:]:
-            assert e.entity_value_shape == (self._gdim,)
+        self._dim = dim
 
     @property
     def geometric_dimension(self) -> int:
-        """Dimension of the space this domain is embedded in."""
-        return self._gdim
-
-    @property
-    def cells(self) -> tuple[AbstractEntity, ...]:
-        """Get the cells in the domain."""
-        return tuple(self._elements.keys())
-
-    def parametrization(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
-        """Get the element describing the geometry of the given cell type."""
-        return self._elements[cell]
-
-    @property
-    def topological_dimension(self) -> int | None:
-        """The topological dimension of the domain.
-
-        This returns None iff the domain contains entities of a mixture
-        of topological dimensions.
-        """
-        dims = {c.topological_dimension for c in self.cells}
-        if len(dims) == 1:
-            (dim,) = dims
-            return dim
-        else:
-            return None
+        """The number of coordinates needed to name a point of this domain."""
+        return self._dim
 
     def __repr__(self) -> str:
         """Representation."""
-        elements = ", ".join(repr(e) for e in self._elements.values())
-        return f"ParametrizedDomain({elements})"
+        return f"RD({self._dim})"
 
     def __eq__(self, other) -> bool:
-        """Check for equality.
-
-        Two parametrized domains are equal when they have the same
-        geometric description. This says nothing about the meshes a
-        consumer may attach to them, which UFLx never sees.
-        """
-        return isinstance(other, ParametrizedDomain) and self._elements == other._elements
+        """Check for equality."""
+        return isinstance(other, RD) and self._dim == other._dim
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.ParametrizedDomain", *sorted(self._elements.items(), key=repr)))
+        return hash(("uflx.RD", self._dim))
 
 
 class EntityDomain(AbstractCoordinateDomain, AbstractFiniteElementDomain):
@@ -170,23 +146,13 @@ class EntityDomain(AbstractCoordinateDomain, AbstractFiniteElementDomain):
         self._entity = entity
 
     @property
-    def entity(self) -> AbstractEntity:
-        """The entity whose coordinates this domain carries."""
-        return self._entity
-
-    @property
     def geometric_dimension(self) -> int:
-        """The dimension of the space this domain is embedded in."""
-        return self._entity.topological_dimension
-
-    @property
-    def topological_dimension(self) -> int | None:
-        """The topological dimension of the domain."""
+        """The number of coordinates needed to name a point of this domain."""
         return self._entity.topological_dimension
 
     @property
     def cells(self) -> tuple[AbstractEntity, ...]:
-        """Get the cell types in the finite element mesh."""
+        """Get the cell types in this domain, which is the entity itself."""
         return (self._entity,)
 
     def __repr__(self) -> str:
@@ -202,17 +168,24 @@ class EntityDomain(AbstractCoordinateDomain, AbstractFiniteElementDomain):
         return hash(("uflx.EntityDomain", self._entity))
 
 
-class RD(AbstractCoordinateDomain):
-    """R^d, the ambient coordinate domain."""
+class ParametrizedDomain(AbstractParametrizedDomain):
+    """A domain whose geometry is described by a finite element per cell."""
 
-    def __init__(self, dim: int):
+    def __init__(self, elements: tuple[AbstractMappedFiniteElement, ...]):
         """Initialise."""
-        self._dim = dim
+        self._elements = {e.cell: e for e in elements}
+        # A parametrization's values are the ambient coordinates, so its
+        # value shape is (gdim,). Read in the entity's coordinates
+        # because the geometry element is identity mapped, and because
+        # the ambient shape would need the gdim being computed here.
+        (self._gdim,) = elements[0].entity_value_shape
+        for e in elements[1:]:
+            assert e.entity_value_shape == (self._gdim,)
 
     @property
     def geometric_dimension(self) -> int:
-        """The dimension of the space this domain is embedded in."""
-        return self._dim
+        """The number of coordinates needed to name a point of this domain."""
+        return self._gdim
 
     @property
     def topological_dimension(self) -> int | None:
@@ -221,19 +194,39 @@ class RD(AbstractCoordinateDomain):
         This returns None iff the domain contains entities of a mixture
         of topological dimensions.
         """
-        return self._dim
+        dims = {c.topological_dimension for c in self.cells}
+        if len(dims) == 1:
+            (dim,) = dims
+            return dim
+        else:
+            return None
+
+    @property
+    def cells(self) -> tuple[AbstractEntity, ...]:
+        """Get the cell types in this domain."""
+        return tuple(self._elements.keys())
+
+    def parametrization(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
+        """Get the element describing the geometry of the given cell type."""
+        return self._elements[cell]
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"RD({self._dim})"
+        elements = ", ".join(repr(e) for e in self._elements.values())
+        return f"ParametrizedDomain({elements})"
 
     def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return isinstance(other, RD) and self._dim == other._dim
+        """Check for equality.
+
+        Two parametrized domains are equal when they have the same
+        geometric description. This says nothing about the meshes a
+        consumer may attach to them, which UFLx never sees.
+        """
+        return isinstance(other, ParametrizedDomain) and self._elements == other._elements
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.RD", self._dim))
+        return hash(("uflx.ParametrizedDomain", frozenset(self._elements.items())))
 
 
 def entity_domain(entity: AbstractEntity) -> EntityDomain:
@@ -250,11 +243,14 @@ def entity_domain(entity: AbstractEntity) -> EntityDomain:
 
 def parametrized_domain(
     elements: Sequence[AbstractMappedFiniteElement] | AbstractMappedFiniteElement,
-):
-    """Create a domain.
+) -> ParametrizedDomain:
+    """Create a parametrized domain.
 
     Args:
         elements: The finite element(s) used to define the geometry of the cells in this domain
+
+    Returns:
+        A domain whose geometry is described by the given element(s)
     """
     if isinstance(elements, AbstractMappedFiniteElement):
         elements = (elements,)

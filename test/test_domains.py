@@ -11,32 +11,32 @@ from uflx import parametrized_domain
 from uflx.domains import RD, AbstractCoordinateDomain, EntityDomain, entity_domain
 
 
-def test_is_affine_map_true_for_degree_one_simplex(lagrange_element):
+def test_has_affine_parametrization_true_for_degree_one_simplex(lagrange_element):
     """A degree 1 Lagrange coordinate element on a simplex cell is an affine map."""
     domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
-    assert domain.is_affine_map
+    assert domain.has_affine_parametrization
 
     domain = parametrized_domain(lagrange_element("tetrahedron", 1, (3,)))
-    assert domain.is_affine_map
+    assert domain.has_affine_parametrization
 
 
-def test_is_affine_map_false_for_higher_degree(lagrange_element):
+def test_has_affine_parametrization_false_for_higher_degree(lagrange_element):
     """A higher degree Lagrange coordinate element is not an affine map."""
     domain = parametrized_domain(lagrange_element("triangle", 2, (2,)))
-    assert not domain.is_affine_map
+    assert not domain.has_affine_parametrization
 
 
-def test_is_affine_map_false_for_tensor_product_cell(lagrange_element):
+def test_has_affine_parametrization_false_for_tensor_product_cell(lagrange_element):
     """A degree 1 Lagrange coordinate element on a non-simplex cell is not affine.
 
     Even at degree 1, a quadrilateral or hexahedron's coordinate map is
     multilinear, not affine, since these cells aren't simplices.
     """
     domain = parametrized_domain(lagrange_element("quadrilateral", 1, (2,)))
-    assert not domain.is_affine_map
+    assert not domain.has_affine_parametrization
 
     domain = parametrized_domain(lagrange_element("hexahedron", 1, (3,)))
-    assert not domain.is_affine_map
+    assert not domain.has_affine_parametrization
 
 
 @pytest.mark.parametrize("cell", ["interval", "triangle", "quadrilateral", "tetrahedron"])
