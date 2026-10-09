@@ -4,7 +4,7 @@ from abc import abstractmethod
 from collections.abc import Sequence
 from typing import Any
 
-from uflx.domains import RD, AbstractCoordinateDomain, AbstractDomain
+from uflx.domains import AbstractCoordinateDomain, AbstractDomain
 from uflx.expressions import AbstractExpression
 from uflx.functions import AbstractVariable
 from uflx.graphs import GraphNode
@@ -90,23 +90,6 @@ class Point(AbstractPoint):
     def __hash__(self) -> int:
         """Hash."""
         return hash(("uflx.Point", self._domain, *self._components))
-
-
-def point(
-    components: Sequence[AbstractExpression], domain: AbstractCoordinateDomain | None = None
-) -> Point:
-    """Create a point.
-
-    Args:
-        components: The coordinates of the point
-        domain: The coordinate domain the point lies in, ambient R^d by default
-
-    Returns:
-        A point
-    """
-    if domain is None:
-        domain = RD(len(components))
-    return Point(components, domain)
 
 
 class PointComponent(AbstractExpression):
