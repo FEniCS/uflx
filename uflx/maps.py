@@ -38,6 +38,15 @@ class AbstractValueMap(ABC):
         """
         return False
 
+    @property
+    def is_identity(self) -> bool:
+        """Whether this map leaves values untouched.
+
+        Conservative by default (False): a subclass overrides this only
+        when its push forward and pull back are both the identity.
+        """
+        return False
+
 
 class IdentityValueMap(AbstractValueMap):
     """Identity map."""
@@ -59,6 +68,11 @@ class IdentityValueMap(AbstractValueMap):
     @property
     def preserves_constant_values(self) -> bool:
         """The identity map trivially preserves constant values."""
+        return True
+
+    @property
+    def is_identity(self) -> bool:
+        """The identity map leaves values untouched."""
         return True
 
 

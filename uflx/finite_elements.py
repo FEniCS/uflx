@@ -106,6 +106,17 @@ class AbstractMappedFiniteElement(AbstractFiniteElement):
     def value_map(self) -> AbstractValueMap:
         """Get the push forward and pull back map."""
 
+    @property
+    def describes_affine_map(self) -> bool:
+        """Whether the map this element describes is affine.
+
+        A degree 1 element on a simplex gives an affine map. On a
+        tensor-product cell even a degree 1 element's map is multilinear,
+        not affine. A library that knows more about its own elements may
+        override this.
+        """
+        return self.cell.is_simplex and self.lagrange_superdegree == 1
+
     def ambient_value_shape(self, geometric_dimension: int) -> tuple[int, ...]:
         """Return the shape of the value space in ambient coordinates."""
         return self.value_map.ambient_value_shape(self.entity_value_shape, geometric_dimension)

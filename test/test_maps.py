@@ -25,3 +25,9 @@ def test_blocked_map(lagrange_element):
     v = Vector([Integer(i) for i in range(4)])
     assert b_map.push_forward(v) == v
     assert b_map.pull_back(v) == v
+
+
+def test_only_the_identity_map_says_it_is_the_identity():
+    """is_identity is conservative, so a wrapping map does not inherit it."""
+    assert IdentityValueMap().is_identity
+    assert not BlockedValueMap(IdentityValueMap(), (2,)).is_identity
