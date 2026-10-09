@@ -1,10 +1,12 @@
 """Complex number algorithms."""
 
+from itertools import product
 from typing import Protocol, runtime_checkable
 
 from uflx.algorithms import replace
-from uflx.expressions import AbstractExpression, Conj
+from uflx.expressions import AbstractExpression, ComplexScalar, Conj, RealScalar
 from uflx.graphs import GraphNode, as_graph
+from uflx.tensors import Tensor
 
 
 @runtime_checkable
@@ -48,9 +50,23 @@ def take_imaginary_part(
     )
 
 
+def _is_literal_zero(value: AbstractExpression) -> bool:
+    """Check if an expression is a literal zero."""
+    if isinstance(value, RealScalar):
+        return value.as_float() == 0.0
+    if isinstance(value, Tensor):
+        return all(
+            _is_literal_zero(value.component(*i))
+            for i in product(*(range(n) for n in value.value_shape))
+        )
+    return False
+
+
 def conj(value: AbstractExpression) -> AbstractExpression:
     """Get the complex conjugate."""
     if isinstance(value, ComplexValued):
-        return value.re - value.im
+        if _is_literal_zero(value.im):
+            return value.re
+        return value.re - ComplexScalar(RealScalar(0.0), RealScalar(1.0)) * value.im
     else:
         return Conj(value)
