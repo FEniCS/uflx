@@ -48,7 +48,7 @@ def test_elasticity_bilinear_form_composes(lagrange_element, cell, dim):
 
 @pytest.mark.parametrize(("cell", "dim"), [("triangle", 2), ("tetrahedron", 3)])
 def test_elasticity_bilinear_form_pulls_back_to_reference(lagrange_element, cell, dim):
-    """The whole form must pull back to the reference cell and stay well-shaped."""
+    """The whole form must pull back to the entity's coordinates and stay well-shaped."""
     domain = parametrized_domain(lagrange_element(cell, 1, (dim,)))
     space = function_space(domain, lagrange_element(cell, 1, (dim,)))
 
