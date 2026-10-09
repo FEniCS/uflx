@@ -14,7 +14,7 @@ from abc import abstractmethod
 from itertools import count
 from typing import Any, Self, cast
 
-from uflx.domains import AbstractDomain, AbstractFiniteElementDomain
+from uflx.domains import AbstractDomain, AbstractFiniteElementDomain, EntityDomain
 from uflx.expressions import AbstractExpression, Im, Re
 from uflx.function_spaces import AbstractFunctionSpace, AbstractMappedFunctionSpace
 from uflx.graphs import GraphNode
@@ -46,7 +46,7 @@ class AbstractVariable(AbstractExpression):
     @property
     def in_entity_coordinates(self) -> bool:
         """Check if this variable's components are in an entity's coordinates."""
-        return False
+        return isinstance(self.domain, EntityDomain)
 
     def to_entity_coordinates(self) -> FiniteElementVariable:
         """Make a version of this variable in the entity's coordinates."""
@@ -163,7 +163,11 @@ class FiniteElementVariable(AbstractVariable):
 
     @property
     def in_entity_coordinates(self) -> bool:
-        """Check if this variable's components are in an entity's coordinates."""
+        """Check if this variable's components are in an entity's coordinates.
+
+        Stored rather than derived from the domain, because
+        to_entity_coordinates keeps the same domain for now.
+        """
         return self._in_entity_coordinates
 
     def to_entity_coordinates(self) -> FiniteElementVariable:

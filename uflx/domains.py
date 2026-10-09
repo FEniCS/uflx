@@ -1,11 +1,20 @@
 # Copyright (C) 2025 Matthew Scroggs and Garth N. Wells
+# Copyright (C) 2026 Jack S. Hale
 #
 # This file is part of UFLx (https://www.fenicsproject.org)
 #
 # SPDX-License-Identifier:    MIT
 """Domains.
 
-A domain is a subset of R^d over which something can be integrated.
+A domain is a set over which something can be integrated.
+
+Some domains are coordinate domains: their points are tuples of numbers,
+so a tuple names a point. Others are parametrized domains, presented as
+the image of a map out of a coordinate domain; their points are not
+tuples, and naming one means naming a tuple in the source domain and
+composing. A mesh is a parametrized domain, and the mesh itself stays
+external to UFLx.
+
 There is no assumption that a domain only contains cells of a single type:
 one could contain (eg) a mixture of triangles and quadrilaterals, or even
 a mixture of (eq) tetrahedra and intervals.
@@ -34,6 +43,16 @@ class AbstractDomain(ABC):
         This returns None iff the domain contains entities of a mixture
         of topological dimensions.
         """
+
+
+class AbstractCoordinateDomain(AbstractDomain):
+    """Base class for a domain whose points are coordinate tuples.
+
+    A tuple of numbers names a point of such a domain outright, so tuple
+    equality is point equality and arithmetic on components is
+    meaningful. Its geometry is the identity, which means its geometric
+    and topological dimensions always agree.
+    """
 
 
 class AbstractFiniteElementDomain(AbstractDomain):
@@ -102,9 +121,77 @@ class ParametrizedDomain(AbstractParametrizedDomain):
         else:
             return None
 
+    def __repr__(self) -> str:
+        """Representation."""
+        elements = ", ".join(repr(e) for e in self._elements.values())
+        return f"ParametrizedDomain({elements})"
 
-class RD(AbstractDomain):
-    """R^d."""
+    def __eq__(self, other) -> bool:
+        """Check for equality.
+
+        Two parametrized domains are equal when they have the same
+        geometric description. This says nothing about the meshes a
+        consumer may attach to them, which UFLx never sees.
+        """
+        return isinstance(other, ParametrizedDomain) and self._elements == other._elements
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.ParametrizedDomain", *sorted(self._elements.items(), key=repr)))
+
+
+class EntityDomain(AbstractCoordinateDomain, AbstractFiniteElementDomain):
+    """The coordinate realization of a single topological entity.
+
+    The geometry of an entity domain is the identity, so unlike a
+    :class:`ParametrizedDomain` it has no parametrization. The
+    coordinates of its points are fixed by whoever defines the elements
+    on the entity, not by UFLx.
+    """
+
+    def __init__(self, entity: AbstractEntity):
+        """Initialise.
+
+        Args:
+            entity: The entity whose coordinates this domain carries
+        """
+        self._entity = entity
+
+    @property
+    def entity(self) -> AbstractEntity:
+        """The entity whose coordinates this domain carries."""
+        return self._entity
+
+    @property
+    def geometric_dimension(self) -> int:
+        """The dimension of the space this domain is embedded in."""
+        return self._entity.topological_dimension
+
+    @property
+    def topological_dimension(self) -> int | None:
+        """The topological dimension of the domain."""
+        return self._entity.topological_dimension
+
+    @property
+    def cells(self) -> tuple[AbstractEntity, ...]:
+        """Get the cell types in the finite element mesh."""
+        return (self._entity,)
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"EntityDomain({self._entity!r})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return isinstance(other, EntityDomain) and self._entity == other._entity
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.EntityDomain", self._entity))
+
+
+class RD(AbstractCoordinateDomain):
+    """R^d, the ambient coordinate domain."""
 
     def __init__(self, dim: int):
         """Initialise."""
@@ -123,6 +210,30 @@ class RD(AbstractDomain):
         of topological dimensions.
         """
         return self._dim
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"RD({self._dim})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return isinstance(other, RD) and self._dim == other._dim
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.RD", self._dim))
+
+
+def entity_domain(entity: AbstractEntity) -> EntityDomain:
+    """Create the coordinate domain of an entity.
+
+    Args:
+        entity: The entity whose coordinates the domain carries
+
+    Returns:
+        The entity's coordinate domain
+    """
+    return EntityDomain(entity)
 
 
 def parametrized_domain(

@@ -2,8 +2,11 @@
 
 import pytest
 
+from uflx import parametrized_domain
+from uflx.algorithms import replace
+from uflx.domains import EntityDomain
 from uflx.expressions import Integer, RealScalar
-from uflx.points import RD, Point
+from uflx.points import RD, Point, point
 
 
 @pytest.mark.parametrize("dim", range(5))
@@ -16,22 +19,53 @@ def test_rd(dim):
 @pytest.mark.parametrize("dim", range(5))
 def test_point(dim):
     """Test a point."""
-    point = Point([Integer(i) for i in range(dim)])
+    p = point([Integer(i) for i in range(dim)])
 
-    assert point.domain.geometric_dimension == dim
+    assert p.domain.geometric_dimension == dim
+    assert p.domain == RD(dim)
+    assert not p.in_entity_coordinates
 
 
 def test_points_of_different_dimensions_differ():
     """A point is not equal to a point with more components."""
     a, b = RealScalar(0.5), RealScalar(1.0)
-    assert Point([a]) != Point([a, b])
-    assert Point([a, b]) != Point([a])
-    assert Point([a, b]) == Point([a, b])
-    assert hash(Point([a, b])) == hash(Point([a, b]))
+    assert point([a]) != point([a, b])
+    assert point([a, b]) != point([a])
+    assert point([a, b]) == point([a, b])
+    assert hash(point([a, b])) == hash(point([a, b]))
 
 
-def test_reference_and_physical_points_differ():
-    """A point on the reference cell is not the physical point with the same coordinates."""
+def test_entity_and_ambient_points_differ(lagrange_element):
+    """The same coordinates in different domains are different points."""
+    domain = parametrized_domain(lagrange_element("interval", 1, (1,)))
+    a = RealScalar(0.5)
+
+    entity = Point([a], EntityDomain(domain.cells[0]))
+    ambient = point([a])
+
+    assert entity.in_entity_coordinates
+    assert not ambient.in_entity_coordinates
+    assert entity != ambient
+    assert len({entity, ambient}) == 2
+
+
+def test_domain_survives_a_rewrite(lagrange_element):
+    """A rewrite of a point's components leaves it in the same domain."""
+    domain = parametrized_domain(lagrange_element("interval", 1, (1,)))
+    a = RealScalar(0.5)
+    entity = Point([a], EntityDomain(domain.cells[0]))
+
+    rewritten = replace(entity, {a: RealScalar(0.25)})
+
+    assert isinstance(rewritten, Point)
+    assert rewritten.domain == entity.domain
+    assert rewritten.in_entity_coordinates
+
+
+def test_point_components_must_match_its_domain(lagrange_element):
+    """A point cannot have more components than its domain has dimensions."""
+    domain = parametrized_domain(lagrange_element("interval", 1, (1,)))
     a, b = RealScalar(0.5), RealScalar(1.0)
-    assert Point([a, b], in_entity_coordinates=True) != Point([a, b])
-    assert len({Point([a, b], in_entity_coordinates=True), Point([a, b])}) == 2
+
+    with pytest.raises(AssertionError):
+        Point([a, b], EntityDomain(domain.cells[0]))

@@ -4,7 +4,7 @@ from abc import abstractmethod
 from collections.abc import Sequence
 from typing import Any
 
-from uflx.domains import RD, AbstractDomain
+from uflx.domains import RD, AbstractCoordinateDomain, AbstractDomain
 from uflx.expressions import AbstractExpression
 from uflx.functions import AbstractVariable
 from uflx.graphs import GraphNode
@@ -36,12 +36,16 @@ class AbstractPoint(AbstractVariable):
 class Point(AbstractPoint):
     """A single point in R^d."""
 
-    def __init__(
-        self, components: Sequence[AbstractExpression], in_entity_coordinates: bool = False
-    ):
-        """Initialise."""
+    def __init__(self, components: Sequence[AbstractExpression], domain: AbstractCoordinateDomain):
+        """Initialise.
+
+        Args:
+            components: The coordinates of the point
+            domain: The coordinate domain the point lies in
+        """
+        assert domain.geometric_dimension == len(components)
         self._components = tuple(components)
-        self._in_entity_coordinates = in_entity_coordinates
+        self._domain = domain
 
     @property
     def index(self) -> int | str:
@@ -49,14 +53,9 @@ class Point(AbstractPoint):
         raise NotImplementedError()
 
     @property
-    def in_entity_coordinates(self) -> bool:
-        """Check if this variable's components are in an entity's coordinates."""
-        return self._in_entity_coordinates
-
-    @property
-    def domain(self) -> AbstractDomain:
+    def domain(self) -> AbstractCoordinateDomain:
         """The domain that this variable is in."""
-        return RD(len(self._components))
+        return self._domain
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -73,21 +72,41 @@ class Point(AbstractPoint):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return (self._components,)
+        return (self._components, self._domain)
+
+    def __repr__(self) -> str:
+        """Representation."""
+        components = ", ".join(repr(c) for c in self._components)
+        return f"Point(({components}), {self._domain!r})"
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
             isinstance(other, Point)
-            and self._in_entity_coordinates == other._in_entity_coordinates
+            and self._domain == other._domain
             and self._components == other._components
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(
-            ("uflx.Point", self._in_entity_coordinates, *[hash(c) for c in self._components])
-        )
+        return hash(("uflx.Point", self._domain, *self._components))
+
+
+def point(
+    components: Sequence[AbstractExpression], domain: AbstractCoordinateDomain | None = None
+) -> Point:
+    """Create a point.
+
+    Args:
+        components: The coordinates of the point
+        domain: The coordinate domain the point lies in, ambient R^d by default
+
+    Returns:
+        A point
+    """
+    if domain is None:
+        domain = RD(len(components))
+    return Point(components, domain)
 
 
 class PointComponent(AbstractExpression):
