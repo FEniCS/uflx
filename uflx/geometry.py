@@ -104,12 +104,12 @@ class ReferenceToPhysical(AbstractPoint):
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        return self._point.value_shape
+        return (self._domain.geometric_dimension,)
 
     @property
     def dim(self) -> int:
         """The dimension of the point."""
-        return self._point.value_shape[0]
+        return self._domain.geometric_dimension
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -180,12 +180,18 @@ class PhysicalToReference(AbstractPoint):
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        return self._point.value_shape
+        return (self.dim,)
 
     @property
     def dim(self) -> int:
         """The dimension of the point."""
-        return self._point.value_shape[0]
+        tdim = self._domain.topological_dimension
+        if tdim is None:
+            raise NotImplementedError(
+                "Reference points on domains with cells of several topological "
+                "dimensions are not supported."
+            )
+        return tdim
 
     @property
     def successors(self) -> set[GraphNode]:
