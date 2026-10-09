@@ -41,7 +41,7 @@ def test_entity_basis_function(lagrange_element):
     domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
     space = function_space(domain, element)
 
-    entity_point = Point([RealScalar(0.25)] * 2, EntityDomain(domain.cells[0]))
+    entity_point = Point([RealScalar(0.25)] * 2, EntityDomain(domain.cell_types[0]))
 
     ref_f = EvaluatedBasisFunction(space, 0, entity_point)
 

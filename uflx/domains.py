@@ -78,21 +78,27 @@ class AbstractCoordinateDomain(AbstractDomain):
 class AbstractCellularDomain(AbstractDomain):
     """Base class for a domain decomposed into cells.
 
-    Having cells is what lets a finite element be attached per cell, so
-    these are the domains a finite element function space can live on.
+    Being made of cells is what lets a finite element be attached per
+    cell, so these are the domains a finite element function space can
+    live on. The decomposition itself stays external, like the mesh: such
+    a domain says which cell types occur in it, not how many cells there
+    are or where they sit.
     """
 
     @property
     @abstractmethod
-    def cells(self) -> tuple[AbstractEntity, ...]:
-        """Get the cell types in this domain."""
+    def cell_types(self) -> tuple[AbstractEntity, ...]:
+        """Get the cell types that occur in this domain."""
 
 
 class AbstractParametrizedDomain(AbstractCellularDomain):
     """Base class for a domain presented as the image of a map.
 
-    The map out of each cell's coordinate domain is the parametrization,
-    and is itself described by a finite element.
+    The map out of a cell's coordinate domain into the ambient
+    coordinates is its parametrization, and a finite element per cell
+    type gives that map's basis. The element alone is not the map:
+    evaluating it on a cell also needs that cell's coordinate dofs, which
+    come from the external mesh.
     """
 
     @abstractmethod
@@ -103,7 +109,8 @@ class AbstractParametrizedDomain(AbstractCellularDomain):
     def has_affine_parametrization(self) -> bool:
         """Is the parametrization of this domain affine?"""
         return all(
-            c.is_simplex and self.parametrization(c).lagrange_superdegree == 1 for c in self.cells
+            c.is_simplex and self.parametrization(c).lagrange_superdegree == 1
+            for c in self.cell_types
         )
 
 
@@ -155,7 +162,7 @@ class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
         return self._entity.topological_dimension
 
     @property
-    def cells(self) -> tuple[AbstractEntity, ...]:
+    def cell_types(self) -> tuple[AbstractEntity, ...]:
         """Get the cell types in this domain, which is the entity itself."""
         return (self._entity,)
 
@@ -198,7 +205,7 @@ class ParametrizedDomain(AbstractParametrizedDomain):
         This returns None iff the domain contains entities of a mixture
         of topological dimensions.
         """
-        dims = {c.topological_dimension for c in self.cells}
+        dims = {c.topological_dimension for c in self.cell_types}
         if len(dims) == 1:
             (dim,) = dims
             return dim
@@ -206,7 +213,7 @@ class ParametrizedDomain(AbstractParametrizedDomain):
             return None
 
     @property
-    def cells(self) -> tuple[AbstractEntity, ...]:
+    def cell_types(self) -> tuple[AbstractEntity, ...]:
         """Get the cell types in this domain."""
         return tuple(self._elements.keys())
 
@@ -251,7 +258,7 @@ def parametrized_domain(
     """Create a parametrized domain.
 
     Args:
-        elements: The finite element(s) used to define the geometry of the cells in this domain
+        elements: The finite element(s) used to define the geometry of each cell type
 
     Returns:
         A domain whose geometry is described by the given element(s)

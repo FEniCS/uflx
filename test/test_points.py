@@ -40,7 +40,7 @@ def test_entity_and_ambient_points_differ(lagrange_element):
     domain = parametrized_domain(lagrange_element("interval", 1, (1,)))
     a = RealScalar(0.5)
 
-    entity = Point([a], EntityDomain(domain.cells[0]))
+    entity = Point([a], EntityDomain(domain.cell_types[0]))
     ambient = point([a])
 
     assert entity.in_entity_coordinates
@@ -53,7 +53,7 @@ def test_domain_survives_a_rewrite(lagrange_element):
     """A rewrite of a point's components leaves it in the same domain."""
     domain = parametrized_domain(lagrange_element("interval", 1, (1,)))
     a = RealScalar(0.5)
-    entity = Point([a], EntityDomain(domain.cells[0]))
+    entity = Point([a], EntityDomain(domain.cell_types[0]))
 
     rewritten = replace(entity, {a: RealScalar(0.25)})
 
@@ -68,4 +68,4 @@ def test_point_components_must_match_its_domain(lagrange_element):
     a, b = RealScalar(0.5), RealScalar(1.0)
 
     with pytest.raises(AssertionError):
-        Point([a, b], EntityDomain(domain.cells[0]))
+        Point([a, b], EntityDomain(domain.cell_types[0]))
