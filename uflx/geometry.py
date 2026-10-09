@@ -128,9 +128,10 @@ class ReferenceToPhysical(AbstractPoint):
         element = self.domain.element(self.domain.cells[0])
         (dim,) = element.reference_value_shape
 
+        coordinate_dofs = CoordinateDofs(self.domain)
         components = [
             expression_sum(
-                FlattenedTensorMap((i // dim, i % dim), (dim,))
+                coordinate_dofs.component(i // dim, i % dim)
                 * EvaluatedBasisFunction(
                     function_space(self.domain, element), i, self.reference_point, component=j
                 )
@@ -254,12 +255,13 @@ class Jacobian(AbstractExpression):
         element = self.domain.element(cell)
 
         assert self.point is not None
+        coordinate_dofs = CoordinateDofs(self.domain)
 
         return Matrix(
             [
                 [
                     expression_sum(
-                        FlattenedTensorMap((i // gdim, i % gdim), (gdim,))
+                        coordinate_dofs.component(i // gdim, i % gdim)
                         * EvaluatedBasisFunction(
                             function_space(self.domain, element),
                             i,
@@ -482,6 +484,41 @@ class JacobianInverseTranspose(AbstractExpression):
             and self.point == other.point
         ):
             return Identity(self.value_shape[0])
+
+
+class CoordinateDofs(AbstractExpression):
+    """The coordinate DOFs of the current cell, as a tensor of shape (number of nodes, gdim)."""
+
+    def __init__(self, domain: AbstractCoordinateElement):
+        """Initialise."""
+        self._domain = domain
+
+    @property
+    def domain(self) -> AbstractCoordinateElement:
+        """The domain."""
+        return self._domain
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        if len(self._domain.cells) != 1:
+            raise NotImplementedError("Only domains with exactly one cell type supported for now.")
+        gdim = self._domain.geometric_dimension
+        return (self._domain.element(self._domain.cells[0]).dim // gdim, gdim)
+
+    @property
+    def successors(self) -> set[GraphNode]:
+        """The successors of this node."""
+        return set()
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (self._domain,)
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get the coordinate of a node, ie an entry of the flattened array of DOFs."""
+        return FlattenedTensorMap(self, indices, (self._domain.geometric_dimension,))
 
 
 def expand_geometry(
