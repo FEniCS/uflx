@@ -4,7 +4,7 @@ import pytest
 
 from uflx.entities import AbstractEntity
 from uflx.finite_elements import AbstractMappedFiniteElement
-from uflx.maps import AbstractValueMap, IdentityValueMap
+from uflx.maps import AbstractValueMap, BlockedValueMap, IdentityValueMap
 
 
 class Entity(AbstractEntity):
@@ -229,6 +229,15 @@ class LagrangeElement(AbstractMappedFiniteElement):
     def __hash__(self):
         """Hash."""
         return hash(("uflx_test.LagrangeElement", self._cell, self._degree))
+
+
+class NonIdentityMappedElement(LagrangeElement):
+    """A Lagrange element whose values are mapped, like a Piola mapped element."""
+
+    @property
+    def value_map(self) -> AbstractValueMap:
+        """Get the push forward and pull back map."""
+        return BlockedValueMap(IdentityValueMap(), self.entity_value_shape)
 
 
 @pytest.fixture

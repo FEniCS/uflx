@@ -6,6 +6,7 @@
 """Test domains."""
 
 import pytest
+from conftest import NonIdentityMappedElement
 
 from uflx import parametrized_domain
 from uflx.domains import RD, AbstractCoordinateDomain, EntityDomain, entity_domain
@@ -94,3 +95,11 @@ def test_an_entity_domain_is_not_a_parametrized_domain(lagrange_element):
 
     assert EntityDomain(entity) != domain
     assert domain != EntityDomain(entity)
+
+
+def test_parametrization_must_be_identity_mapped(lagrange_element):
+    """A parametrization's values are the ambient coordinates, so no mapping is allowed."""
+    (triangle,) = parametrized_domain(lagrange_element("triangle", 1, (2,))).cell_types
+
+    with pytest.raises(ValueError, match="identity mapped"):
+        parametrized_domain(NonIdentityMappedElement(triangle, 1, (2,)))

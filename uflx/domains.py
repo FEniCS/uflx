@@ -108,10 +108,7 @@ class AbstractParametrizedDomain(AbstractCellularDomain):
     @property
     def has_affine_parametrization(self) -> bool:
         """Is the parametrization of this domain affine?"""
-        return all(
-            c.is_simplex and self.parametrization(c).lagrange_superdegree == 1
-            for c in self.cell_types
-        )
+        return all(self.parametrization(c).describes_affine_map for c in self.cell_types)
 
 
 class RD(AbstractCoordinateDomain):
@@ -185,10 +182,16 @@ class ParametrizedDomain(AbstractParametrizedDomain):
     def __init__(self, elements: tuple[AbstractMappedFiniteElement, ...]):
         """Initialise."""
         self._elements = {e.cell: e for e in elements}
-        # A parametrization's values are the ambient coordinates, so its
-        # value shape is (gdim,). Read in the entity's coordinates
-        # because the geometry element is identity mapped, and because
-        # the ambient shape would need the gdim being computed here.
+        for e in elements:
+            if not e.value_map.is_identity:
+                raise ValueError(
+                    "A parametrization's values are the ambient coordinates, "
+                    "so its element must be identity mapped."
+                )
+        # Hence a parametrization's value shape is (gdim,), and reading it
+        # in the entity's coordinates is the same as reading it in the
+        # ambient ones -- which is just as well, since the ambient shape
+        # would need the gdim being computed here.
         (self._gdim,) = elements[0].entity_value_shape
         for e in elements[1:]:
             assert e.entity_value_shape == (self._gdim,)
