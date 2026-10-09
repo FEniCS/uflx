@@ -98,7 +98,7 @@ class UnknownMap(AbstractValueMap):
 
 
 def test_unknown_mapping_is_not_constant(lagrange_element):
-    """Reference degree zero alone is insufficient on the physical cell."""
+    """Degree zero in the entity's coordinates alone is insufficient in ambient coordinates."""
     base = lagrange_element("triangle", 0)
 
     class MappedElement(LagrangeElement):
