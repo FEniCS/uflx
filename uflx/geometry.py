@@ -125,7 +125,7 @@ class PushedForwardPoint(AbstractPoint):
         """Expand geometry."""
         if len(self.domain.cell_types) != 1:
             raise NotImplementedError("Only domains with exactly on element supported for now.")
-        element = self.domain.parametrization(self.domain.cell_types[0])
+        element = self.domain.parametrization_element(self.domain.cell_types[0])
         (dim,) = element.entity_value_shape
 
         components = [
@@ -269,7 +269,7 @@ class Jacobian(AbstractExpression):
         if len(self.domain.cell_types) > 1:
             raise NotImplementedError()
         (cell,) = self.domain.cell_types
-        element = self.domain.parametrization(cell)
+        element = self.domain.parametrization_element(cell)
 
         assert self.point is not None
 
