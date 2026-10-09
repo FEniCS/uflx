@@ -4,9 +4,9 @@ import pytest
 
 from uflx import parametrized_domain
 from uflx.algorithms import replace
-from uflx.domains import EntityDomain
+from uflx.domains import RD, EntityDomain
 from uflx.expressions import Integer, RealScalar
-from uflx.points import RD, Point, point
+from uflx.points import Point
 
 
 @pytest.mark.parametrize("dim", range(5))
@@ -19,7 +19,7 @@ def test_rd(dim):
 @pytest.mark.parametrize("dim", range(5))
 def test_point(dim):
     """Test a point."""
-    p = point([Integer(i) for i in range(dim)])
+    p = Point([Integer(i) for i in range(dim)], RD(dim))
 
     assert p.domain.geometric_dimension == dim
     assert p.domain == RD(dim)
@@ -29,10 +29,10 @@ def test_point(dim):
 def test_points_of_different_dimensions_differ():
     """A point is not equal to a point with more components."""
     a, b = RealScalar(0.5), RealScalar(1.0)
-    assert point([a]) != point([a, b])
-    assert point([a, b]) != point([a])
-    assert point([a, b]) == point([a, b])
-    assert hash(point([a, b])) == hash(point([a, b]))
+    assert Point([a], RD(1)) != Point([a, b], RD(2))
+    assert Point([a, b], RD(2)) != Point([a], RD(1))
+    assert Point([a, b], RD(2)) == Point([a, b], RD(2))
+    assert hash(Point([a, b], RD(2))) == hash(Point([a, b], RD(2)))
 
 
 def test_entity_and_ambient_points_differ(lagrange_element):
@@ -41,7 +41,7 @@ def test_entity_and_ambient_points_differ(lagrange_element):
     a = RealScalar(0.5)
 
     entity = Point([a], EntityDomain(domain.cell_types[0]))
-    ambient = point([a])
+    ambient = Point([a], RD(1))
 
     assert entity.in_entity_coordinates
     assert not ambient.in_entity_coordinates

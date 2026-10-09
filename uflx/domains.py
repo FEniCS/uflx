@@ -19,7 +19,7 @@ In finite element terms, the two are the reference cell and the mesh. For
 a surface mesh of triangles in three dimensions::
 
     mesh = parametrized_domain(P1_vector)              # tdim 2, gdim 3
-    X = point([a, b], entity_domain(triangle))         # tdim == gdim == 2
+    X = Point([a, b], entity_domain(triangle))         # tdim == gdim == 2
     x = PushedForwardPoint(X, mesh).expand_geometry()  # a point in RD(3)
 
 The pair (a, b) names no point of the mesh: it has many triangles, and a

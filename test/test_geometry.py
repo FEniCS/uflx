@@ -15,7 +15,7 @@ from uflx.geometry import (
     PushedForwardPoint,
 )
 from uflx.graphs import as_graph
-from uflx.points import Point, point
+from uflx.points import Point
 from uflx.tensors import FlattenedTensorMap
 
 cells_and_gdims = [
@@ -114,7 +114,7 @@ def test_pulled_back_point_lands_in_entity_coordinates(lagrange_element):
     domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
     (entity,) = domain.cell_types
 
-    pulled = PulledBackPoint(point([RealScalar(1.0)] * 3), domain)
+    pulled = PulledBackPoint(Point([RealScalar(1.0)] * 3, RD(3)), domain)
 
     assert pulled.domain == EntityDomain(entity)
     assert pulled.in_entity_coordinates
@@ -127,7 +127,7 @@ def test_the_two_mapped_points_do_not_collide(lagrange_element):
     (entity,) = domain.cell_types
 
     entity_point = Point([RealScalar(0.25)], EntityDomain(entity))
-    ambient_point = point([RealScalar(0.25)])
+    ambient_point = Point([RealScalar(0.25)], RD(1))
 
     pushed = PushedForwardPoint(entity_point, domain)
     pulled = PulledBackPoint(ambient_point, domain)

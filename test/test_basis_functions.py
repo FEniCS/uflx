@@ -5,9 +5,9 @@ from uflx.basis_functions import (
     AbstractEvaluatedBasisFunction,
     EvaluatedBasisFunction,
 )
-from uflx.domains import EntityDomain
+from uflx.domains import RD, EntityDomain
 from uflx.expressions import RealScalar
-from uflx.points import Point, point
+from uflx.points import Point
 
 
 def test_ambient_basis_function(lagrange_element):
@@ -16,7 +16,7 @@ def test_ambient_basis_function(lagrange_element):
     domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
     space = function_space(domain, element)
 
-    ambient_point = point([RealScalar(1.0)] * 3)
+    ambient_point = Point([RealScalar(1.0)] * 3, RD(3))
 
     phys_f = EvaluatedBasisFunction(space, 0, ambient_point)
 
