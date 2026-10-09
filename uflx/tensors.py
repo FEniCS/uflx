@@ -19,11 +19,17 @@ class FlattenedTensorMap(AbstractExpression):
     an input: the entry is the same in a tensor with any number of rows.
 
     Args:
+        array: The array that the entry is read from.
         indices: The N indices of the entry.
         trailing_shape: The N - 1 extents of the tensor from the second dimension onwards.
     """
 
-    def __init__(self, indices: tuple[int, ...], trailing_shape: tuple[int, ...]):
+    def __init__(
+        self,
+        array: AbstractExpression,
+        indices: tuple[int, ...],
+        trailing_shape: tuple[int, ...],
+    ):
         """Initialise."""
         if len(indices) != len(trailing_shape) + 1:
             raise ValueError("Number of indices must be one more than the number of extents.")
@@ -32,8 +38,14 @@ class FlattenedTensorMap(AbstractExpression):
         if indices[0] < 0 or any(i < 0 or i >= n for i, n in zip(indices[1:], trailing_shape)):
             raise IndexError(f"Indices {indices} out of range for extents {trailing_shape}.")
 
+        self._array = array
         self._indices = indices
         self._trailing_shape = trailing_shape
+
+    @property
+    def array(self) -> AbstractExpression:
+        """The array that the entry is read from."""
+        return self._array
 
     @property
     def flat_index(self) -> int:
@@ -51,12 +63,12 @@ class FlattenedTensorMap(AbstractExpression):
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
-        return set()
+        return {self._array}
 
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._indices, self._trailing_shape
+        return self._array, self._indices, self._trailing_shape
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""

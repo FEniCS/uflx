@@ -6,6 +6,7 @@ from uflx import coordinate_element
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.expressions import RealScalar
 from uflx.geometry import (
+    CoordinateDofs,
     Jacobian,
     JacobianInverse,
     JacobianInverseTranspose,
@@ -109,7 +110,7 @@ def test_jacobian_derivatives_are_reference_derivatives(cell, gdim, lagrange_ele
 def coordinate_dof_entries(expression):
     """The (node, component) of each coordinate DOF an expression refers to."""
     return {
-        node.init_args[0]
+        node.init_args[1]
         for node in as_graph(expression).ordered_nodes()
         if isinstance(node, FlattenedTensorMap)
     }
@@ -125,3 +126,22 @@ def test_jacobian_coordinate_dofs(cell, gdim, lagrange_element):
     x_dofs = coordinate_dof_entries(ReferenceToPhysical(point, domain).expand_geometry())
     assert len(x_dofs) > 0
     assert coordinate_dof_entries(Jacobian(domain, point).expand_geometry()) == x_dofs
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_geometry_reads_the_coordinate_dofs(cell, gdim, lagrange_element):
+    """Test that the entries of the geometry are read from the coordinate DOFs of the domain."""
+    domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
+    tdim = domain.cells[0].topological_dimension
+    point = Point([RealScalar(0.1)] * tdim, is_reference=True)
+
+    for expression in [
+        ReferenceToPhysical(point, domain).expand_geometry(),
+        Jacobian(domain, point).expand_geometry(),
+    ]:
+        arrays = {
+            node.array
+            for node in as_graph(expression).ordered_nodes()
+            if isinstance(node, FlattenedTensorMap)
+        }
+        assert arrays == {CoordinateDofs(domain)}

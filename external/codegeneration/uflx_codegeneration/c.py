@@ -1,6 +1,7 @@
 """Generation of C code."""
 
-from typing import Protocol, runtime_checkable
+from collections.abc import Callable
+from typing import Any, ClassVar, Protocol, runtime_checkable
 
 import numpy as np
 from uflx.expressions import (
@@ -15,6 +16,7 @@ from uflx.expressions import (
     Subtract,
     Sum,
 )
+from uflx.geometry import CoordinateDofs
 from uflx.points import PointComponent
 from uflx.tensors import FlattenedTensorMap
 
@@ -23,10 +25,10 @@ from uflx_codegeneration import symbols
 
 @runtime_checkable
 class GenerateC(Protocol):
-    """Protocol for Objects that can be converted to C code."""
+    """Protocol for objects that can be converted to C code."""
 
-    def generate_c(self) -> str:
-        """Generate code for this object."""
+    def generate_c(self, generator: "CGenerator") -> str:
+        """Generate code for this object, using generator for the code of its operands."""
 
 
 def c_table(table: np.ndarray) -> str:
@@ -48,123 +50,105 @@ def tables_to_c(tables: dict[str, np.ndarray]) -> str:
     )
 
 
-def product_generate_c(self) -> str:
-    """Generate code for this object."""
-    if self.value_shape != ():
+def product_generate_c(generator: "CGenerator", node: Product) -> str:
+    """Generate code for a product."""
+    if node.value_shape != ():
         raise NotImplementedError("Cannot generate code for multiplication of non-scalars")
-    items = []
-    for i in self._items:
-        if not isinstance(i, GenerateC):
-            raise NotImplementedError(f"GenerateC is not implemented for {i.__class__}")
-        items.append(i.generate_c())
-    return "(" + " * ".join(items) + ")"
+    return "(" + " * ".join(generator.generate(i) for i in node._items) + ")"
 
 
-setattr(Product, "generate_c", product_generate_c)
+def div_generate_c(generator: "CGenerator", node: Div) -> str:
+    """Generate code for a division."""
+    return f"({generator.generate(node.first)} / {generator.generate(node.second)})"
 
 
-def div_generate_c(self) -> str:
-    """Generate code for this object."""
-    if not isinstance(self.first, GenerateC):
-        raise NotImplementedError(f"GenerateC is not implemented for {self.first.__class__}")
-    if not isinstance(self.second, GenerateC):
-        raise NotImplementedError(f"GenerateC is not implemented for {self.second.__class__}")
-    return f"({self.first.generate_c()} / {self.second.generate_c()})"
+def reciprocal_generate_c(generator: "CGenerator", node: Reciprocal) -> str:
+    """Generate code for a reciprocal."""
+    return f"(1.0 / {generator.generate(node.argument)})"
 
 
-setattr(Div, "generate_c", div_generate_c)
+def sum_generate_c(generator: "CGenerator", node: Sum) -> str:
+    """Generate code for a sum."""
+    return "(" + " + ".join(generator.generate(i) for i in node._items) + ")"
 
 
-def reciprocal_generate_c(self) -> str:
-    """Generate code for this object."""
-    if not isinstance(self.argument, GenerateC):
-        raise NotImplementedError(f"GenerateC is not implemented for {self.argument.__class__}")
-    return f"(1.0 / {self.argument.generate_c()})"
+def subtract_generate_c(generator: "CGenerator", node: Subtract) -> str:
+    """Generate code for a subtraction."""
+    return f"({generator.generate(node.first)} - {generator.generate(node.second)})"
 
 
-setattr(Reciprocal, "generate_c", reciprocal_generate_c)
+def abs_generate_c(generator: "CGenerator", node: Abs) -> str:
+    """Generate code for an absolute value."""
+    return f"fabs({generator.generate(node.argument)})"
 
 
-def sum_generate_c(self) -> str:
-    """Generate code for this object."""
-    items = []
-    for i in self._items:
-        if not isinstance(i, GenerateC):
-            raise NotImplementedError(f"GenerateC is not implemented for {i.__class__}")
-        items.append(i.generate_c())
-    return "(" + " + ".join(items) + ")"
+def sqrt_generate_c(generator: "CGenerator", node: Sqrt) -> str:
+    """Generate code for a square root."""
+    return f"sqrt({generator.generate(node.argument)})"
 
 
-setattr(Sum, "generate_c", sum_generate_c)
+def neg_generate_c(generator: "CGenerator", node: Neg) -> str:
+    """Generate code for a negation."""
+    return f"-{generator.generate(node.argument)}"
 
 
-def subtract_generate_c(self) -> str:
-    """Generate code for this object."""
-    if not isinstance(self.first, GenerateC):
-        raise NotImplementedError(f"GenerateC is not implemented for {self.first.__class__}")
-    if not isinstance(self.second, GenerateC):
-        raise NotImplementedError(f"GenerateC is not implemented for {self.second.__class__}")
-    return f"({self.first.generate_c()} - {self.second.generate_c()})"
-
-
-setattr(Subtract, "generate_c", subtract_generate_c)
-
-
-def abs_generate_c(self) -> str:
-    """Generate code for this object."""
-    if not isinstance(self.argument, GenerateC):
-        raise NotImplementedError(f"GenerateC is not implemented for {self.argument.__class__}")
-    return f"fabs({self.argument.generate_c()})"
-
-
-setattr(Abs, "generate_c", abs_generate_c)
-
-
-def sqrt_generate_c(self) -> str:
-    """Generate code for this object."""
-    if not isinstance(self.argument, GenerateC):
-        raise NotImplementedError(f"GenerateC is not implemented for {self.argument.__class__}")
-    return f"sqrt({self.argument.generate_c()})"
-
-
-setattr(Sqrt, "generate_c", sqrt_generate_c)
-
-
-def neg_generate_c(self) -> str:
-    """Generate code for this object."""
-    if not isinstance(self.argument, GenerateC):
-        raise NotImplementedError(f"GenerateC is not implemented for {self.argument.__class__}")
-    return f"-{self.argument.generate_c()}"
-
-
-setattr(Neg, "generate_c", neg_generate_c)
-
-
-def pc_generate_c(self) -> str:
-    """Generate code for this object."""
-    c = self.point.component(self.component_index)
+def pc_generate_c(generator: "CGenerator", node: PointComponent) -> str:
+    """Generate code for a component of a point."""
+    index = node.component_index
+    if not isinstance(index, int):
+        raise NotImplementedError("Cannot generate code for a symbolic component of a point")
+    c = node.point.component(index)
     if isinstance(c, PointComponent):
-        raise NotImplementedError(f"GenerateC is not implemented for {self.__class__}")
-    if not isinstance(c, GenerateC):
-        raise NotImplementedError(f"GenerateC is not implemented for {c.__class__}")
-    return c.generate_c()
+        raise NotImplementedError("Cannot generate code for a symbolic component of a point")
+    return generator.generate(c)
 
 
-setattr(PointComponent, "generate_c", pc_generate_c)
+def scalar_generate_c(generator: "CGenerator", node: RealScalar | Integer) -> str:
+    """Generate code for a scalar."""
+    return f"{node.value}"
 
 
-def ftm_generate_c(self) -> str:
-    """Generate code for this object, an entry of the coordinate DOFs."""
-    return f"{symbols.coordinate_dofs}[{self.flat_index}]"
+def ftm_generate_c(generator: "CGenerator", node: FlattenedTensorMap) -> str:
+    """Generate code for an entry of an array."""
+    return f"{generator.generate(node.array)}[{node.flat_index}]"
 
 
-setattr(FlattenedTensorMap, "generate_c", ftm_generate_c)
+def coordinate_dofs_generate_c(generator: "CGenerator", node: CoordinateDofs) -> str:
+    """Generate code for the coordinate DOFs of a cell."""
+    return symbols.coordinate_dofs
 
 
-def scalar_generate_c(self) -> str:
-    """Generate code for this object."""
-    return f"{self.value}"
+class CGenerator:
+    """Generator of C code.
 
+    Objects that implement the GenerateC protocol generate their own code. The code for classes
+    in the UFLx core is generated by the functions in ``handlers``, so that generating code
+    does not require adding methods to those classes. A subclass can override ``handlers`` to
+    customise the generated code, and an instance can be passed to
+    uflx_codegeneration.generate.
+    """
 
-setattr(RealScalar, "generate_c", scalar_generate_c)
-setattr(Integer, "generate_c", scalar_generate_c)
+    handlers: ClassVar[dict[type, Callable[["CGenerator", Any], str]]] = {
+        Product: product_generate_c,
+        Div: div_generate_c,
+        Reciprocal: reciprocal_generate_c,
+        Sum: sum_generate_c,
+        Subtract: subtract_generate_c,
+        Abs: abs_generate_c,
+        Sqrt: sqrt_generate_c,
+        Neg: neg_generate_c,
+        PointComponent: pc_generate_c,
+        FlattenedTensorMap: ftm_generate_c,
+        CoordinateDofs: coordinate_dofs_generate_c,
+        RealScalar: scalar_generate_c,
+        Integer: scalar_generate_c,
+    }
+
+    def generate(self, node: Any) -> str:
+        """Generate C code for a node."""
+        if isinstance(node, GenerateC):
+            return node.generate_c(self)
+        for cls in type(node).__mro__:
+            if cls in self.handlers:
+                return self.handlers[cls](self, node)
+        raise NotImplementedError(f"C generation is not implemented for {node.__class__}")
