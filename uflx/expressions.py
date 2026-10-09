@@ -238,6 +238,14 @@ class RealScalar(AbstractScalar):
         """Negation."""
         return RealScalar(-self.value)
 
+    def simplified_sum(self, other: AbstractExpression) -> AbstractExpression | None:
+        """Return a single expression representing the simplified sum.
+
+        This function should return None if no simplification can be made.
+        """
+        if self.value == 0:
+            return other
+
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
@@ -658,6 +666,20 @@ class Product(AbstractExpression):
         return Product(cast(list[AbstractExpression], items))
 
     @property
+    def is_commutative(self) -> bool:
+        """Whether the operands of this expression can be reordered."""
+        return True
+
+    @property
+    def operands(self) -> tuple[AbstractExpression, ...]:
+        """The operands."""
+        return self._items
+
+    def with_operands(self, operands: Sequence[AbstractExpression]) -> Product:
+        """Create the same expression with different operands."""
+        return Product(operands)
+
+    @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set(self._items)
@@ -809,6 +831,20 @@ class Sum(AbstractExpression):
         if len(items) == 1:
             return items[0]
         return Sum(cast(list[AbstractExpression], items))
+
+    @property
+    def is_commutative(self) -> bool:
+        """Whether the operands of this expression can be reordered."""
+        return True
+
+    @property
+    def operands(self) -> tuple[AbstractExpression, ...]:
+        """The operands."""
+        return self._items
+
+    def with_operands(self, operands: Sequence[AbstractExpression]) -> Sum:
+        """Create the same expression with different operands."""
+        return Sum(operands)
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -1084,14 +1120,14 @@ class MatVec(BinaryOperator):
         assert (
             len(first.value_shape) == 2
             and len(second.value_shape) == 1
-            and first.value_shape[0] == second.value_shape[0]
+            and first.value_shape[1] == second.value_shape[0]
         )
         super().__init__(first, second)
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        return self.second.value_shape
+        return (self.first.value_shape[0],)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""

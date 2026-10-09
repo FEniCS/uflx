@@ -90,6 +90,16 @@ def test_add_and_subtract_function(lagrange_element):
     assert isinstance(simpler_expression, TrialFunction)
 
 
+def test_add_real_zero(lagrange_element):
+    """Test that adding 0.0 is removed."""
+    element = lagrange_element("triangle", 2)
+    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    space = function_space(domain, element)
+    u = TrialFunction(space)
+
+    assert isinstance(simplify(u + 0.0), TrialFunction)
+
+
 def test_multiply_and_divide_integer_form(lagrange_element):
     """Test that 2 and 1/2 are successfully cancelled."""
     pytest.xfail()
@@ -203,3 +213,16 @@ def test_jacobian_and_inverse_form(lagrange_element):
     else:
         assert isinstance(simpler_form.integrand.first, TestFunction)
         assert isinstance(simpler_form.integrand.second, TrialFunction)
+
+
+def test_commutative_operands_are_sorted(lagrange_element):
+    """Test that sums and products equal up to the order of operands simplify equally."""
+    element = lagrange_element("triangle", 2)
+    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    space = function_space(domain, element)
+    u = TrialFunction(space)
+    f = Coefficient(space)
+    g = Coefficient(space)
+
+    assert u * f + g != g + f * u
+    assert simplify(u * f + g) == simplify(g + f * u)

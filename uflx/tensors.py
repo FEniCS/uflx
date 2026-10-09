@@ -12,6 +12,57 @@ NestedSequence: TypeAlias = AbstractExpression | Sequence["NestedSequence"]
 NestedTuple: TypeAlias = AbstractExpression | tuple["NestedTuple", ...]
 
 
+class FlattenedTensorMap(AbstractExpression):
+    """A scalar entry of a row-major tensor, given by its position in the flattened 1D array.
+
+    The extent of the first dimension does not affect the position of an entry, so it is not
+    an input: the entry is the same in a tensor with any number of rows.
+
+    Args:
+        indices: The N indices of the entry.
+        trailing_shape: The N - 1 extents of the tensor from the second dimension onwards.
+    """
+
+    def __init__(self, indices: tuple[int, ...], trailing_shape: tuple[int, ...]):
+        """Initialise."""
+        if len(indices) != len(trailing_shape) + 1:
+            raise ValueError("Number of indices must be one more than the number of extents.")
+        if any(n <= 0 for n in trailing_shape):
+            raise ValueError(f"Extents {trailing_shape} must be positive.")
+        if indices[0] < 0 or any(i < 0 or i >= n for i, n in zip(indices[1:], trailing_shape)):
+            raise IndexError(f"Indices {indices} out of range for extents {trailing_shape}.")
+
+        self._indices = indices
+        self._trailing_shape = trailing_shape
+
+    @property
+    def flat_index(self) -> int:
+        """The position of the entry in the flattened array."""
+        index = self._indices[0]
+        for i, n in zip(self._indices[1:], self._trailing_shape):
+            index = index * n + i
+        return index
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        return ()
+
+    @property
+    def successors(self) -> set[GraphNode]:
+        """The successors of this node."""
+        return set()
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return self._indices, self._trailing_shape
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get a component of the expression."""
+        raise ValueError("Cannot get a component of a scalar expression")
+
+
 class Tensor(AbstractExpression):
     """A general tensor."""
 
@@ -20,14 +71,16 @@ class Tensor(AbstractExpression):
 
         def to_shape_and_tuple(items) -> tuple[tuple[int, ...], NestedTuple]:
             if isinstance(items, AbstractExpression):
-                return (), items
+                # A non-scalar entry is stacked: its shape is appended.
+                return items.value_shape, items
             s: tuple[int, ...] | None = None
             t = []
             for i in items:
                 sub_s, sub_t = to_shape_and_tuple(i)
                 if s is None:
                     s = sub_s
-                assert s == sub_s
+                if s != sub_s:
+                    raise ValueError(f"Tensor entries of shapes {s} and {sub_s} cannot be stacked.")
                 t.append(sub_t)
             assert s is not None
             return (len(t), *s), tuple(t)
@@ -64,8 +117,7 @@ class Tensor(AbstractExpression):
 
         def extract_component(items: NestedTuple, indices: tuple[int, ...]) -> AbstractExpression:
             if isinstance(items, AbstractExpression):
-                assert len(indices) == 0
-                return items
+                return items.component(*indices) if len(indices) > 0 else items
             assert len(indices) > 0
             return extract_component(items[indices[0]], indices[1:])
 
@@ -88,7 +140,8 @@ class Vector(Tensor):
     def __init__(self, entries: Sequence[AbstractExpression]):
         """Initalise."""
         super().__init__(entries)
-        assert self._shape == (len(entries),)
+        if self._shape != (len(entries),):
+            raise ValueError("Vector entries must be scalars; stack tensors with Tensor.")
 
     def __repr__(self):
         """Representation."""
@@ -101,7 +154,8 @@ class Matrix(Tensor):
     def __init__(self, entries: Sequence[Sequence[AbstractExpression]]):
         """Initalise."""
         super().__init__(entries)
-        assert self._shape == (len(entries), len(entries[0]))
+        if self._shape != (len(entries), len(entries[0])):
+            raise ValueError("Matrix entries must be scalars; stack tensors with Tensor.")
 
     def __repr__(self):
         """Representation."""

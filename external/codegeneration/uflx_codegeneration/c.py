@@ -16,8 +16,8 @@ from uflx.expressions import (
     Subtract,
     Sum,
 )
-from uflx.geometry import CoordinateDofComponent
 from uflx.points import PointComponent
+from uflx.tensors import FlattenedTensorMap
 
 from uflx_codegeneration import symbols
 
@@ -102,14 +102,17 @@ def pc_generate_c(generator: "CGenerator", node: PointComponent) -> str:
     return generator.generate(c)
 
 
-def cdc_generate_c(generator: "CGenerator", node: CoordinateDofComponent) -> str:
-    """Generate code for a component of a coordinate DOF."""
-    return f"{symbols.coordinate_dofs}[{node._tdim * node._point + node._component}]"
-
-
 def scalar_generate_c(generator: "CGenerator", node: RealScalar | Integer) -> str:
     """Generate code for a scalar."""
     return f"{node.value}"
+
+
+def ftm_generate_c(self) -> str:
+    """Generate code for this object, an entry of the coordinate DOFs."""
+    return f"{symbols.coordinate_dofs}[{self.flat_index}]"
+
+
+setattr(FlattenedTensorMap, "generate_c", ftm_generate_c)
 
 
 class CGenerator:
@@ -132,7 +135,7 @@ class CGenerator:
         Sqrt: sqrt_generate_c,
         Neg: neg_generate_c,
         PointComponent: pc_generate_c,
-        CoordinateDofComponent: cdc_generate_c,
+        FlattenedTensorMap: ftm_generate_c,
         RealScalar: scalar_generate_c,
         Integer: scalar_generate_c,
     }

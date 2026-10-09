@@ -9,7 +9,7 @@ from uflx.expressions import AbstractExpression, expression_sum
 from uflx.function_spaces import function_space
 from uflx.graphs import GraphNode, as_graph
 from uflx.points import AbstractPoint, Point
-from uflx.tensors import Identity, Matrix
+from uflx.tensors import FlattenedTensorMap, Identity, Matrix
 
 
 @runtime_checkable
@@ -104,12 +104,12 @@ class ReferenceToPhysical(AbstractPoint):
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        return self._point.value_shape
+        return (self._domain.geometric_dimension,)
 
     @property
     def dim(self) -> int:
         """The dimension of the point."""
-        return self._point.value_shape[0]
+        return self._domain.geometric_dimension
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -130,7 +130,7 @@ class ReferenceToPhysical(AbstractPoint):
 
         components = [
             expression_sum(
-                CoordinateDofComponent(i // dim, i % dim, dim)
+                FlattenedTensorMap((i // dim, i % dim), (dim,))
                 * EvaluatedBasisFunction(
                     function_space(self.domain, element), i, self.reference_point, component=j
                 )
@@ -180,12 +180,18 @@ class PhysicalToReference(AbstractPoint):
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        return self._point.value_shape
+        return (self.dim,)
 
     @property
     def dim(self) -> int:
         """The dimension of the point."""
-        return self._point.value_shape[0]
+        tdim = self._domain.topological_dimension
+        if tdim is None:
+            raise NotImplementedError(
+                "Reference points on domains with cells of several topological "
+                "dimensions are not supported."
+            )
+        return tdim
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -253,12 +259,12 @@ class Jacobian(AbstractExpression):
             [
                 [
                     expression_sum(
-                        CoordinateDofComponent(i // tdim, i % tdim, tdim)
+                        FlattenedTensorMap((i // gdim, i % gdim), (gdim,))
                         * EvaluatedBasisFunction(
                             function_space(self.domain, element),
                             i,
                             self.point,
-                            derivative=tuple(1 if d == col else 0 for d in range(gdim)),
+                            derivative=tuple(1 if d == col else 0 for d in range(tdim)),
                             component=row,
                         )
                         for i in range(element.dim)
@@ -476,35 +482,6 @@ class JacobianInverseTranspose(AbstractExpression):
             and self.point == other.point
         ):
             return Identity(self.value_shape[0])
-
-
-class CoordinateDofComponent(AbstractExpression):
-    """A coordinate of a coordinate DOF."""
-
-    def __init__(self, point, component, tdim):
-        """Initialise."""
-        self._point = point
-        self._component = component
-        self._tdim = tdim
-
-    @property
-    def value_shape(self) -> tuple[int, ...]:
-        """The value shape of the expression."""
-        return ()
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._point, self._component, self._tdim
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        raise ValueError("Cannot get a component of a scalar expression")
 
 
 def expand_geometry(
