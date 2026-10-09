@@ -44,3 +44,11 @@ def test_function_space_multiple_cells(gdim, lagrange_element):
     )
     assert isinstance(space.domain, AbstractParametrizedDomain)
     assert len(space.elements) == len(space.domain.cells) == 2
+
+
+def test_element_must_live_on_a_cell_of_the_domain(lagrange_element):
+    """An element on a cell the domain does not have is rejected."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
+
+    with pytest.raises(ValueError, match="not defined on a cell of its domain"):
+        function_space(domain, lagrange_element("quadrilateral", 1))
