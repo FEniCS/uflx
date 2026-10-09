@@ -26,7 +26,7 @@ def test_function_space(cell_name, gdim, lagrange_element):
     domain = parametrized_domain(lagrange_element(cell_name, 1, (3,)))
     space = function_space(domain, lagrange_element(cell_name, 1))
     assert isinstance(space.domain, AbstractParametrizedDomain)
-    assert len(space.elements) == len(space.domain.cells) == 1
+    assert len(space.elements) == len(space.domain.cell_types) == 1
 
 
 @pytest.mark.parametrize("gdim", [2, 3])
@@ -43,7 +43,7 @@ def test_function_space_multiple_cells(gdim, lagrange_element):
         [lagrange_element("triangle", 2), lagrange_element("quadrilateral", 2)],
     )
     assert isinstance(space.domain, AbstractParametrizedDomain)
-    assert len(space.elements) == len(space.domain.cells) == 2
+    assert len(space.elements) == len(space.domain.cell_types) == 2
 
 
 def test_element_must_live_on_a_cell_of_the_domain(lagrange_element):

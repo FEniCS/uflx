@@ -42,18 +42,18 @@ def test_has_affine_parametrization_false_for_tensor_product_cell(lagrange_eleme
 @pytest.mark.parametrize("cell", ["interval", "triangle", "quadrilateral", "tetrahedron"])
 def test_entity_domain_dimensions_agree(cell, lagrange_element):
     """An entity domain's geometry is the identity, so its dimensions agree."""
-    (entity,) = parametrized_domain(lagrange_element(cell, 1, (3,))).cells
+    (entity,) = parametrized_domain(lagrange_element(cell, 1, (3,))).cell_types
     domain = entity_domain(entity)
 
     assert isinstance(domain, AbstractCoordinateDomain)
     assert domain.geometric_dimension == domain.topological_dimension
     assert domain.geometric_dimension == entity.topological_dimension
-    assert domain.cells == (entity,)
+    assert domain.cell_types == (entity,)
 
 
 def test_entity_domain_has_no_parametrization(lagrange_element):
     """An entity domain carries no parametrization, unlike a parametrized domain."""
-    (entity,) = parametrized_domain(lagrange_element("triangle", 1, (2,))).cells
+    (entity,) = parametrized_domain(lagrange_element("triangle", 1, (2,))).cell_types
 
     assert not hasattr(entity_domain(entity), "parametrization")
 
@@ -68,8 +68,8 @@ def test_rd_equality(dim):
 
 def test_entity_domain_equality(lagrange_element):
     """Separately built entity domains on the same entity are equal."""
-    (triangle,) = parametrized_domain(lagrange_element("triangle", 1, (2,))).cells
-    (interval,) = parametrized_domain(lagrange_element("interval", 1, (1,))).cells
+    (triangle,) = parametrized_domain(lagrange_element("triangle", 1, (2,))).cell_types
+    (interval,) = parametrized_domain(lagrange_element("interval", 1, (1,))).cell_types
 
     assert EntityDomain(triangle) == EntityDomain(triangle)
     assert hash(EntityDomain(triangle)) == hash(EntityDomain(triangle))
@@ -90,7 +90,7 @@ def test_parametrized_domain_equality(lagrange_element):
 def test_an_entity_domain_is_not_a_parametrized_domain(lagrange_element):
     """The two kinds of domain never compare equal, whatever their dimensions."""
     domain = parametrized_domain(lagrange_element("interval", 1, (1,)))
-    (entity,) = domain.cells
+    (entity,) = domain.cell_types
 
     assert EntityDomain(entity) != domain
     assert domain != EntityDomain(entity)

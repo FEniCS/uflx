@@ -40,9 +40,9 @@ cells_and_gdims = [
 def test_jacobian_expand_geometry(cell, gdim, lagrange_element):
     """Test expansion of Jacobian."""
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
-    tdim = domain.cells[0].topological_dimension
+    tdim = domain.cell_types[0].topological_dimension
 
-    point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cells[0]))
+    point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cell_types[0]))
     j = Jacobian(domain, point)
     assert j.value_shape == (gdim, tdim)
 
@@ -54,9 +54,9 @@ def test_jacobian_expand_geometry(cell, gdim, lagrange_element):
 def test_jacobian_inverse_expand_geometry(cell, gdim, lagrange_element):
     """Test expansion of Jacobian inverse."""
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
-    tdim = domain.cells[0].topological_dimension
+    tdim = domain.cell_types[0].topological_dimension
 
-    point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cells[0]))
+    point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cell_types[0]))
     j = JacobianInverse(domain, point)
     assert j.value_shape == (tdim, gdim)
 
@@ -68,9 +68,9 @@ def test_jacobian_inverse_expand_geometry(cell, gdim, lagrange_element):
 def test_jacobian_tranpose_expand_geometry(cell, gdim, lagrange_element):
     """Test expansion of Jacobian inverse transpose."""
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
-    tdim = domain.cells[0].topological_dimension
+    tdim = domain.cell_types[0].topological_dimension
 
-    point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cells[0]))
+    point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cell_types[0]))
     j = JacobianTranspose(domain, point)
     assert j.value_shape == (tdim, gdim)
 
@@ -82,9 +82,9 @@ def test_jacobian_tranpose_expand_geometry(cell, gdim, lagrange_element):
 def test_jacobian_inverse_transpose_expand_geometry(cell, gdim, lagrange_element):
     """Test expansion of Jacobian inverse transpose."""
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
-    tdim = domain.cells[0].topological_dimension
+    tdim = domain.cell_types[0].topological_dimension
 
-    point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cells[0]))
+    point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cell_types[0]))
     j = JacobianInverseTranspose(domain, point)
     assert j.value_shape == (gdim, tdim)
 
@@ -96,7 +96,7 @@ def test_jacobian_inverse_transpose_expand_geometry(cell, gdim, lagrange_element
 def test_pushed_forward_point_expands_to_ambient_coordinates(cell, gdim, lagrange_element):
     """Expanding a pushed forward point gives explicit ambient coordinates."""
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
-    (entity,) = domain.cells
+    (entity,) = domain.cell_types
     tdim = entity.topological_dimension
 
     entity_point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
@@ -112,7 +112,7 @@ def test_pushed_forward_point_expands_to_ambient_coordinates(cell, gdim, lagrang
 def test_pulled_back_point_lands_in_entity_coordinates(lagrange_element):
     """A pulled back point lies in the entity's coordinates, not on the mesh."""
     domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
-    (entity,) = domain.cells
+    (entity,) = domain.cell_types
 
     pulled = PulledBackPoint(point([RealScalar(1.0)] * 3), domain)
 
@@ -124,7 +124,7 @@ def test_pulled_back_point_lands_in_entity_coordinates(lagrange_element):
 def test_the_two_mapped_points_do_not_collide(lagrange_element):
     """A pushed forward point is never equal to a pulled back one."""
     domain = parametrized_domain(lagrange_element("interval", 1, (1,)))
-    (entity,) = domain.cells
+    (entity,) = domain.cell_types
 
     entity_point = Point([RealScalar(0.25)], EntityDomain(entity))
     ambient_point = point([RealScalar(0.25)])

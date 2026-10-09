@@ -123,9 +123,9 @@ class PushedForwardPoint(AbstractPoint):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        if len(self.domain.cells) != 1:
+        if len(self.domain.cell_types) != 1:
             raise NotImplementedError("Only domains with exactly on element supported for now.")
-        element = self.domain.parametrization(self.domain.cells[0])
+        element = self.domain.parametrization(self.domain.cell_types[0])
         (dim,) = element.entity_value_shape
 
         components = [
@@ -187,7 +187,7 @@ class PulledBackPoint(AbstractPoint):
         A pulled back point lies in the entity's coordinates, not on the
         parametrized domain it came from.
         """
-        (cell,) = self._parametrized_domain.cells
+        (cell,) = self._parametrized_domain.cell_types
         return EntityDomain(cell)
 
     @property
@@ -266,9 +266,9 @@ class Jacobian(AbstractExpression):
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
         gdim, tdim = self.value_shape
-        if len(self.domain.cells) > 1:
+        if len(self.domain.cell_types) > 1:
             raise NotImplementedError()
-        (cell,) = self.domain.cells
+        (cell,) = self.domain.cell_types
         element = self.domain.parametrization(cell)
 
         assert self.point is not None

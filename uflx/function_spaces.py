@@ -58,7 +58,7 @@ class FunctionSpace(AbstractMappedFunctionSpace):
         self._domain = domain
         self._elements = elements
         for element in elements:
-            if element.cell not in domain.cells:
+            if element.cell not in domain.cell_types:
                 raise ValueError(
                     f"Element on cell {element.cell} is not defined on a cell of its domain."
                 )
