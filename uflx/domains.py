@@ -15,7 +15,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
 from uflx.entities import AbstractEntity
-from uflx.finite_elements import AbstractReferenceMappedFiniteElement
+from uflx.finite_elements import AbstractMappedFiniteElement
 
 
 class AbstractDomain(ABC):
@@ -45,7 +45,7 @@ class AbstractFiniteElementDomain(AbstractDomain):
         """Get the cell types in the finite element mesh."""
 
 
-class AbstractCoordinateElement(AbstractFiniteElementDomain):
+class AbstractParametrizedDomain(AbstractFiniteElementDomain):
     """Base class for a coordinate element.
 
     In a coordinate element, the geometry of the domain is defined using a
@@ -53,24 +53,26 @@ class AbstractCoordinateElement(AbstractFiniteElementDomain):
     """
 
     @abstractmethod
-    def element(self, cell: AbstractEntity) -> AbstractReferenceMappedFiniteElement:
-        """Get the element on the given cell type."""
+    def parametrization(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
+        """Get the element describing the geometry of the given cell type."""
 
     @property
     def is_affine_map(self) -> bool:
-        """Is the reference-to-physical map of this domain affine?"""
-        return all(c.is_simplex and self.element(c).lagrange_superdegree == 1 for c in self.cells)
+        """Is the parametrization of this domain affine?"""
+        return all(
+            c.is_simplex and self.parametrization(c).lagrange_superdegree == 1 for c in self.cells
+        )
 
 
-class CoordinateElement(AbstractCoordinateElement):
+class ParametrizedDomain(AbstractParametrizedDomain):
     """A coordinate element."""
 
-    def __init__(self, elements: tuple[AbstractReferenceMappedFiniteElement, ...]):
+    def __init__(self, elements: tuple[AbstractMappedFiniteElement, ...]):
         """Initialise."""
         self._elements = {e.cell: e for e in elements}
-        (self._gdim,) = elements[0].reference_value_shape
+        (self._gdim,) = elements[0].entity_value_shape
         for e in elements[1:]:
-            assert e.reference_value_shape == (self._gdim,)
+            assert e.entity_value_shape == (self._gdim,)
 
     @property
     def geometric_dimension(self) -> int:
@@ -82,8 +84,8 @@ class CoordinateElement(AbstractCoordinateElement):
         """Get the cells in the domain."""
         return tuple(self._elements.keys())
 
-    def element(self, cell: AbstractEntity) -> AbstractReferenceMappedFiniteElement:
-        """Get the elements in the domain."""
+    def parametrization(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
+        """Get the element describing the geometry of the given cell type."""
         return self._elements[cell]
 
     @property
@@ -123,19 +125,19 @@ class RD(AbstractDomain):
         return self._dim
 
 
-def coordinate_element(
-    elements: Sequence[AbstractReferenceMappedFiniteElement] | AbstractReferenceMappedFiniteElement,
+def parametrized_domain(
+    elements: Sequence[AbstractMappedFiniteElement] | AbstractMappedFiniteElement,
 ):
     """Create a domain.
 
     Args:
         elements: The finite element(s) used to define the geometry of the cells in this domain
     """
-    if isinstance(elements, AbstractReferenceMappedFiniteElement):
+    if isinstance(elements, AbstractMappedFiniteElement):
         elements = (elements,)
-    assert len(elements[0].reference_value_shape) == 1
-    (gdim,) = elements[0].reference_value_shape
+    assert len(elements[0].entity_value_shape) == 1
+    (gdim,) = elements[0].entity_value_shape
     for e in elements:
-        assert e.reference_value_shape == (gdim,)
+        assert e.entity_value_shape == (gdim,)
 
-    return CoordinateElement(tuple(elements))
+    return ParametrizedDomain(tuple(elements))

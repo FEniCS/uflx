@@ -36,10 +36,12 @@ class AbstractPoint(AbstractVariable):
 class Point(AbstractPoint):
     """A single point in R^d."""
 
-    def __init__(self, components: Sequence[AbstractExpression], is_reference: bool = False):
+    def __init__(
+        self, components: Sequence[AbstractExpression], in_entity_coordinates: bool = False
+    ):
         """Initialise."""
         self._components = tuple(components)
-        self._is_reference = is_reference
+        self._in_entity_coordinates = in_entity_coordinates
 
     @property
     def index(self) -> int | str:
@@ -47,9 +49,9 @@ class Point(AbstractPoint):
         raise NotImplementedError()
 
     @property
-    def is_reference(self) -> bool:
-        """Check if this domain is on a reference cell."""
-        return self._is_reference
+    def in_entity_coordinates(self) -> bool:
+        """Check if this variable's components are in an entity's coordinates."""
+        return self._in_entity_coordinates
 
     @property
     def domain(self) -> AbstractDomain:
@@ -77,13 +79,15 @@ class Point(AbstractPoint):
         """Check for equality."""
         return (
             isinstance(other, Point)
-            and self._is_reference == other._is_reference
+            and self._in_entity_coordinates == other._in_entity_coordinates
             and self._components == other._components
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.Point", self._is_reference, *[hash(c) for c in self._components]))
+        return hash(
+            ("uflx.Point", self._in_entity_coordinates, *[hash(c) for c in self._components])
+        )
 
 
 class PointComponent(AbstractExpression):

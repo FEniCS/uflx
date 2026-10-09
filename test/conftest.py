@@ -3,8 +3,8 @@
 import pytest
 
 from uflx.entities import AbstractEntity
-from uflx.finite_elements import AbstractReferenceMappedFiniteElement
-from uflx.maps import AbstractReferenceMap, IdentityReferenceMap
+from uflx.finite_elements import AbstractMappedFiniteElement
+from uflx.maps import AbstractValueMap, IdentityValueMap
 
 
 class Entity(AbstractEntity):
@@ -156,7 +156,7 @@ class Hexahedron(Entity):
         )
 
 
-class LagrangeElement(AbstractReferenceMappedFiniteElement):
+class LagrangeElement(AbstractMappedFiniteElement):
     """A Lagrange element."""
 
     def __init__(
@@ -193,8 +193,8 @@ class LagrangeElement(AbstractReferenceMappedFiniteElement):
         return True
 
     @property
-    def reference_value_shape(self) -> tuple[int, ...]:
-        """Return the shape of the value space on the reference cell."""
+    def entity_value_shape(self) -> tuple[int, ...]:
+        """Return the shape of the value space in the entity's coordinates."""
         if self._block_shape is None:
             return ()
         return self._block_shape
@@ -222,9 +222,9 @@ class LagrangeElement(AbstractReferenceMappedFiniteElement):
         raise RuntimeError("Unsupported cell type")
 
     @property
-    def reference_map(self) -> AbstractReferenceMap:
+    def value_map(self) -> AbstractValueMap:
         """Get the push forward and pull back map."""
-        return IdentityReferenceMap()
+        return IdentityValueMap()
 
     def __hash__(self):
         """Hash."""

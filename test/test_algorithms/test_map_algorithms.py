@@ -1,7 +1,7 @@
 """Test map algorithms."""
 
-from uflx import TestFunction, TrialFunction, coordinate_element, dx, function_space, grad, inner
-from uflx.algorithms import pull_back_to_reference
+from uflx import TestFunction, TrialFunction, dx, function_space, grad, inner, parametrized_domain
+from uflx.algorithms import pull_back_to_entity
 from uflx.functions import (
     AbstractFunction,
     Coefficient,
@@ -13,14 +13,14 @@ from uflx.integrals import Integral
 def test_mass_matrix(lagrange_element):
     """Test a mass matrix."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
     v = TestFunction(space)
     form = inner(u, v) * dx
     assert isinstance(form, Integral)
 
-    pulled_form = pull_back_to_reference(form)
+    pulled_form = pull_back_to_entity(form)
     assert isinstance(pulled_form, Integral)
 
     functions = [node for node in as_graph(form) if isinstance(node, AbstractFunction)]
@@ -32,22 +32,22 @@ def test_mass_matrix(lagrange_element):
     assert len(pulled_functions) == 2
 
     for f in functions:
-        assert isinstance(f, AbstractFunction) and not f.is_reference
+        assert isinstance(f, AbstractFunction) and not f.in_entity_coordinates
     for f in pulled_functions:
-        assert isinstance(f, AbstractFunction) and f.is_reference
+        assert isinstance(f, AbstractFunction) and f.in_entity_coordinates
 
 
 def test_stuffness_matrix(lagrange_element):
     """Test a stiffness matrix."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
     v = TestFunction(space)
     form = inner(grad(u), grad(v)) * dx
     assert isinstance(form, Integral)
 
-    pulled_form = pull_back_to_reference(form)
+    pulled_form = pull_back_to_entity(form)
     assert isinstance(pulled_form, Integral)
 
     functions = [node for node in as_graph(form) if isinstance(node, AbstractFunction)]
@@ -59,21 +59,21 @@ def test_stuffness_matrix(lagrange_element):
     assert len(pulled_functions) == 2
 
     for f in functions:
-        assert isinstance(f, AbstractFunction) and not f.is_reference
+        assert isinstance(f, AbstractFunction) and not f.in_entity_coordinates
     for f in pulled_functions:
-        assert isinstance(f, AbstractFunction) and f.is_reference
+        assert isinstance(f, AbstractFunction) and f.in_entity_coordinates
 
 
 def test_linear_form(lagrange_element):
     """Test a linear form."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     v = TestFunction(space)
     form = v * dx
     assert isinstance(form, Integral)
 
-    pulled_form = pull_back_to_reference(form)
+    pulled_form = pull_back_to_entity(form)
     assert isinstance(pulled_form, Integral)
 
     functions = [node for node in as_graph(form) if isinstance(node, AbstractFunction)]
@@ -85,22 +85,22 @@ def test_linear_form(lagrange_element):
     assert len(pulled_functions) == 1
 
     for f in functions:
-        assert isinstance(f, AbstractFunction) and not f.is_reference
+        assert isinstance(f, AbstractFunction) and not f.in_entity_coordinates
     for f in pulled_functions:
-        assert isinstance(f, AbstractFunction) and f.is_reference
+        assert isinstance(f, AbstractFunction) and f.in_entity_coordinates
 
 
 def test_coefficient_mass_matrix_like_form(lagrange_element):
     """Test that a Coefficient pulls back like an Argument does."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     w = Coefficient(space)
     v = TestFunction(space)
     form = inner(w, v) * dx
     assert isinstance(form, Integral)
 
-    pulled_form = pull_back_to_reference(form)
+    pulled_form = pull_back_to_entity(form)
     assert isinstance(pulled_form, Integral)
 
     functions = [node for node in as_graph(form) if isinstance(node, AbstractFunction)]
@@ -112,12 +112,12 @@ def test_coefficient_mass_matrix_like_form(lagrange_element):
     assert len(pulled_functions) == 2
 
     for f in functions:
-        assert isinstance(f, AbstractFunction) and not f.is_reference
+        assert isinstance(f, AbstractFunction) and not f.in_entity_coordinates
     for f in pulled_functions:
-        assert isinstance(f, AbstractFunction) and f.is_reference
+        assert isinstance(f, AbstractFunction) and f.in_entity_coordinates
 
     reference_coefficients = [
-        f for f in pulled_functions if isinstance(f, Coefficient) and f.is_reference
+        f for f in pulled_functions if isinstance(f, Coefficient) and f.in_entity_coordinates
     ]
     assert len(reference_coefficients) == 1
     assert reference_coefficients[0].label == w.label
@@ -126,21 +126,21 @@ def test_coefficient_mass_matrix_like_form(lagrange_element):
 def test_coefficient_gradient_pulls_back(lagrange_element):
     """Test that grad(Coefficient) pulls back the same way grad(Argument) does."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     w = Coefficient(space)
     v = TestFunction(space)
     form = inner(grad(w), grad(v)) * dx
     assert isinstance(form, Integral)
 
-    pulled_form = pull_back_to_reference(form)
+    pulled_form = pull_back_to_entity(form)
     assert isinstance(pulled_form, Integral)
 
     pulled_functions = [
         node for node in as_graph(pulled_form) if isinstance(node, AbstractFunction)
     ]
     reference_coefficients = [
-        f for f in pulled_functions if isinstance(f, Coefficient) and f.is_reference
+        f for f in pulled_functions if isinstance(f, Coefficient) and f.in_entity_coordinates
     ]
     assert len(reference_coefficients) == 1
     assert reference_coefficients[0].label == w.label
@@ -149,7 +149,7 @@ def test_coefficient_gradient_pulls_back(lagrange_element):
 def test_distinct_coefficients_stay_distinguishable_after_pull_back(lagrange_element):
     """Test that two distinct Coefficients on the same space don't collapse together."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     w1 = Coefficient(space)
     w2 = Coefficient(space)
@@ -157,12 +157,12 @@ def test_distinct_coefficients_stay_distinguishable_after_pull_back(lagrange_ele
     assert w1.label != w2.label
 
     form = inner(w1 + w2, v) * dx
-    pulled_form = pull_back_to_reference(form)
+    pulled_form = pull_back_to_entity(form)
 
     reference_coefficients = [
         node
         for node in as_graph(pulled_form)
-        if isinstance(node, Coefficient) and node.is_reference
+        if isinstance(node, Coefficient) and node.in_entity_coordinates
     ]
     assert len(reference_coefficients) == 2
     assert {f.label for f in reference_coefficients} == {w1.label, w2.label}

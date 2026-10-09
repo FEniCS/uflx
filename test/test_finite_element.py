@@ -11,5 +11,5 @@ def test_lagrange_element(entity, lagrange_element):
     element = lagrange_element(entity.name, 2)
 
     assert element.cell == entity
-    assert element.reference_value_shape == ()
+    assert element.entity_value_shape == ()
     assert element.lagrange_superdegree == 2

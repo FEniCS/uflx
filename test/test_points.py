@@ -33,5 +33,5 @@ def test_points_of_different_dimensions_differ():
 def test_reference_and_physical_points_differ():
     """A point on the reference cell is not the physical point with the same coordinates."""
     a, b = RealScalar(0.5), RealScalar(1.0)
-    assert Point([a, b], is_reference=True) != Point([a, b])
-    assert len({Point([a, b], is_reference=True), Point([a, b])}) == 2
+    assert Point([a, b], in_entity_coordinates=True) != Point([a, b])
+    assert len({Point([a, b], in_entity_coordinates=True), Point([a, b])}) == 2

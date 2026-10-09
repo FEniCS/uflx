@@ -1,6 +1,6 @@
 """Push forward and pull back maps.
 
-These maps are uses to map function values between reference cells and physical cells
+These maps carry function values between an entity's coordinates and ambient coordinates
 """
 
 from abc import ABC, abstractmethod
@@ -11,26 +11,26 @@ from uflx.expressions import AbstractExpression
 from uflx.graphs import GraphNode, as_graph
 
 
-class AbstractReferenceMap(ABC):
-    """Abstract base class for reference maps."""
+class AbstractValueMap(ABC):
+    """Abstract base class for value maps."""
 
     @abstractmethod
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
-        """Map function values from a reference cell to a physical cell."""
+        """Map values from an entity's coordinates to its domain's own."""
 
     @abstractmethod
     def pull_back(self, function: AbstractExpression) -> AbstractExpression:
-        """Map function values from a physical cell to a reference cell."""
+        """Map values from a domain's own coordinates to an entity's."""
 
     @abstractmethod
-    def physical_value_shape(
-        self, reference_value_shape: tuple[int, ...], geometric_dimension: int
+    def mapped_value_shape(
+        self, entity_value_shape: tuple[int, ...], geometric_dimension: int
     ) -> tuple[int, ...]:
-        """Map function values from a physical cell to a reference cell."""
+        """Map values from a domain's own coordinates to an entity's."""
 
     @property
     def preserves_constant_values(self) -> bool:
-        """Whether a reference-cell-constant function stays constant when pushed forward.
+        """Whether a function constant in an entity's coordinates stays constant once mapped.
 
         Conservative by default (False): a subclass overrides this only
         when it is known to preserve cellwise-constant values.
@@ -39,22 +39,22 @@ class AbstractReferenceMap(ABC):
         return False
 
 
-class IdentityReferenceMap(AbstractReferenceMap):
+class IdentityValueMap(AbstractValueMap):
     """Identity map."""
 
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
-        """Map function values from a reference cell to a physical cell."""
+        """Map values from an entity's coordinates to its domain's own."""
         return function
 
     def pull_back(self, function: AbstractExpression) -> AbstractExpression:
-        """Map function values from a physical cell to a reference cell."""
+        """Map values from a domain's own coordinates to an entity's."""
         return function
 
-    def physical_value_shape(
-        self, reference_value_shape: tuple[int, ...], geometric_dimension: int
+    def mapped_value_shape(
+        self, entity_value_shape: tuple[int, ...], geometric_dimension: int
     ) -> tuple[int, ...]:
-        """Map function values from a physical cell to a reference cell."""
-        return reference_value_shape
+        """Map values from a domain's own coordinates to an entity's."""
+        return entity_value_shape
 
     @property
     def preserves_constant_values(self) -> bool:
@@ -62,12 +62,12 @@ class IdentityReferenceMap(AbstractReferenceMap):
         return True
 
 
-class BlockedReferenceMap(AbstractReferenceMap):
+class BlockedValueMap(AbstractValueMap):
     """Map for blocked element."""
 
     def __init__(
         self,
-        component_map: AbstractReferenceMap,
+        component_map: AbstractValueMap,
         shape: tuple[int, ...],
     ):
         """Initialise."""
@@ -75,17 +75,17 @@ class BlockedReferenceMap(AbstractReferenceMap):
         self._shape = shape
 
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
-        """Map function values from a reference cell to a physical cell."""
+        """Map values from an entity's coordinates to its domain's own."""
         return function  # TODO
 
     def pull_back(self, function: AbstractExpression) -> AbstractExpression:
-        """Map function values from a physical cell to a reference cell."""
+        """Map values from a domain's own coordinates to an entity's."""
         return function  # TODO
 
-    def physical_value_shape(
-        self, reference_value_shape: tuple[int, ...], geometric_dimension: int
+    def mapped_value_shape(
+        self, entity_value_shape: tuple[int, ...], geometric_dimension: int
     ) -> tuple[int, ...]:
-        """Map function values from a physical cell to a reference cell."""
+        """Map values from a domain's own coordinates to an entity's."""
         return self._shape
 
     @property
@@ -94,12 +94,12 @@ class BlockedReferenceMap(AbstractReferenceMap):
         return self._component_map.preserves_constant_values
 
 
-class SymmetricReferenceMap(AbstractReferenceMap):
+class SymmetricValueMap(AbstractValueMap):
     """Symmetric map."""
 
     def __init__(
         self,
-        component_map: AbstractReferenceMap,
+        component_map: AbstractValueMap,
         shape: tuple[int, ...],
         symmetry_map: dict[tuple[int, ...], int],
     ):
@@ -109,17 +109,17 @@ class SymmetricReferenceMap(AbstractReferenceMap):
         self._symmetry_map = symmetry_map
 
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
-        """Map function values from a reference cell to a physical cell."""
+        """Map values from an entity's coordinates to its domain's own."""
         return function  # TODO
 
     def pull_back(self, function: AbstractExpression) -> AbstractExpression:
-        """Map function values from a physical cell to a reference cell."""
+        """Map values from a domain's own coordinates to an entity's."""
         return function  # TODO
 
-    def physical_value_shape(
-        self, reference_value_shape: tuple[int, ...], geometric_dimension: int
+    def mapped_value_shape(
+        self, entity_value_shape: tuple[int, ...], geometric_dimension: int
     ) -> tuple[int, ...]:
-        """Map function values from a physical cell to a reference cell."""
+        """Map values from a domain's own coordinates to an entity's."""
         return self._shape
 
     @property
@@ -128,12 +128,12 @@ class SymmetricReferenceMap(AbstractReferenceMap):
         return self._component_map.preserves_constant_values
 
 
-class MixedReferenceMap(AbstractReferenceMap):
+class MixedValueMap(AbstractValueMap):
     """Map for a mixed element."""
 
     def __init__(
         self,
-        sub_maps: list[AbstractReferenceMap],
+        sub_maps: list[AbstractValueMap],
         shapes: list[tuple[int, ...]],
     ):
         """Initialise."""
@@ -141,17 +141,17 @@ class MixedReferenceMap(AbstractReferenceMap):
         self._shapes = shapes
 
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
-        """Map function values from a reference cell to a physical cell."""
+        """Map values from an entity's coordinates to its domain's own."""
         return function  # TODO
 
     def pull_back(self, function: AbstractExpression) -> AbstractExpression:
-        """Map function values from a physical cell to a reference cell."""
+        """Map values from a domain's own coordinates to an entity's."""
         return function  # TODO
 
-    def physical_value_shape(
-        self, reference_value_shape: tuple[int, ...], geometric_dimension: int
+    def mapped_value_shape(
+        self, entity_value_shape: tuple[int, ...], geometric_dimension: int
     ) -> tuple[int, ...]:
-        """Map function values from a physical cell to a reference cell."""
+        """Map values from a domain's own coordinates to an entity's."""
         shape: tuple[int, ...] = ()
         for s in self._shapes:
             shape += s
@@ -180,11 +180,11 @@ class IsPulledBack(Protocol):
 
 
 class PushedForward(AbstractExpression):
-    """A function on a reference cell that has been mapped to a physical cell."""
+    """A function in an entity's coordinates, mapped to its domain's own."""
 
-    def __init__(self, reference_map: AbstractReferenceMap, function: AbstractExpression):
+    def __init__(self, value_map: AbstractValueMap, function: AbstractExpression):
         """Initialise."""
-        self.reference_map = reference_map
+        self.value_map = value_map
         self.function = function
 
     @property
@@ -194,7 +194,7 @@ class PushedForward(AbstractExpression):
 
     def __repr__(self):
         """Representation."""
-        return f"PushedForward({self.reference_map})"
+        return f"PushedForward({self.value_map})"
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -204,11 +204,11 @@ class PushedForward(AbstractExpression):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self.reference_map, self.function
+        return self.value_map, self.function
 
     def apply_push_forward(self) -> AbstractExpression:
         """Apply the push forward."""
-        return self.reference_map.push_forward(self.function)
+        return self.value_map.push_forward(self.function)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -216,11 +216,11 @@ class PushedForward(AbstractExpression):
 
 
 class PulledBack(AbstractExpression):
-    """A function on a physical cell that has been mapped to a reference cell."""
+    """A function in a domain's own coordinates, mapped to an entity's."""
 
-    def __init__(self, reference_map: AbstractReferenceMap, function: AbstractExpression):
+    def __init__(self, value_map: AbstractValueMap, function: AbstractExpression):
         """Initalise."""
-        self.reference_map = reference_map
+        self.value_map = value_map
         self.function = function
 
     @property
@@ -230,7 +230,7 @@ class PulledBack(AbstractExpression):
 
     def __repr__(self):
         """Representation."""
-        return f"PulledBack({self.reference_map})"
+        return f"PulledBack({self.value_map})"
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -240,11 +240,11 @@ class PulledBack(AbstractExpression):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self.reference_map, self.function
+        return self.value_map, self.function
 
     def apply_pull_back(self) -> AbstractExpression:
         """Apply the pull back."""
-        return self.reference_map.pull_back(self.function)
+        return self.value_map.pull_back(self.function)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
