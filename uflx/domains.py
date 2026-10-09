@@ -75,47 +75,6 @@ class AbstractCoordinateDomain(AbstractDomain):
         return self.geometric_dimension
 
 
-class AbstractCellularDomain(AbstractDomain):
-    """Base class for a domain decomposed into cells.
-
-    Being made of cells is what lets a finite element be attached per
-    cell, so these are the domains a finite element function space can
-    live on. The decomposition itself stays external, like the mesh: such
-    a domain says which cell types occur in it, not how many cells there
-    are or where they sit.
-    """
-
-    @property
-    @abstractmethod
-    def cell_types(self) -> tuple[AbstractEntity, ...]:
-        """Get the cell types that occur in this domain."""
-
-
-class AbstractParametrizedDomain(AbstractCellularDomain):
-    """Base class for a domain presented as the image of a map.
-
-    The map out of a cell's coordinate domain into the ambient
-    coordinates is its parametrization, and a finite element per cell
-    type gives that map's basis. The element alone is not the map:
-    evaluating it on a cell also needs that cell's coordinate dofs, which
-    come from the external mesh.
-    """
-
-    @abstractmethod
-    def parametrization_element(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
-        """Get the element giving the basis of the given cell type's parametrization.
-
-        The parametrization itself cannot be returned: it is this basis
-        summed against a particular cell's coordinate dofs, and those
-        come from the external mesh.
-        """
-
-    @property
-    def has_affine_parametrization(self) -> bool:
-        """Is the parametrization of this domain affine?"""
-        return all(self.parametrization_element(c).describes_affine_map for c in self.cell_types)
-
-
 class RD(AbstractCoordinateDomain):
     """R^d, the ambient coordinate domain."""
 
@@ -139,6 +98,22 @@ class RD(AbstractCoordinateDomain):
     def __hash__(self) -> int:
         """Hash."""
         return hash(("uflx.RD", self._dim))
+
+
+class AbstractCellularDomain(AbstractDomain):
+    """Base class for a domain decomposed into cells.
+
+    Being made of cells is what lets a finite element be attached per
+    cell, so these are the domains a finite element function space can
+    live on. The decomposition itself stays external, like the mesh: such
+    a domain says which cell types occur in it, not how many cells there
+    are or where they sit.
+    """
+
+    @property
+    @abstractmethod
+    def cell_types(self) -> tuple[AbstractEntity, ...]:
+        """Get the cell types that occur in this domain."""
 
 
 class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
@@ -179,6 +154,31 @@ class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
     def __hash__(self) -> int:
         """Hash."""
         return hash(("uflx.EntityDomain", self._entity))
+
+
+class AbstractParametrizedDomain(AbstractCellularDomain):
+    """Base class for a domain presented as the image of a map.
+
+    The map out of a cell's coordinate domain into the ambient
+    coordinates is its parametrization, and a finite element per cell
+    type gives that map's basis. The element alone is not the map:
+    evaluating it on a cell also needs that cell's coordinate dofs, which
+    come from the external mesh.
+    """
+
+    @abstractmethod
+    def parametrization_element(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
+        """Get the element giving the basis of the given cell type's parametrization.
+
+        The parametrization itself cannot be returned: it is this basis
+        summed against a particular cell's coordinate dofs, and those
+        come from the external mesh.
+        """
+
+    @property
+    def has_affine_parametrization(self) -> bool:
+        """Is the parametrization of this domain affine?"""
+        return all(self.parametrization_element(c).describes_affine_map for c in self.cell_types)
 
 
 class ParametrizedDomain(AbstractParametrizedDomain):
