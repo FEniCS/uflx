@@ -298,7 +298,7 @@ class AbstractGeometricQuantity(AbstractExpression):
         self._point = point
 
     @property
-    def domain(self) -> AbstractParametrizedDomain:
+    def domain(self) -> AbstractCellularDomain:
         """The domain whose geometry this quantity differentiates."""
         return self._domain
 
