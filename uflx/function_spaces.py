@@ -36,6 +36,14 @@ class AbstractFunctionSpace(ABC):
     def real_valued(self) -> bool:
         """Check if this space is real-valued."""
 
+    @abstractmethod
+    def __eq__(self, other) -> bool:
+        """Check if this space is equal to another space."""
+
+    @abstractmethod
+    def __hash__(self) -> int:
+        """Hash."""
+
 
 class AbstractMappedFunctionSpace(AbstractFunctionSpace):
     """Abstract base class for a function space whose functions are mapped from an entity."""
@@ -89,6 +97,28 @@ class FunctionSpace(AbstractMappedFunctionSpace):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the function space."""
         return self.elements[0].ambient_value_shape(self.domain.geometric_dimension)
+
+    def __repr__(self) -> str:
+        """Representation."""
+        elements = ", ".join(repr(e) for e in self._elements)
+        return f"FunctionSpace({self._domain!r}, {elements})"
+
+    def __eq__(self, other) -> bool:
+        """Check if this space is equal to another space.
+
+        Two spaces are equal when they are the same elements on the same
+        domain. The element order is part of that, since elements[0] is
+        what a pull back reaches for.
+        """
+        return (
+            isinstance(other, FunctionSpace)
+            and self._domain == other._domain
+            and self._elements == other._elements
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.FunctionSpace", self._domain, self._elements))
 
 
 def function_space(
