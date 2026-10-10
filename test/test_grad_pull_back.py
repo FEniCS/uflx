@@ -2,7 +2,7 @@
 
 import pytest
 
-from uflx import Coefficient, parametrized_domain, function_space, grad
+from uflx import Coefficient, function_space, grad, parametrized_domain
 from uflx.algorithms import pull_back_to_entity
 from uflx.expressions import MatrixProduct
 from uflx.geometry import JacobianInverse

@@ -2,7 +2,7 @@
 
 import pytest
 
-from uflx import Coefficient, parametrized_domain, function_space, grad
+from uflx import Coefficient, function_space, grad, parametrized_domain
 from uflx.expressions import RealScalar
 from uflx.tensors import Matrix, Tensor, Vector
 
