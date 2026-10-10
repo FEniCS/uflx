@@ -11,6 +11,7 @@ from uflx.functions import create_variable
 from uflx.geometry import (
     AbstractJacobian,
     Jacobian,
+    JacobianDeterminant,
     JacobianInverse,
     JacobianInverseTranspose,
     JacobianTranspose,
@@ -275,3 +276,57 @@ def test_a_jacobian_without_a_point_knows_no_cell(mixed_mesh):
     """Being generic over cell types is useful, but it cannot be expanded."""
     with pytest.raises(ValueError, match="not been told where"):
         Jacobian(mixed_mesh).expand_geometry()
+
+
+geometric_quantities = [
+    Jacobian,
+    JacobianDeterminant,
+    JacobianInverse,
+    JacobianTranspose,
+    JacobianInverseTranspose,
+]
+
+
+@pytest.mark.parametrize("quantity", geometric_quantities)
+def test_a_geometric_quantity_shows_its_arguments(quantity, lagrange_element):
+    """All of them say what they are of, not just their class name."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+
+    assert repr(quantity(domain)).startswith(f"{quantity.__name__}(")
+    assert repr(domain) in repr(quantity(domain))
+
+
+@pytest.mark.parametrize("quantity", geometric_quantities)
+def test_a_geometric_quantity_cannot_be_mutated(quantity, lagrange_element):
+    """Its hash comes from its arguments, so moving them would lose it in a dict.
+
+    These nodes are dictionary keys while an expression is being rewritten.
+    """
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    (cell,) = domain.cell_types
+    node = quantity(domain)
+    found_by = {node: "here"}
+
+    with pytest.raises(AttributeError):
+        node.point = Point([RealScalar(0.25)] * 2, EntityDomain(cell))
+
+    assert node in found_by
+
+
+def test_pushing_forward_needs_a_point_in_a_cells_coordinates(lagrange_element):
+    """There is nothing to carry a point of the ambient coordinates forward."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    ambient = Point([RealScalar(0.25)] * 2, RD(2))
+
+    with pytest.raises(ValueError, match="pushed forward from a cell's coordinates"):
+        PushedForwardPoint(ambient, domain)
+
+
+def test_pulling_back_needs_a_point_in_ambient_coordinates(lagrange_element):
+    """A point already in a cell's coordinates has nothing to pull back."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    (cell,) = domain.cell_types
+    entity_point = Point([RealScalar(0.25)] * 2, EntityDomain(cell))
+
+    with pytest.raises(ValueError, match="nothing to pull back"):
+        PulledBackPoint(entity_point, domain.parametrization(cell))

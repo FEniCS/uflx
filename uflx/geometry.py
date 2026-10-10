@@ -1,5 +1,7 @@
 """Geometry."""
 
+from __future__ import annotations
+
 from typing import Any, Protocol, Self, runtime_checkable
 
 from uflx.algorithms import replace
@@ -87,7 +89,7 @@ class SpatialCoordinate(AbstractExpression):
         return SingleSpatialCoordinate(self._dimension, i)
 
 
-def as_matrix(jacobian: AbstractExpression) -> Matrix:
+def _as_dense_matrix(jacobian: AbstractExpression) -> Matrix:
     """Densify a Jacobian so a determinant, inverse or transpose can be taken.
 
     An identity map's Jacobian is an Identity, which stays symbolic in a
@@ -109,8 +111,14 @@ class PushedForwardPoint(AbstractPoint):
         Args:
             point: The point in the entity's coordinates
             domain: The domain to push the point forward onto
+
+        Raises:
+            ValueError: If the point is not in a cell's coordinates
         """
-        assert isinstance(point.domain, EntityDomain)
+        if not isinstance(point.domain, EntityDomain):
+            raise ValueError(
+                f"A point is pushed forward from a cell's coordinates, not from {point.domain!r}."
+            )
         self._point = point
         self._parametrized_domain = domain
 
@@ -200,8 +208,15 @@ class PulledBackPoint(AbstractPoint):
             point: The point in ambient coordinates
             parametrization: The map the point is pulled back through, which says
                 which cell's coordinates it lands in
+
+        Raises:
+            ValueError: If the point is already in a cell's coordinates
         """
-        assert not isinstance(point.domain, EntityDomain)
+        if isinstance(point.domain, EntityDomain):
+            raise ValueError(
+                f"A point in {point.domain!r} is already in a cell's coordinates, so "
+                f"there is nothing to pull back."
+            )
         self._point = point
         self._parametrization = parametrization
 
@@ -278,8 +293,18 @@ class AbstractJacobian(AbstractExpression):
             domain: The domain whose geometry is being differentiated
             point: Where to differentiate it, if that is known yet
         """
-        self.domain = domain
-        self.point = point
+        self._domain = domain
+        self._point = point
+
+    @property
+    def domain(self) -> AbstractParametrizedDomain:
+        """The domain whose geometry this quantity differentiates."""
+        return self._domain
+
+    @property
+    def point(self) -> AbstractVariable | None:
+        """Where it is differentiated, if it has been told yet."""
+        return self._point
 
     @property
     def parametrization(self) -> AbstractParametrization:
@@ -304,7 +329,7 @@ class AbstractJacobian(AbstractExpression):
         return self.domain.parametrization(cell)
 
     @property
-    def _jacobian(self) -> "Jacobian":
+    def _jacobian(self) -> Jacobian:
         """The Jacobian this quantity is built from."""
         return Jacobian(self.domain, self.point)
 
@@ -316,7 +341,28 @@ class AbstractJacobian(AbstractExpression):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self.domain, self.point
+        return self._domain, self._point
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"{self.__class__.__name__}({self._domain!r}, {self._point!r})"
+
+    def _simplified_against(
+        self, other: GraphNode, partner: type[AbstractJacobian]
+    ) -> GraphNode | None:
+        """Give the identity when `other` is the matching inverse of this quantity.
+
+        Args:
+            other: The quantity this one is multiplied by
+            partner: The class whose product with this one is the identity
+        """
+        if (
+            isinstance(other, partner)
+            and self._domain == other.domain
+            and self._point == other.point
+        ):
+            return Identity(self.value_shape[0])
+        return None
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Evaluate this quantity at the given variable.
@@ -337,7 +383,7 @@ class Jacobian(AbstractJacobian):
     """The Jacobian."""
 
     @property
-    def _jacobian(self) -> "Jacobian":
+    def _jacobian(self) -> Jacobian:
         """The Jacobian is its own."""
         return self
 
@@ -358,10 +404,6 @@ class Jacobian(AbstractJacobian):
         assert self.point is not None
         return parametrization.jacobian(self.point)
 
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"Jacobian({self.domain!r}, {self.point!r})"
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         return self.expand_geometry().component(*indices)
@@ -371,12 +413,7 @@ class Jacobian(AbstractJacobian):
 
         This function should return None if no simplification can be made.
         """
-        if (
-            isinstance(other, JacobianInverse)
-            and self.domain == other.domain
-            and self.point == other.point
-        ):
-            return Identity(self.value_shape[0])
+        return self._simplified_against(other, JacobianInverse)
 
 
 class JacobianDeterminant(AbstractJacobian):
@@ -389,7 +426,7 @@ class JacobianDeterminant(AbstractJacobian):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = as_matrix(self._jacobian.expand_geometry())
+        j = _as_dense_matrix(self._jacobian.expand_geometry())
         return abs(j.compute_determinant())
 
     def component(self, *indices: int) -> AbstractExpression:
@@ -407,12 +444,8 @@ class JacobianInverse(AbstractJacobian):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = as_matrix(self._jacobian.expand_geometry())
+        j = _as_dense_matrix(self._jacobian.expand_geometry())
         return j.compute_inverse()
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"JacobianInverse({self.domain!r}, {self.point!r})"
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -423,12 +456,7 @@ class JacobianInverse(AbstractJacobian):
 
         This function should return None if no simplification can be made.
         """
-        if (
-            isinstance(other, Jacobian)
-            and self.domain == other.domain
-            and self.point == other.point
-        ):
-            return Identity(self.value_shape[0])
+        return self._simplified_against(other, Jacobian)
 
 
 class JacobianTranspose(AbstractJacobian):
@@ -441,12 +469,8 @@ class JacobianTranspose(AbstractJacobian):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = as_matrix(self._jacobian.expand_geometry())
+        j = _as_dense_matrix(self._jacobian.expand_geometry())
         return j.transpose()
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"JacobianTranspose({self.domain!r}, {self.point!r})"
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -457,12 +481,7 @@ class JacobianTranspose(AbstractJacobian):
 
         This function should return None if no simplification can be made.
         """
-        if (
-            isinstance(other, JacobianInverseTranspose)
-            and self.domain == other.domain
-            and self.point == other.point
-        ):
-            return Identity(self.value_shape[0])
+        return self._simplified_against(other, JacobianInverseTranspose)
 
 
 class JacobianInverseTranspose(AbstractJacobian):
@@ -475,12 +494,8 @@ class JacobianInverseTranspose(AbstractJacobian):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = as_matrix(self._jacobian.expand_geometry())
+        j = _as_dense_matrix(self._jacobian.expand_geometry())
         return j.compute_inverse().transpose()
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"JacobianInverseTranspose({self.domain!r}, {self.point!r})"
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -491,21 +506,24 @@ class JacobianInverseTranspose(AbstractJacobian):
 
         This function should return None if no simplification can be made.
         """
-        if (
-            isinstance(other, JacobianTranspose)
-            and self.domain == other.domain
-            and self.point == other.point
-        ):
-            return Identity(self.value_shape[0])
+        return self._simplified_against(other, JacobianTranspose)
 
 
 def expand_geometry(
     expression: GraphNode,
 ) -> GraphNode:
-    """Replace jacobians with evaluations of the derivatives of finite elements."""
+    """Replace geometric quantities by expressions in a domain's parametrizations.
+
+    A Jacobian becomes the derivative of the map it differentiates and a
+    pushed forward point becomes the coordinates it lands on. What those
+    expressions contain is the map's business: a finite element one gives
+    a sum over its basis, a closed form one gives its own expression.
+    """
     to_replace: dict[GraphNode, GraphNode] = {}
 
     for node in as_graph(expression):
+        # The GraphNode check is for the type checker, which loses that fact
+        # on the protocol check.
         if isinstance(node, GraphNode) and isinstance(node, ExpandableGeometry):
             to_replace[node] = node.expand_geometry()
 
