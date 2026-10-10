@@ -117,7 +117,7 @@ def test_multiply_and_divide_integer_form(lagrange_element):
     u = TrialFunction(space)
     v = TestFunction(space)
 
-    form = inner(2 * u, v / 2) * dx
+    form = inner(2 * u, v / 2) * dx(domain)
     simpler_form = simplify(form)
 
     assert isinstance(form, Integral)
@@ -141,7 +141,7 @@ def test_multiply_and_divide_function_form(lagrange_element):
 
     f = Coefficient(space)
 
-    form = (u * f) * (v / f) * dx
+    form = (u * f) * (v / f) * dx(domain)
     simpler_form = simplify(form)
 
     assert isinstance(form, Integral)
@@ -200,7 +200,7 @@ def test_jacobian_and_inverse_form(lagrange_element):
     j = Jacobian(domain)
     j_inv_t = JacobianInverseTranspose(domain)
 
-    form = inner(j @ u, j_inv_t @ v) * dx
+    form = inner(j @ u, j_inv_t @ v) * dx(domain)
     simpler_form = simplify(form)
 
     assert isinstance(form, Integral)

@@ -13,8 +13,8 @@ def test_argument_labelling(lagrange_element):
     u = TrialFunction(space)
     v = TestFunction(space)
 
-    form1 = inner(u, v) * dx
-    form2 = inner(u, v) * dx
+    form1 = inner(u, v) * dx(domain)
+    form2 = inner(u, v) * dx(domain)
 
     assert isinstance(form1, Integral)
     assert isinstance(form2, Integral)

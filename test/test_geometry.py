@@ -191,7 +191,7 @@ def mass_form(cell, gdim, lagrange_element):
     """A form with geometry in it once pulled back, but no gradients."""
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
     space = function_space(domain, lagrange_element(cell, 1))
-    return inner(Coefficient(space), TestFunction(space)) * dx
+    return inner(Coefficient(space), TestFunction(space)) * dx(domain)
 
 
 def test_a_jacobian_is_told_where_it_is_evaluated(lagrange_element):

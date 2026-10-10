@@ -1,4 +1,5 @@
 # Copyright (C) 2025 Matthew Scroggs and Garth N. Wells
+# Copyright (C) 2026 Jack S. Hale
 #
 # This file is part of UFLx (https://www.fenicsproject.org)
 #
@@ -12,7 +13,7 @@ from itertools import count
 from typing import Any, cast
 
 from uflx.algorithms import replace
-from uflx.domains import AbstractCellularDomain, AbstractParametrizedDomain
+from uflx.domains import AbstractParametrizedDomain, EntityDomain
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
 from uflx.functions import (
@@ -20,14 +21,22 @@ from uflx.functions import (
     AbstractVariable,
     FiniteElementVariable,
     create_variable,
-    extract_domain,
 )
 from uflx.geometry import AbstractGeometricQuantity, VolumeElement
 from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
 
 
 class AbstractMeasure(ABC):
-    """Abstract base class for an integral measure."""
+    """Abstract base class for an integral measure.
+
+    A measure is the domain integrated over paired with the density used
+    on it. Neither half is optional: a function is not a differential
+    form, so integrating one needs a density, and a density is a density
+    of something.
+
+    The domain is one presented as the image of a map, since that map is
+    where the density comes from.
+    """
 
     def __rmul__(self, other: AbstractExpression) -> Integral:
         """Right multiply by an expression to form an integral."""
@@ -36,14 +45,63 @@ class AbstractMeasure(ABC):
         return NotImplemented
 
     @property
+    @abstractmethod
+    def domain(self) -> AbstractParametrizedDomain:
+        """The domain this measure integrates over."""
+
+    @property
+    @abstractmethod
+    def density(self) -> AbstractExpression:
+        """The factor an integral picks up on being pulled back.
+
+        In coordinates on the domain, the density written against the
+        coordinate volume.
+        """
+
+    @abstractmethod
+    def with_domain(self, domain: AbstractParametrizedDomain) -> AbstractMeasure:
+        """Get this measure over another domain.
+
+        Retargeting is what a pull back does to a measure, and what
+        restricting an integral to one cell type does to it.
+
+        Args:
+            domain: The domain to integrate over instead
+
+        Returns:
+            The same kind of measure over that domain
+        """
+
+    @property
     def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
+        """The successors of this node.
+
+        A measure has none, the density included. A measure describes an
+        integral rather than being part of its expression, and its
+        density is not evaluated anywhere until a pull back multiplies it
+        into the integrand, which is where it is told its point.
+        """
         return set()
 
     @property
     @abstractmethod
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
+
+    def __eq__(self, other) -> bool:
+        """Check for equality.
+
+        Two measures are equal when they are the same kind over the same
+        arguments. A measure is a description, so it has no identity of
+        its own beyond them.
+        """
+        if not isinstance(other, AbstractMeasure):
+            return NotImplemented
+        return type(self) is type(other) and self.init_args == other.init_args
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash((type(self).__name__, self.init_args))
 
 
 class AbstractIntegral(ABC):
@@ -104,22 +162,33 @@ class Integral(AbstractIntegral):
         measure: AbstractMeasure,
         variable: AbstractVariable | None = None,
     ):
-        """Initialise."""
+        """Initialise.
+
+        Args:
+            integrand: The expression being integrated
+            measure: The measure to integrate it against, which says over
+                what
+            variable: The point the integrand is read at, if one is being
+                carried over from the integral this one was built from
+
+        Raises:
+            ValueError: If a function in the integrand is not on the
+                domain being integrated over
+        """
         self._measure = measure
+        domain = measure.domain
+        self._variable = create_variable(domain) if variable is None else variable
+
         replacements: dict[GraphNode, GraphNode] = {}
-        if variable is None:
-            domain = None
-            for node in as_graph(integrand):
-                if isinstance(node, AbstractFunction) and node.variable is None:
-                    if domain is None:
-                        domain = node.function_space.domain
-                        self._variable = create_variable(domain)
-                    else:
-                        assert domain == node.function_space.domain
-                    replacements[node] = node.reconstruct_with_variable(self._variable)
-            assert domain is not None
-        else:
-            self._variable = variable
+        for node in as_graph(integrand):
+            if isinstance(node, AbstractFunction) and node.variable is None:
+                if node.function_space.domain != domain:
+                    raise ValueError(
+                        f"Cannot integrate a function on {node.function_space.domain!r} "
+                        f"over {domain!r}. A function reaches another domain only "
+                        f"through a map, not by being integrated there."
+                    )
+                replacements[node] = node.reconstruct_with_variable(self._variable)
 
         # A Jacobian built during a pull back does not know where it is
         # evaluated. This integral's variable is that point.
@@ -161,15 +230,9 @@ class Integral(AbstractIntegral):
         return self._integrand, self._measure, self._variable
 
     @property
-    def domain(self) -> AbstractCellularDomain:
-        """The domain this integral is over.
-
-        Read off the functions in the integrand that are in ambient
-        coordinates, which must all agree.
-        """
-        domain = extract_domain(self._integrand)
-        assert isinstance(domain, AbstractCellularDomain)
-        return domain
+    def domain(self) -> AbstractParametrizedDomain:
+        """The domain this integral is over, which its measure names."""
+        return self._measure.domain
 
     def restricted_to(self, cell: AbstractEntity) -> Integral:
         """Get this integral over the part of its domain made of one cell type.
@@ -193,7 +256,7 @@ class Integral(AbstractIntegral):
         variable = self._variable
         if isinstance(variable, FiniteElementVariable):
             variable = variable.to_ambient_coordinates(restricted_domain)
-        return Integral(integrand, self._measure, variable)
+        return Integral(integrand, self._measure.with_domain(restricted_domain), variable)
 
     def split_by_cell_type(self) -> IntegralSum | None:
         """Split this integral into one over each cell type of its domain.
@@ -211,7 +274,6 @@ class Integral(AbstractIntegral):
         """Pull the node back to the entity's coordinates."""
         integrand = node_map.get(self._integrand, self._integrand)
         domain = self.domain
-        assert isinstance(domain, AbstractParametrizedDomain)
         if len(domain.cell_types) != 1:
             # Each cell type has its own coordinate domain, so there is no one
             # set of coordinates to pull back to. Split first.
@@ -220,12 +282,14 @@ class Integral(AbstractIntegral):
                 "coordinates. Split it by cell type first."
             )
         (cell,) = domain.cell_types
-        density = VolumeElement(domain)
 
         assert isinstance(integrand, AbstractExpression)
 
+        # Change of variables moves the measure as well as the integrand.
         return Integral(
-            density * integrand, self._measure, self._variable.to_entity_coordinates(cell)
+            self._measure.density * integrand,
+            self._measure.with_domain(EntityDomain(cell)),
+            self._variable.to_entity_coordinates(cell),
         )
 
     def __repr__(self) -> str:
@@ -295,39 +359,53 @@ class IntegralSum:
 
 
 class Measure(AbstractMeasure):
-    """An integral measure."""
+    """Integration against the density a domain's own parametrization induces.
 
-    def __init__(self, dim: int | None, codim: int | None, boundary_only: bool):
+    The density is ``sqrt(det g)``, so that volumes measured in a cell's
+    coordinates agree with the ambient ones. A measure that weighs its
+    domain some other way is a class of its own rather than an argument
+    defaulted here.
+    """
+
+    def __init__(self, domain: AbstractParametrizedDomain):
         """Initialise.
 
         Args:
-            dim: The topological dimension integrated over, if the measure fixes one
-            codim: The codimension integrated over, if the measure fixes one
-            boundary_only: Whether only entities on the boundary are integrated over
+            domain: The domain to integrate over
         """
-        self._dim = dim
-        self._codim = codim
-        self._boundary_only = boundary_only
+        self._domain = domain
+
+    @property
+    def domain(self) -> AbstractParametrizedDomain:
+        """The domain this measure integrates over."""
+        return self._domain
+
+    @property
+    def density(self) -> AbstractExpression:
+        """The volume element of this measure's domain."""
+        return VolumeElement(self._domain)
+
+    def with_domain(self, domain: AbstractParametrizedDomain) -> Measure:
+        """Get the measure of another domain."""
+        return Measure(domain)
 
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._dim, self._codim, self._boundary_only
+        return (self._domain,)
 
     def __repr__(self) -> str:
         """Representation."""
-        kwargs = {}
-        if self._dim is not None:
-            kwargs["dim"] = self._dim
-        if self._codim is not None:
-            kwargs["codim"] = self._codim
-        if self._boundary_only:
-            kwargs["boundary_only"] = self._boundary_only
-        return (
-            f"{self.__class__.__name__}("
-            + ", ".join(f"{key}={value}" for key, value in kwargs.items())
-            + ")"
-        )
+        return f"{self.__class__.__name__}({self._domain!r})"
 
 
-dx = Measure(dim=None, codim=0, boundary_only=False)
+def dx(domain: AbstractParametrizedDomain) -> Measure:
+    """Create the measure a domain's own parametrization induces.
+
+    Args:
+        domain: The domain to integrate over
+
+    Returns:
+        The measure of that domain
+    """
+    return Measure(domain)

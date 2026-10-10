@@ -1,9 +1,12 @@
 # Measures and integrals
 
-What integration means, what UFLx currently does, and where the two disagree.
-`LANGUAGE.md` leaves the measure section as a TODO and `OPEN_ISSUES.md` records that
-the volume form is not an object; this note is the argument behind both. It is a design
-note, not a specification: nothing here is implemented yet.
+What integration means, what UFLx did, and where the two disagreed. `LANGUAGE.md` left
+the measure section as a TODO and `OPEN_ISSUES.md` recorded that the volume form was not
+an object; this note is the argument behind both.
+
+A design note rather than a specification. §2 describes the code as it stood at the head
+of this branch, before anything here was acted on, and §7 says which stages have since
+landed. `LANGUAGE.md` is where the language as it stands is written down.
 
 ## 1. What an integral is
 
@@ -48,7 +51,7 @@ and discarding the sign discards exactly the information an outward normal needs
 unexpressible orientation in `OPEN_ISSUES.md` and the unsigned `UnitNormal` are not two
 gaps. They are one.
 
-## 2. What UFLx does now
+## 2. What UFLx did
 
 ```python
 dx = Measure(dim=None, codim=0, boundary_only=False)
@@ -129,26 +132,26 @@ Removing all three leaves a measure that is the pair a measure actually is:
 measure = (the domain integrated over, the density on it)
 ```
 
-with the density defaulting to the one the domain's own parametrization induces,
-`√det g`. The suggested spelling keeps `f * dx` working for the single-domain case, using
-the `None`-means-not-yet-known allowance in `DESIGN_CHOICES.md` rather than a default
-chosen in `__init__`:
+with the density being the one the domain's own parametrization induces, `√det g`. The
+domain is stated, never inferred: `dx` is a function of it rather than a thing that
+acquires one.
 
 ```python
-dx  # Measure(domain=None), the domain to be inferred as today
-dx(omega)  # Measure(omega), the domain stated
+dx(omega)  # Measure(omega), whose density is VolumeElement(omega)
 ```
 
-Inference then stays available as sugar for the common case and is documented as sugar,
-rather than being the model.
+An earlier draft of this section kept a bare `dx` whose domain was filled in from the
+integrand, as sugar for the single-domain case. That is what the code did before, it is
+what UFL does, and it was rejected for being implicit: an integral that guesses its
+domain is an integral that cannot be told it guessed wrong.
 
 A measure that carries its density also buys something UFL cannot express at all. An
 axisymmetric problem integrates against `r dr dz`, and in UFL the `r` is multiplied into
 every integrand by hand, where it is indistinguishable from part of the physics. As a
-weighted measure it is where it belongs:
+measure of its own kind it is where it belongs:
 
 ```python
-dx_axi = Measure(omega, density=x[0] * InducedDensity(omega))
+dx_axi = WeightedMeasure(dx(omega), x[0])
 ```
 
 The same slot holds a surface measure that is not the induced one, and — stretching
@@ -252,22 +255,19 @@ parts becomes statable in the language rather than in a consumer's conventions.
 
 Each stage stands alone and is listed with what it costs.
 
-1. **Name the density factor what it is.** Split `JacobianDeterminant` into the signed
-   determinant of a square map and a density factor — `VolumeElement`, say, being
-   `√det g` — and drop the duplicated `abs`. Pure clarification, small, and it is what
-   makes an orientation sign expressible later rather than being absorbed into a name.
-   Breaks `codegeneration`'s pattern match on `JacobianDeterminant`.
-1. **Give the measure its domain.** `Measure(domain=None)`, `dx(omega)`, and
-   `Integral` reconciles the stated domain with the inferred one and errors when they
-   disagree. `pull_back_to_entity` retargets the measure onto the reference cell instead
-   of leaving it untouched. No behaviour change for single-domain forms.
-1. **Give the measure its density.** `Measure(domain, density)`, defaulting through a
-   factory to the induced one; `pull_back_to_entity` reads the factor off the measure
-   rather than constructing it. The density becomes a successor of the measure in the
-   graph, so `replace` and `expand_geometry` reach it with no new traversal.
-   Axisymmetric and other weighted measures follow for free.
-1. **Retire `dim`, `codim` and `boundary_only`** in favour of domain constructors,
-   `boundary_of` and `interface_of`. This needs the reference geometry UFLx cannot
+1. ~~**Name the density factor what it is.**~~ Done. `VolumeElement` is `√det g` and
+   `JacobianDeterminant` is the signed determinant of a square map, raising otherwise.
+   The duplicated `abs` is gone. Breaks `codegeneration`'s pattern match on
+   `JacobianDeterminant`.
+1. ~~**Give the measure its domain and its density.**~~ Done, and `dim`, `codim` and
+   `boundary_only` went with it. `Measure(domain)` is required, `dx(omega)` builds it,
+   `Integral` reads the domain off the measure and raises when a function in the
+   integrand is on another domain, and `pull_back_to_entity` retargets the measure onto
+   the reference cell. The density is a property rather than an argument, and it is not a
+   successor of the measure: after a pull back the measure's density is a `VolumeElement`
+   with no point, and `expand_geometry`'s blanket walk would raise on it.
+1. **Build the derived domains**, `boundary_of` and `interface_of`, which is what is left
+   of `codim` and `boundary_only`. This needs the reference geometry UFLx cannot
    supply (`OPEN_ISSUES.md`): the facet inclusion `s ↦ (1 − s, s)` has to come from
    outside, as an abstract hook, a consumer-supplied parametrization, or an unexpandable
    terminal as in UFL. That fork is the real decision and it is not a measure question.
@@ -281,22 +281,22 @@ Each stage stands alone and is listed with what it costs.
 
 Acceptance criteria, as tests to write rather than prose to agree with.
 
-- **Change of variables holds by construction.** Pulling an integral back changes the
-  measure's domain and its density together, and the result's domain is the reference
-  cell. Today the first half silently does not happen.
+- ~~**Change of variables holds by construction.**~~ Covered by
+  `test_pulling_back_retargets_the_measure`. Pulling an integral back moves the measure
+  onto the reference cell and multiplies its density into the integrand.
 - **A weighted measure is distinguishable from physics.** `∫ f r dx` as an axisymmetric
   measure and `∫ (f r) dx` as a weighted integrand are different objects, and the
   measure survives differentiation of the form with respect to a coefficient untouched.
-- **A composed domain's measure is `√det g`.** Already covered by
-  `test_the_volume_scaling_is_the_metrics_gram_determinant`, which should stop needing
-  to apologise for `abs(det J)` and `√det(JᵀJ)` being equal as numbers but not as
-  expressions.
+- ~~**A composed domain's measure is `√det g`.**~~ Covered by
+  `test_the_volume_element_is_the_metrics_gram_determinant`, which no longer has to
+  apologise for a determinant that was not one.
 - **One integral, two domains.** `inner(ι₊* u₊ − ι₋* u₋, v) * dx(interface)` builds,
   and the two restrictions are distinguishable in the graph.
 - **The jump is side-symmetric in the measure.** Pulling the interface integral back
   through either side's chart gives the same density factor.
-- **Mixed cell types still split.** `split_by_cell_type` keeps working when the measure
-  carries a domain, giving one measure per cell type rather than one shared measure.
+- ~~**Mixed cell types still split.**~~ Covered by
+  `test_an_integral_restricts_to_one_cell_type`, which now asserts the measure is
+  retargeted per cell type rather than shared.
 - **The divergence theorem is statable.** `∫ div(u) dx(omega)` and
   `∫ inner(u, n) dx(boundary_of(omega))` are both expressible, with `n`'s sign fixed by
   the boundary's inclusion rather than by a consumer's convention.

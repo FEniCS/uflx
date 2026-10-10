@@ -124,9 +124,9 @@ def mixed_space(mixed_mesh, lagrange_element):
 
 
 @pytest.fixture
-def mixed_form(mixed_space):
+def mixed_form(mixed_space, mixed_mesh):
     """A mass form over the mixed mesh, with no gradients in it."""
-    return inner(Coefficient(mixed_space), TestFunction(mixed_space)) * dx
+    return inner(Coefficient(mixed_space), TestFunction(mixed_space)) * dx(mixed_mesh)
 
 
 def test_an_integral_knows_the_domain_it_is_over(mixed_form, mixed_mesh):
@@ -135,13 +135,13 @@ def test_an_integral_knows_the_domain_it_is_over(mixed_form, mixed_mesh):
 
 
 def test_an_integral_restricts_to_one_cell_type(mixed_form, mixed_mesh):
-    """Restricting takes the integrand and the dummy variable with it."""
+    """Restricting takes the integrand, the dummy variable and the measure with it."""
     for cell in mixed_mesh.cell_types:
         restricted = mixed_form.restricted_to(cell)
 
         assert restricted.domain == mixed_mesh.restricted_to(cell)
         assert restricted.variable.domain == mixed_mesh.restricted_to(cell)
-        assert restricted.measure == mixed_form.measure
+        assert restricted.measure == mixed_form.measure.with_domain(restricted.domain)
 
 
 def test_splitting_by_cell_type(mixed_form, mixed_mesh, lagrange_element):
@@ -150,7 +150,7 @@ def test_splitting_by_cell_type(mixed_form, mixed_mesh, lagrange_element):
 
     domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 1))
-    single = inner(Coefficient(space), TestFunction(space)) * dx
+    single = inner(Coefficient(space), TestFunction(space)) * dx(domain)
     assert isinstance(single, Integral)
     assert single.split_by_cell_type() is None
 
@@ -197,7 +197,7 @@ def test_a_form_over_one_cell_type_is_still_a_plain_integral(lagrange_element):
     """The path for a single cell type is untouched by the fan out."""
     domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 1))
-    form = inner(Coefficient(space), TestFunction(space)) * dx
+    form = inner(Coefficient(space), TestFunction(space)) * dx(domain)
 
     assert isinstance(pull_back_to_entity(form), Integral)
 
