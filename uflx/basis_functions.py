@@ -137,8 +137,7 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
                 assert isinstance(self.element, AbstractMappedFiniteElement)
                 return self.element.entity_value_shape
             else:
-                assert self._variable.domain.topological_dimension is not None
-                return self.element.ambient_value_shape(self._variable.domain.topological_dimension)
+                return self.element.ambient_value_shape(self._variable.domain.geometric_dimension)
         else:
             return ()
 
