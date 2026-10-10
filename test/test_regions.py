@@ -21,6 +21,8 @@ from collections.abc import Sequence
 
 import pytest
 
+from uflx import dx
+from uflx.algorithms import pull_back_to_entity
 from uflx.domains import (
     RD,
     AbstractCellularDomain,
@@ -40,6 +42,7 @@ from uflx.geometry import (
     VolumeElement,
     _as_dense_matrix,
 )
+from uflx.integrals import Integral
 from uflx.points import Point
 from uflx.tensors import Matrix, Vector
 
@@ -503,3 +506,91 @@ def test_a_faces_projector_is_the_identity_less_its_normal(brick):
     ]
 
     assert projector == pytest.approx(expected)
+
+
+def test_r_d_is_charted_by_itself(rectangle):
+    """R^d is a domain a measure can be put on, and the simplest one.
+
+    Its points are coordinate tuples already, so its chart is the
+    identity and its density is one: the measure of R^d is the Lebesgue
+    measure. It is the only coordinate domain with no boundary, which is
+    the difference between it and a box.
+    """
+    space = RD(2)
+    point = point_in(space, 0.5, 1.5)
+
+    assert space.chart_sources == (space,)
+    assert space.chart(space).is_identity
+    assert VolumeElement(space, point).expand_geometry().as_float() == pytest.approx(1.0)
+    assert entries_of(MetricTensor(space, point), 2, 2) == pytest.approx([1.0, 0.0, 0.0, 1.0])
+
+    with pytest.raises(ValueError, match="is charted by itself"):
+        space.chart(rectangle)
+
+
+@pytest.mark.parametrize("dim", [1, 2, 3])
+def test_a_measure_on_r_d_is_the_lebesgue_one(dim):
+    """A measure needs a chart and not a cell, and R^d has one."""
+    point = point_in(RD(dim), *[0.5] * dim)
+    measure = dx(RD(dim))
+
+    assert measure.domain == RD(dim)
+    assert measure.density == VolumeElement(RD(dim))
+    assert VolumeElement(RD(dim), point).expand_geometry().as_float() == pytest.approx(1.0)
+
+
+def test_an_integral_over_r_d_builds(rectangle):
+    """With the domain stated there is nothing to infer, so an integrand of none works.
+
+    No finite element function can live on R^d -- an element is attached
+    to a cell -- so the integrand here has no functions in it at all,
+    which is what an integral whose domain is named allows.
+    """
+    for domain in (RD(2), rectangle, rectangle.face(axis=0, upper=True)):
+        integral = RealScalar(1.0) * dx(domain)
+        assert isinstance(integral, Integral)
+
+        assert integral.domain == domain
+        assert integral.measure.density == VolumeElement(domain)
+
+
+def test_a_measure_on_a_regions_boundary_is_an_exterior_facet_measure(rectangle):
+    """ds, with no cells and no new kind of measure.
+
+    An exterior boundary integral is the one measure over a domain of
+    codimension one, which a box's face is. What is still missing is the
+    outward normal's sign, not the measure.
+    """
+    face = rectangle.face(axis=1, upper=True)
+
+    integral = RealScalar(1.0) * dx(face)
+    assert isinstance(integral, Integral)
+
+    assert integral.domain == face
+    assert integral.domain.topological_dimension == 1
+    assert integral.measure != dx(rectangle)
+
+
+@pytest.mark.parametrize("domain_of", ["plane", "region", "face"])
+def test_a_charted_domain_that_is_not_cellular_cannot_be_pulled_back(rectangle, domain_of):
+    """Pulling back is still entity shaped, and says so rather than failing oddly.
+
+    Change of variables onto a chart's parameter region is meaningful for
+    any charted domain -- for R^d and for a region it is the identity, and
+    for a face it is the inclusion -- but the variable it would hand the
+    integrand is a cell's, so this is guarded rather than generalised.
+    """
+    domain = {
+        "plane": RD(2),
+        "region": rectangle,
+        "face": rectangle.face(axis=0, upper=False),
+    }[domain_of]
+    integral = RealScalar(1.0) * dx(domain)
+    assert isinstance(integral, Integral)
+
+    assert integral.split_by_cell_type() is None
+
+    with pytest.raises(ValueError, match="is not made of cells"):
+        integral.cellular_domain
+    with pytest.raises(ValueError, match="is not made of cells"):
+        pull_back_to_entity(integral)
