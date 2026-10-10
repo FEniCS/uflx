@@ -15,11 +15,22 @@ The interesting result is in
 :func:`test_opposite_faces_are_indistinguishable_to_the_normal`.
 """
 
-import pytest
-from conftest import Box
+from __future__ import annotations
 
-from uflx.domains import RD, AbstractCellularDomain, AbstractCoordinateDomain
-from uflx.expressions import RealScalar
+from collections.abc import Sequence
+
+import pytest
+
+from uflx.domains import (
+    RD,
+    AbstractCellularDomain,
+    AbstractChartedDomain,
+    AbstractCoordinateDomain,
+    AbstractParametrization,
+    IdentityParametrization,
+)
+from uflx.expressions import AbstractExpression, Integer, RealScalar
+from uflx.functions import AbstractVariable
 from uflx.geometry import (
     Jacobian,
     MetricTensor,
@@ -30,6 +41,273 @@ from uflx.geometry import (
     _as_dense_matrix,
 )
 from uflx.points import Point
+from uflx.tensors import Matrix, Vector
+
+
+class FaceInclusion(AbstractParametrization):
+    """The map that puts a face's held coordinate back.
+
+    A point of a face's parameter region has one coordinate fewer than
+    the box it bounds. This writes the held value in at its own axis and
+    the region's coordinates around it, which is a face's chart.
+    """
+
+    def __init__(self, region: AbstractCoordinateDomain, axis: int, held_at: float, dim: int):
+        """Initialise.
+
+        Args:
+            region: The box with the held coordinate dropped
+            axis: Which coordinate is held
+            held_at: The value the held coordinate takes
+            dim: How many coordinates the box has
+        """
+        self._region = region
+        self._axis = axis
+        self._held_at = held_at
+        self._dim = dim
+
+    @property
+    def source(self) -> AbstractCoordinateDomain:
+        """A face's chart starts from the box with the held coordinate dropped."""
+        return self._region
+
+    @property
+    def target_dimension(self) -> int:
+        """It lands in the box's coordinates."""
+        return self._dim
+
+    @property
+    def _kept(self) -> list[int]:
+        """Which coordinate of the box each of the region's coordinates becomes."""
+        return [i for i in range(self._dim) if i != self._axis]
+
+    def value(self, point: AbstractVariable) -> AbstractExpression:
+        """Write the held value at its axis and the region's coordinates around it."""
+        kept = self._kept
+        return Vector(
+            [
+                RealScalar(self._held_at) if i == self._axis else point.component(kept.index(i))
+                for i in range(self._dim)
+            ]
+        )
+
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
+        """The held coordinate does not move, and the rest pass straight through."""
+        kept = self._kept
+        return Matrix(
+            [
+                [
+                    Integer(0) if i == self._axis else Integer(int(kept.index(i) == j))
+                    for j in range(len(kept))
+                ]
+                for i in range(self._dim)
+            ]
+        )
+
+    @property
+    def is_affine(self) -> bool:
+        """An inclusion is affine."""
+        return True
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"FaceInclusion({self._region!r}, {self._axis}, {self._held_at}, {self._dim})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, FaceInclusion)
+            and other._region == self._region
+            and other._axis == self._axis
+            and other._held_at == self._held_at
+            and other._dim == self._dim
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("FaceInclusion", self._region, self._axis, self._held_at, self._dim))
+
+
+class Box(AbstractChartedDomain, AbstractCoordinateDomain):
+    """An axis aligned box of R^d, as a domain in its own right.
+
+    A region whose points are coordinate tuples, charted by itself
+    through the identity. There are no cells in it, no entities and no
+    elements: a box is named by its extent and that is the whole of its
+    description.
+    """
+
+    def __init__(self, bounds: Sequence[tuple[float, float]]):
+        """Initialise.
+
+        Args:
+            bounds: The lower and upper end of each coordinate's range
+        """
+        self._bounds = tuple((float(lower), float(upper)) for lower, upper in bounds)
+        if any(upper <= lower for lower, upper in self._bounds):
+            raise ValueError("Each coordinate of a box must run from a lower end to a higher one.")
+
+    @property
+    def bounds(self) -> tuple[tuple[float, float], ...]:
+        """The lower and upper end of each coordinate's range."""
+        return self._bounds
+
+    @property
+    def geometric_dimension(self) -> int:
+        """One coordinate per pair of bounds."""
+        return len(self._bounds)
+
+    @property
+    def chart_sources(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """A box is charted by itself."""
+        return (self,)
+
+    def chart(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """A box's own chart is the identity.
+
+        Raises:
+            ValueError: If the region is not this box
+        """
+        if source != self:
+            raise ValueError(f"{self!r} is charted by itself, not by {source!r}.")
+        return IdentityParametrization(self)
+
+    def face(self, axis: int, upper: bool) -> BoxFace:
+        """Get the face where one coordinate is held at an end of its range.
+
+        Args:
+            axis: Which coordinate is held
+            upper: Whether it is held at the upper end rather than the lower
+
+        Returns:
+            That face, as a domain
+        """
+        return BoxFace(self, axis, upper)
+
+    @property
+    def faces(self) -> tuple[BoxFace, ...]:
+        """Every face of this box, two per coordinate."""
+        return tuple(
+            self.face(axis, upper)
+            for axis in range(self.geometric_dimension)
+            for upper in (False, True)
+        )
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"Box({self._bounds})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return isinstance(other, Box) and other._bounds == self._bounds
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("Box", self._bounds))
+
+
+class BoxFace(AbstractChartedDomain):
+    """One face of a box, a domain of codimension one in the box's coordinates.
+
+    Its parameter region is the box with the held coordinate dropped, and
+    its chart is the inclusion that puts that coordinate back.
+
+    A face knows which way is out of the box from its own description:
+    the held coordinate decreases out of the box at the lower end and
+    increases out of it at the upper, so the outward normal is minus or
+    plus that axis. Nothing is inferred from a vertex ordering, and
+    nothing needs a convention. What the geometry cannot do with it is
+    the subject of the tests.
+    """
+
+    def __init__(self, box: Box, axis: int, upper: bool):
+        """Initialise.
+
+        Args:
+            box: The box this is a face of
+            axis: Which coordinate is held at an end of its range
+            upper: Whether it is held at the upper end rather than the lower
+        """
+        if axis < 0 or axis >= box.geometric_dimension:
+            raise ValueError(f"{box!r} has no coordinate {axis}.")
+        self._box = box
+        self._axis = axis
+        self._upper = upper
+
+    @property
+    def box(self) -> Box:
+        """The box this is a face of."""
+        return self._box
+
+    @property
+    def axis(self) -> int:
+        """Which coordinate is held."""
+        return self._axis
+
+    @property
+    def held_at(self) -> float:
+        """The value the held coordinate takes on this face."""
+        return self._box.bounds[self._axis][1 if self._upper else 0]
+
+    @property
+    def outward_normal(self) -> tuple[float, ...]:
+        """The direction out of the box, as ordinary numbers.
+
+        Minus or plus the held axis, which the face's own description
+        gives with nothing to compute and no sign left open.
+        """
+        sign = 1.0 if self._upper else -1.0
+        return tuple(sign if i == self._axis else 0.0 for i in range(self._box.geometric_dimension))
+
+    @property
+    def geometric_dimension(self) -> int:
+        """A face lives in the coordinates of the box it bounds."""
+        return self._box.geometric_dimension
+
+    @property
+    def topological_dimension(self) -> int:
+        """One less than the box, a coordinate being held."""
+        return self._box.geometric_dimension - 1
+
+    @property
+    def parameter_region(self) -> Box:
+        """The box with the held coordinate dropped."""
+        bounds = self._box.bounds
+        return Box(tuple(b for i, b in enumerate(bounds) if i != self._axis))
+
+    @property
+    def chart_sources(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """A face is charted by the box with the held coordinate dropped."""
+        return (self.parameter_region,)
+
+    def chart(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """The inclusion that puts the held coordinate back.
+
+        Raises:
+            ValueError: If the region is not this face's parameter region
+        """
+        region = self.parameter_region
+        if source != region:
+            raise ValueError(f"{self!r} is charted by {region!r}, not by {source!r}.")
+        return FaceInclusion(region, self._axis, self.held_at, self.geometric_dimension)
+
+    def __repr__(self) -> str:
+        """Representation."""
+        end = "upper" if self._upper else "lower"
+        return f"BoxFace({self._box!r}, {self._axis}, {end})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, BoxFace)
+            and other._box == self._box
+            and other._axis == self._axis
+            and other._upper == self._upper
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("BoxFace", self._box, self._axis, self._upper))
 
 
 @pytest.fixture
