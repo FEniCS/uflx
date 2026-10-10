@@ -128,7 +128,9 @@ These properties are enough to reject many meaningless expressions before loweri
 
 A measure is the domain integrated over paired with the density used on it. Neither half is optional. A function is not a differential form, so integrating one needs a density, and a density is a density of something.
 
-The density is not stated by the caller. `dx(domain)` is the measure the domain's own parametrization induces, `sqrt(det g)`, so that volumes measured in a cell's coordinates agree with the ambient ones. A measure that weighs its domain some other way, such as the `r dr dz` of an axisymmetric problem, is a measure of its own kind rather than an argument given here.
+The density is not stated by the caller. `dx(domain)` is the measure the domain's own chart induces, `sqrt(det g)`, so that lengths and volumes measured in a chart's coordinates agree with the ambient ones. Where the chart is the identity, as it is on R^d or on a region of it, that is one and the measure is the Lebesgue measure.
+
+There is no way to weigh a measure by a function, and this is deliberate. A factor that is geometric is the density of some chart, so it arrives by presenting the domain through that chart rather than by weighting: the `r` of an axisymmetric problem is `sqrt(det g)` of a cylindrical chart, not a weight on a two-dimensional one. A factor that is not geometric is part of the physics and belongs in the integrand. What does lie outside an induced density is a measure of a different kind rather than a weighted one, such as the Dirac measure a point evaluation integrates against.
 
 ```python
 dx(mesh)  # the measure of a mesh
