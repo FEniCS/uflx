@@ -1,10 +1,16 @@
 """Implmentations of domains."""
 
+from collections.abc import Sequence
+
 import pytest
 
+from uflx.domains import RD, AbstractCoordinateDomain, AbstractParametrization
 from uflx.entities import AbstractEntity
+from uflx.expressions import AbstractExpression, RealScalar, expression_sum
 from uflx.finite_elements import AbstractMappedFiniteElement
+from uflx.functions import AbstractVariable
 from uflx.maps import AbstractValueMap, BlockedValueMap, IdentityValueMap
+from uflx.tensors import Matrix, Vector
 
 
 class Entity(AbstractEntity):
@@ -154,6 +160,84 @@ class Hexahedron(Entity):
                 [(self, (0,))],
             ]
         )
+
+
+class AffineMap(AbstractParametrization):
+    """A closed form affine map, given by its matrix and its offset.
+
+    Enough to describe the inclusion of a reference facet into a cell,
+    or a linear map of the coordinates a domain lives in, without a
+    finite element anywhere near it.
+    """
+
+    def __init__(self, matrix: Sequence[Sequence[float]], offset: Sequence[float]):
+        """Initialise.
+
+        Args:
+            matrix: The rows of the matrix of the map
+            offset: Where the source's origin lands
+        """
+        self._matrix = tuple(tuple(row) for row in matrix)
+        self._offset = tuple(offset)
+        if len({len(row) for row in self._matrix}) != 1:
+            raise ValueError("Every row of the matrix must be the same length.")
+        if len(self._offset) != len(self._matrix):
+            raise ValueError("The offset must have one entry per row of the matrix.")
+
+    @property
+    def source(self) -> AbstractCoordinateDomain:
+        """This map starts in as many coordinates as the matrix has columns."""
+        return RD(len(self._matrix[0]))
+
+    @property
+    def target_dimension(self) -> int:
+        """This map lands in as many coordinates as the matrix has rows."""
+        return len(self._matrix)
+
+    def apply(self, coordinates: Sequence[float]) -> list[float]:
+        """Apply the map to ordinary numbers, to say what is expected of it."""
+        return [
+            sum(a * x for a, x in zip(row, coordinates, strict=True)) + b
+            for row, b in zip(self._matrix, self._offset, strict=True)
+        ]
+
+    def value(self, point: AbstractVariable) -> AbstractExpression:
+        """Multiply the matrix by the point and add the offset."""
+        return Vector(
+            [
+                expression_sum(
+                    (RealScalar(a) * point.component(j) for j, a in enumerate(row)),
+                    default=RealScalar(0.0),
+                )
+                + RealScalar(b)
+                for row, b in zip(self._matrix, self._offset, strict=True)
+            ]
+        )
+
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
+        """An affine map's derivative is its matrix."""
+        return Matrix([[RealScalar(a) for a in row] for row in self._matrix])
+
+    @property
+    def is_affine(self) -> bool:
+        """An affine map is affine."""
+        return True
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"uflx.test.AffineMap({self._matrix}, {self._offset})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, AffineMap)
+            and other._matrix == self._matrix
+            and other._offset == self._offset
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.test.AffineMap", self._matrix, self._offset))
 
 
 class LagrangeElement(AbstractMappedFiniteElement):
