@@ -3,8 +3,16 @@
 import pytest
 from conftest import Interval
 
-from uflx import composed_domain, parametrized_domain
-from uflx.algorithms import simplify
+from uflx import (
+    Coefficient,
+    TestFunction,
+    composed_domain,
+    dx,
+    function_space,
+    inner,
+    parametrized_domain,
+)
+from uflx.algorithms import pull_back_to_entity, simplify
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import (
     RD,
@@ -15,7 +23,15 @@ from uflx.domains import (
 )
 from uflx.expressions import AbstractExpression, Integer, MatrixProduct, RealScalar
 from uflx.functions import AbstractVariable
-from uflx.geometry import Jacobian, PushedForwardPoint
+from uflx.geometry import (
+    AbstractGeometricQuantity,
+    Jacobian,
+    JacobianDeterminant,
+    MetricTensor,
+    PushedForwardPoint,
+    TangentialProjector,
+    expand_geometry,
+)
 from uflx.graphs import as_graph
 from uflx.parametrizations import ComposedParametrization, FiniteElementParametrization
 from uflx.points import Point
@@ -224,3 +240,29 @@ def test_restricting_a_composed_domain_keeps_its_map(mesh_on_a_parabola, parabol
     assert restricted.geometric_dimension == 2
     assert restricted.topological_dimension == 1
     assert isinstance(restricted.parametrization(cell), ComposedParametrization)
+
+
+def test_a_composed_domain_has_a_measure(mesh_on_a_parabola, entity_point):
+    """A composed map's Jacobian is a matrix product, which still has to reduce.
+
+    The determinant, the metric and the projector all have to write the
+    Jacobian out before working on it, and a chain rule does not hand
+    them a Matrix.
+    """
+    for quantity in [JacobianDeterminant, MetricTensor, TangentialProjector]:
+        expanded = quantity(mesh_on_a_parabola, entity_point).expand_geometry()
+        assert expanded.value_shape == quantity(mesh_on_a_parabola, entity_point).value_shape
+
+    assert JacobianDeterminant(mesh_on_a_parabola, entity_point).value_shape == ()
+    assert MetricTensor(mesh_on_a_parabola, entity_point).value_shape == (1, 1)
+    assert TangentialProjector(mesh_on_a_parabola, entity_point).value_shape == (2, 2)
+
+
+def test_a_form_over_a_composed_domain_expands(mesh_on_a_parabola, lagrange_element):
+    """Pulling a form back onto a composed domain leaves no geometry behind."""
+    space = function_space(mesh_on_a_parabola, lagrange_element("interval", 1))
+    form = inner(Coefficient(space), TestFunction(space)) * dx
+
+    expanded = expand_geometry(pull_back_to_entity(form))
+
+    assert not any(isinstance(n, AbstractGeometricQuantity) for n in as_graph(expanded))
