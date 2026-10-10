@@ -31,7 +31,8 @@ from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression, MatrixProduct, expression_sum
 from uflx.finite_elements import AbstractMappedFiniteElement
 from uflx.function_spaces import function_space
-from uflx.points import AbstractPoint, Point
+from uflx.functions import AbstractVariable
+from uflx.points import Point
 from uflx.tensors import FlattenedTensorMap, Matrix, Vector
 
 
@@ -71,7 +72,7 @@ class FiniteElementParametrization(AbstractParametrization):
         return self._element
 
     def _dof_sum(
-        self, point: AbstractPoint, component: int, derivative: tuple[int, ...]
+        self, point: AbstractVariable, component: int, derivative: tuple[int, ...]
     ) -> AbstractExpression:
         """Sum the basis against the coordinate dofs, for one component."""
         dim = self._target_dimension
@@ -87,14 +88,14 @@ class FiniteElementParametrization(AbstractParametrization):
             for i in range(self._element.dim)
         )
 
-    def value(self, point: AbstractPoint) -> AbstractExpression:
+    def value(self, point: AbstractVariable) -> AbstractExpression:
         """Interpolate the coordinate dofs at the point."""
         no_derivative = (0,) * self.source.geometric_dimension
         return Vector(
             [self._dof_sum(point, j, no_derivative) for j in range(self._target_dimension)]
         )
 
-    def jacobian(self, point: AbstractPoint) -> AbstractExpression:
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
         """Interpolate the coordinate dofs against the basis's derivatives."""
         tdim = self.source.geometric_dimension
         return Matrix(
@@ -157,7 +158,7 @@ class ComposedParametrization(AbstractParametrization):
         """Composition lands where the second map lands."""
         return self._outer.target_dimension
 
-    def _intermediate_point(self, point: AbstractPoint) -> Point:
+    def _intermediate_point(self, point: AbstractVariable) -> Point:
         """The point the first map gives the second."""
         value = self._inner.value(point)
         return Point(
@@ -165,11 +166,11 @@ class ComposedParametrization(AbstractParametrization):
             self._outer.source,
         )
 
-    def value(self, point: AbstractPoint) -> AbstractExpression:
+    def value(self, point: AbstractVariable) -> AbstractExpression:
         """Apply the second map to the first map's value."""
         return self._outer.value(self._intermediate_point(point))
 
-    def jacobian(self, point: AbstractPoint) -> AbstractExpression:
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
         """The chain rule."""
         return MatrixProduct(
             [

@@ -48,7 +48,7 @@ from uflx.tensors import Identity, Vector
 
 if TYPE_CHECKING:
     from uflx.expressions import AbstractExpression
-    from uflx.points import AbstractPoint
+    from uflx.functions import AbstractVariable
 
 
 class AbstractDomain(ABC):
@@ -140,22 +140,22 @@ class AbstractParametrization(ABC):
         """The number of coordinates this map lands in."""
 
     @abstractmethod
-    def value(self, point: AbstractPoint) -> AbstractExpression:
+    def value(self, point: AbstractVariable) -> AbstractExpression:
         """Evaluate this map at a point of its source.
 
         Args:
-            point: A point of this map's source
+            point: A point of this map's source, or a variable standing for one
 
         Returns:
             The coordinates it maps to, of shape ``(target_dimension,)``
         """
 
     @abstractmethod
-    def jacobian(self, point: AbstractPoint) -> AbstractExpression:
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
         """Differentiate this map at a point of its source.
 
         Args:
-            point: A point of this map's source
+            point: A point of this map's source, or a variable standing for one
 
         Returns:
             The derivative of each target coordinate with respect to each
@@ -215,11 +215,11 @@ class IdentityParametrization(AbstractParametrization):
         """This map lands where it starts."""
         return self._domain.geometric_dimension
 
-    def value(self, point: AbstractPoint) -> AbstractExpression:
+    def value(self, point: AbstractVariable) -> AbstractExpression:
         """Give back the coordinates of the point."""
         return Vector([point.component(i) for i in range(self.target_dimension)])
 
-    def jacobian(self, point: AbstractPoint) -> AbstractExpression:
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
         """Differentiating the identity gives the identity."""
         return Identity(self.target_dimension)
 

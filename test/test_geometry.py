@@ -2,19 +2,24 @@
 
 import pytest
 
-from uflx import parametrized_domain
+from uflx import Coefficient, TestFunction, dx, function_space, inner, parametrized_domain
+from uflx.algorithms import pull_back_to_entity
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import RD, EntityDomain
 from uflx.expressions import RealScalar
+from uflx.functions import create_variable
 from uflx.geometry import (
+    AbstractJacobian,
     Jacobian,
     JacobianInverse,
     JacobianInverseTranspose,
     JacobianTranspose,
     PulledBackPoint,
     PushedForwardPoint,
+    expand_geometry,
 )
 from uflx.graphs import as_graph
+from uflx.integrals import Integral
 from uflx.points import Point
 from uflx.tensors import FlattenedTensorMap
 
@@ -177,3 +182,49 @@ def test_jacobian_coordinate_dofs(cell, gdim, lagrange_element):
         coordinate_dof_entries(Jacobian(domain.sole_parametrization, point).expand_geometry())
         == x_dofs
     )
+
+
+def mass_form(cell, gdim, lagrange_element):
+    """A form with geometry in it once pulled back, but no gradients."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    space = function_space(domain, lagrange_element(cell, 1))
+    return inner(Coefficient(space), TestFunction(space)) * dx
+
+
+def test_a_jacobian_is_told_where_it_is_evaluated(lagrange_element):
+    """A pulled back integral hands its geometry the variable standing for the point."""
+    pulled = pull_back_to_entity(mass_form("triangle", 2, lagrange_element))
+
+    assert isinstance(pulled, Integral)
+    jacobians = [n for n in as_graph(pulled) if isinstance(n, AbstractJacobian)]
+    assert len(jacobians) > 0
+    for j in jacobians:
+        assert j.point is not None
+        assert j.point == pulled.variable
+        assert j.point.domain == j.parametrization.source
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_a_pulled_back_integral_expands_its_geometry(cell, gdim, lagrange_element):
+    """Expanding a pulled back form leaves no geometry behind.
+
+    A Jacobian built during a pull back used to keep point=None, so
+    expanding one asserted instead of giving an expression.
+    """
+    expanded = expand_geometry(pull_back_to_entity(mass_form(cell, gdim, lagrange_element)))
+
+    assert not any(isinstance(n, AbstractJacobian) for n in as_graph(expanded))
+
+
+def test_geometry_refuses_a_variable_in_the_wrong_coordinates(lagrange_element):
+    """A Jacobian is evaluated at a point of its map's source, not anywhere else."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    parametrization = domain.sole_parametrization
+    (cell,) = domain.cell_types
+
+    ambient = create_variable(domain)
+    assert ambient.domain != parametrization.source
+    assert Jacobian(parametrization).reconstruct_with_variable(ambient).point is None
+
+    entity = ambient.to_entity_coordinates(cell)
+    assert Jacobian(parametrization).reconstruct_with_variable(entity).point == entity
