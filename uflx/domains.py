@@ -261,6 +261,24 @@ class AbstractCellularDomain(AbstractDomain):
     def cell_types(self) -> tuple[AbstractEntity, ...]:
         """Get the cell types that occur in this domain."""
 
+    @abstractmethod
+    def restricted_to(self, cell: AbstractEntity) -> AbstractCellularDomain:
+        """Get the part of this domain made of cells of one type.
+
+        Integrating over a domain of several cell types means integrating
+        over each of these and adding the results, since each cell type
+        has its own coordinate domain and its own map out of it.
+
+        Args:
+            cell: A cell type of this domain
+
+        Returns:
+            A domain whose only cell type is the given one
+
+        Raises:
+            ValueError: If the cell is not a cell type of this domain
+        """
+
 
 class AbstractParametrizedDomain(AbstractCellularDomain):
     """Base class for a domain presented as the image of a map.
@@ -278,6 +296,14 @@ class AbstractParametrizedDomain(AbstractCellularDomain):
 
         Returns:
             That cell type's parametrization
+        """
+
+    @abstractmethod
+    def restricted_to(self, cell: AbstractEntity) -> AbstractParametrizedDomain:
+        """Get the part of this domain made of cells of one type.
+
+        Restricting a parametrized domain leaves it parametrized, by the
+        same map for the cell type that is kept.
         """
 
     @property
@@ -317,6 +343,12 @@ class EntityDomain(AbstractCoordinateDomain, AbstractParametrizedDomain):
         if cell != self._entity:
             raise ValueError(f"{cell} is not the entity of this domain.")
         return IdentityParametrization(self)
+
+    def restricted_to(self, cell: AbstractEntity) -> EntityDomain:
+        """An entity domain has one cell type already, which is its entity."""
+        if cell != self._entity:
+            raise ValueError(f"{cell} is not the entity of this domain.")
+        return self
 
     def __repr__(self) -> str:
         """Representation."""
