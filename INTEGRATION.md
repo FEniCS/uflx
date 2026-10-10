@@ -182,7 +182,7 @@ contact surface, two independently meshed subdomains. `Γ` is a facet of neither
 `φ₊⁻¹(ψ_Γ(X))` — pulling a point of `Γ` into `Ω₊`'s coordinates through a map with no
 symbolic inverse.
 
-UFLx has that primitive. `PulledBackPoint` is `φ⁻¹` on points, a terminal by design,
+UFLx has that primitive. `PreimagePoint` is `φ⁻¹` on points, a terminal by design,
 standing for a Newton solve a consumer performs, and it takes the chart rather than the
 domain precisely because which cell the point lands in is part of the question. So the
 general interface needs no new geometry: a point of `Γ` is pushed forward by `Γ`'s own

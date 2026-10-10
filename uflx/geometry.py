@@ -42,10 +42,12 @@ def _as_dense_matrix(jacobian: AbstractExpression) -> Matrix:
     return Matrix([[jacobian.component(i, j) for j in range(cols)] for i in range(rows)])
 
 
-class PushedForwardPoint(AbstractPoint):
-    """A point in an entity's coordinates, mapped through a parametrization.
+class ImagePoint(AbstractPoint):
+    """Where a chart sends a point of the region it starts from.
 
-    The point level action of a map: the same thing
+    Applying a map to a point, which is an image and not a pushforward:
+    a pushforward and a pullback act on fields, and `uflx.maps` is where
+    those live. The same thing
     :class:`SpatialCoordinate` gives as an expression, but being a point
     it can be the variable a basis function is evaluated at. An element
     defined on the physical cell rather than on a reference one needs
@@ -53,7 +55,7 @@ class PushedForwardPoint(AbstractPoint):
 
     It takes the domain rather than the map because the point it starts
     from already lies in a cell's coordinate domain, and so names the
-    cell whose map carries it. Contrast :class:`PulledBackPoint`.
+    cell whose map carries it. Contrast :class:`PreimagePoint`.
     """
 
     def __init__(self, point: AbstractPoint, domain: AbstractParametrizedDomain):
@@ -136,14 +138,14 @@ class PushedForwardPoint(AbstractPoint):
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
-            isinstance(other, PushedForwardPoint)
+            isinstance(other, ImagePoint)
             and self._point == other._point
             and self._parametrized_domain == other._parametrized_domain
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.PushedForwardPoint", self._point, self._parametrized_domain))
+        return hash(("uflx.ImagePoint", self._point, self._parametrized_domain))
 
     @property
     def index(self) -> int | str:
@@ -151,8 +153,11 @@ class PushedForwardPoint(AbstractPoint):
         return self._point.index
 
 
-class PulledBackPoint(AbstractPoint):
-    """A point in ambient coordinates, mapped to an entity's coordinates.
+class PreimagePoint(AbstractPoint):
+    """The point of a chart's region that lands on a given ambient point.
+
+    The inverse image of a point, and not a pullback: a pullback acts on
+    fields, and `uflx.maps` is where those live.
 
     A terminal, deliberately: it has no expansion and will not get one.
     A parametrization offers a value and a derivative and no inverse,
@@ -162,7 +167,7 @@ class PulledBackPoint(AbstractPoint):
 
     It takes the map rather than the domain because a point of the ambient
     coordinates does not say which cell it should land in; that is part of
-    the question being asked. Contrast :class:`PushedForwardPoint`.
+    the question being asked. Contrast :class:`ImagePoint`.
 
     What wants it is evaluation at a physical location: a reference basis
     read at ``phi^-1(x)``, which is what a point evaluation needs.
@@ -229,14 +234,14 @@ class PulledBackPoint(AbstractPoint):
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
-            isinstance(other, PulledBackPoint)
+            isinstance(other, PreimagePoint)
             and self._point == other._point
             and self._parametrization == other._parametrization
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.PulledBackPoint", self._point, self._parametrization))
+        return hash(("uflx.PreimagePoint", self._point, self._parametrization))
 
     @property
     def index(self) -> int | str:
