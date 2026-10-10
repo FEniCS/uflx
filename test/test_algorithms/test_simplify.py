@@ -13,9 +13,16 @@ from uflx import (
 )
 from uflx.algorithms import simplify
 from uflx.expressions import MatrixProduct, Product
-from uflx.geometry import Jacobian, JacobianInverse, JacobianInverseTranspose, JacobianTranspose
+from uflx.geometry import (
+    Jacobian,
+    JacobianInverse,
+    JacobianInverseTranspose,
+    JacobianTranspose,
+    TangentialProjector,
+)
 from uflx.integrals import Integral
 from uflx.operators import Inner
+from uflx.tensors import Identity
 
 
 def test_add_and_subtract_integer(lagrange_element):
@@ -226,3 +233,42 @@ def test_commutative_operands_are_sorted(lagrange_element):
 
     assert u * f + g != g + f * u
     assert simplify(u * f + g) == simplify(g + f * u)
+
+
+@pytest.mark.parametrize("transpose", [True, False])
+def test_a_map_and_its_pseudo_inverse_give_the_tangential_projector(lagrange_element, transpose):
+    """On a manifold J J+ is not the identity, since it keeps only tdim directions.
+
+    JacobianInverse is a pseudo-inverse where the map is not square, so
+    J+ J is the identity on the cell's coordinates but J J+ projects the
+    ambient coordinates onto the tangent space.
+    """
+    domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
+
+    if transpose:
+        outer = JacobianInverseTranspose(domain) @ JacobianTranspose(domain)
+        inner = JacobianTranspose(domain) @ JacobianInverseTranspose(domain)
+    else:
+        outer = Jacobian(domain) @ JacobianInverse(domain)
+        inner = JacobianInverse(domain) @ Jacobian(domain)
+
+    projector = simplify(outer)
+    assert isinstance(projector, TangentialProjector)
+    assert projector.value_shape == (3, 3)
+
+    identity = simplify(inner)
+    assert isinstance(identity, Identity)
+    assert identity.value_shape == (2, 2)
+
+
+@pytest.mark.parametrize("transpose", [True, False])
+def test_a_square_map_and_its_inverse_still_give_the_identity(lagrange_element, transpose):
+    """Where the tangent space is everything, the projector is the identity."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+
+    if transpose:
+        product = JacobianInverseTranspose(domain) @ JacobianTranspose(domain)
+    else:
+        product = Jacobian(domain) @ JacobianInverse(domain)
+
+    assert simplify(product) == Identity(2)

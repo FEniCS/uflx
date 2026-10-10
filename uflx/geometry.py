@@ -347,22 +347,30 @@ class AbstractGeometricQuantity(AbstractExpression):
         """Representation."""
         return f"{self.__class__.__name__}({self._domain!r}, {self._point!r})"
 
-    def _simplified_against(
-        self, other: GraphNode, partner: type[AbstractGeometricQuantity]
-    ) -> GraphNode | None:
-        """Give the identity when `other` is the matching inverse of this quantity.
+    def _is_partnered_by(self, other: GraphNode, partner: type[AbstractGeometricQuantity]) -> bool:
+        """Whether `other` is a quantity of the given kind on the same geometry.
 
         Args:
             other: The quantity this one is multiplied by
-            partner: The class whose product with this one is the identity
+            partner: The class it must be for the product to simplify
         """
-        if (
+        return (
             isinstance(other, partner)
             and self._domain == other.domain
             and self._point == other.point
-        ):
-            return Identity(self.value_shape[0])
-        return None
+        )
+
+    def _onto_the_tangent_space(self) -> GraphNode:
+        """What a map composed with its own pseudo-inverse comes to.
+
+        Only the identity when the map is square. Otherwise it projects the
+        ambient coordinates onto the tangent space, keeping tdim of the
+        gdim directions.
+        """
+        gdim, tdim = self._jacobian.value_shape
+        if gdim == tdim:
+            return Identity(gdim)
+        return TangentialProjector(self._domain, self._point)
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Evaluate this quantity at the given variable.
@@ -413,7 +421,9 @@ class Jacobian(AbstractGeometricQuantity):
 
         This function should return None if no simplification can be made.
         """
-        return self._simplified_against(other, JacobianInverse)
+        if self._is_partnered_by(other, JacobianInverse):
+            return self._onto_the_tangent_space()
+        return None
 
 
 class MetricTensor(AbstractGeometricQuantity):
@@ -443,6 +453,47 @@ class MetricTensor(AbstractGeometricQuantity):
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         return self.expand_geometry().component(*indices)
+
+
+class TangentialProjector(AbstractGeometricQuantity):
+    """The orthogonal projection of the ambient coordinates onto the tangent space.
+
+    ``P = J g^-1 J^T``, which is what a map composed with its own
+    pseudo-inverse comes to. It is symmetric and idempotent, and its rank
+    is the topological dimension: it keeps the directions a cell can move
+    in and discards the rest. For a hypersurface it is ``I - n (x) n``.
+
+    Where the map is square it is the identity, since then the tangent
+    space is the whole of the ambient coordinates.
+    """
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        gdim, _ = self._jacobian.value_shape
+        return (gdim, gdim)
+
+    def expand_geometry(self) -> AbstractExpression:
+        """Expand geometry."""
+        gdim, tdim = self._jacobian.value_shape
+        if gdim == tdim:
+            return Identity(gdim)
+        j = _as_dense_matrix(self._jacobian.expand_geometry())
+        return j.matmat(j.compute_inverse())
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get a component of the expression."""
+        return self.expand_geometry().component(*indices)
+
+    def simplified_matrix_product(self, other: GraphNode) -> GraphNode | None:
+        """Return a single expression representing the simplified matrix product.
+
+        This function should return None if no simplification can be made.
+        """
+        if self._is_partnered_by(other, TangentialProjector):
+            # A projection projected again is the same projection.
+            return self
+        return None
 
 
 class JacobianDeterminant(AbstractGeometricQuantity):
@@ -485,7 +536,10 @@ class JacobianInverse(AbstractGeometricQuantity):
 
         This function should return None if no simplification can be made.
         """
-        return self._simplified_against(other, Jacobian)
+        if self._is_partnered_by(other, Jacobian):
+            # J+ J is the identity on the cell's own coordinates.
+            return Identity(self.value_shape[0])
+        return None
 
 
 class JacobianTranspose(AbstractGeometricQuantity):
@@ -510,7 +564,10 @@ class JacobianTranspose(AbstractGeometricQuantity):
 
         This function should return None if no simplification can be made.
         """
-        return self._simplified_against(other, JacobianInverseTranspose)
+        if self._is_partnered_by(other, JacobianInverseTranspose):
+            # J+ J is the identity on the cell's own coordinates.
+            return Identity(self.value_shape[0])
+        return None
 
 
 class JacobianInverseTranspose(AbstractGeometricQuantity):
@@ -535,7 +592,9 @@ class JacobianInverseTranspose(AbstractGeometricQuantity):
 
         This function should return None if no simplification can be made.
         """
-        return self._simplified_against(other, JacobianTranspose)
+        if self._is_partnered_by(other, JacobianTranspose):
+            return self._onto_the_tangent_space()
+        return None
 
 
 def expand_geometry(

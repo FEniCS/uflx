@@ -18,12 +18,13 @@ from uflx.geometry import (
     MetricTensor,
     PulledBackPoint,
     PushedForwardPoint,
+    TangentialProjector,
     expand_geometry,
 )
 from uflx.graphs import as_graph
 from uflx.integrals import Integral
 from uflx.points import Point
-from uflx.tensors import FlattenedTensorMap, Matrix
+from uflx.tensors import FlattenedTensorMap, Identity, Matrix
 
 cells_and_gdims = [
     ("interval", 1),
@@ -283,6 +284,7 @@ geometric_quantities = [
     Jacobian,
     JacobianDeterminant,
     MetricTensor,
+    TangentialProjector,
     JacobianInverse,
     JacobianTranspose,
     JacobianInverseTranspose,
@@ -382,3 +384,36 @@ def test_the_volume_scaling_is_the_metrics_gram_determinant(cell, gdim, lagrange
     assert simplify(abs(Sqrt(g.compute_determinant()))) == simplify(
         JacobianDeterminant(domain, point).expand_geometry()
     )
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_projector_is_square_in_the_ambient_dimension(cell, gdim, lagrange_element):
+    """It acts on the ambient coordinates, keeping the tangent directions."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+
+    assert TangentialProjector(domain).value_shape == (gdim, gdim)
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_projector_is_the_identity_only_on_a_square_map(cell, gdim, lagrange_element):
+    """Where a cell can move in every ambient direction there is nothing to project."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    expanded = TangentialProjector(domain, point).expand_geometry()
+
+    if gdim == tdim:
+        assert expanded == Identity(gdim)
+    else:
+        assert not isinstance(expanded, Identity)
+        assert expanded.value_shape == (gdim, gdim)
+
+
+def test_the_projector_is_idempotent(lagrange_element):
+    """Projecting an already projected vector changes nothing."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
+    projector = TangentialProjector(domain)
+
+    assert simplify(projector @ projector) == projector
