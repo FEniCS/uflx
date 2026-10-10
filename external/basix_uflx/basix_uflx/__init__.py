@@ -10,8 +10,9 @@ import basix
 import numpy as np
 import numpy.typing as npt
 import uflx
-from uflx_codegeneration.finite_element import AbstractFiniteElement, BlockedElement, MixedElement
-from uflx_codegeneration.utils import number_of_derivatives
+
+from basix_uflx.finite_element import AbstractFiniteElement, BlockedElement, MixedElement
+from basix_uflx.utils import number_of_derivatives
 
 __all__ = [
     "blocked_element",

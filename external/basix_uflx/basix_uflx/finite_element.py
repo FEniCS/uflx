@@ -16,18 +16,18 @@ from uflx.maps import (
 
 
 class AbstractFiniteElement(AbstractReferenceMappedFiniteElement):
-    """A base wrapper for a uflx-codegeneration compatible finite element.
+    """A finite element whose basis functions can be evaluated.
 
-    This class includes methods and properties required for code generation.
-    By implementing these functions in a finite element definition, you can
-    enable that finite element library to be used to generate finite element
-    kernel code.
+    UFLx itself is purely symbolic, so its element ABCs describe only what a
+    basis looks like. This class adds the evaluation an element library must
+    provide for a form to be assembled or compiled: tabulation of values and
+    derivatives, and a known Lagrange superdegree.
 
     Note that this class inherits from UFLx's AbstractReferenceMappedFiniteElement,
     and so all the abstract methods from that class must be implemented too.
     The return type of the property `lagrange_superdegree` that is defined in
     this class differs from the return type of AbstractReferenceMappedFiniteElement:
-    this property cannot be None in order for code to be successfully generated.
+    this property cannot be None.
     """
 
     @abstractmethod
@@ -87,7 +87,7 @@ class MixedElement(AbstractFiniteElement):
 
     def __hash__(self):
         """Hash."""
-        return hash(("uflx_codegeneration", f"{self!r}"))
+        return hash(("basix_uflx", f"{self!r}"))
 
     def __repr__(self) -> str:
         """Representation."""
@@ -245,7 +245,7 @@ class BlockedElement(AbstractFiniteElement):
 
     def __hash__(self):
         """Hash."""
-        return hash(("uflx_codegeneration", f"{self!r}"))
+        return hash(("basix_uflx", f"{self!r}"))
 
     def __repr__(self) -> str:
         """Representation."""
