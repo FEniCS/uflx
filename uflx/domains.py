@@ -26,7 +26,7 @@ and the mesh. For a surface mesh of triangles in three dimensions::
 
     mesh = parametrized_domain(P1_vector)       # tdim 2, gdim 3
     X = Point([a, b], entity_domain(triangle))  # tdim == gdim == 2
-    x = PushedForwardPoint(X, mesh.sole_parametrization).expand_geometry()
+    x = PushedForwardPoint(X, mesh).expand_geometry()  # a point of RD(3)
 
 The pair (a, b) names no point of the mesh: it has many triangles, and a
 point of the surface needs three ambient coordinates. It names a point of
@@ -279,20 +279,6 @@ class AbstractParametrizedDomain(AbstractCellularDomain):
         Returns:
             That cell type's parametrization
         """
-
-    @property
-    def sole_parametrization(self) -> AbstractParametrization:
-        """Get the parametrization of a domain that has only one cell type.
-
-        Raises:
-            NotImplementedError: If the domain has more than one cell type
-        """
-        if len(self.cell_types) != 1:
-            raise NotImplementedError(
-                "Only domains with exactly one cell type are supported for now."
-            )
-        (cell,) = self.cell_types
-        return self.parametrization(cell)
 
     @property
     def has_affine_parametrization(self) -> bool:

@@ -75,6 +75,12 @@ def line(lagrange_element):
 
 
 @pytest.fixture
+def line_map(line):
+    """The finite element map of the mesh of the line."""
+    return line.parametrization(Interval())
+
+
+@pytest.fixture
 def mesh_on_a_parabola(line, parabola):
     """A finite element mesh of the line, mapped onto a parabola in the plane."""
     return composed_domain(line, parabola)
@@ -97,9 +103,9 @@ def test_a_closed_form_map_needs_no_element(parabola, entity_point):
     assert not parabola.is_identity
 
 
-def test_an_element_map_knows_its_source_and_target(line):
+def test_an_element_map_knows_its_source_and_target(line_map):
     """A finite element map starts on its cell and lands in the ambient coordinates."""
-    parametrization = line.sole_parametrization
+    parametrization = line_map
 
     assert isinstance(parametrization, FiniteElementParametrization)
     assert parametrization.source == entity_domain(Interval())
@@ -114,7 +120,7 @@ def test_composing_dimensions_takes_one_from_each_half(mesh_on_a_parabola):
     assert mesh_on_a_parabola.cell_types == (Interval(),)
 
 
-def test_composing_incompatible_maps_is_rejected(line):
+def test_composing_incompatible_maps_is_rejected(line, line_map):
     """A map must start where the one before it lands."""
 
     class FromThePlane(Parabolic):
@@ -124,7 +130,7 @@ def test_composing_incompatible_maps_is_rejected(line):
             return RD(2)
 
     with pytest.raises(ValueError, match="Cannot compose"):
-        ComposedParametrization(line.sole_parametrization, FromThePlane())
+        ComposedParametrization(line_map, FromThePlane())
 
     with pytest.raises(ValueError, match="Cannot map a domain"):
         composed_domain(line, FromThePlane())
@@ -132,7 +138,7 @@ def test_composing_incompatible_maps_is_rejected(line):
 
 def test_a_composed_push_forward_squares_the_inner_map(mesh_on_a_parabola, entity_point):
     """The second ambient coordinate is the first one squared."""
-    x = PushedForwardPoint(entity_point, mesh_on_a_parabola.sole_parametrization)
+    x = PushedForwardPoint(entity_point, mesh_on_a_parabola)
     expanded = x.expand_geometry()
 
     assert isinstance(expanded, Point)
@@ -141,16 +147,16 @@ def test_a_composed_push_forward_squares_the_inner_map(mesh_on_a_parabola, entit
     assert expanded.component(1) == s * s
 
 
-def test_a_composed_jacobian_is_the_chain_rule(mesh_on_a_parabola, line, entity_point):
+def test_a_composed_jacobian_is_the_chain_rule(mesh_on_a_parabola, line_map, entity_point):
     """The composite's Jacobian is the outer Jacobian times the inner one."""
-    parametrization = mesh_on_a_parabola.sole_parametrization
+    parametrization = mesh_on_a_parabola
 
     j = Jacobian(parametrization, entity_point).expand_geometry()
 
     assert isinstance(j, MatrixProduct)
     assert j.value_shape == (2, 1)
 
-    inner = line.sole_parametrization
+    inner = line_map
     s = inner.value(entity_point).component(0)
     ds = inner.jacobian(entity_point).component(0, 0)
     assert simplify(j.component(0, 0)) == simplify(ds)
@@ -159,7 +165,7 @@ def test_a_composed_jacobian_is_the_chain_rule(mesh_on_a_parabola, line, entity_
 
 def test_a_composed_domain_still_tabulates_its_inner_basis(mesh_on_a_parabola, entity_point):
     """Basis functions and a closed form map appear in the same expression."""
-    j = Jacobian(mesh_on_a_parabola.sole_parametrization, entity_point).expand_geometry()
+    j = Jacobian(mesh_on_a_parabola, entity_point).expand_geometry()
 
     assert any(isinstance(n, EvaluatedBasisFunction) for n in as_graph(j))
 
@@ -175,26 +181,27 @@ def test_composing_with_the_identity_changes_nothing(parabola, entity_point):
     assert simplify(composed.jacobian(point)) == simplify(parabola.jacobian(point))
 
 
-def test_affineness_and_identity_conjoin(line, parabola):
+def test_affineness_and_identity_conjoin(line, line_map, parabola):
     """A composite is affine only if both halves are, and likewise the identity."""
     identity = IdentityParametrization(RD(1))
 
     assert ComposedParametrization(identity, identity).is_identity
     assert ComposedParametrization(identity, identity).is_affine
     assert not ComposedParametrization(identity, parabola).is_affine
-    assert not ComposedParametrization(line.sole_parametrization, parabola).is_affine
+    assert not ComposedParametrization(line_map, parabola).is_affine
     assert not composed_domain(line, parabola).has_affine_parametrization
 
 
 def test_parametrizations_compare_by_value(line, parabola):
     """Geometric quantities hold a map, so rewriting and simplifying compare them."""
-    assert line.sole_parametrization == line.sole_parametrization
-    assert hash(line.sole_parametrization) == hash(line.sole_parametrization)
+    cell = Interval()
+    assert line.parametrization(cell) == line.parametrization(cell)
+    assert hash(line.parametrization(cell)) == hash(line.parametrization(cell))
 
     composed = composed_domain(line, parabola)
-    assert composed.sole_parametrization == composed.sole_parametrization
-    assert hash(composed.sole_parametrization) == hash(composed.sole_parametrization)
-    assert composed.sole_parametrization != line.sole_parametrization
+    assert composed.parametrization(cell) == composed.parametrization(cell)
+    assert hash(composed.parametrization(cell)) == hash(composed.parametrization(cell))
+    assert composed.parametrization(cell) != line.parametrization(cell)
 
 
 def test_an_element_map_still_exposes_its_element(lagrange_element):

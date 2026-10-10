@@ -64,7 +64,7 @@ def test_an_entity_domains_parametrization_is_the_identity(lagrange_element):
     domain = entity_domain(entity)
 
     assert isinstance(domain, AbstractParametrizedDomain)
-    parametrization = domain.sole_parametrization
+    parametrization = domain.parametrization(entity)
     assert parametrization.is_identity
     assert parametrization.is_affine
     assert parametrization.source == domain
