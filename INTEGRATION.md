@@ -34,8 +34,8 @@ density. Given a metric `g`, in coordinates `X` on `U`:
 ∫_M f dV_g = ∫_U f(φ(X)) √det g(X) dX
 ```
 
-For an immersion `φ: U ⊂ Rⁿ → R^d` with the Euclidean metric pulled back,
-`g = JᵀJ` and the factor is `√det(JᵀJ)`, which for `n = d` is `|det J|`.
+For an immersion `φ: U ⊂ Rⁿ → R^d` with the Euclidean metric pulled back, `g = JᵀJ` and
+the factor is `√det(JᵀJ)`, which for `n = d` is `|det J|`.
 
 Three distinct objects are involved, and they are routinely conflated:
 
@@ -132,10 +132,10 @@ Removing all three leaves a measure that is the pair a measure actually is:
 measure = (the domain integrated over, the density on it)
 ```
 
-with the density being the one the domain's own chart induces, `√det g`, and read off the
-measure rather than from an algorithm. It is a property of the domain and not a second
-argument, for the reason below. The domain is stated, never inferred: `dx` is a function
-of it rather than a thing that acquires one.
+with the density being the one the domain's own chart induces, `√det g`, and read off
+the measure rather than from an algorithm. It is a property of the domain and not a
+second argument, for the reason below. The domain is stated, never inferred: `dx` is a
+function of it rather than a thing that acquires one.
 
 ```python
 dx(omega)  # Measure(omega), whose density is VolumeElement(omega)
@@ -154,7 +154,8 @@ density buys what UFL cannot express, an axisymmetric problem integrating agains
 `WeightedMeasure(dx(omega), x[0])` as where the `r` belongs. That was wrong, and the
 example was the clearest case of why.
 
-The `r` is not a weight. The cylindrical chart `psi(r, z, theta) = (r cos theta, r sin theta, z)` has
+The `r` is not a weight. The cylindrical chart
+`psi(r, z, theta) = (r cos theta, r sin theta, z)` has
 
 ```
 g = J^T J = diag(1, 1, r^2)        sqrt(det g) = r        |det J| = r
@@ -163,8 +164,8 @@ g = J^T J = diag(1, 1, r^2)        sqrt(det g) = r        |det J| = r
 so `r` is the volume element of a domain presented through that chart: ordinary induced
 geometry, already expressible. What makes it look like a weight is then pretending the
 domain is two-dimensional. Stated honestly, the axisymmetric measure is the pushforward
-of the three-dimensional one along the projection that forgets `theta`, and the `2 pi` is
-`∫ dtheta`. A chart, then a map out of it. Nothing weighs anything.
+of the three-dimensional one along the projection that forgets `theta`, and the `2 pi`
+is `∫ dtheta`. A chart, then a map out of it. Nothing weighs anything.
 
 That generalises. For any factor one might want to put in a measure:
 
@@ -177,8 +178,8 @@ belongs in the measure. The inversion is the right reading: that is an argument 
 modelling the domain properly, and a factor not recoverable from a chart has no claim on
 the measure either.
 
-Completeness cuts the same way. Every absolutely continuous measure is the pushforward of
-Lebesgue measure under some diffeomorphism — in one dimension the inverse of the
+Completeness cuts the same way. Every absolutely continuous measure is the pushforward
+of Lebesgue measure under some diffeomorphism — in one dimension the inverse of the
 distribution function, in higher dimensions Moser's argument — so a weight adds nothing
 composition cannot give. For `exp(-|x|^2) dx` that map is not elementary, which is a
 reason not to pretend it is a composition one can write down, not a reason to add a
@@ -293,9 +294,10 @@ much `ds` costs.
 
 - **A facet's outward conormal needs no orientation at all.** Outwardness is about the
   interior, not the orientation: `φ` carries interior to interior, so if `n̂·v > 0` for
-  outward `v` then `(J⁻ᵀn̂)·(Jv) = n̂·v > 0`. Checked against a reflection, where `J⁻ᵀ n̂`
-  gives the outward normal and the cross product of the mapped facet's own Jacobian does
-  not. So this costs no new information, only a reference normal and a transport rule.
+  outward `v` then `(J⁻ᵀn̂)·(Jv) = n̂·v > 0`. Checked against a reflection, where
+  `J⁻ᵀ n̂` gives the outward normal and the cross product of the mapped facet's own
+  Jacobian does not. So this costs no new information, only a reference normal and a
+  transport rule.
 - **A manifold's surface normal needs a genuine external choice** of which side is up,
   and `det J` does not exist there to supply it. This is `OPEN_ISSUES.md`'s item.
 - **`sign(det J)`**, which `VolumeElement` splitting off made nameable again, is about
@@ -321,22 +323,23 @@ Each stage stands alone and is listed with what it costs.
    `boundary_only` went with it. `Measure(domain)` is required, `dx(omega)` builds it,
    `Integral` reads the domain off the measure and raises when a function in the
    integrand is on another domain, and `pull_back_to_entity` retargets the measure onto
-   the reference cell. The density is a property rather than an argument, and it is not a
-   successor of the measure: after a pull back the measure's density is a `VolumeElement`
-   with no point, and `expand_geometry`'s blanket walk would raise on it.
+   the reference cell. The density is a property rather than an argument, and it is not
+   a successor of the measure: after a pull back the measure's density is a
+   `VolumeElement` with no point, and `expand_geometry`'s blanket walk would raise on
+   it.
 1. ~~**Let a measure be put on a domain that is not made of cells.**~~ Done.
    `AbstractChartedDomain` asks for a chart out of a parameter region, a reference cell
    being one kind of region; `RD` is charted by itself, so the measure of R^d is the
    Lebesgue one; and `Measure` takes any charted domain. A region of R^d and its
    boundary faces carry measures too, which is `ds` with no cells in it. Restriction and
    the pull back still want cells and say so.
-1. **Build the derived domains**, `boundary_of` and `interface_of`, which is what is left
-   of `codim` and `boundary_only`. This needs the reference geometry UFLx cannot
+1. **Build the derived domains**, `boundary_of` and `interface_of`, which is what is
+   left of `codim` and `boundary_only`. This needs the reference geometry UFLx cannot
    supply (`OPEN_ISSUES.md`): the facet inclusion `s ↦ (1 − s, s)` has to come from
    outside, as an abstract hook, a consumer-supplied parametrization, or an unexpandable
    terminal as in UFL. That fork is the real decision and it is not a measure question.
-1. **Generalise `parametrization(cell)` to admit a map per side**, and add restriction as
-   a pullback along a named map. This is `dS`, in both the matching and non-matching
+1. **Generalise `parametrization(cell)` to admit a map per side**, and add restriction
+   as a pullback along a named map. This is `dS`, in both the matching and non-matching
    cases, and it subsumes `+`/`-`.
 1. **Carry orientation on the restriction**, giving a signed normal and a statable
    divergence theorem.
@@ -355,8 +358,8 @@ Acceptance criteria, as tests to write rather than prose to agree with.
 - ~~**A composed domain's measure is `√det g`.**~~ Covered by
   `test_the_volume_element_is_the_metrics_gram_determinant`, which no longer has to
   apologise for a determinant that was not one.
-- **One integral, two domains.** `inner(ι₊* u₊ − ι₋* u₋, v) * dx(interface)` builds,
-  and the two restrictions are distinguishable in the graph.
+- **One integral, two domains.** `inner(ι₊* u₊ − ι₋* u₋, v) * dx(interface)` builds, and
+  the two restrictions are distinguishable in the graph.
 - **The jump is side-symmetric in the measure.** Pulling the interface integral back
   through either side's chart gives the same density factor.
 - ~~**Mixed cell types still split.**~~ Covered by
