@@ -197,9 +197,18 @@ class ParametrizedDomain(AbstractParametrizedDomain):
         # in the entity's coordinates is the same as reading it in the
         # ambient ones -- which is just as well, since the ambient shape
         # would need the gdim being computed here.
-        (self._gdim,) = elements[0].entity_value_shape
-        for e in elements[1:]:
-            assert e.entity_value_shape == (self._gdim,)
+        shapes = {e.entity_value_shape for e in elements}
+        if len(shapes) != 1:
+            raise ValueError(
+                f"Every parametrization of a domain must have the same value shape, got {shapes}."
+            )
+        (shape,) = shapes
+        if len(shape) != 1:
+            raise ValueError(
+                f"A parametrization's values are a point of R^gdim, so it must be vector "
+                f"valued, but its value shape is {shape}."
+            )
+        (self._gdim,) = shape
 
     @property
     def geometric_dimension(self) -> int:
@@ -273,9 +282,4 @@ def parametrized_domain(
     """
     if isinstance(elements, AbstractMappedFiniteElement):
         elements = (elements,)
-    assert len(elements[0].entity_value_shape) == 1
-    (gdim,) = elements[0].entity_value_shape
-    for e in elements:
-        assert e.entity_value_shape == (gdim,)
-
     return ParametrizedDomain(tuple(elements))

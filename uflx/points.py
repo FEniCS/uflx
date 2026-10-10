@@ -43,7 +43,11 @@ class Point(AbstractPoint):
             components: The coordinates of the point
             domain: The coordinate domain the point lies in
         """
-        assert domain.geometric_dimension == len(components)
+        if len(components) != domain.geometric_dimension:
+            raise ValueError(
+                f"A point in {domain!r} is named by {domain.geometric_dimension} "
+                f"coordinates, but {len(components)} were given."
+            )
         self._components = tuple(components)
         self._domain = domain
 
