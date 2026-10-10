@@ -14,10 +14,11 @@ from uflx.domains import (
     entity_domain,
 )
 from uflx.expressions import AbstractExpression, Integer, MatrixProduct, RealScalar
+from uflx.functions import AbstractVariable
 from uflx.geometry import Jacobian, PushedForwardPoint
 from uflx.graphs import as_graph
 from uflx.parametrizations import ComposedParametrization, FiniteElementParametrization
-from uflx.points import AbstractPoint, Point
+from uflx.points import Point
 from uflx.tensors import Matrix, Vector
 
 
@@ -38,12 +39,12 @@ class Parabolic(AbstractParametrization):
         """This map lands in the plane."""
         return 2
 
-    def value(self, point: AbstractPoint) -> AbstractExpression:
+    def value(self, point: AbstractVariable) -> AbstractExpression:
         """Square the coordinate to get the second component."""
         y = point.component(0)
         return Vector([y, y * y])
 
-    def jacobian(self, point: AbstractPoint) -> AbstractExpression:
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
         """Differentiate (y, y^2) by hand."""
         y = point.component(0)
         return Matrix([[Integer(1)], [Integer(2) * y]])

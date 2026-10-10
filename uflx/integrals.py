@@ -19,7 +19,7 @@ from uflx.functions import (
     AbstractVariable,
     create_variable,
 )
-from uflx.geometry import JacobianDeterminant
+from uflx.geometry import AbstractJacobian, JacobianDeterminant
 from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
 
 
@@ -109,6 +109,14 @@ class Integral(AbstractIntegral):
             assert domain is not None
         else:
             self._variable = variable
+
+        # A Jacobian built during a pull back does not know where it is
+        # evaluated. This integral's variable is that point.
+        for node in as_graph(integrand):
+            if isinstance(node, AbstractJacobian) and node.point is None:
+                evaluated = node.reconstruct_with_variable(self._variable)
+                if evaluated is not node:
+                    replacements[node] = evaluated
 
         if len(replacements) == 0:
             self._integrand = integrand

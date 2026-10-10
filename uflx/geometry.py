@@ -1,10 +1,11 @@
 """Geometry."""
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, Self, runtime_checkable
 
 from uflx.algorithms import replace
 from uflx.domains import RD, AbstractCoordinateDomain, AbstractParametrization, EntityDomain
 from uflx.expressions import AbstractExpression
+from uflx.functions import AbstractVariable
 from uflx.graphs import GraphNode, as_graph
 from uflx.points import AbstractPoint, Point
 from uflx.tensors import Identity, Matrix
@@ -242,23 +243,31 @@ class PulledBackPoint(AbstractPoint):
         return self._point.index
 
 
-class Jacobian(AbstractExpression):
-    """The Jacobian."""
+class AbstractJacobian(AbstractExpression):
+    """Base class for the derivative of a parametrization, and quantities built on it.
+
+    A Jacobian is evaluated somewhere, but when one is created during a
+    pull back there is no point to evaluate it at yet. It is therefore
+    built without one and told later, by the integral whose dummy
+    variable stands for the point.
+    """
 
     def __init__(
-        self, parametrization: AbstractParametrization, point: AbstractPoint | None = None
+        self, parametrization: AbstractParametrization, point: AbstractVariable | None = None
     ):
-        """Initalise."""
+        """Initialise.
+
+        Args:
+            parametrization: The map being differentiated
+            point: Where to differentiate it, if that is known yet
+        """
         self.parametrization = parametrization
         self.point = point
 
     @property
-    def value_shape(self) -> tuple[int, ...]:
-        """The value shape of the expression."""
-        return (
-            self.parametrization.target_dimension,
-            self.parametrization.source.geometric_dimension,
-        )
+    def _jacobian(self) -> "Jacobian":
+        """The Jacobian this quantity is built from."""
+        return Jacobian(self.parametrization, self.point)
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -269,6 +278,33 @@ class Jacobian(AbstractExpression):
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
         return self.parametrization, self.point
+
+    def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
+        """Evaluate this quantity at the given variable.
+
+        The variable stands for a point of the map's source, so one in
+        any other coordinates is not this quantity's to take.
+        """
+        if variable.domain != self.parametrization.source:
+            return self
+        return self.__class__(self.parametrization, variable)
+
+
+class Jacobian(AbstractJacobian):
+    """The Jacobian."""
+
+    @property
+    def _jacobian(self) -> "Jacobian":
+        """The Jacobian is its own."""
+        return self
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        return (
+            self.parametrization.target_dimension,
+            self.parametrization.source.geometric_dimension,
+        )
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -296,31 +332,13 @@ class Jacobian(AbstractExpression):
             return Identity(self.value_shape[0])
 
 
-class JacobianDeterminant(AbstractExpression):
+class JacobianDeterminant(AbstractJacobian):
     """The determinant of the Jacobian."""
-
-    def __init__(
-        self, parametrization: AbstractParametrization, point: AbstractPoint | None = None
-    ):
-        """Initialise."""
-        self._jacobian = Jacobian(parametrization, point)
-        self.parametrization = parametrization
-        self.point = point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return ()
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.parametrization, self.point
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -332,31 +350,13 @@ class JacobianDeterminant(AbstractExpression):
         raise ValueError("Cannot get a component of a scalar expression")
 
 
-class JacobianInverse(AbstractExpression):
+class JacobianInverse(AbstractJacobian):
     """The inverse of the Jacobian."""
-
-    def __init__(
-        self, parametrization: AbstractParametrization, point: AbstractPoint | None = None
-    ):
-        """Initalise."""
-        self._jacobian = Jacobian(parametrization, point)
-        self.parametrization = parametrization
-        self.point = point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self._jacobian.value_shape[::-1]
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.parametrization, self.point
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -384,31 +384,13 @@ class JacobianInverse(AbstractExpression):
             return Identity(self.value_shape[0])
 
 
-class JacobianTranspose(AbstractExpression):
+class JacobianTranspose(AbstractJacobian):
     """The transpose of the Jacobian."""
-
-    def __init__(
-        self, parametrization: AbstractParametrization, point: AbstractPoint | None = None
-    ):
-        """Initalise."""
-        self._jacobian = Jacobian(parametrization, point)
-        self.parametrization = parametrization
-        self.point = point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self._jacobian.value_shape[::-1]
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.parametrization, self.point
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -436,31 +418,13 @@ class JacobianTranspose(AbstractExpression):
             return Identity(self.value_shape[0])
 
 
-class JacobianInverseTranspose(AbstractExpression):
+class JacobianInverseTranspose(AbstractJacobian):
     """The inverse transpose of the Jacobian."""
-
-    def __init__(
-        self, parametrization: AbstractParametrization, point: AbstractPoint | None = None
-    ):
-        """Initalise."""
-        self._jacobian = Jacobian(parametrization, point)
-        self.parametrization = parametrization
-        self.point = point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self._jacobian.value_shape
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.parametrization, self.point
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
