@@ -183,10 +183,10 @@ contact surface, two independently meshed subdomains. `Γ` is a facet of neither
 symbolic inverse.
 
 UFLx has that primitive. `PreimagePoint` is `φ⁻¹` on points, a terminal by design,
-standing for a Newton solve a consumer performs, and it takes the chart rather than the
-domain precisely because which cell the point lands in is part of the question. So the
-general interface needs no new geometry: a point of `Γ` is pushed forward by `Γ`'s own
-chart and pulled back through each side's.
+standing for a mapping the surrounding library provides, and it takes the chart rather
+than the domain precisely because which cell the point lands in is part of the question.
+So the general interface needs no new geometry: a point of `Γ` is pushed forward by
+`Γ`'s own chart and pulled back through each side's.
 
 Read in that order, UFL's `+`/`-` is the special case in which `φ₊⁻¹ ∘ ψ_Γ` is known
 combinatorially and so costs nothing.
