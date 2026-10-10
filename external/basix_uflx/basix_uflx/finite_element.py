@@ -6,16 +6,16 @@ from enum import Enum
 import numpy as np
 import numpy.typing as npt
 from uflx.entities import AbstractEntity
-from uflx.finite_elements import AbstractReferenceMappedFiniteElement
+from uflx.finite_elements import AbstractMappedFiniteElement
 from uflx.maps import (
-    AbstractReferenceMap,
-    BlockedReferenceMap,
-    MixedReferenceMap,
-    SymmetricReferenceMap,
+    AbstractValueMap,
+    BlockedValueMap,
+    MixedValueMap,
+    SymmetricValueMap,
 )
 
 
-class AbstractFiniteElement(AbstractReferenceMappedFiniteElement):
+class AbstractFiniteElement(AbstractMappedFiniteElement):
     """A finite element whose basis functions can be evaluated.
 
     UFLx itself is purely symbolic, so its element ABCs describe only what a
@@ -23,10 +23,10 @@ class AbstractFiniteElement(AbstractReferenceMappedFiniteElement):
     provide for a form to be assembled or compiled: tabulation of values and
     derivatives, and a known Lagrange superdegree.
 
-    Note that this class inherits from UFLx's AbstractReferenceMappedFiniteElement,
+    Note that this class inherits from UFLx's AbstractMappedFiniteElement,
     and so all the abstract methods from that class must be implemented too.
     The return type of the property `lagrange_superdegree` that is defined in
-    this class differs from the return type of AbstractReferenceMappedFiniteElement:
+    this class differs from the return type of AbstractMappedFiniteElement:
     this property cannot be None.
     """
 
@@ -76,8 +76,8 @@ class MixedElement(AbstractFiniteElement):
         """Initialise the element."""
         assert len(sub_elements) > 0
         self._sub_elements = sub_elements
-        self._reference_map = MixedReferenceMap(
-            [e.reference_map for e in sub_elements], [e.reference_value_shape for e in sub_elements]
+        self._value_map = MixedValueMap(
+            [e.value_map for e in sub_elements], [e.entity_value_shape for e in sub_elements]
         )
         for e in sub_elements[1:]:
             if e.cell != sub_elements[0].cell:
@@ -138,13 +138,13 @@ class MixedElement(AbstractFiniteElement):
         return max([e.lagrange_superdegree for e in self._sub_elements], default=0)
 
     @property
-    def reference_map(self) -> AbstractReferenceMap:
+    def value_map(self) -> AbstractValueMap:
         """Get the push forward and pull back map."""
-        return self._reference_map
+        return self._value_map
 
     @property
-    def reference_value_shape(self) -> tuple[int, ...]:
-        """Return the shape of the value space on the reference cell."""
+    def entity_value_shape(self) -> tuple[int, ...]:
+        """Return the shape of the value space in the entity's coordinates."""
         raise NotImplementedError()
 
     def tabulate(self, derivatives: int, points: npt.ArrayLike) -> npt.NDArray:
@@ -191,7 +191,7 @@ class BlockedElement(AbstractFiniteElement):
         ordering: BlockedOrdering = BlockedOrdering.xyzxyz,
     ):
         """Initialise the element."""
-        if sub_element.reference_value_shape != ():
+        if sub_element.entity_value_shape != ():
             raise ValueError(
                 "Blocked elements of non-scalar elements are not supported. "
                 "Try using MixedElement instead."
@@ -225,8 +225,8 @@ class BlockedElement(AbstractFiniteElement):
                     symmetry_map[(j, i)] = n
                     n += 1
 
-            self._reference_map = SymmetricReferenceMap(
-                sub_element.reference_map,
+            self._value_map = SymmetricValueMap(
+                sub_element.value_map,
                 shape,
                 symmetry_map,
             )
@@ -296,13 +296,13 @@ class BlockedElement(AbstractFiniteElement):
         return self._sub_element.lagrange_superdegree
 
     @property
-    def reference_map(self) -> AbstractReferenceMap:
+    def value_map(self) -> AbstractValueMap:
         """Get the push forward and pull back map."""
-        return BlockedReferenceMap(self._sub_element.reference_map, self._block_shape)
+        return BlockedValueMap(self._sub_element.value_map, self._block_shape)
 
     @property
-    def reference_value_shape(self) -> tuple[int, ...]:
-        """Return the value size of the value space on the reference cell."""
+    def entity_value_shape(self) -> tuple[int, ...]:
+        """Return the value size of the value space in the entity's coordinates."""
         return self._block_shape
 
     def tabulate(self, derivatives: int, points: npt.ArrayLike) -> npt.NDArray:

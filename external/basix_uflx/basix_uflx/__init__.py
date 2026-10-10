@@ -25,11 +25,11 @@ __all__ = [
 ]
 
 
-def convert_map(basix_map: basix.MapType) -> uflx.maps.AbstractReferenceMap:
+def convert_map(basix_map: basix.MapType) -> uflx.maps.AbstractValueMap:
     """Convert a basix map to a UFLx map."""
     match basix_map:
         case basix.MapType.identity:
-            return uflx.maps.IdentityReferenceMap()
+            return uflx.maps.IdentityValueMap()
         case _:
             raise NotImplementedError()
 
@@ -162,11 +162,11 @@ class BasixElement(AbstractFiniteElement):
         return d
 
     @property
-    def reference_map(self) -> uflx.maps.AbstractReferenceMap:
+    def value_map(self) -> uflx.maps.AbstractValueMap:
         return convert_map(self._element.map_type)
 
     @property
-    def reference_value_shape(self) -> tuple[int, ...]:
+    def entity_value_shape(self) -> tuple[int, ...]:
         return tuple(self._element.value_shape)
 
     def tabulate(self, derivatives: int, points: npt.ArrayLike) -> npt.NDArray:
@@ -181,7 +181,7 @@ class QuadratureElement(AbstractFiniteElement):
         cell: basix.CellType,
         points: npt.NDArray[np.floating],
         weights: npt.NDArray[np.floating],
-        reference_map: uflx.maps.AbstractReferenceMap,
+        value_map: uflx.maps.AbstractValueMap,
         degree: int | None = None,
         dtype: npt.DTypeLike = np.float64,
     ):
@@ -189,7 +189,7 @@ class QuadratureElement(AbstractFiniteElement):
         self._points = points.astype(dtype)
         self._weights = weights.astype(dtype)
         self._cell_type = cell
-        self._reference_map = reference_map
+        self._value_map = value_map
         self._degree = len(points) if degree is None else degree
 
     def __hash__(self):
@@ -198,7 +198,7 @@ class QuadratureElement(AbstractFiniteElement):
     def __repr__(self) -> str:
         return (
             f"QuadratureElement({self._cell_type.name}, {hash_data(self._points)}, "
-            f"{hash_data(self._weights)}, {self._reference_map!r})"
+            f"{hash_data(self._weights)}, {self._value_map!r})"
         )
 
     def __str__(self):
@@ -207,7 +207,7 @@ class QuadratureElement(AbstractFiniteElement):
     def __eq__(self, other) -> bool:
         return isinstance(other, QuadratureElement) and (
             self._cell_type == other._cell_type
-            and self._reference_map == other._reference_map
+            and self._value_map == other._value_map
             and self._points.shape == other._points.shape
             and self._weights.shape == other._weights.shape
             and np.allclose(self._points, other._points)
@@ -231,12 +231,12 @@ class QuadratureElement(AbstractFiniteElement):
         return self._degree  # TODO: this is not right
 
     @property
-    def reference_value_shape(self) -> tuple[int, ...]:
+    def entity_value_shape(self) -> tuple[int, ...]:
         return ()
 
     @property
-    def reference_map(self) -> uflx.maps.AbstractReferenceMap:
-        return self._reference_map
+    def value_map(self) -> uflx.maps.AbstractValueMap:
+        return self._value_map
 
     def tabulate(self, derivatives: int, points: npt.ArrayLike) -> npt.NDArray:
         if derivatives > 0:
@@ -284,23 +284,21 @@ class RealElement(AbstractFiniteElement):
 
     @property
     def dim(self) -> int:
-        return self.reference_value_size
+        return self.entity_value_size
 
     @property
     def lagrange_superdegree(self) -> int:
         return 0
 
     @property
-    def reference_map(self) -> uflx.maps.AbstractReferenceMap:
+    def value_map(self) -> uflx.maps.AbstractValueMap:
         if self._value_shape == ():
-            return uflx.maps.IdentityReferenceMap()
+            return uflx.maps.IdentityValueMap()
         else:
-            return uflx.maps.BlockedReferenceMap(
-                uflx.maps.IdentityReferenceMap(), self._value_shape
-            )
+            return uflx.maps.BlockedValueMap(uflx.maps.IdentityValueMap(), self._value_shape)
 
     @property
-    def reference_value_shape(self) -> tuple[int, ...]:
+    def entity_value_shape(self) -> tuple[int, ...]:
         return self._value_shape
 
     def tabulate(self, derivatives: int, points: npt.ArrayLike) -> npt.NDArray:
@@ -309,8 +307,8 @@ class RealElement(AbstractFiniteElement):
             [
                 number_of_derivatives(derivatives, self.cell),
                 points.shape[0],
-                self.reference_value_size,
-                self.reference_value_size,
+                self.entity_value_size,
+                self.entity_value_size,
             ]
         )
         table[0, :, :, :] = 1.0
@@ -406,7 +404,7 @@ def element(
 
 def custom_element(
     cell_type: basix.CellType,
-    reference_value_shape: Sequence[int],
+    entity_value_shape: Sequence[int],
     wcoeffs: npt.ArrayLike,
     x: Sequence[Sequence[npt.ArrayLike]],
     M: Sequence[Sequence[npt.ArrayLike]],
@@ -423,7 +421,7 @@ def custom_element(
 
     Args:
         cell_type: The cell type
-        reference_value_shape: The reference value shape of the element
+        entity_value_shape: The value shape of the element in the entity's coordinates
         wcoeffs: Matrices for the kth value index containing the
             expansion coefficients defining a polynomial basis spanning
             the polynomial space for this element. Shape is
@@ -452,7 +450,7 @@ def custom_element(
     """
     e = basix.create_custom_element(
         cell_type,
-        tuple(reference_value_shape),
+        tuple(entity_value_shape),
         np.asarray(wcoeffs),
         [[np.asarray(j) for j in i] for i in x],
         [[np.asarray(j) for j in i] for i in M],
@@ -487,7 +485,7 @@ def quadrature_element(
     degree: int | None = None,
     points: npt.ArrayLike | None = None,
     weights: npt.ArrayLike | None = None,
-    reference_map: uflx.maps.AbstractReferenceMap | None = None,
+    value_map: uflx.maps.AbstractValueMap | None = None,
     symmetry: bool | None = None,
     dtype: npt.DTypeLike = np.float64,
 ) -> AbstractFiniteElement:
@@ -503,7 +501,7 @@ def quadrature_element(
         degree: Quadrature degree.
         points: Quadrature points.
         weights: Quadrature weights.
-        reference_map: Reference map
+        value_map: Map applied to the element's values
         symmetry: Set to ``True`` if the tensor is symmetric. Valid for
             rank 2 elements only.
         dtype: Data type of quadrature points and weights
@@ -514,13 +512,11 @@ def quadrature_element(
     if isinstance(cell, str):
         cell = basix.CellType[cell]
 
-    if reference_map is None:
+    if value_map is None:
         if tuple(value_shape) == ():
-            reference_map = uflx.maps.IdentityReferenceMap()
+            value_map = uflx.maps.IdentityValueMap()
         else:
-            reference_map = uflx.maps.BlockedReferenceMap(
-                uflx.maps.IdentityReferenceMap(), tuple(value_shape)
-            )
+            value_map = uflx.maps.BlockedValueMap(uflx.maps.IdentityValueMap(), tuple(value_shape))
 
     if points is None:
         assert weights is None
@@ -536,7 +532,7 @@ def quadrature_element(
     assert weights is not None
 
     e = QuadratureElement(
-        cell, np.asarray(points), np.asarray(weights), reference_map, degree, dtype=dtype
+        cell, np.asarray(points), np.asarray(weights), value_map, degree, dtype=dtype
     )
     if tuple(value_shape) == ():
         if symmetry is not None:
@@ -583,7 +579,7 @@ def blocked_element(
     Returns:
         A blocked finite element.
     """
-    if len(sub_element.reference_value_shape) != 0:
+    if len(sub_element.entity_value_shape) != 0:
         raise ValueError("Cannot create a blocked element containing a non-scalar element.")
 
     return BlockedElement(sub_element, shape=tuple(shape), symmetry=symmetry)
