@@ -167,7 +167,7 @@ class Restriction(AbstractExpression):
         """Read this restriction at the given variable."""
         return Restriction(self._field, self._domain, variable)
 
-    def restricted_to_piece(self, piece: AbstractParametrizedDomain) -> Restriction:
+    def on_piece(self, piece: AbstractParametrizedDomain) -> Restriction:
         """Get this restriction onto one piece of the domain it restricts to.
 
         What the split of an integral over a union does to it: the

@@ -67,7 +67,17 @@ adding the results, since each type has its own coordinate domain and its own ma
 it. Pulling such an integral back to the cells' coordinates therefore gives a sum of
 integrals, one per cell type.
 
-The actual mesh is still external to UFLx.
+A domain may also be presented as a union of parametrized pieces, each parametrized in its own
+right. That is what the facets of a mesh are: a piece per cell type and local facet,
+each the inclusion of the reference facet into the cell followed by the cell's own map.
+Integrating over a union is integrating over each piece and adding the results, as for
+cell types. A union is not an atlas: its pieces carry no claim of a relation to each
+other, where an atlas's parametrizations cover one set and are related by transition maps.
+
+The actual mesh is still external to UFLx. So is which facets a union of them has: that
+a facet lies on the boundary is a question about a cell complex, so the domain is named
+for the sub-entities it is parametrized by and claims no boundary. A domain carries an opaque
+label for a consumer to tell one such selection from another.
 
 ### Function spaces
 
@@ -193,10 +203,23 @@ a measure.
 
 `ds` and `dS` are not kinds of measure. In UFL they are, because the measure does not
 name its domain and so has to encode it; here an exterior-facet integral is this same
-measure over the boundary, and an interior-facet integral is it over an interface. Those
-domains are not yet constructible, so neither spelling exists yet. The `+`/`-`
-restriction below belongs to the integrand, being a field pulled back along one side's
-inclusion, and not to the measure.
+measure over a domain of facets, and an interior-facet integral is it over an interface.
+
+The first of those is constructible. `facets_of(mesh)` is the domain a mesh's facets
+make up, and an exterior-facet integral is the one measure over it, with the fields in
+the integrand read there through its parametrization:
+
+```python
+facets = facets_of(mesh)
+inner(restrict(grad(u), facets), UnitNormal(facets)) * dx(facets)
+```
+
+Pulling that back gives one integral per facet over the reference facet, each carrying
+that facet's volume element as its density. No part of it is a facet measure.
+
+An interface is not constructible yet: it needs a parametrization per side. The `+`/`-`
+restriction below belongs to the integrand either way, being a field pulled back along
+one side's inclusion, and not to the measure.
 
 ### Integrals
 
@@ -207,6 +230,7 @@ Examples:
 ```python
 v * f * dx(mesh)
 inner(grad(v), grad(u)) * dx(mesh)
+restrict(v, facets_of(mesh)) * g * dx(facets_of(mesh))  # an exterior facet integral
 jump(v) * dS  # once an interface domain exists
 ```
 
@@ -250,13 +274,18 @@ The language is small, but it is typed.
   indexed-expression rules.
 - Tensor contractions such as `dot` and `inner` require compatible tensor shapes.
 - Spatial derivatives require a spatial domain.
-- Facet quantities such as `FacetNormal` are only meaningful in facet integration
-  contexts.
+- Facet quantities such as a normal are read off the domain they are a normal to, so a
+  facet's normal is `UnitNormal(facets_of(mesh))`, and a normal is only defined in
+  codimension one.
+- A field on one domain is read on another through a restriction, `restrict(u, facets)`,
+  which is the pullback of the field along that domain's parametrization.
 - Interior-facet expressions may use side restrictions:
   ```python
   u("+")
   u("-")
   ```
+  which are that same restriction along one side's inclusion, once a domain has a parametrization
+  per side.
 - Operators such as `jump` and `avg` are shorthand for combinations of such
   restrictions.
 - An integral is valid only when the final integrand is scalar and has no free indices.

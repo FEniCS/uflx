@@ -292,7 +292,7 @@ class Integral(AbstractIntegral):
             variable = variable.to_domain_coordinates(domain)
         return Integral(integrand, self._measure.with_domain(domain), variable)
 
-    def restricted_to_piece(self, piece: AbstractParametrizedDomain) -> Integral:
+    def on_piece(self, piece: AbstractParametrizedDomain) -> Integral:
         """Get this integral over one piece of its domain.
 
         The measure moves onto the piece, and so does everything in the
@@ -310,7 +310,7 @@ class Integral(AbstractIntegral):
         replacements: dict[GraphNode, GraphNode] = {}
         for node in as_graph(self._integrand):
             if isinstance(node, Restriction) and node.domain == domain:
-                replacements[node] = node.restricted_to_piece(piece)
+                replacements[node] = node.on_piece(piece)
             elif isinstance(node, AbstractGeometricQuantity) and node.domain == domain:
                 replacements[node] = node.on_domain(piece)
         integrand = replace(self._integrand, replacements) if replacements else self._integrand
@@ -332,7 +332,7 @@ class Integral(AbstractIntegral):
         domain = self.domain
         if not isinstance(domain, UnionDomain):
             return None
-        return IntegralSum(tuple(self.restricted_to_piece(p) for p in domain.pieces))
+        return IntegralSum(tuple(self.on_piece(p) for p in domain.pieces))
 
     def split_by_cell_type(self) -> IntegralSum | None:
         """Split this integral into one over each cell type of its domain.

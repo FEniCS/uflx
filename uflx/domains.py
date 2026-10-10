@@ -663,7 +663,7 @@ class SubEntityDomain(AbstractCellularDomain):
             raise ValueError(f"{cell} is not the sub-entity of this domain.")
         return self._cell.sub_entity_inclusion(self._dim, self._index)
 
-    def restricted_to(self, cell: AbstractEntity) -> SubEntityDomain:
+    def on_cell_type(self, cell: AbstractEntity) -> SubEntityDomain:
         """A sub-entity domain has one cell type already, which is the sub-entity."""
         if cell != self.sub_entity:
             raise ValueError(f"{cell} is not the sub-entity of this domain.")

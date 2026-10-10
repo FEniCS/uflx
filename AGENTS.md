@@ -71,6 +71,10 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
 
 - `entities.py` — `AbstractEntity`: topological mesh entities (point/interval/
   triangle/.../hexahedron), defined recursively via their sub-entities.
+  `sub_entity_inclusion` is the one piece of reference geometry an entity is asked for —
+  the map carrying a sub-entity's coordinates into the cell's — since the combinatorics
+  say which vertices a facet has and not where they are. Its default raises; a consumer
+  supplies it.
 - `finite_elements.py` — `AbstractFiniteElement` / `AbstractMappedFiniteElement`: what
   basis functions look like on a cell; depends on `entities` and `maps`.
 - `maps.py` — `AbstractValueMap` (e.g. `IdentityValueMap`): push-forward/pull-back of
@@ -84,10 +88,14 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   points are tuples of numbers (`RD`, `EntityDomain`); a parametrized domain is the
   image of a map out of one. `AbstractParametrization` is that map, evaluated by `value`
   and differentiated by `jacobian`; `IdentityParametrization` is an entity domain's and
-  `RD`'s own. `AbstractParametrizedDomain` is what geometry and a measure ask for: a map
-  out of a parameter region, a reference cell being one kind of region and a region of
-  `RD` another, so being integrable over does not imply being made of cells. The actual
-  mesh stays external to UFLx.
+  `RD`'s own. `AbstractParametrizedDomain` is what geometry and a measure ask for: a map out
+  of a parameter region, a reference cell being one kind of region and a region of `RD`
+  another, so being integrable over does not imply being made of cells. The actual mesh
+  stays external to UFLx. `SubEntityDomain` is one sub-entity of a cell as a domain, in
+  the cell's coordinates, and `coordinate_domain` is what says those are the cell's and
+  not the ambient ones. `UnionDomain` is a domain presented as several parametrized pieces,
+  which is what the facets of a mesh are, the parameter region no longer identifying the
+  parametrization; it refuses to hand out a parametrization several pieces share.
 - `function_spaces.py` — `AbstractFunctionSpace`: standard FE spaces (domain + element),
   constant spaces (shape + scalar type), or non-FE spaces (domain + shape, no element).
   Do not construct `Argument`/`Coefficient` directly from an element — they must come
@@ -97,9 +105,12 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
 - `parametrizations.py` — `FiniteElementParametrization` and `ParametrizedDomain`, where
   a map is described by a finite element per cell, plus
   `ComposedParametrization`/`ComposedDomain`, which apply two maps in turn via the chain
-  rule. Evaluating an element map is an interpolation sum, so this sits above
-  `function_spaces`/`basis_functions` rather than in `domains`, which must not know how
-  a parametrization is described.
+  rule, and `AffineParametrization`, a closed form map a consumer can state. `facets_of`
+  (and `sub_entities_of` for any codimension) builds the union whose pieces are a
+  sub-entity's inclusion followed by the cell's own map, which is the domain an exterior
+  facet integral is over. Evaluating an element map is an interpolation sum, so this
+  sits above `function_spaces`/`basis_functions` rather than in `domains`, which must
+  not know how a parametrization is described.
 - `expressions.py` — `AbstractExpression`: the base of every symbolic node
   (`BinaryOperator`, `UnaryOperator`, terminals). Carries value shape, free indices,
   domain, scalar type as static, extensible attributes (unlike legacy UFL's fixed
@@ -109,14 +120,22 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   quantities (spatial coordinates, Jacobians, ...), and complex-number support
   (`re`/`im` via the `ComplexValued` protocol), all built as `AbstractExpression`
   subclasses / graph rewrites over them.
+- `restrictions.py` — `Restriction`/`restrict`: a field read at the point another
+  domain's parametrization gives, `ι*u`, which is how a field on a mesh appears in an integral
+  over its facets. It lives in the integrand and not in the measure, which is why a
+  gradient under one keeps the cell's inverse Jacobian rather than the facet's
+  tangential one. `evaluate_at` is the shared pass that tells an expression where it is
+  read.
 - `integrals.py` — `Measure`, a domain paired with the density on it, built by
   `dx(domain)`; `Integral` (`expr * measure`), which takes its domain from its measure;
   and `IntegralSum`, which adding integrals gives. An integral over a domain of several
   cell types is pulled back as one integral per cell type, since each has its own
   coordinate domain; `Integral.on_cell_type` and `split_by_cell_type` do that, carrying
-  the measure onto the restricted domain. There is no `ds` or `dS`: an exterior or
-  interior facet integral is this measure over a domain of codimension one, which
-  [INTEGRATION.md](INTEGRATION.md) §3 argues for and §6 says is not yet constructible.
+  the measure onto the restricted domain. `split_by_piece` is the same fan out over the
+  pieces of a union, run first since a piece names one parametrization and so one cell type. There
+  is no `ds` or `dS`: an exterior facet integral is this measure over `facets_of(mesh)`
+  with the fields restricted, which [INTEGRATION.md](INTEGRATION.md) §3 argues for, and
+  an interior one waits on a parametrization per side, which §6 lists.
 
 Symbolic (Gateaux) differentiation and expression/integral transformation between domain
 configurations are the two core transformation procedures UFLx provides on top of this
