@@ -87,8 +87,49 @@ class AbstractCoordinateDomain(AbstractDomain):
         return self.geometric_dimension
 
 
-class RD(AbstractCoordinateDomain):
-    """R^d, the ambient coordinate domain."""
+class AbstractChartedDomain(AbstractDomain):
+    """Base class for a domain presented through maps out of coordinate domains.
+
+    A chart is a map out of a parameter region: a set whose points are
+    coordinate tuples, carried by the map into this domain. The region is
+    what identifies the chart, since naming a point of this domain means
+    naming a point of some region and composing.
+
+    A reference cell is one kind of parameter region and not the only
+    kind, so being charted does not imply being made of cells. A region
+    of R^d charted by itself is a domain of this kind with no cells in
+    it, and its boundary is another. What a geometric quantity needs of a
+    domain is a chart, which is why it asks for one here rather than for
+    a cell's parametrization.
+    """
+
+    @property
+    @abstractmethod
+    def chart_sources(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """The parameter regions this domain is charted by."""
+
+    @abstractmethod
+    def chart(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """Get the map out of the given parameter region.
+
+        Args:
+            source: One of this domain's chart sources
+
+        Returns:
+            The map out of that region
+
+        Raises:
+            ValueError: If this domain has no chart out of that region
+        """
+
+
+class RD(AbstractCoordinateDomain, AbstractChartedDomain):
+    """R^d, the ambient coordinate domain.
+
+    Charted by itself, through the identity: its points are coordinate
+    tuples already, so nothing has to carry them anywhere. The measure
+    that follows is the Lebesgue one, whose density is one.
+    """
 
     def __init__(self, dim: int):
         """Initialise."""
@@ -98,6 +139,21 @@ class RD(AbstractCoordinateDomain):
     def geometric_dimension(self) -> int:
         """The number of coordinates needed to name a point of this domain."""
         return self._dim
+
+    @property
+    def chart_sources(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """R^d is charted by itself."""
+        return (self,)
+
+    def chart(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """R^d's own chart is the identity.
+
+        Raises:
+            ValueError: If the region is not this R^d
+        """
+        if source != self:
+            raise ValueError(f"{self!r} is charted by itself, not by {source!r}.")
+        return IdentityParametrization(self)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -244,42 +300,6 @@ class IdentityParametrization(AbstractParametrization):
     def __hash__(self) -> int:
         """Hash."""
         return hash(("uflx.IdentityParametrization", self._domain))
-
-
-class AbstractChartedDomain(AbstractDomain):
-    """Base class for a domain presented through maps out of coordinate domains.
-
-    A chart is a map out of a parameter region: a set whose points are
-    coordinate tuples, carried by the map into this domain. The region is
-    what identifies the chart, since naming a point of this domain means
-    naming a point of some region and composing.
-
-    A reference cell is one kind of parameter region and not the only
-    kind, so being charted does not imply being made of cells. A region
-    of R^d charted by itself is a domain of this kind with no cells in
-    it, and its boundary is another. What a geometric quantity needs of a
-    domain is a chart, which is why it asks for one here rather than for
-    a cell's parametrization.
-    """
-
-    @property
-    @abstractmethod
-    def chart_sources(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """The parameter regions this domain is charted by."""
-
-    @abstractmethod
-    def chart(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
-        """Get the map out of the given parameter region.
-
-        Args:
-            source: One of this domain's chart sources
-
-        Returns:
-            The map out of that region
-
-        Raises:
-            ValueError: If this domain has no chart out of that region
-        """
 
 
 class AbstractCellularDomain(AbstractDomain):

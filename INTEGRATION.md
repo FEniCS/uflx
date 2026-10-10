@@ -289,6 +289,12 @@ Each stage stands alone and is listed with what it costs.
    the reference cell. The density is a property rather than an argument, and it is not a
    successor of the measure: after a pull back the measure's density is a `VolumeElement`
    with no point, and `expand_geometry`'s blanket walk would raise on it.
+1. ~~**Let a measure be put on a domain that is not made of cells.**~~ Done.
+   `AbstractChartedDomain` asks for a chart out of a parameter region, a reference cell
+   being one kind of region; `RD` is charted by itself, so the measure of R^d is the
+   Lebesgue one; and `Measure` takes any charted domain. A region of R^d and its
+   boundary faces carry measures too, which is `ds` with no cells in it. Restriction and
+   the pull back still want cells and say so.
 1. **Build the derived domains**, `boundary_of` and `interface_of`, which is what is left
    of `codim` and `boundary_only`. This needs the reference geometry UFLx cannot
    supply (`OPEN_ISSUES.md`): the facet inclusion `s ↦ (1 − s, s)` has to come from
