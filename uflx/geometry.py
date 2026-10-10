@@ -1,15 +1,20 @@
 """Geometry."""
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, Self, runtime_checkable
 
 from uflx.algorithms import replace
-from uflx.basis_functions import EvaluatedBasisFunction
-from uflx.domains import RD, AbstractParametrizedDomain, EntityDomain
-from uflx.expressions import AbstractExpression, expression_sum
-from uflx.function_spaces import function_space
+from uflx.domains import (
+    RD,
+    AbstractCoordinateDomain,
+    AbstractParametrization,
+    AbstractParametrizedDomain,
+    EntityDomain,
+)
+from uflx.expressions import AbstractExpression
+from uflx.functions import AbstractVariable
 from uflx.graphs import GraphNode, as_graph
 from uflx.points import AbstractPoint, Point
-from uflx.tensors import FlattenedTensorMap, Identity, Matrix
+from uflx.tensors import Identity, Matrix
 
 
 @runtime_checkable
@@ -82,14 +87,32 @@ class SpatialCoordinate(AbstractExpression):
         return SingleSpatialCoordinate(self._dimension, i)
 
 
+def as_matrix(jacobian: AbstractExpression) -> Matrix:
+    """Densify a Jacobian so a determinant, inverse or transpose can be taken.
+
+    An identity map's Jacobian is an Identity, which stays symbolic in a
+    matrix product but has to be written out to be inverted.
+    """
+    if isinstance(jacobian, Identity):
+        size = jacobian.size
+        return Matrix([[jacobian.component(i, j) for j in range(size)] for i in range(size)])
+    assert isinstance(jacobian, Matrix)
+    return jacobian
+
+
 class PushedForwardPoint(AbstractPoint):
-    """A point in an entity's coordinates, mapped to ambient coordinates."""
+    """A point in an entity's coordinates, mapped through a parametrization."""
 
     def __init__(self, point: AbstractPoint, domain: AbstractParametrizedDomain):
-        """Initialise."""
+        """Initialise.
+
+        Args:
+            point: The point in the entity's coordinates
+            domain: The domain to push the point forward onto
+        """
         assert isinstance(point.domain, EntityDomain)
         self._point = point
-        self._domain = domain
+        self._parametrized_domain = domain
 
     @property
     def entity_point(self) -> AbstractPoint:
@@ -97,103 +120,29 @@ class PushedForwardPoint(AbstractPoint):
         return self._point
 
     @property
-    def domain(self) -> AbstractParametrizedDomain:
-        """The domain."""
-        return self._domain
+    def parametrized_domain(self) -> AbstractParametrizedDomain:
+        """The domain this point is pushed forward onto."""
+        return self._parametrized_domain
 
     @property
-    def value_shape(self) -> tuple[int, ...]:
-        """The value shape of the expression."""
-        return (self._domain.geometric_dimension,)
+    def parametrization(self) -> AbstractParametrization:
+        """The map this point is pushed forward through.
 
-    @property
-    def dim(self) -> int:
-        """The dimension of the point."""
-        return self._domain.geometric_dimension
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return {self._point}
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._point, self._domain
-
-    def expand_geometry(self) -> AbstractExpression:
-        """Expand geometry."""
-        if len(self.domain.cell_types) != 1:
-            raise NotImplementedError("Only domains with exactly on element supported for now.")
-        element = self.domain.parametrization_element(self.domain.cell_types[0])
-        (dim,) = element.entity_value_shape
-
-        components = [
-            expression_sum(
-                FlattenedTensorMap((i // dim, i % dim), (dim,))
-                * EvaluatedBasisFunction(
-                    function_space(self.domain, element), i, self.entity_point, component=j
-                )
-                for i in range(element.dim)
-            )
-            for j in range(dim)
-        ]
-
-        # The expansion is an interpolation sum of coordinate dofs, so what
-        # comes out is explicit ambient coordinates.
-        return Point(components, RD(dim))
-
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return (
-            isinstance(other, PushedForwardPoint)
-            and self._point == other._point
-            and self._domain == other._domain
-        )
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.PushedForwardPoint", hash(self._point), hash(self._domain)))
-
-    @property
-    def index(self) -> int | str:
-        """The point's index in the set of points."""
-        return self._point.index
-
-
-class PulledBackPoint(AbstractPoint):
-    """A point in ambient coordinates, mapped to an entity's coordinates."""
-
-    def __init__(self, point: AbstractPoint, domain: AbstractParametrizedDomain):
-        """Initialise.
-
-        Args:
-            point: The point in ambient coordinates
-            domain: The parametrized domain the point is pulled back through
+        The point already lies in a cell's coordinate domain, so it names
+        the cell whose map carries it.
         """
-        assert not isinstance(point.domain, EntityDomain)
-        self._point = point
-        self._parametrized_domain = domain
+        source = self._point.domain
+        assert isinstance(source, EntityDomain)
+        (cell,) = source.cell_types
+        return self._parametrized_domain.parametrization(cell)
 
     @property
-    def ambient_point(self) -> AbstractPoint:
-        """The point in ambient coordinates."""
-        return self._point
-
-    @property
-    def domain(self) -> EntityDomain:
+    def domain(self) -> RD:
         """The domain.
 
-        A pulled back point lies in the entity's coordinates, not on the
-        parametrized domain it came from.
+        A pushed forward point lies in the coordinates the map lands in.
         """
-        (cell,) = self._parametrized_domain.cell_types
-        return EntityDomain(cell)
-
-    @property
-    def parametrized_domain(self) -> AbstractParametrizedDomain:
-        """The parametrized domain that this point was pulled back through."""
-        return self._parametrized_domain
+        return RD(self._parametrized_domain.geometric_dimension)
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -203,13 +152,7 @@ class PulledBackPoint(AbstractPoint):
     @property
     def dim(self) -> int:
         """The dimension of the point."""
-        tdim = self._parametrized_domain.topological_dimension
-        if tdim is None:
-            raise NotImplementedError(
-                "Points in a cell's coordinates are not supported on domains with "
-                "cells of several topological dimensions."
-            )
-        return tdim
+        return self._parametrized_domain.geometric_dimension
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -221,17 +164,25 @@ class PulledBackPoint(AbstractPoint):
         """The arguments used to initialise this object."""
         return self._point, self._parametrized_domain
 
+    def expand_geometry(self) -> AbstractExpression:
+        """Expand geometry."""
+        value = self.parametrization.value(self._point)
+
+        # The map's values are ambient coordinates, so what comes out is a
+        # point of R^gdim rather than one of the domain it parametrizes.
+        return Point([value.component(j) for j in range(self.dim)], self.domain)
+
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
-            isinstance(other, PulledBackPoint)
+            isinstance(other, PushedForwardPoint)
             and self._point == other._point
             and self._parametrized_domain == other._parametrized_domain
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.PulledBackPoint", self._point, self._parametrized_domain))
+        return hash(("uflx.PushedForwardPoint", self._point, self._parametrized_domain))
 
     @property
     def index(self) -> int | str:
@@ -239,19 +190,123 @@ class PulledBackPoint(AbstractPoint):
         return self._point.index
 
 
-class Jacobian(AbstractExpression):
-    """The Jacobian."""
+class PulledBackPoint(AbstractPoint):
+    """A point in ambient coordinates, mapped to an entity's coordinates."""
 
-    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractPoint | None = None):
-        """Initalise."""
-        self.domain = domain
-        self.point = point
+    def __init__(self, point: AbstractPoint, parametrization: AbstractParametrization):
+        """Initialise.
+
+        Args:
+            point: The point in ambient coordinates
+            parametrization: The map the point is pulled back through, which says
+                which cell's coordinates it lands in
+        """
+        assert not isinstance(point.domain, EntityDomain)
+        self._point = point
+        self._parametrization = parametrization
+
+    @property
+    def ambient_point(self) -> AbstractPoint:
+        """The point in ambient coordinates."""
+        return self._point
+
+    @property
+    def domain(self) -> AbstractCoordinateDomain:
+        """The domain.
+
+        A pulled back point lies in the coordinates the map starts from,
+        not in the ones it lands in.
+        """
+        return self._parametrization.source
+
+    @property
+    def parametrization(self) -> AbstractParametrization:
+        """The map this point is pulled back through."""
+        return self._parametrization
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        assert self.domain.topological_dimension is not None
-        return (self.domain.geometric_dimension, self.domain.topological_dimension)
+        return (self.dim,)
+
+    @property
+    def dim(self) -> int:
+        """The dimension of the point."""
+        return self._parametrization.source.geometric_dimension
+
+    @property
+    def successors(self) -> set[GraphNode]:
+        """The successors of this node."""
+        return {self._point}
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return self._point, self._parametrization
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, PulledBackPoint)
+            and self._point == other._point
+            and self._parametrization == other._parametrization
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.PulledBackPoint", self._point, self._parametrization))
+
+    @property
+    def index(self) -> int | str:
+        """The point's index in the set of points."""
+        return self._point.index
+
+
+class AbstractJacobian(AbstractExpression):
+    """Base class for the derivative of a parametrization, and quantities built on it.
+
+    A Jacobian is evaluated somewhere, but when one is created during a
+    pull back there is no point to evaluate it at yet. It is therefore
+    built without one and told later, by the integral whose dummy
+    variable stands for the point.
+    """
+
+    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractVariable | None = None):
+        """Initialise.
+
+        Args:
+            domain: The domain whose geometry is being differentiated
+            point: Where to differentiate it, if that is known yet
+        """
+        self.domain = domain
+        self.point = point
+
+    @property
+    def parametrization(self) -> AbstractParametrization:
+        """The map this quantity differentiates, for the cell its point lies in.
+
+        A point lies in a cell's coordinate domain, so it names the cell.
+        Until a point arrives this quantity is generic over the domain's
+        cell types, which is what lets it be built during a pull back.
+        """
+        if self.point is None:
+            raise ValueError(
+                "This quantity has not been told where it is evaluated, so the cell "
+                "whose map it differentiates is not known."
+            )
+        source = self.point.domain
+        if not isinstance(source, EntityDomain):
+            raise ValueError(
+                f"This quantity is evaluated at a point of a cell's coordinate domain, "
+                f"not of {source!r}."
+            )
+        (cell,) = source.cell_types
+        return self.domain.parametrization(cell)
+
+    @property
+    def _jacobian(self) -> "Jacobian":
+        """The Jacobian this quantity is built from."""
+        return Jacobian(self.domain, self.point)
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -263,35 +318,45 @@ class Jacobian(AbstractExpression):
         """The arguments used to initialise this object."""
         return self.domain, self.point
 
+    def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
+        """Evaluate this quantity at the given variable.
+
+        The variable stands for a point of one of this domain's cells, so
+        one in any other coordinates is not this quantity's to take.
+        """
+        source = variable.domain
+        if not isinstance(source, EntityDomain):
+            return self
+        (cell,) = source.cell_types
+        if cell not in self.domain.cell_types:
+            return self
+        return self.__class__(self.domain, variable)
+
+
+class Jacobian(AbstractJacobian):
+    """The Jacobian."""
+
+    @property
+    def _jacobian(self) -> "Jacobian":
+        """The Jacobian is its own."""
+        return self
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        tdim = self.domain.topological_dimension
+        if tdim is None:
+            raise NotImplementedError(
+                "A Jacobian is not supported on a domain whose cells have several "
+                "topological dimensions."
+            )
+        return (self.domain.geometric_dimension, tdim)
+
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        gdim, tdim = self.value_shape
-        if len(self.domain.cell_types) > 1:
-            raise NotImplementedError()
-        (cell,) = self.domain.cell_types
-        element = self.domain.parametrization_element(cell)
-
+        parametrization = self.parametrization
         assert self.point is not None
-
-        return Matrix(
-            [
-                [
-                    expression_sum(
-                        FlattenedTensorMap((i // gdim, i % gdim), (gdim,))
-                        * EvaluatedBasisFunction(
-                            function_space(self.domain, element),
-                            i,
-                            self.point,
-                            derivative=tuple(1 if d == col else 0 for d in range(tdim)),
-                            component=row,
-                        )
-                        for i in range(element.dim)
-                    )
-                    for col in range(tdim)
-                ]
-                for row in range(gdim)
-            ]
-        )
+        return parametrization.jacobian(self.point)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -314,34 +379,17 @@ class Jacobian(AbstractExpression):
             return Identity(self.value_shape[0])
 
 
-class JacobianDeterminant(AbstractExpression):
+class JacobianDeterminant(AbstractJacobian):
     """The determinant of the Jacobian."""
-
-    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractPoint | None = None):
-        """Initialise."""
-        self._jacobian = Jacobian(domain, point)
-        self.domain = domain
-        self.point = point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return ()
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.domain, self.point
-
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = self._jacobian.expand_geometry()
-        assert isinstance(j, Matrix)
+        j = as_matrix(self._jacobian.expand_geometry())
         return abs(j.compute_determinant())
 
     def component(self, *indices: int) -> AbstractExpression:
@@ -349,34 +397,17 @@ class JacobianDeterminant(AbstractExpression):
         raise ValueError("Cannot get a component of a scalar expression")
 
 
-class JacobianInverse(AbstractExpression):
+class JacobianInverse(AbstractJacobian):
     """The inverse of the Jacobian."""
-
-    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractPoint | None = None):
-        """Initalise."""
-        self._jacobian = Jacobian(domain, point)
-        self.domain = domain
-        self.point = point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self._jacobian.value_shape[::-1]
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.domain, self.point
-
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = self._jacobian.expand_geometry()
-        assert isinstance(j, Matrix)
+        j = as_matrix(self._jacobian.expand_geometry())
         return j.compute_inverse()
 
     def __repr__(self) -> str:
@@ -400,34 +431,17 @@ class JacobianInverse(AbstractExpression):
             return Identity(self.value_shape[0])
 
 
-class JacobianTranspose(AbstractExpression):
+class JacobianTranspose(AbstractJacobian):
     """The transpose of the Jacobian."""
-
-    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractPoint | None = None):
-        """Initalise."""
-        self._jacobian = Jacobian(domain, point)
-        self.domain = domain
-        self.point = point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self._jacobian.value_shape[::-1]
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.domain, self.point
-
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = self._jacobian.expand_geometry()
-        assert isinstance(j, Matrix)
+        j = as_matrix(self._jacobian.expand_geometry())
         return j.transpose()
 
     def __repr__(self) -> str:
@@ -451,34 +465,17 @@ class JacobianTranspose(AbstractExpression):
             return Identity(self.value_shape[0])
 
 
-class JacobianInverseTranspose(AbstractExpression):
+class JacobianInverseTranspose(AbstractJacobian):
     """The inverse transpose of the Jacobian."""
-
-    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractPoint | None = None):
-        """Initalise."""
-        self._jacobian = Jacobian(domain, point)
-        self.domain = domain
-        self.point = point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self._jacobian.value_shape
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.domain, self.point
-
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = self._jacobian.expand_geometry()
-        assert isinstance(j, Matrix)
+        j = as_matrix(self._jacobian.expand_geometry())
         return j.compute_inverse().transpose()
 
     def __repr__(self) -> str:
