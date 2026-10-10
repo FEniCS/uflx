@@ -3,25 +3,31 @@
 import pytest
 
 from uflx import Coefficient, TestFunction, dx, function_space, inner, parametrized_domain
-from uflx.algorithms import pull_back_to_entity
+from uflx.algorithms import pull_back_to_entity, simplify
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import RD, EntityDomain
-from uflx.expressions import RealScalar
+from uflx.expressions import RealScalar, Sqrt
 from uflx.functions import create_variable
 from uflx.geometry import (
-    AbstractJacobian,
+    AbstractGeometricQuantity,
     Jacobian,
+    JacobianDeterminant,
     JacobianInverse,
     JacobianInverseTranspose,
     JacobianTranspose,
+    MetricTensor,
     PulledBackPoint,
     PushedForwardPoint,
+    SingleSpatialCoordinate,
+    SpatialCoordinate,
+    TangentialProjector,
+    UnitNormal,
     expand_geometry,
 )
 from uflx.graphs import as_graph
 from uflx.integrals import Integral
 from uflx.points import Point
-from uflx.tensors import FlattenedTensorMap
+from uflx.tensors import FlattenedTensorMap, Identity, Matrix
 
 cells_and_gdims = [
     ("interval", 1),
@@ -192,7 +198,7 @@ def test_a_jacobian_is_told_where_it_is_evaluated(lagrange_element):
     pulled = pull_back_to_entity(mass_form("triangle", 2, lagrange_element))
 
     assert isinstance(pulled, Integral)
-    jacobians = [n for n in as_graph(pulled) if isinstance(n, AbstractJacobian)]
+    jacobians = [n for n in as_graph(pulled) if isinstance(n, AbstractGeometricQuantity)]
     assert len(jacobians) > 0
     for j in jacobians:
         assert j.point is not None
@@ -209,7 +215,7 @@ def test_a_pulled_back_integral_expands_its_geometry(cell, gdim, lagrange_elemen
     """
     expanded = expand_geometry(pull_back_to_entity(mass_form(cell, gdim, lagrange_element)))
 
-    assert not any(isinstance(n, AbstractJacobian) for n in as_graph(expanded))
+    assert not any(isinstance(n, AbstractGeometricQuantity) for n in as_graph(expanded))
 
 
 def test_geometry_refuses_a_variable_in_the_wrong_coordinates(lagrange_element):
@@ -275,3 +281,237 @@ def test_a_jacobian_without_a_point_knows_no_cell(mixed_mesh):
     """Being generic over cell types is useful, but it cannot be expanded."""
     with pytest.raises(ValueError, match="not been told where"):
         Jacobian(mixed_mesh).expand_geometry()
+
+
+geometric_quantities = [
+    Jacobian,
+    JacobianDeterminant,
+    MetricTensor,
+    TangentialProjector,
+    UnitNormal,
+    JacobianInverse,
+    JacobianTranspose,
+    JacobianInverseTranspose,
+]
+
+
+@pytest.mark.parametrize("quantity", geometric_quantities)
+def test_a_geometric_quantity_shows_its_arguments(quantity, lagrange_element):
+    """All of them say what they are of, not just their class name."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+
+    assert repr(quantity(domain)).startswith(f"{quantity.__name__}(")
+    assert repr(domain) in repr(quantity(domain))
+
+
+@pytest.mark.parametrize("quantity", geometric_quantities)
+def test_a_geometric_quantity_cannot_be_mutated(quantity, lagrange_element):
+    """Its hash comes from its arguments, so moving them would lose it in a dict.
+
+    These nodes are dictionary keys while an expression is being rewritten.
+    """
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    (cell,) = domain.cell_types
+    node = quantity(domain)
+    found_by = {node: "here"}
+
+    with pytest.raises(AttributeError):
+        node.point = Point([RealScalar(0.25)] * 2, EntityDomain(cell))
+
+    assert node in found_by
+
+
+def test_pushing_forward_needs_a_point_in_a_cells_coordinates(lagrange_element):
+    """There is nothing to carry a point of the ambient coordinates forward."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    ambient = Point([RealScalar(0.25)] * 2, RD(2))
+
+    with pytest.raises(ValueError, match="pushed forward from a cell's coordinates"):
+        PushedForwardPoint(ambient, domain)
+
+
+def test_pulling_back_needs_a_point_in_ambient_coordinates(lagrange_element):
+    """A point already in a cell's coordinates has nothing to pull back."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    (cell,) = domain.cell_types
+    entity_point = Point([RealScalar(0.25)] * 2, EntityDomain(cell))
+
+    with pytest.raises(ValueError, match="nothing to pull back"):
+        PulledBackPoint(entity_point, domain.parametrization(cell))
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_metric_is_square_in_the_cells_own_dimension(cell, gdim, lagrange_element):
+    """The metric measures in the cell's coordinates, so it is tdim by tdim."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+
+    assert MetricTensor(domain).value_shape == (tdim, tdim)
+    assert Jacobian(domain).value_shape == (gdim, tdim)
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_metric_is_symmetric(cell, gdim, lagrange_element):
+    """G = J^T J, so g[i, j] and g[j, i] are the same sum."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    g = MetricTensor(domain, point).expand_geometry()
+
+    assert isinstance(g, Matrix)
+    for i in range(tdim):
+        for j in range(tdim):
+            assert simplify(g.component(i, j)) == simplify(g.component(j, i))
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_volume_scaling_is_the_metrics_gram_determinant(cell, gdim, lagrange_element):
+    """On a manifold the factor an integral picks up is sqrt(det g).
+
+    For a square map the same identity holds, but JacobianDeterminant
+    takes the direct and much cheaper abs(det J) instead, so the two are
+    equal as numbers without being equal as expressions.
+    """
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    if gdim == tdim:
+        pytest.skip("Not a manifold, so the direct determinant is used.")
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    g = MetricTensor(domain, point).expand_geometry()
+    assert isinstance(g, Matrix)
+
+    assert simplify(abs(Sqrt(g.compute_determinant()))) == simplify(
+        JacobianDeterminant(domain, point).expand_geometry()
+    )
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_projector_is_square_in_the_ambient_dimension(cell, gdim, lagrange_element):
+    """It acts on the ambient coordinates, keeping the tangent directions."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+
+    assert TangentialProjector(domain).value_shape == (gdim, gdim)
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_projector_is_the_identity_only_on_a_square_map(cell, gdim, lagrange_element):
+    """Where a cell can move in every ambient direction there is nothing to project."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    expanded = TangentialProjector(domain, point).expand_geometry()
+
+    if gdim == tdim:
+        assert expanded == Identity(gdim)
+    else:
+        assert not isinstance(expanded, Identity)
+        assert expanded.value_shape == (gdim, gdim)
+
+
+def test_the_projector_is_idempotent(lagrange_element):
+    """Projecting an already projected vector changes nothing."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
+    projector = TangentialProjector(domain)
+
+    assert simplify(projector @ projector) == projector
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_normal_exists_exactly_at_codimension_one(cell, gdim, lagrange_element):
+    """One direction is orthogonal to the tangent space only when one is left over."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+
+    if gdim == tdim + 1:
+        assert UnitNormal(domain).value_shape == (gdim,)
+    else:
+        with pytest.raises(ValueError, match="codimension"):
+            UnitNormal(domain).value_shape
+
+
+def test_a_domain_of_no_topological_dimension_has_no_normal_to_compute(lagrange_element):
+    """The normal to a point is a sign, which is a convention rather than a value."""
+    domain = parametrized_domain(lagrange_element("point", 1, (1,)))
+
+    with pytest.raises(NotImplementedError, match="sign"):
+        UnitNormal(domain).value_shape
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_spatial_coordinate_is_the_maps_value(cell, gdim, lagrange_element):
+    """X is phi(X), so expanding it is asking the map what it gives."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    coordinates = SpatialCoordinate(domain, point)
+
+    assert coordinates.value_shape == (gdim,)
+    assert coordinates.expand_geometry() == domain.parametrization(entity).value(point)
+
+
+def test_both_ways_of_indexing_a_coordinate_check_their_range(lagrange_element):
+    """`x[i]` and `x.component(i)` are the same path, so they agree.
+
+    They used not to: one raised and the other gave a nonsense node.
+    """
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    coordinates = SpatialCoordinate(domain)
+
+    assert coordinates[1] == coordinates.component(1)
+    for out_of_range in [-1, 2]:
+        with pytest.raises(IndexError, match="out of range"):
+            coordinates[out_of_range]
+        with pytest.raises(IndexError, match="out of range"):
+            coordinates.component(out_of_range)
+
+
+def test_one_coordinate_stays_a_node_of_its_own(lagrange_element):
+    """`sin(x[0])` should stay readable until geometry is expanded."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    (entity,) = domain.cell_types
+    point = Point([RealScalar(0.25)] * 2, EntityDomain(entity))
+
+    single = SpatialCoordinate(domain, point)[1]
+
+    assert isinstance(single, SingleSpatialCoordinate)
+    assert single.value_shape == ()
+    assert single.expand_geometry() == SpatialCoordinate(domain, point).expand_geometry().component(
+        1
+    )
+    with pytest.raises(ValueError, match="scalar"):
+        single.component(0)
+
+
+def test_one_coordinate_keeps_which_coordinate_it_is_when_told_a_point(lagrange_element):
+    """It carries more than a domain and a point, so it rebuilds itself."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    (cell,) = domain.cell_types
+    variable = create_variable(domain).to_entity_coordinates(cell)
+
+    told = SingleSpatialCoordinate(domain, 1).reconstruct_with_variable(variable)
+
+    assert told.point == variable
+    assert told == SingleSpatialCoordinate(domain, 1, variable)
+
+
+def test_a_pushed_forward_point_is_the_spatial_coordinate_as_a_point(lagrange_element):
+    """The two are one computation; the difference is only the type."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
+    (entity,) = domain.cell_types
+    point = Point([RealScalar(0.25)] * 2, EntityDomain(entity))
+
+    pushed = PushedForwardPoint(point, domain).expand_geometry()
+    coordinates = SpatialCoordinate(domain, point).expand_geometry()
+
+    assert isinstance(pushed, Point)
+    assert [pushed.component(i) for i in range(3)] == [coordinates.component(i) for i in range(3)]

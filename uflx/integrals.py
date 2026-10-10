@@ -20,8 +20,9 @@ from uflx.functions import (
     AbstractVariable,
     FiniteElementVariable,
     create_variable,
+    extract_domain,
 )
-from uflx.geometry import AbstractJacobian, JacobianDeterminant
+from uflx.geometry import AbstractGeometricQuantity, JacobianDeterminant
 from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
 
 
@@ -123,7 +124,7 @@ class Integral(AbstractIntegral):
         # A Jacobian built during a pull back does not know where it is
         # evaluated. This integral's variable is that point.
         for node in as_graph(integrand):
-            if isinstance(node, AbstractJacobian) and node.point is None:
+            if isinstance(node, AbstractGeometricQuantity) and node.point is None:
                 evaluated = node.reconstruct_with_variable(self._variable)
                 if evaluated is not node:
                     replacements[node] = evaluated
@@ -166,14 +167,7 @@ class Integral(AbstractIntegral):
         Read off the functions in the integrand that are in ambient
         coordinates, which must all agree.
         """
-        domain = None
-        for node in self.graph.descendants(self._integrand):
-            if isinstance(node, AbstractFunction) and not node.in_entity_coordinates:
-                if domain is None:
-                    domain = node.function_space.domain
-                else:
-                    assert domain == node.function_space.domain
-        assert domain is not None
+        domain = extract_domain(self._integrand)
         assert isinstance(domain, AbstractCellularDomain)
         return domain
 
@@ -301,10 +295,14 @@ class IntegralSum:
 class Measure(AbstractMeasure):
     """An integral measure."""
 
-    def __init__(
-        self, dim: int | None = None, codim: int | None = None, boundary_only: bool = False
-    ):
-        """Initialise."""
+    def __init__(self, dim: int | None, codim: int | None, boundary_only: bool):
+        """Initialise.
+
+        Args:
+            dim: The topological dimension integrated over, if the measure fixes one
+            codim: The codimension integrated over, if the measure fixes one
+            boundary_only: Whether only entities on the boundary are integrated over
+        """
         self._dim = dim
         self._codim = codim
         self._boundary_only = boundary_only
@@ -330,4 +328,4 @@ class Measure(AbstractMeasure):
         )
 
 
-dx = Measure(codim=0)
+dx = Measure(dim=None, codim=0, boundary_only=False)

@@ -152,5 +152,5 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
 - A class's factory/constructor function has the same name as the class, lowercased
   (mid-word capitals become `_x`, e.g. a hypothetical `FooX` class pairs with
   `foo_x()`).
-- `__init__` methods take no default values; if defaults are useful, add a separate
-  factory function instead of defaulting the constructor.
+- `__init__` methods do not choose a value for the caller; add a factory or named
+  instance instead (as `dx` is). A `None` default for a field not yet known is fine.
