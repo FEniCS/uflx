@@ -160,10 +160,10 @@ class PreimagePoint(AbstractPoint):
     fields, and `uflx.maps` is where those live.
 
     A terminal, deliberately: it has no expansion and will not get one.
-    A parametrization offers a value and a derivative and no inverse,
-    because inverting a finite element map is a Newton solve rather than
-    anything symbolic. So this names a point a consumer computes, the way
-    a coordinate dof names a number a mesh holds.
+    A parametrization offers a value and a derivative and no inverse, the
+    map back being an algorithm the surrounding library provides. So this
+    names a point that library computes, the way a coordinate dof names a
+    number a mesh holds.
 
     It takes the map rather than the domain because a point of the ambient
     coordinates does not say which cell it should land in; that is part of
