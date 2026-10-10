@@ -112,7 +112,7 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   coordinate domain; `Integral.restricted_to` and `split_by_cell_type` do that, carrying
   the measure onto the restricted domain. There is no `ds` or `dS`: an exterior or
   interior facet integral is this measure over a domain of codimension one, which
-  [INTEGRATION.md](INTEGRATION.md) §4 argues for and §7 says is not yet constructible.
+  [INTEGRATION.md](INTEGRATION.md) §3 argues for and §6 says is not yet constructible.
 
 Symbolic (Gateaux) differentiation and expression/integral transformation between domain
 configurations are the two core transformation procedures UFLx provides on top of this

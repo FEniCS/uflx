@@ -2,6 +2,7 @@
 
 What integration means in UFLx, written against differential geometry rather than finite
 element usage. A design note: it argues for the model, where `LANGUAGE.md` states it.
+Arguments against the alternatives are in the notes at the end.
 
 ## 1. What an integral is
 
@@ -42,7 +43,7 @@ A **density** is the absolute value of an `n`-form. It integrates over an unorie
 manifold and is always non-negative. UFLx integrates functions against densities rather
 than forms against an orientation, which is the right choice for a mesh, whose cells are
 not consistently oriented and whose volumes must be positive. The sign a density
-discards is the orientation the chart gives, and §5 says what that sign is and is not
+discards is the orientation the chart gives, and §4 says what that sign is and is not
 good for.
 
 ## 2. What a measure is
@@ -62,17 +63,15 @@ The density is the one the domain's own chart induces, `√det g`, read off the 
 dx(omega)  # Measure(omega), whose density is VolumeElement(omega)
 ```
 
-It is a property of the domain rather than a second argument, for the reason in §3.
-Where the chart is the identity, as on `R^d` or on a region of it, the density is one
-and the measure is the Lebesgue measure. Seen another way the density is `dμ/dλ`, the
-derivative of the measure with respect to the Lebesgue measure on its chart's parameter
-region, which is why the chart fixes it.
+It is a property of the domain rather than a second argument, and there is no way to
+weigh a measure by a function [1]. Where the chart is the identity, as on `R^d` or on a
+region of it, the density is one and the measure is the Lebesgue measure. Seen another
+way the density is `dμ/dλ`, the derivative of the measure with respect to the Lebesgue
+measure on its chart's parameter region, which is why the chart fixes it.
 
 The domain is stated and never inferred, so `dx` is a function of a domain rather than a
-thing that acquires one. An integral that guesses its domain from its integrand is an
-integral that cannot be told it guessed wrong, and guessing cannot express an integrand
-spanning two domains at all, which is what an interface needs. `Integral` therefore
-reads the domain off its measure and rejects a function living on another.
+thing that acquires one [2]. `Integral` reads the domain off its measure and rejects a
+function living on another.
 
 The domain is any charted domain: one that offers a map out of a parameter region. A
 reference cell is one kind of parameter region, a region of `R^d` is another, and `R^d`
@@ -86,55 +85,17 @@ injected by an algorithm.
 What a measure does not carry is topological selection. A codimension is relative to a
 domain, and whether an entity lies on a boundary is a question about a cell complex UFLx
 does not own; both are ways of *selecting a derived domain* from a mesh. That selection
-is real and necessary, and it belongs to domain construction — see §4.
+is real and necessary, and it belongs to domain construction — see §3.
 
-## 3. No weighted measures
+## 3. One measure, three domains
 
-There is no way to weigh a measure by a function. For any factor one might want to put
-in a measure:
-
-- if it is geometric, it is the density of some chart, so it comes from composing — the
-  thing to change is the domain and not the measure;
-- if it is not geometric, it is physics, and belongs in the integrand.
-
-The axisymmetric `r dr dz` is the case worth working through, looking most like a
-weight. The cylindrical chart `psi(r, z, theta) = (r cos theta, r sin theta, z)` has
-
-```
-g = J^T J = diag(1, 1, r^2)        sqrt(det g) = r        |det J| = r
-```
-
-so `r` is the volume element of a domain presented through that chart: ordinary induced
-geometry. It looks like a weight only once the domain is pretended to be
-two-dimensional. Stated honestly, the axisymmetric measure is the pushforward of the
-three-dimensional one along the projection that forgets `theta`, and the `2 pi` is
-`∫ dtheta`. A chart, then a map out of it. Nothing weighs anything.
-
-Completeness points the same way. Every absolutely continuous measure is the pushforward
-of Lebesgue measure under some diffeomorphism — in one dimension the inverse of the
-distribution function, in higher dimensions Moser's argument — so a weight adds nothing
-composition cannot give. For `exp(-|x|^2) dx` that map is not elementary, which is a
-reason not to pretend it is a composition one can write down, not a reason to add a
-weight.
-
-What lies outside an induced density is a different kind of measure rather than a
-weighted one. A Dirac measure has no density with respect to anything, so it cannot be
-`w . mu`, and a quadrature rule is a sum of Diracs. Those are atomic, and would be a
-sibling of `Measure`. Restriction to a subdomain is likewise a domain and not an
-indicator weight, which is why UFL's subdomain ids on the measure are the same
-conflation from the other side.
-
-## 4. `ds` and `dS` are not kinds of measure
-
-In UFL, `dx`, `ds` and `dS` are three measures. Here they are one measure over three
-different domains, and they look like three only when the domain is unstated and has to
-be encoded in the measure instead.
+`dx`, `ds` and `dS` are one measure over three different domains [3].
 
 - `dx` is the induced density on `Ω`.
 - `ds` is the induced density on `∂Ω`, a codimension-one domain in its own right. Its
   chart per facet type is the reference facet's inclusion into the cell followed by the
   cell's own map, which is a `ComposedParametrization`.
-- `dS` is the induced density on an interface, a codimension-one domain again.
+- `dS` is the induced density on an interface, a codimension-one domain again [4].
 
 The `+`/`-` of UFL is not part of the measure either. It is a *restriction of a field*,
 which is a pullback along one side's inclusion map, and it lives in the integrand.
@@ -148,7 +109,7 @@ A region of `R^d` shows this with no cells involved: a box carries a measure, an
 does each of its faces, which is an exterior facet measure rather than a second kind of
 measure.
 
-## 5. Orientation
+## 4. Orientation
 
 A density integrates on an unoriented manifold, which is what makes `|det J|` right for
 a mesh. Stokes' theorem is about forms:
@@ -187,7 +148,7 @@ separate orientation terminal. An outward normal asks "outward from which side",
 restriction answers it, and integration by parts becomes statable in the language rather
 than in a consumer's conventions.
 
-## 6. The interface, without finite element terminology
+## 5. The interface, without finite element terminology
 
 Two manifolds `Ω₊` and `Ω₋` meeting along `Γ` of codimension one. Two embeddings
 
@@ -228,11 +189,9 @@ general interface needs no new geometry: a point of `Γ` is pushed forward by `�
 chart and pulled back through each side's.
 
 Read in that order, UFL's `+`/`-` is the special case in which `φ₊⁻¹ ∘ ψ_Γ` is known
-combinatorially and so costs nothing. Designing `dS` as a measure kind gets this
-backwards: it hardcodes the easy case into the vocabulary and leaves no room for the
-other.
+combinatorially and so costs nothing.
 
-## 7. What is not built
+## 6. What is not built
 
 1. **The derived domains**, `boundary_of` and `interface_of`. This needs reference
    geometry UFLx cannot supply: `AbstractEntity` knows a facet's vertices but not where
@@ -240,7 +199,7 @@ other.
    hook, a consumer-supplied chart, or an unexpandable terminal as in UFL. That fork is
    the real decision and it is not a measure question.
 1. **A chart per side**, generalising `parametrization(cell)`, plus restriction as a
-   pullback along a named chart. This is `dS` in both cases of §6, and it subsumes
+   pullback along a named chart. This is `dS` in both cases of §5, and it subsumes
    `+`/`-`.
 1. **Orientation carried on a restriction**, giving a signed normal and a statable
    divergence theorem.
@@ -251,7 +210,7 @@ other.
 1. **Atomic measures**, for a point evaluation and for a quadrature rule as a sum of
    Diracs. A sibling of `Measure` rather than a weighting of one.
 
-## 8. What the design has to pass
+## 7. What the design has to pass
 
 Acceptance criteria, as tests rather than prose to agree with.
 
@@ -276,3 +235,41 @@ Acceptance criteria, as tests rather than prose to agree with.
 - **The divergence theorem is statable.** `∫ div(u) dx(omega)` and
   `∫ inner(u, n) dx(boundary_of(omega))` are both expressible, with `n`'s sign fixed by
   the boundary's inclusion rather than by a consumer's convention.
+
+## Notes
+
+1. **Why a measure cannot be weighed by a function.** For any factor one might want to
+   put in a measure: if it is geometric, it is the density of some chart, so it comes
+   from composing, and the thing to change is the domain; if it is not geometric, it is
+   physics, and belongs in the integrand. The axisymmetric `r dr dz` is the case worth
+   working through, looking most like a weight. The cylindrical chart
+   `psi(r, z, theta) = (r cos theta, r sin theta, z)` has `g = J^T J = diag(1, 1, r^2)`,
+   so `sqrt(det g) = r`: the `r` is the volume element of a domain presented through
+   that chart, ordinary induced geometry. It looks like a weight only once the domain is
+   pretended to be two-dimensional. Stated honestly, the axisymmetric measure is the
+   pushforward of the three-dimensional one along the projection that forgets `theta`,
+   and the `2 pi` is `∫ dtheta`. A chart, then a map out of it. Completeness points the
+   same way: every absolutely continuous measure is the pushforward of Lebesgue measure
+   under some diffeomorphism — in one dimension the inverse of the distribution
+   function, in higher dimensions Moser's argument — so a weight adds nothing
+   composition cannot give. For `exp(-|x|^2) dx` that map is not elementary, which is a
+   reason not to pretend it is a composition one can write down, not a reason to add a
+   weight. What lies outside an induced density is a different kind of measure rather
+   than a weighted one: a Dirac measure has no density with respect to anything, so it
+   cannot be `w . mu`, and a quadrature rule is a sum of Diracs.
+1. **Why the domain is stated rather than inferred.** Inference reads the domain off the
+   functions in the integrand and requires them to agree, so it cannot express an
+   integrand spanning two domains at all — which is exactly what an interface needs. It
+   also cannot be contradicted: an integral that guesses its domain is an integral that
+   cannot be told it guessed wrong, and where domain equality is structural the guess
+   can be wrong silently, two distinct meshes built from the same coordinate element
+   comparing equal.
+1. **Why UFL has three measures rather than one.** Its measure does not name its domain,
+   so what it integrates over has to be encoded in the measure instead, as a codimension
+   and a boundary flag. Subdomain ids on the measure are the same conflation from the
+   other side: a subdomain is a domain, not an indicator weight on a measure.
+1. **Why `dS` as a kind of measure gets it backwards.** The matching case of §5 — where
+   the two sides' charts differ by a combinatorial reparametrization — is the one that
+   costs nothing, and making `dS` a measure kind hardcodes it into the vocabulary. That
+   leaves no room for the non-matching case, which is the one that needs the language's
+   help and which UFL cannot express at all.
