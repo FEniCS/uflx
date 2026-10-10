@@ -5,21 +5,25 @@ Guidance for agents (Claude Code and others) working in this repository.
 ## What this is
 
 UFLx is an experimental, minimal reimplementation of UFL (Unified Form Language): a
-symbolic language embedded in Python for writing finite-element variational forms
-(e.g. `inner(grad(v), grad(u)) * dx`). It does not own meshes, boundary markers,
-coefficient values, or assembly — those belong to a surrounding solver environment
-(e.g. DOLFIN/DOLFINx). See [LANGUAGE.md](LANGUAGE.md) for the full language spec and
+symbolic language embedded in Python for writing finite-element variational forms (e.g.
+`inner(grad(v), grad(u)) * dx(mesh)`). It does not own meshes, boundary markers,
+coefficient values, or assembly — those belong to a surrounding solver environment (e.g.
+DOLFIN/DOLFINx). See [LANGUAGE.md](LANGUAGE.md) for the full language spec and
 [DESIGN_CHOICES.md](DESIGN_CHOICES.md) for naming/API conventions — read both before
-adding to the object model.
+adding to the object model. [INTEGRATION.md](INTEGRATION.md) is the argument behind the
+measure and integral model, written against differential geometry, and lists what is not
+built.
 
 ## Commands
 
 Install for development (editable):
+
 ```
 pip install -e ".[ci,lint,docs]"
 ```
 
 Lint (must pass with zero diff/errors, matches CI):
+
 ```
 ruff check .
 ruff format --check .          # use `ruff format .` to auto-fix
@@ -27,6 +31,7 @@ pyrefly check                  # type checker, config in [tool.pyrefly]
 ```
 
 Run the core test suite:
+
 ```
 pytest test/
 pytest test/test_forms.py::test_name    # single test
@@ -35,12 +40,14 @@ pytest -n auto test/                    # parallel, matches CI (needs pytest-xdi
 
 `external/basix_uflx` is a separate installable package excluded from the main `uflx`
 package; install and test it independently:
+
 ```
 pip install external/basix_uflx
 pytest external/basix_uflx/test
 ```
 
 Build docs:
+
 ```
 cd doc && make html
 ```
@@ -51,41 +58,48 @@ Expression trees (the symbolic core) are not plain Python object graphs — they
 backed by an explicit DAG in `uflx/graphs/` (`Graph` subclasses `networkx.DiGraph`;
 nodes are `GraphNode`s exposing `successors` and `init_args`). Whole-tree rewrites
 (substituting terminals, extracting real/imaginary parts, applying push-forward/
-pull-back maps) go through `uflx/algorithms/replace.py`, which walks the graph
-and calls `reconstruct_node` (`uflx/algorithms/reconstruct.py`) to rebuild any
-node whose successors changed, by re-invoking `node.__class__(*args)` with replaced
-`init_args`. Anything that needs to transform an expression (`complex.py`, `maps.py`,
-`geometry.py`) is built on this `replace` primitive rather than ad hoc tree-walking —
-follow that pattern for new transformations.
+pull-back maps) go through `uflx/algorithms/replace.py`, which walks the graph and calls
+`reconstruct_node` (`uflx/algorithms/reconstruct.py`) to rebuild any node whose
+successors changed, by re-invoking `node.__class__(*args)` with replaced `init_args`.
+Anything that needs to transform an expression (`complex.py`, `maps.py`, `geometry.py`)
+is built on this `replace` primitive rather than ad hoc tree-walking — follow that
+pattern for new transformations.
 
-The object model is a layered chain of abstract base classes, each file named after
-its plural concept with `Abstract*` base classes (concrete classes are defined by
-consumers, e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
+The object model is a layered chain of abstract base classes, each file named after its
+plural concept with `Abstract*` base classes (concrete classes are defined by consumers,
+e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
 
 - `entities.py` — `AbstractEntity`: topological mesh entities (point/interval/
   triangle/.../hexahedron), defined recursively via their sub-entities.
-- `finite_elements.py` — `AbstractFiniteElement` / `AbstractMappedFiniteElement`:
-  what basis functions look like on a cell; depends on `entities` and `maps`.
-- `maps.py` — `AbstractValueMap` (e.g. `IdentityValueMap`): push-forward/
-  pull-back of values between an entity's coordinates and ambient coordinates,
-  implemented as graph rewrites.
-- `domains.py` — `AbstractDomain`: a set you can integrate over. A coordinate
-  domain's points are tuples of numbers (`RD`, `EntityDomain`); a parametrized
-  domain is the image of a map out of one. `AbstractParametrization` is that map,
-  evaluated by `value` and differentiated by `jacobian`; `IdentityParametrization`
-  is an entity domain's. The actual mesh stays external to UFLx.
-- `function_spaces.py` — `AbstractFunctionSpace`: standard FE spaces (domain +
-  element), constant spaces (shape + scalar type), or non-FE spaces (domain + shape,
-  no element). Do not construct `Argument`/`Coefficient` directly from an element —
-  they must come from a `FunctionSpace`.
+- `finite_elements.py` — `AbstractFiniteElement` / `AbstractMappedFiniteElement`: what
+  basis functions look like on a cell; depends on `entities` and `maps`.
+- `maps.py` — `AbstractValueMap` (e.g. `IdentityValueMap`): push-forward/pull-back of
+  field values between an entity's coordinates and ambient coordinates, implemented as
+  graph rewrites. Which map a field needs follows from the degree of the form it
+  represents — identity for a 0-form, `J⁻ᵀ` for a 1-form, `J / det J` for an (n-1)-form
+  — and the module docstring pairs each with the `geometry.py` quantity it is. Applying
+  a chart to a *point* is a different operation, named `ImagePoint` and `PreimagePoint`
+  in `geometry.py`.
+- `domains.py` — `AbstractDomain`: a set you can integrate over. A coordinate domain's
+  points are tuples of numbers (`RD`, `EntityDomain`); a parametrized domain is the
+  image of a map out of one. `AbstractParametrization` is that map, evaluated by `value`
+  and differentiated by `jacobian`; `IdentityParametrization` is an entity domain's and
+  `RD`'s own. `AbstractChartedDomain` is what geometry and a measure ask for: a map out
+  of a parameter region, a reference cell being one kind of region and a region of `RD`
+  another, so being integrable over does not imply being made of cells. The actual mesh
+  stays external to UFLx.
+- `function_spaces.py` — `AbstractFunctionSpace`: standard FE spaces (domain + element),
+  constant spaces (shape + scalar type), or non-FE spaces (domain + shape, no element).
+  Do not construct `Argument`/`Coefficient` directly from an element — they must come
+  from a `FunctionSpace`.
 - `functions.py` / `basis_functions.py` — `AbstractFunction` and basis functions
   evaluated at points, in either an entity's coordinates or ambient coordinates.
-- `parametrizations.py` — `FiniteElementParametrization` and `ParametrizedDomain`,
-  where a map is described by a finite element per cell, plus
-  `ComposedParametrization`/`ComposedDomain`, which apply two maps in turn via the
-  chain rule. Evaluating an element map is an interpolation sum, so this sits above
-  `function_spaces`/`basis_functions` rather than in `domains`, which must not know
-  how a parametrization is described.
+- `parametrizations.py` — `FiniteElementParametrization` and `ParametrizedDomain`, where
+  a map is described by a finite element per cell, plus
+  `ComposedParametrization`/`ComposedDomain`, which apply two maps in turn via the chain
+  rule. Evaluating an element map is an interpolation sum, so this sits above
+  `function_spaces`/`basis_functions` rather than in `domains`, which must not know how
+  a parametrization is described.
 - `expressions.py` — `AbstractExpression`: the base of every symbolic node
   (`BinaryOperator`, `UnaryOperator`, terminals). Carries value shape, free indices,
   domain, scalar type as static, extensible attributes (unlike legacy UFL's fixed
@@ -95,15 +109,19 @@ consumers, e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` exte
   quantities (spatial coordinates, Jacobians, ...), and complex-number support
   (`re`/`im` via the `ComplexValued` protocol), all built as `AbstractExpression`
   subclasses / graph rewrites over them.
-- `integrals.py` — measures (`dx`, `ds`, `dS`), `Integral` (`expr * measure`) and
-  `IntegralSum`, which adding integrals gives. An integral over a domain of several
+- `integrals.py` — `Measure`, a domain paired with the density on it, built by
+  `dx(domain)`; `Integral` (`expr * measure`), which takes its domain from its measure;
+  and `IntegralSum`, which adding integrals gives. An integral over a domain of several
   cell types is pulled back as one integral per cell type, since each has its own
-  coordinate domain; `Integral.restricted_to` and `split_by_cell_type` do that.
+  coordinate domain; `Integral.restricted_to` and `split_by_cell_type` do that, carrying
+  the measure onto the restricted domain. There is no `ds` or `dS`: an exterior or
+  interior facet integral is this measure over a domain of codimension one, which
+  [INTEGRATION.md](INTEGRATION.md) §3 argues for and §6 says is not yet constructible.
 
-Symbolic (Gateaux) differentiation and expression/integral transformation between
-domain configurations are the two core transformation procedures UFLx provides on top
-of this object model (see LANGUAGE.md §4) — both are lazy, expressed as graph
-operators rather than eagerly evaluated.
+Symbolic (Gateaux) differentiation and expression/integral transformation between domain
+configurations are the two core transformation procedures UFLx provides on top of this
+object model (see LANGUAGE.md §4) — both are lazy, expressed as graph operators rather
+than eagerly evaluated.
 
 ## Python style
 
@@ -111,19 +129,23 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
 `AGENTS.md`), adapted for this pure-Python, MIT-licensed package:
 
 - **Formatting/linting**: `ruff check` and `ruff format --check`, configured in
-  `pyproject.toml`. Line length 100, 4-space indent. Rule set includes pydocstyle
-  (`D`, Google convention), pycodestyle, pyflakes, isort, pyupgrade,
-  flake8-import-conventions, NumPy-specific rules, and a few more (`RUF`, `FLY`,
-  `LOG`, `ISC`). Run the formatter/linter locally before calling a change done —
-  don't rely on CI to catch formatting.
+  `pyproject.toml`. Line length 100, 4-space indent. Rule set includes pydocstyle (`D`,
+  Google convention), pycodestyle, pyflakes, isort, pyupgrade,
+  flake8-import-conventions, NumPy-specific rules, and a few more (`RUF`, `FLY`, `LOG`,
+  `ISC`). Run the formatter/linter locally before calling a change done — don't rely on
+  CI to catch formatting.
+
 - **Import order** (ruff's isort, default grouping): future → standard-library →
   third-party (`networkx`, `pytest`) → first-party (`uflx`) → local-folder.
-- **Docstrings**: Google style (`Args:`, `Returns:`, etc.), required on modules,
-  classes and methods (`D` rules are enforced, `__init__.py` is exempted from unused
-  imports only — not docstrings).
+
+- **Docstrings**: Google style (`Args:`, `Returns:`, etc.), required on modules, classes
+  and methods (`D` rules are enforced, `__init__.py` is exempted from unused imports
+  only — not docstrings).
+
 - **Type hints**: used throughout and checked with `pyrefly` (`[tool.pyrefly]` in
   `pyproject.toml`); not currently enforced by a ruff annotation rule, but new public
   functions/methods should still be annotated to match the rest of the codebase.
+
 - **File header**: most files under `uflx/` (the core object-model layer —
   `entities.py`, `finite_elements.py`, `domains.py`, `function_spaces.py`,
   `functions.py`, `expressions.py`, `operators.py`, `integrals.py`,
@@ -137,12 +159,11 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
   # SPDX-License-Identifier:    MIT
   ```
 
-  followed by a module docstring. Some newer/infrastructure files (`uflx/graphs/`
-  and its `algorithms/` submodule, `maps.py`, `tensors.py`, `points.py`,
-  `geometry.py`, `complex.py`, `utils.py`) currently omit it — match the header
-  convention for new files in the core object-model layer; add your name/year rather
-  than replacing existing authors when making a substantive change to a file that has
-  one.
+  followed by a module docstring. Some newer/infrastructure files (`uflx/graphs/` and
+  its `algorithms/` submodule, `maps.py`, `tensors.py`, `points.py`, `geometry.py`,
+  `complex.py`, `utils.py`) currently omit it — match the header convention for new
+  files in the core object-model layer; add your name/year rather than replacing
+  existing authors when making a substantive change to a file that has one.
 
 ## Conventions (see DESIGN_CHOICES.md)
 
@@ -153,4 +174,5 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
   (mid-word capitals become `_x`, e.g. a hypothetical `FooX` class pairs with
   `foo_x()`).
 - `__init__` methods do not choose a value for the caller; add a factory or named
-  instance instead (as `dx` is). A `None` default for a field not yet known is fine.
+  instance instead (as `dx(domain)` is a factory for a measure). A `None` default for a
+  field not yet known is fine.

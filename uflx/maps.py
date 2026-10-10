@@ -1,6 +1,29 @@
 """Push forward and pull back maps.
 
-These maps carry function values between an entity's coordinates and ambient coordinates
+A push forward and a pull back act on fields. A field on an entity is pushed forward to
+one on the ambient coordinates, and a field on the ambient coordinates is pulled back to
+one on the entity, so which direction a value map runs in is the whole of what it says.
+
+Which map a field needs is fixed by what kind of field it is, which in differential
+geometry is the degree of the form it represents, and each case is one of the Jacobian
+quantities `uflx.geometry` names:
+
+- a 0-form, a function, pushes forward by composition alone, so the map is the identity.
+  This is the H1 conforming case, Lagrange and its relatives;
+- a 1-form pushes forward by ``J^-T``, which is the covariant Piola map. This is the
+  H(curl) conforming case, Nedelec and its relatives;
+- an (n-1)-form pushes forward by ``J / det J``, which is the contravariant Piola map.
+  This is the H(div) conforming case, Raviart-Thomas and its relatives. The determinant
+  here is the signed one, :class:`uflx.geometry.JacobianDeterminant`, not the density
+  :class:`uflx.geometry.VolumeElement`, which is why this map and not the others needs to
+  know whether a chart inverts.
+
+UFLx names the direction and leaves the expression to the element, so the maps here are
+abstract and a consumer supplies the Piola it needs.
+
+Applying a chart to a point is a different operation, being an image rather than a push
+forward; `uflx.geometry`'s :class:`uflx.geometry.ImagePoint` and
+:class:`uflx.geometry.PreimagePoint` are named for that.
 """
 
 from abc import ABC, abstractmethod
@@ -26,7 +49,15 @@ class AbstractValueMap(ABC):
     def ambient_value_shape(
         self, entity_value_shape: tuple[int, ...], geometric_dimension: int
     ) -> tuple[int, ...]:
-        """Map values from ambient coordinates to an entity's coordinates."""
+        """The shape a value takes once pushed forward.
+
+        Args:
+            entity_value_shape: The shape a value has on the entity
+            geometric_dimension: The number of ambient coordinates
+
+        Returns:
+            The shape the pushed forward value has
+        """
 
     @property
     def preserves_constant_values(self) -> bool:
@@ -62,7 +93,7 @@ class IdentityValueMap(AbstractValueMap):
     def ambient_value_shape(
         self, entity_value_shape: tuple[int, ...], geometric_dimension: int
     ) -> tuple[int, ...]:
-        """Map values from ambient coordinates to an entity's coordinates."""
+        """The identity map leaves the shape alone."""
         return entity_value_shape
 
     @property
@@ -99,7 +130,7 @@ class BlockedValueMap(AbstractValueMap):
     def ambient_value_shape(
         self, entity_value_shape: tuple[int, ...], geometric_dimension: int
     ) -> tuple[int, ...]:
-        """Map values from ambient coordinates to an entity's coordinates."""
+        """A blocked value takes the shape of its block."""
         return self._shape
 
     @property
@@ -138,7 +169,7 @@ class SymmetricValueMap(AbstractValueMap):
     def ambient_value_shape(
         self, entity_value_shape: tuple[int, ...], geometric_dimension: int
     ) -> tuple[int, ...]:
-        """Map values from ambient coordinates to an entity's coordinates."""
+        """A symmetric value takes the shape it is stored with."""
         return self._shape
 
     @property
@@ -170,7 +201,7 @@ class MixedValueMap(AbstractValueMap):
     def ambient_value_shape(
         self, entity_value_shape: tuple[int, ...], geometric_dimension: int
     ) -> tuple[int, ...]:
-        """Map values from ambient coordinates to an entity's coordinates."""
+        """A mixed value's shape is its sub-maps' shapes laid end to end."""
         shape: tuple[int, ...] = ()
         for s in self._shapes:
             shape += s

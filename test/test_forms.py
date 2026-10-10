@@ -11,7 +11,7 @@ def test_simple_form(lagrange_element):
     space = function_space(domain, element)
     u = TrialFunction(space)
     v = TestFunction(space)
-    form = inner(u, v) * dx
+    form = inner(u, v) * dx(domain)
 
     print(form)
     assert isinstance(form, Integral)

@@ -39,7 +39,7 @@ def test_dg0_value_and_gradient(lagrange_element, cell, dim, geometry_degree):
     v = TestFunction(function_space(domain, lagrange_element(cell, 1)))
     assert c.is_cellwise_constant
     assert c.label != other.label
-    form = inner(c, v) * dx
+    form = inner(c, v) * dx(domain)
     assert isinstance(form, Integral)
     for expression in [form, pull_back_to_entity(form)]:
         coefficients = [n for n in as_graph(expression) if isinstance(n, Coefficient)]
@@ -60,7 +60,7 @@ def test_dg0_value_and_gradient(lagrange_element, cell, dim, geometry_degree):
     for i in range(dim):
         assert_zero(c.diff(i), ())
         assert_zero(reference.diff(i), ())
-    gradient_form = inner(grad(c), grad(v)) * dx
+    gradient_form = inner(grad(c), grad(v)) * dx(domain)
     assert not any(isinstance(n, Coefficient) for n in as_graph(gradient_form))
     # Replacement must retain the new coefficient's constancy on reconstruction.
     variable = Coefficient(v.function_space)
