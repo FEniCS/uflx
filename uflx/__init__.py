@@ -18,3 +18,4 @@ from uflx.parametrizations import (
     parametrized_domain,
     sub_entities_of,
 )
+from uflx.restrictions import restrict

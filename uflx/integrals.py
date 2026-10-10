@@ -22,8 +22,9 @@ from uflx.functions import (
     Variable,
     create_variable,
 )
-from uflx.geometry import AbstractGeometricQuantity, VolumeElement
+from uflx.geometry import VolumeElement
 from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
+from uflx.restrictions import Restriction, evaluate_at
 
 
 class AbstractMeasure(ABC):
@@ -181,8 +182,21 @@ class Integral(AbstractIntegral):
         domain = measure.domain
         self._variable = create_variable(domain) if variable is None else variable
 
-        replacements: dict[GraphNode, GraphNode] = {}
-        for node in as_graph(integrand):
+        # A restriction says where the field under it is read, so this
+        # integral's variable is none of that subtree's business, and a
+        # field on another domain is no error there either: reaching
+        # another domain through a map is exactly what a restriction is.
+        graph = as_graph(integrand)
+        restricted = frozenset(
+            descendant
+            for node in graph
+            if isinstance(node, Restriction)
+            for descendant in graph.descendants(node) - {node}
+        )
+
+        for node in graph:
+            if node in restricted:
+                continue
             if isinstance(node, AbstractFunction) and node.variable is None:
                 if node.function_space.domain != domain:
                     raise ValueError(
@@ -190,20 +204,12 @@ class Integral(AbstractIntegral):
                         f"over {domain!r}. A function reaches another domain only "
                         f"through a map, not by being integrated there."
                     )
-                replacements[node] = node.reconstruct_with_variable(self._variable)
 
-        # A Jacobian built during a pull back does not know where it is
-        # evaluated. This integral's variable is that point.
-        for node in as_graph(integrand):
-            if isinstance(node, AbstractGeometricQuantity) and node.point is None:
-                evaluated = node.reconstruct_with_variable(self._variable)
-                if evaluated is not node:
-                    replacements[node] = evaluated
-
-        if len(replacements) == 0:
-            self._integrand = integrand
-        else:
-            self._integrand = replace(integrand, replacements)
+        # A function or a Jacobian built during a pull back does not know
+        # where it is evaluated. This integral's variable is that point.
+        evaluated = evaluate_at(integrand, self._variable, restricted)
+        assert isinstance(evaluated, AbstractExpression)
+        self._integrand = evaluated
         self._graph = generate_graph(self)
 
     @property

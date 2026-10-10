@@ -1,0 +1,266 @@
+# Copyright (C) 2026 Jack S. Hale
+#
+# This file is part of UFLx (https://www.fenicsproject.org)
+#
+# SPDX-License-Identifier:    MIT
+"""Restriction of a field to a domain it is not defined on.
+
+A field on a domain reaches a piece of that domain's boundary the way a
+field reaches anywhere else: through a map. If ``iota`` parametrizations a facet of
+a cell, the restriction of ``u`` to that facet is the pullback
+``iota^* u``, the field read at the point the parametrization gives. Written out,
+``(iota^* u)(X) = u(iota(X))``.
+
+That is why an exterior facet integral needs no new measure and no new
+kind of function space. The integral is over the facet, so its dummy
+variable is a point of the reference facet; the field is still the
+cell's, read at the included point. A gradient inside a restriction is
+therefore still the cell's gradient, carried by the cell's inverse
+Jacobian, rather than the facet's tangential one -- which is the whole
+reason the restriction is written in the integrand and not folded into
+the measure.
+
+Only the value is left alone. A restriction here is the pullback of a
+function and not of a form, so it does not carry a value map; what the
+restriction of a 1-form field should be is `uflx.maps`'s question.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from uflx.algorithms import replace
+from uflx.domains import (
+    AbstractParametrizedDomain,
+    AbstractParametrization,
+    AbstractParametrizedDomain,
+    SubEntityDomain,
+    UnionDomain,
+)
+from uflx.expressions import AbstractExpression
+from uflx.functions import AbstractFunction, AbstractVariable, extract_domain
+from uflx.geometry import AbstractGeometricQuantity, ImagePoint
+from uflx.graphs import GraphNode, as_graph
+
+
+def evaluate_at(
+    expression: GraphNode, variable: AbstractVariable, skip: frozenset[GraphNode] = frozenset()
+) -> GraphNode:
+    """Tell the parts of an expression that do not know it where they are read.
+
+    A function or a geometric quantity can be built before there is a
+    point to read it at, and is told later. This is that telling, done
+    once for an integral's dummy variable and once for the point a
+    restriction's parametrization gives.
+
+    Args:
+        expression: The expression to evaluate
+        variable: The point its parts are read at
+        skip: Nodes to leave alone, being read somewhere else
+
+    Returns:
+        The expression with its parts evaluated at the variable
+    """
+    replacements: dict[GraphNode, GraphNode] = {}
+    for node in as_graph(expression):
+        if node in skip:
+            continue
+        if isinstance(node, AbstractFunction | Restriction) and node.variable is None:
+            replacements[node] = node.reconstruct_with_variable(variable)
+        elif isinstance(node, AbstractGeometricQuantity) and node.point is None:
+            evaluated = node.reconstruct_with_variable(variable)
+            if evaluated is not node:
+                replacements[node] = evaluated
+    if len(replacements) == 0:
+        return expression
+    return replace(expression, replacements)
+
+
+class Restriction(AbstractExpression):
+    """A field read at the point a domain's parametrization gives it, ``iota^* u``.
+
+    The domain restricted to is a piece of a sub-entity domain, or the
+    union of such pieces before an integral over it has been split. Until
+    it is one piece there is no one inclusion to read the field through,
+    so a union answers nothing about its parametrization and the pull back refuses.
+    """
+
+    def __init__(
+        self,
+        field: AbstractExpression,
+        domain: AbstractParametrizedDomain,
+        variable: AbstractVariable | None = None,
+    ):
+        """Initialise.
+
+        Args:
+            field: The field being restricted, on the domain the pieces
+                are pieces of
+            domain: The domain it is restricted to
+            variable: Where the restriction is read, if that is known yet
+
+        Raises:
+            ValueError: If the domain is not made of sub-entities of the
+                field's own domain
+        """
+        field_domain = extract_domain(field)
+        if not isinstance(field_domain, AbstractParametrizedDomain):
+            raise ValueError(
+                f"A field on {field_domain!r} has no cells, so nothing includes a "
+                f"sub-entity into one of them."
+            )
+        for piece in _pieces_of(domain):
+            inner, cell_map = _inclusion_of(piece)
+            if inner.cell not in field_domain.cell_types:
+                raise ValueError(
+                    f"{inner.cell} is not a cell type of {field_domain!r}, so a field "
+                    f"there is not read on its sub-entities."
+                )
+            if cell_map != field_domain.parametrization(inner.cell):
+                raise ValueError(
+                    f"{piece!r} is not a piece of {field_domain!r}, so a field on that "
+                    f"domain is not read through this piece's parametrization."
+                )
+        self._field = field
+        self._domain = domain
+        self._variable = variable
+
+    @property
+    def field(self) -> AbstractExpression:
+        """The field being restricted."""
+        return self._field
+
+    @property
+    def domain(self) -> AbstractParametrizedDomain:
+        """The domain it is restricted to."""
+        return self._domain
+
+    @property
+    def variable(self) -> AbstractVariable | None:
+        """Where the restriction is read, if it has been told yet."""
+        return self._variable
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """A pullback of a function's values leaves them as they are."""
+        return self._field.value_shape
+
+    @property
+    def successors(self) -> set[GraphNode]:
+        """The successors of this node."""
+        return {self._field}
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return self._field, self._domain, self._variable
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get a component of the expression.
+
+        Reading a component and reading through a parametrization commute, the
+        values being left alone.
+        """
+        return Restriction(self._field.component(*indices), self._domain, self._variable)
+
+    def reconstruct_with_variable(self, variable: AbstractVariable) -> Restriction:
+        """Read this restriction at the given variable."""
+        return Restriction(self._field, self._domain, variable)
+
+    def restricted_to_piece(self, piece: AbstractParametrizedDomain) -> Restriction:
+        """Get this restriction onto one piece of the domain it restricts to.
+
+        What the split of an integral over a union does to it: the
+        inclusion a field is read through is a piece's and not a union's.
+
+        Args:
+            piece: One piece of this restriction's domain
+
+        Returns:
+            The same field restricted to that piece
+        """
+        return Restriction(self._field, piece)
+
+    @property
+    def image_point(self) -> ImagePoint:
+        """The point of the cell this restriction reads its field at.
+
+        The restriction's own point lies in the reference sub-entity's
+        coordinates, and the inclusion carries it into the cell's, where
+        the field's basis is defined.
+
+        Raises:
+            ValueError: If this restriction has not been told where it is
+                read, or is over a union rather than one piece
+        """
+        if self._variable is None:
+            raise ValueError(
+                "This restriction has not been told where it is read, so the point its "
+                "field is read at is not known."
+            )
+        if isinstance(self._domain, UnionDomain):
+            raise ValueError(
+                f"{self._domain!r} has a parametrization per piece, so there is no one inclusion to "
+                f"read a field through. Split an integral over it into one per piece first."
+            )
+        inclusion, _ = _inclusion_of(self._domain)
+        return ImagePoint(self._variable.to_entity_coordinates(inclusion.sub_entity), inclusion)
+
+    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
+        """Read the pulled back field at the included point.
+
+        The field is pulled back onto its cell by the walk that reaches
+        this node, and the restriction is what says where on that cell it
+        is read. Having said it, the restriction is done: what is left is
+        the field itself, evaluated.
+        """
+        field = node_map.get(self._field, self._field)
+        return evaluate_at(field, self.image_point)
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"Restriction({self._field!r}, {self._domain!r}, {self._variable!r})"
+
+
+def _pieces_of(domain: AbstractParametrizedDomain) -> tuple[AbstractParametrizedDomain, ...]:
+    """The pieces of a union, or the domain itself when it is one piece."""
+    if isinstance(domain, UnionDomain):
+        return domain.pieces
+    return (domain,)
+
+
+def _inclusion_of(
+    domain: AbstractParametrizedDomain,
+) -> tuple[SubEntityDomain, AbstractParametrization]:
+    """Read a piece as a sub-entity of a cell, mapped on by the cell's own map.
+
+    Args:
+        domain: One piece of the domain a field is restricted to
+
+    Returns:
+        The sub-entity domain it is parametrized from, and the map applied to it
+
+    Raises:
+        ValueError: If the piece is not a sub-entity of a cell mapped on
+    """
+    inner = getattr(domain, "inner_domain", None)
+    cell_map = getattr(domain, "map", None)
+    if not isinstance(inner, SubEntityDomain) or cell_map is None:
+        raise ValueError(
+            f"A field is restricted along the inclusion of a sub-entity into its cell, "
+            f"and {domain!r} is not one mapped on by a domain's parametrization."
+        )
+    return inner, cell_map
+
+
+def restrict(field: AbstractExpression, domain: AbstractParametrizedDomain) -> Restriction:
+    """Restrict a field to a domain made of sub-entities of its own.
+
+    Args:
+        field: The field being restricted
+        domain: The domain it is restricted to
+
+    Returns:
+        The field read at the point that domain's parametrization gives
+    """
+    return Restriction(field, domain)

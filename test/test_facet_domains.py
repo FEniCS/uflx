@@ -23,7 +23,17 @@ import math
 import pytest
 from conftest import Entity, Interval, LagrangeElement, Tetrahedron, Triangle
 
-from uflx import composed_domain, parametrized_domain
+from uflx import (
+    Coefficient,
+    TestFunction,
+    composed_domain,
+    dx,
+    function_space,
+    grad,
+    inner,
+    parametrized_domain,
+)
+from uflx.algorithms import pull_back_to_entity
 from uflx.domains import (
     RD,
     EntityDomain,
@@ -33,20 +43,26 @@ from uflx.domains import (
 )
 from uflx.expressions import RealScalar
 from uflx.geometry import (
+    AbstractGeometricQuantity,
     ImagePoint,
+    JacobianInverse,
     MetricTensor,
     TangentialProjector,
     UnitNormal,
     VolumeElement,
     _as_dense_matrix,
 )
+from uflx.graphs import as_graph
+from uflx.integrals import Integral
 from uflx.parametrizations import (
     AffineParametrization,
+    ComposedDomain,
     ComposedParametrization,
     facets_of,
     sub_entities_of,
 )
 from uflx.points import Point
+from uflx.restrictions import Restriction, restrict
 
 
 class Placed(Entity):
@@ -283,6 +299,7 @@ def test_the_facets_of_a_mesh_are_its_cells_facets_mapped_on(mesh):
     assert facets.geometric_dimension == 2
     assert facets.topological_dimension == 1
     for k, piece in enumerate(facets.pieces):
+        assert isinstance(piece, ComposedDomain)
         assert piece.inner_domain == sub_entity_domain(cell, 1, k)
         assert piece.map == mesh.parametrization(cell)
         assert piece.cell_types == (Interval(),)
@@ -359,3 +376,156 @@ def test_the_normal_of_a_facet_of_a_mapped_cell_is_not_the_mapped_normal(
     assert sum(c * c for c in normal) == pytest.approx(1.0)
     assert abs(normal[0]) == pytest.approx(1.0 / math.sqrt(5.0))
     assert abs(normal[1]) == pytest.approx(2.0 / math.sqrt(5.0))
+
+
+@pytest.fixture
+def space(mesh):
+    """A P1 space on the mesh of placed triangles."""
+    return function_space(mesh, LagrangeElement(PlacedTriangle(), 1))
+
+
+@pytest.fixture
+def facet(mesh):
+    """One facet of that mesh, a piece of the domain its facets make up."""
+    piece = facets_of(mesh).pieces[0]
+    assert isinstance(piece, ComposedDomain)
+    return piece
+
+
+def quantities_in(expression):
+    """The geometric quantities an expression reads, by class name."""
+    return {
+        type(node).__name__: node
+        for node in as_graph(expression).ordered_nodes()
+        if isinstance(node, AbstractGeometricQuantity)
+    }
+
+
+def test_a_restriction_is_the_field_it_restricts(space, facet):
+    """A pullback of a function leaves the values alone, so only where changes."""
+    u = Coefficient(space)
+
+    restricted = restrict(u, facet)
+
+    assert isinstance(restricted, Restriction)
+    assert restricted.field == u
+    assert restricted.domain == facet
+    assert restricted.value_shape == u.value_shape
+    assert restricted.successors == {u}
+    assert restricted == restrict(u, facet)
+    assert hash(restricted) == hash(restrict(u, facet))
+
+
+def test_a_field_is_restricted_only_to_pieces_of_its_own_domain(space, facet):
+    """The parametrization has to be the one the field's own cells are mapped by."""
+    elsewhere = parametrized_domain(LagrangeElement(PlacedTriangle(), 2, (2,)))
+    u = Coefficient(space)
+
+    with pytest.raises(ValueError, match="is not a piece of"):
+        restrict(u, facets_of(elsewhere).pieces[0])
+
+
+def test_a_field_is_restricted_along_an_inclusion_and_not_along_any_map(space, mesh):
+    """Restriction is reading a field on a sub-entity of its own cells."""
+    u = Coefficient(space)
+
+    with pytest.raises(ValueError, match="not one mapped on by a domain's parametrization"):
+        restrict(u, mesh)
+
+
+def test_an_integral_over_a_facet_takes_a_restricted_field(space, facet):
+    """A field on the mesh is integrated over a facet by being read there.
+
+    Without the restriction the integral refuses, as it should: a
+    function reaches another domain through a map and not by being
+    integrated there.
+    """
+    u = Coefficient(space)
+    v = TestFunction(space)
+
+    integral = inner(restrict(u, facet), restrict(v, facet)) * dx(facet)
+
+    assert isinstance(integral, Integral)
+    assert integral.domain == facet
+    assert integral.variable.domain == facet
+
+    with pytest.raises(ValueError, match="Cannot integrate a function on"):
+        inner(u, v) * dx(facet)
+
+
+def test_pulling_a_facet_integral_back_lands_on_the_reference_facet(space, facet):
+    """The measure moves onto the facet's own coordinate domain and leaves its density.
+
+    That density is the facet's volume element, read at the facet's own
+    point: the factor an exterior facet integral picks up, from the one
+    measure rather than from a measure of its own.
+    """
+    v = TestFunction(space)
+
+    pulled = pull_back_to_entity(restrict(v, facet) * dx(facet))
+
+    assert isinstance(pulled, Integral)
+    assert pulled.domain == EntityDomain(Interval())
+    assert pulled.variable.domain == EntityDomain(Interval())
+    volume_element = quantities_in(pulled.integrand)["VolumeElement"]
+    assert volume_element == VolumeElement(facet, pulled.variable)
+
+
+def test_a_restricted_fields_basis_is_read_at_the_included_point(space, facet):
+    """The cell's basis, at the point the facet's inclusion gives in the cell."""
+    v = TestFunction(space)
+
+    pulled = pull_back_to_entity(restrict(v, facet) * dx(facet))
+    assert isinstance(pulled, Integral)
+
+    (function,) = [
+        node
+        for node in as_graph(pulled.integrand).ordered_nodes()
+        if isinstance(node, TestFunction)
+    ]
+    variable = function.variable
+    assert variable == ImagePoint(
+        pulled.variable.to_entity_coordinates(Interval()), facet.inner_domain
+    )
+    assert variable is not None
+    assert variable.domain == EntityDomain(PlacedTriangle())
+    assert function.in_entity_coordinates
+
+
+def test_a_gradient_inside_a_restriction_is_the_cells_gradient(space, facet, mesh):
+    """Not the facet's: a restriction is in the integrand precisely so this holds.
+
+    The inverse Jacobian carrying the entity gradient is the mesh's, read
+    at the included point, where the facet's own would be the tangential
+    one and would lose the derivative across the facet.
+    """
+    v = TestFunction(space)
+    normal = UnitNormal(facet)
+
+    pulled = pull_back_to_entity(inner(restrict(grad(v), facet), normal) * dx(facet))
+    assert isinstance(pulled, Integral)
+
+    quantities = quantities_in(pulled.integrand)
+    assert quantities["JacobianInverse"] == JacobianInverse(
+        mesh, ImagePoint(pulled.variable.to_entity_coordinates(Interval()), facet.inner_domain)
+    )
+    assert quantities["UnitNormal"] == UnitNormal(facet, pulled.variable)
+    assert quantities["VolumeElement"] == VolumeElement(facet, pulled.variable)
+
+
+def test_a_restriction_to_a_union_has_no_one_inclusion_to_read_through(space, mesh):
+    """Several pieces, several inclusions, so the point is not known until the split."""
+    v = TestFunction(space)
+    facets = facets_of(mesh)
+
+    integral = restrict(v, facets) * dx(facets)
+    assert isinstance(integral, Integral)
+    (restriction,) = [
+        node
+        for node in as_graph(integral.integrand).ordered_nodes()
+        if isinstance(node, Restriction)
+    ]
+
+    assert restriction.variable == integral.variable
+    with pytest.raises(ValueError, match="parametrization per piece"):
+        restriction.image_point
