@@ -22,6 +22,7 @@ from uflx.geometry import (
     SpatialCoordinate,
     TangentialProjector,
     UnitNormal,
+    VolumeElement,
     expand_geometry,
 )
 from uflx.graphs import as_graph
@@ -286,6 +287,7 @@ def test_a_jacobian_without_a_point_knows_no_cell(mixed_mesh):
 geometric_quantities = [
     Jacobian,
     JacobianDeterminant,
+    VolumeElement,
     MetricTensor,
     TangentialProjector,
     UnitNormal,
@@ -368,10 +370,10 @@ def test_the_metric_is_symmetric(cell, gdim, lagrange_element):
 
 
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
-def test_the_volume_scaling_is_the_metrics_gram_determinant(cell, gdim, lagrange_element):
+def test_the_volume_element_is_the_metrics_gram_determinant(cell, gdim, lagrange_element):
     """On a manifold the factor an integral picks up is sqrt(det g).
 
-    For a square map the same identity holds, but JacobianDeterminant
+    For a square map the same identity holds, but the volume element
     takes the direct and much cheaper abs(det J) instead, so the two are
     equal as numbers without being equal as expressions.
     """
@@ -385,9 +387,42 @@ def test_the_volume_scaling_is_the_metrics_gram_determinant(cell, gdim, lagrange
     g = MetricTensor(domain, point).expand_geometry()
     assert isinstance(g, Matrix)
 
-    assert simplify(abs(Sqrt(g.compute_determinant()))) == simplify(
-        JacobianDeterminant(domain, point).expand_geometry()
+    assert simplify(Sqrt(g.compute_determinant())) == simplify(
+        VolumeElement(domain, point).expand_geometry()
     )
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_volume_element_is_the_determinants_magnitude_on_a_cell(cell, gdim, lagrange_element):
+    """Where the map is square the density is abs(det J), and the sign is kept."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    if gdim != tdim:
+        pytest.skip("A manifold, so the determinant does not exist.")
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    assert simplify(abs(JacobianDeterminant(domain, point).expand_geometry())) == simplify(
+        VolumeElement(domain, point).expand_geometry()
+    )
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_a_manifold_map_has_no_determinant(cell, gdim, lagrange_element):
+    """A non-square matrix has none, and the density is what was wanted anyway."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    if gdim == tdim:
+        pytest.skip("Not a manifold, so the determinant exists.")
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    with pytest.raises(ValueError, match="has no determinant"):
+        JacobianDeterminant(domain, point).value_shape
+    with pytest.raises(ValueError, match="has no determinant"):
+        JacobianDeterminant(domain, point).expand_geometry()
+
+    assert VolumeElement(domain, point).value_shape == ()
 
 
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)

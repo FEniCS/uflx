@@ -506,7 +506,7 @@ class MetricTensor(AbstractGeometricQuantity):
 
     Its determinant is the squared volume scaling, so ``sqrt(det g)`` is
     the factor an integral picks up on being pulled back, which is what
-    :class:`JacobianDeterminant` gives.
+    :class:`VolumeElement` gives.
     """
 
     @property
@@ -519,6 +519,35 @@ class MetricTensor(AbstractGeometricQuantity):
         """Expand geometry."""
         j = _as_dense_matrix(self._jacobian.expand_geometry())
         return j.transpose().matmat(j)
+
+
+class VolumeElement(AbstractGeometricQuantity):
+    """The density a parametrization induces, ``sqrt(det g)``.
+
+    The factor an integral picks up on being pulled back to a cell's
+    coordinates: the volume the map gives a unit volume of the cell. On a
+    manifold it is ``sqrt(det(J^T J))``, and where the map is square it
+    reduces to ``abs(det J)``, which is cheaper.
+
+    Never negative, being a density rather than a volume form. Integrating
+    a function needs only this. The sign a density discards is the
+    orientation the map gives the cell, which :class:`JacobianDeterminant`
+    keeps where the map is square.
+    """
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        return ()
+
+    def expand_geometry(self) -> AbstractExpression:
+        """Expand geometry."""
+        gdim, tdim = self._jacobian.value_shape
+        determinant = _as_dense_matrix(self._jacobian.expand_geometry()).compute_determinant()
+        if gdim == tdim:
+            return abs(determinant)
+        # A non-square map's pseudo-determinant is a square root already.
+        return determinant
 
 
 class TangentialProjector(AbstractGeometricQuantity):
@@ -613,17 +642,41 @@ class UnitNormal(AbstractGeometricQuantity):
 
 
 class JacobianDeterminant(AbstractGeometricQuantity):
-    """The determinant of the Jacobian."""
+    """The signed determinant of a square Jacobian.
+
+    Defined only where the map is square, a non-square matrix having no
+    determinant. The factor an integral picks up on being pulled back is
+    :class:`VolumeElement`, which is defined either way and is never
+    negative.
+
+    The sign is the orientation the map gives the cell. Nothing consumes
+    it yet, and it is named because it is what a density throws away.
+    """
+
+    def _check_square(self) -> None:
+        """Check that the map has a determinant at all.
+
+        Raises:
+            ValueError: If the map is not square
+        """
+        gdim, tdim = self._jacobian.value_shape
+        if gdim != tdim:
+            raise ValueError(
+                f"A map from {tdim} coordinates into {gdim} has no determinant. The "
+                f"factor an integral picks up on being pulled back is VolumeElement."
+            )
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
+        self._check_square()
         return ()
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
+        self._check_square()
         j = _as_dense_matrix(self._jacobian.expand_geometry())
-        return abs(j.compute_determinant())
+        return j.compute_determinant()
 
 
 class JacobianInverse(AbstractGeometricQuantity):
