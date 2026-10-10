@@ -90,16 +90,17 @@ class SpatialCoordinate(AbstractExpression):
 
 
 def _as_dense_matrix(jacobian: AbstractExpression) -> Matrix:
-    """Densify a Jacobian so a determinant, inverse or transpose can be taken.
+    """Write a Jacobian out entry by entry, so it can be inverted or reduced.
 
-    An identity map's Jacobian is an Identity, which stays symbolic in a
-    matrix product but has to be written out to be inverted.
+    A map's Jacobian need not already be a Matrix: an identity map gives
+    an Identity, and a composed map gives the MatrixProduct of the chain
+    rule. Both have to be written out before a determinant, an inverse or
+    a transpose can be taken of them.
     """
-    if isinstance(jacobian, Identity):
-        size = jacobian.size
-        return Matrix([[jacobian.component(i, j) for j in range(size)] for i in range(size)])
-    assert isinstance(jacobian, Matrix)
-    return jacobian
+    if isinstance(jacobian, Matrix):
+        return jacobian
+    rows, cols = jacobian.value_shape
+    return Matrix([[jacobian.component(i, j) for j in range(cols)] for i in range(rows)])
 
 
 class PushedForwardPoint(AbstractPoint):
