@@ -295,10 +295,14 @@ class IntegralSum:
 class Measure(AbstractMeasure):
     """An integral measure."""
 
-    def __init__(
-        self, dim: int | None = None, codim: int | None = None, boundary_only: bool = False
-    ):
-        """Initialise."""
+    def __init__(self, dim: int | None, codim: int | None, boundary_only: bool):
+        """Initialise.
+
+        Args:
+            dim: The topological dimension integrated over, if the measure fixes one
+            codim: The codimension integrated over, if the measure fixes one
+            boundary_only: Whether only entities on the boundary are integrated over
+        """
         self._dim = dim
         self._codim = codim
         self._boundary_only = boundary_only
@@ -324,4 +328,4 @@ class Measure(AbstractMeasure):
         )
 
 
-dx = Measure(codim=0)
+dx = Measure(dim=None, codim=0, boundary_only=False)
