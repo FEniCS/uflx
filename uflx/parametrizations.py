@@ -30,7 +30,7 @@ from uflx.domains import (
     EntityDomain,
 )
 from uflx.entities import AbstractEntity
-from uflx.expressions import AbstractExpression, MatrixProduct, expression_sum
+from uflx.expressions import AbstractExpression, MatrixProduct, RealScalar, expression_sum
 from uflx.finite_elements import AbstractMappedFiniteElement
 from uflx.function_spaces import function_space
 from uflx.functions import AbstractVariable
@@ -206,6 +206,116 @@ class ComposedParametrization(AbstractParametrization):
     def __hash__(self) -> int:
         """Hash."""
         return hash(("uflx.ComposedParametrization", self._inner, self._outer))
+
+
+class AffineParametrization(AbstractParametrization):
+    """A map given in closed form by its matrix and its offset, ``X -> A X + b``.
+
+    Enough to describe the inclusion of a reference sub-entity into its
+    cell, or a linear change of the coordinates a domain lives in, with no
+    finite element involved. The numbers are the caller's: an inclusion's
+    matrix and offset come from the reference coordinates of the cell,
+    which belong to whoever defines the elements on it.
+    """
+
+    def __init__(
+        self,
+        source: AbstractCoordinateDomain,
+        matrix: Sequence[Sequence[float]],
+        offset: Sequence[float],
+    ):
+        """Initialise.
+
+        Args:
+            source: The coordinate domain this map starts from
+            matrix: The rows of the matrix of the map
+            offset: Where the source's origin lands
+
+        Raises:
+            ValueError: If the matrix and the offset do not describe a map
+                out of the source
+        """
+        self._source = source
+        self._matrix = tuple(tuple(float(a) for a in row) for row in matrix)
+        self._offset = tuple(float(b) for b in offset)
+        if len({len(row) for row in self._matrix}) > 1:
+            raise ValueError("Every row of the matrix must be the same length.")
+        if len(self._offset) != len(self._matrix):
+            raise ValueError("The offset must have one entry per row of the matrix.")
+        if len(self._matrix) == 0:
+            raise ValueError("A map must land in at least one coordinate.")
+        if len(self._matrix[0]) != source.geometric_dimension:
+            raise ValueError(
+                f"A map out of {source!r} takes {source.geometric_dimension} coordinates, "
+                f"so its matrix must have that many columns."
+            )
+
+    @property
+    def source(self) -> AbstractCoordinateDomain:
+        """The coordinate domain this map starts from."""
+        return self._source
+
+    @property
+    def target_dimension(self) -> int:
+        """This map lands in as many coordinates as the matrix has rows."""
+        return len(self._matrix)
+
+    @property
+    def matrix(self) -> tuple[tuple[float, ...], ...]:
+        """The rows of the matrix of this map."""
+        return self._matrix
+
+    @property
+    def offset(self) -> tuple[float, ...]:
+        """Where the source's origin lands."""
+        return self._offset
+
+    def value(self, point: AbstractVariable) -> AbstractExpression:
+        """Multiply the matrix by the point and add the offset."""
+        return Vector(
+            [
+                expression_sum(
+                    (RealScalar(a) * point.component(j) for j, a in enumerate(row)),
+                    default=RealScalar(0.0),
+                )
+                + RealScalar(b)
+                for row, b in zip(self._matrix, self._offset, strict=True)
+            ]
+        )
+
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
+        """An affine map's derivative is its matrix."""
+        return Matrix([[RealScalar(a) for a in row] for row in self._matrix])
+
+    @property
+    def is_affine(self) -> bool:
+        """An affine map is affine."""
+        return True
+
+    @property
+    def is_identity(self) -> bool:
+        """Whether this map leaves the coordinates it is given untouched."""
+        identity = tuple(
+            tuple(float(i == j) for j in range(len(self._matrix))) for i in range(len(self._matrix))
+        )
+        return self._matrix == identity and not any(self._offset)
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"AffineParametrization({self._source!r}, {self._matrix}, {self._offset})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, AffineParametrization)
+            and other._source == self._source
+            and other._matrix == self._matrix
+            and other._offset == self._offset
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.AffineParametrization", self._source, self._matrix, self._offset))
 
 
 class ParametrizedDomain(AbstractCellularDomain):
@@ -386,4 +496,22 @@ def composed_domain(
     Returns:
         A domain whose geometry is the domain's followed by the map
     """
-    return ComposedDomain(domain, outer_map)
+    return ComposedDomain(domain, map)
+
+
+def affine_parametrization(
+    source: AbstractCoordinateDomain,
+    matrix: Sequence[Sequence[float]],
+    offset: Sequence[float],
+) -> AffineParametrization:
+    """Create a map given by its matrix and its offset.
+
+    Args:
+        source: The coordinate domain the map starts from
+        matrix: The rows of the matrix of the map
+        offset: Where the source's origin lands
+
+    Returns:
+        That affine map
+    """
+    return AffineParametrization(source, matrix, offset)
