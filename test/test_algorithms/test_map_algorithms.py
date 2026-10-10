@@ -221,5 +221,5 @@ def test_a_variable_pulls_back_only_to_a_cell_of_its_domain(lagrange_element):
     v = FiniteElementVariable(mesh, "x")
 
     assert v.to_entity_coordinates(triangle).domain == EntityDomain(triangle)
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError, match="not a cell type"):
         v.to_entity_coordinates(facet)
