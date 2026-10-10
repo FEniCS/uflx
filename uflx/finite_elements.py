@@ -13,9 +13,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import prod
+from typing import TYPE_CHECKING
 
 from uflx.entities import AbstractEntity
 from uflx.maps import AbstractValueMap
+
+if TYPE_CHECKING:
+    from uflx.domains import AbstractDomain
 
 
 class AbstractFiniteElement(ABC):
@@ -43,12 +47,18 @@ class AbstractFiniteElement(ABC):
         """Check if this element is real-valued."""
 
     @abstractmethod
-    def ambient_value_shape(self, geometric_dimension: int) -> tuple[int, ...]:
-        """Return the shape of the value space in ambient coordinates."""
+    def ambient_value_shape(self, domain: AbstractDomain) -> tuple[int, ...]:
+        """Return the shape of the value space in a domain's ambient coordinates.
 
-    def ambient_value_size(self, geometric_dimension: int) -> int:
-        """Return the value size of the value space in ambient coordinates."""
-        return prod(self.ambient_value_shape(geometric_dimension))
+        Args:
+            domain: The domain whose ambient coordinates the values are
+                expressed in. Taking the domain rather than its dimension
+                leaves no room to pass a topological one.
+        """
+
+    def ambient_value_size(self, domain: AbstractDomain) -> int:
+        """Return the value size of the value space in a domain's ambient coordinates."""
+        return prod(self.ambient_value_shape(domain))
 
     @property
     @abstractmethod
@@ -117,6 +127,8 @@ class AbstractMappedFiniteElement(AbstractFiniteElement):
         """
         return self.cell.is_simplex and self.lagrange_superdegree == 1
 
-    def ambient_value_shape(self, geometric_dimension: int) -> tuple[int, ...]:
-        """Return the shape of the value space in ambient coordinates."""
-        return self.value_map.ambient_value_shape(self.entity_value_shape, geometric_dimension)
+    def ambient_value_shape(self, domain: AbstractDomain) -> tuple[int, ...]:
+        """Return the shape of the value space in a domain's ambient coordinates."""
+        return self.value_map.ambient_value_shape(
+            self.entity_value_shape, domain.geometric_dimension
+        )

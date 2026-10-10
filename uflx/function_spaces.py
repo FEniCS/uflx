@@ -70,10 +70,9 @@ class FunctionSpace(AbstractMappedFunctionSpace):
                 raise ValueError(
                     f"Element on cell {element.cell} is not defined on a cell of its domain."
                 )
-        gdim = domain.geometric_dimension
-        shape = elements[0].ambient_value_shape(gdim)
+        shape = elements[0].ambient_value_shape(domain)
         for element in elements[1:]:
-            if element.ambient_value_shape(gdim) != shape:
+            if element.ambient_value_shape(domain) != shape:
                 raise ValueError(
                     "Elements in a functions space must have the same ambient value shape."
                 )
@@ -96,7 +95,7 @@ class FunctionSpace(AbstractMappedFunctionSpace):
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the function space."""
-        return self.elements[0].ambient_value_shape(self.domain.geometric_dimension)
+        return self.elements[0].ambient_value_shape(self.domain)
 
     def __repr__(self) -> str:
         """Representation."""
