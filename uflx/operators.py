@@ -6,11 +6,11 @@
 """Operators."""
 
 from uflx.complex import conj
-from uflx.domains import AbstractDomain, AbstractParametrizedDomain
+from uflx.domains import AbstractParametrizedDomain
 from uflx.expressions import AbstractExpression, BinaryOperator, Sqrt, UnaryOperator
-from uflx.functions import AbstractFunction
+from uflx.functions import AbstractFunction, extract_domain
 from uflx.geometry import JacobianInverse
-from uflx.graphs import GraphNode, as_graph
+from uflx.graphs import GraphNode
 from uflx.maps import PushedForward
 from uflx.tensors import Identity, Tensor, Vector, zero
 
@@ -122,18 +122,6 @@ class Grad(UnaryOperator):
 
         # assert isinstance(self.argument, EvaluatedPhysicalBasisFunction)
         argument = node_map.get(self.argument, self.argument)
-
-        def extract_domain(node: GraphNode) -> AbstractDomain:
-            """Extract the domain associated with a node."""
-            domain: AbstractDomain | None = None
-            for i in as_graph(node).descendants(node):
-                if isinstance(i, AbstractFunction) and not i.in_entity_coordinates:
-                    if domain is None:
-                        domain = i.function_space.domain
-                    else:
-                        assert domain == i.function_space.domain
-            assert domain is not None
-            return domain
 
         domain = extract_domain(self)
         assert isinstance(domain, AbstractParametrizedDomain)

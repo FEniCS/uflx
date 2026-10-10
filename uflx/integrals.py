@@ -20,6 +20,7 @@ from uflx.functions import (
     AbstractVariable,
     FiniteElementVariable,
     create_variable,
+    extract_domain,
 )
 from uflx.geometry import AbstractGeometricQuantity, JacobianDeterminant
 from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
@@ -166,14 +167,7 @@ class Integral(AbstractIntegral):
         Read off the functions in the integrand that are in ambient
         coordinates, which must all agree.
         """
-        domain = None
-        for node in self.graph.descendants(self._integrand):
-            if isinstance(node, AbstractFunction) and not node.in_entity_coordinates:
-                if domain is None:
-                    domain = node.function_space.domain
-                else:
-                    assert domain == node.function_space.domain
-        assert domain is not None
+        domain = extract_domain(self._integrand)
         assert isinstance(domain, AbstractCellularDomain)
         return domain
 
