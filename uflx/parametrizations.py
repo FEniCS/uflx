@@ -18,6 +18,8 @@ finite element map at all. A mesh of intervals in R^1 composed with
 interpolated through the nodes of a higher degree coordinate element.
 """
 
+from __future__ import annotations
+
 from collections.abc import Sequence
 
 from uflx.basis_functions import EvaluatedBasisFunction
@@ -267,6 +269,12 @@ class ParametrizedDomain(AbstractParametrizedDomain):
         """Get the element giving the basis of the given cell type's parametrization."""
         return self._elements[cell]
 
+    def restricted_to(self, cell: AbstractEntity) -> ParametrizedDomain:
+        """Keep the element of one cell type, which is a domain of that type alone."""
+        if cell not in self._elements:
+            raise ValueError(f"{cell} is not a cell type of this domain.")
+        return ParametrizedDomain((self._elements[cell],))
+
     def __repr__(self) -> str:
         """Representation."""
         elements = ", ".join(repr(e) for e in self._elements.values())
@@ -328,6 +336,10 @@ class ComposedDomain(AbstractParametrizedDomain):
     def parametrization(self, cell: AbstractEntity) -> ComposedParametrization:
         """Get the inner map for this cell, followed by the outer map."""
         return ComposedParametrization(self._domain.parametrization(cell), self._map)
+
+    def restricted_to(self, cell: AbstractEntity) -> ComposedDomain:
+        """Restrict the domain being mapped on, and keep mapping it the same way."""
+        return ComposedDomain(self._domain.restricted_to(cell), self._map)
 
     def __repr__(self) -> str:
         """Representation."""

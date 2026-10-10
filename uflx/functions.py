@@ -216,9 +216,31 @@ class AbstractFunction(AbstractExpression):
             return self.variable.in_entity_coordinates
         return isinstance(self.function_space.domain, EntityDomain)
 
+    def restricted_to(self, cell: AbstractEntity) -> AbstractFunction:
+        """Get this function on its space restricted to one cell type.
+
+        Args:
+            cell: A cell type of this function's space's domain
+
+        Returns:
+            The same function on the restricted space, or this function
+            when its space does not change
+        """
+        space = self.function_space
+        if not isinstance(space, AbstractMappedFunctionSpace):
+            return self
+        restricted = space.restricted_to(cell)
+        if restricted == space:
+            return self
+        return self.reconstruct_with_space(restricted)
+
     @abstractmethod
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
+
+    @abstractmethod
+    def reconstruct_with_space(self, space: AbstractFunctionSpace) -> Self:
+        """Reconstruct this function in another function space."""
 
     @abstractmethod
     def diff(self, index: int) -> AbstractFunction:
@@ -314,6 +336,10 @@ class Argument(AbstractFunction):
         """Reconstruct this function taking the input variable as input."""
         return self.__class__(self._space, self._component, variable)
 
+    def reconstruct_with_space(self, space: AbstractFunctionSpace) -> Self:
+        """Reconstruct this function in another function space."""
+        return self.__class__(space, self._component, self._variable)
+
     @property
     def function_space(self) -> AbstractFunctionSpace:
         """The function space that this function lives in."""
@@ -388,6 +414,10 @@ class Coefficient(AbstractFunction):
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
         return self.__class__(self._space, self._label, variable)
+
+    def reconstruct_with_space(self, space: AbstractFunctionSpace) -> Self:
+        """Reconstruct this function in another function space."""
+        return self.__class__(space, self._label, self._variable)
 
     @property
     def function_space(self) -> AbstractFunctionSpace:
@@ -485,6 +515,10 @@ class TestFunction(Argument):
         """Reconstruct this function taking the input variable as input."""
         return self.__class__(self._space, variable)
 
+    def reconstruct_with_space(self, space: AbstractFunctionSpace) -> Self:
+        """Reconstruct this function in another function space."""
+        return self.__class__(space, self._variable)
+
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
@@ -525,6 +559,10 @@ class TrialFunction(Argument):
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
         return self.__class__(self._space, variable)
+
+    def reconstruct_with_space(self, space: AbstractFunctionSpace) -> Self:
+        """Reconstruct this function in another function space."""
+        return self.__class__(space, self._variable)
 
     @property
     def init_args(self) -> tuple[Any, ...]:
