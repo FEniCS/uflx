@@ -12,11 +12,13 @@ from itertools import count
 from typing import Any, cast
 
 from uflx.algorithms import replace
-from uflx.domains import AbstractParametrizedDomain
+from uflx.domains import AbstractCellularDomain, AbstractParametrizedDomain
+from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
 from uflx.functions import (
     AbstractFunction,
     AbstractVariable,
+    FiniteElementVariable,
     create_variable,
 )
 from uflx.geometry import AbstractJacobian, JacobianDeterminant
@@ -80,6 +82,14 @@ class AbstractIntegral(ABC):
     @abstractmethod
     def variable(self) -> AbstractVariable:
         """The dummy variable of this integral."""
+
+    def __add__(self, other: Any) -> IntegralSum:
+        """Add to another integral, or to a sum of them."""
+        if isinstance(other, IntegralSum):
+            return IntegralSum((self, *other.terms))
+        if isinstance(other, AbstractIntegral):
+            return IntegralSum((self, other))
+        return NotImplemented
 
 
 class Integral(AbstractIntegral):
@@ -149,9 +159,13 @@ class Integral(AbstractIntegral):
         """The arguments used to initialise this object."""
         return self._integrand, self._measure, self._variable
 
-    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
-        """Pull the node back to the entity's coordinates."""
-        integrand = node_map.get(self._integrand, self._integrand)
+    @property
+    def domain(self) -> AbstractCellularDomain:
+        """The domain this integral is over.
+
+        Read off the functions in the integrand that are in ambient
+        coordinates, which must all agree.
+        """
         domain = None
         for node in self.graph.descendants(self._integrand):
             if isinstance(node, AbstractFunction) and not node.in_entity_coordinates:
@@ -160,14 +174,56 @@ class Integral(AbstractIntegral):
                 else:
                     assert domain == node.function_space.domain
         assert domain is not None
+        assert isinstance(domain, AbstractCellularDomain)
+        return domain
+
+    def restricted_to(self, cell: AbstractEntity) -> Integral:
+        """Get this integral over the part of its domain made of one cell type.
+
+        Args:
+            cell: A cell type of this integral's domain
+
+        Returns:
+            The same integrand over that cell type alone
+        """
+        restricted_domain = self.domain.restricted_to(cell)
+        restrictions: dict[GraphNode, GraphNode] = {}
+        for node in as_graph(self._integrand):
+            if isinstance(node, AbstractFunction):
+                restricted = node.restricted_to(cell)
+                if restricted is not node:
+                    restrictions[node] = restricted
+        integrand = replace(self._integrand, restrictions) if restrictions else self._integrand
+        assert isinstance(integrand, AbstractExpression)
+
+        variable = self._variable
+        if isinstance(variable, FiniteElementVariable):
+            variable = variable.to_ambient_coordinates(restricted_domain)
+        return Integral(integrand, self._measure, variable)
+
+    def split_by_cell_type(self) -> IntegralSum | None:
+        """Split this integral into one over each cell type of its domain.
+
+        Returns:
+            A sum of integrals, one per cell type, or None when the domain
+            has one cell type and there is nothing to split
+        """
+        cell_types = self.domain.cell_types
+        if len(cell_types) == 1:
+            return None
+        return IntegralSum(tuple(self.restricted_to(cell) for cell in cell_types))
+
+    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
+        """Pull the node back to the entity's coordinates."""
+        integrand = node_map.get(self._integrand, self._integrand)
+        domain = self.domain
         assert isinstance(domain, AbstractParametrizedDomain)
         if len(domain.cell_types) != 1:
-            # Each cell type has its own map, hence its own measure, so this
-            # wants one integral per cell type and a sum of integrals to
-            # hold them.
-            raise NotImplementedError(
-                "Pulling an integral back over a domain with several cell types is "
-                "not supported yet."
+            # Each cell type has its own coordinate domain, so there is no one
+            # set of coordinates to pull back to. Split first.
+            raise ValueError(
+                "Cannot pull an integral over several cell types back to one cell's "
+                "coordinates. Split it by cell type first."
             )
         (cell,) = domain.cell_types
         det = abs(JacobianDeterminant(domain))
@@ -179,6 +235,67 @@ class Integral(AbstractIntegral):
     def __repr__(self) -> str:
         """Representation."""
         return f"Integral(variable={self._variable!r})"
+
+
+class IntegralSum:
+    """A sum of integrals.
+
+    An integral over a domain of several cell types is the sum of one
+    integral per cell type, since each has its own coordinate domain, its
+    own map out of it and so its own measure. This holds those terms.
+
+    Not called a form: LANGUAGE.md defines a form as a multilinear
+    functional and says a UFLx form need not be a sum of integrals.
+    """
+
+    def __init__(self, terms: tuple[AbstractIntegral, ...]):
+        """Initialise.
+
+        Args:
+            terms: The integrals being added
+        """
+        if len(terms) == 0:
+            raise ValueError("Cannot create an empty sum of integrals.")
+        self._terms = terms
+
+    @property
+    def terms(self) -> tuple[AbstractIntegral, ...]:
+        """The integrals being added."""
+        return self._terms
+
+    @property
+    def successors(self) -> set[GraphNode]:
+        """The successors of this node."""
+        return set(self._terms)
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (self._terms,)
+
+    def __add__(self, other: Any) -> IntegralSum:
+        """Add another integral, or another sum of them, flattening the result."""
+        if isinstance(other, IntegralSum):
+            return IntegralSum((*self._terms, *other.terms))
+        if isinstance(other, AbstractIntegral):
+            return IntegralSum((*self._terms, other))
+        return NotImplemented
+
+    def __eq__(self, other) -> bool:
+        """Check for equality.
+
+        The order of the terms counts, as it does for any other sum in
+        UFLx before it is simplified.
+        """
+        return isinstance(other, IntegralSum) and self._terms == other._terms
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.IntegralSum", self._terms))
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return "IntegralSum(" + ", ".join(repr(i) for i in self._terms) + ")"
 
 
 class Measure(AbstractMeasure):
