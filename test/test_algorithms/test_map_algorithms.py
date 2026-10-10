@@ -1,5 +1,7 @@
 """Test map algorithms."""
 
+import pytest
+
 from uflx import TestFunction, TrialFunction, dx, function_space, grad, inner, parametrized_domain
 from uflx.algorithms import pull_back_to_entity
 from uflx.domains import EntityDomain
@@ -209,3 +211,15 @@ def test_pulling_a_variable_back_changes_only_where_it_lives(lagrange_element):
     assert pulled.domain == EntityDomain(element.cell)
     assert pulled != v
     assert len({pulled, v}) == 2
+
+
+def test_a_variable_pulls_back_only_to_a_cell_of_its_domain(lagrange_element):
+    """A facet is a sub-entity of a cell, not a cell of the mesh."""
+    mesh = parametrized_domain(lagrange_element("triangle", 1, (3,)))
+    (triangle,) = mesh.cell_types
+    (facet,) = {f for f in triangle.sub_entities(1)}
+    v = FiniteElementVariable(mesh, "x")
+
+    assert v.to_entity_coordinates(triangle).domain == EntityDomain(triangle)
+    with pytest.raises(AssertionError):
+        v.to_entity_coordinates(facet)
