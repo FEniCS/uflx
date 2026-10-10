@@ -3,13 +3,11 @@
 from typing import Any, Protocol, runtime_checkable
 
 from uflx.algorithms import replace
-from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import RD, AbstractParametrizedDomain, EntityDomain
-from uflx.expressions import AbstractExpression, expression_sum
-from uflx.function_spaces import function_space
+from uflx.expressions import AbstractExpression
 from uflx.graphs import GraphNode, as_graph
 from uflx.points import AbstractPoint, Point
-from uflx.tensors import FlattenedTensorMap, Identity, Matrix
+from uflx.tensors import Identity, Matrix
 
 
 @runtime_checkable
@@ -125,23 +123,18 @@ class PushedForwardPoint(AbstractPoint):
         """Expand geometry."""
         if len(self.domain.cell_types) != 1:
             raise NotImplementedError("Only domains with exactly on element supported for now.")
-        element = self.domain.parametrization_element(self.domain.cell_types[0])
-        (dim,) = element.entity_value_shape
+        (cell,) = self.domain.cell_types
+        gdim = self.domain.geometric_dimension
+        value = (0,) * cell.topological_dimension
 
         components = [
-            expression_sum(
-                FlattenedTensorMap((i // dim, i % dim), (dim,))
-                * EvaluatedBasisFunction(
-                    function_space(self.domain, element), i, self.entity_point, component=j
-                )
-                for i in range(element.dim)
-            )
-            for j in range(dim)
+            self.domain.parametrization_component(cell, self.entity_point, j, value)
+            for j in range(gdim)
         ]
 
-        # The expansion is an interpolation sum of coordinate dofs, so what
-        # comes out is explicit ambient coordinates.
-        return Point(components, RD(dim))
+        # The parametrization's values are ambient coordinates, so what
+        # comes out is a point of R^gdim rather than one of this domain.
+        return Point(components, RD(gdim))
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
@@ -269,23 +262,17 @@ class Jacobian(AbstractExpression):
         if len(self.domain.cell_types) > 1:
             raise NotImplementedError()
         (cell,) = self.domain.cell_types
-        element = self.domain.parametrization_element(cell)
 
         assert self.point is not None
 
         return Matrix(
             [
                 [
-                    expression_sum(
-                        FlattenedTensorMap((i // gdim, i % gdim), (gdim,))
-                        * EvaluatedBasisFunction(
-                            function_space(self.domain, element),
-                            i,
-                            self.point,
-                            derivative=tuple(1 if d == col else 0 for d in range(tdim)),
-                            component=row,
-                        )
-                        for i in range(element.dim)
+                    self.domain.parametrization_component(
+                        cell,
+                        self.point,
+                        row,
+                        tuple(1 if d == col else 0 for d in range(tdim)),
                     )
                     for col in range(tdim)
                 ]

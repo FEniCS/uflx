@@ -9,7 +9,13 @@ import pytest
 from conftest import BlockedIdentityMappedElement, NonIdentityMappedElement
 
 from uflx import parametrized_domain
-from uflx.domains import RD, AbstractCoordinateDomain, EntityDomain, entity_domain
+from uflx.domains import (
+    RD,
+    AbstractCoordinateDomain,
+    AbstractParametrizedDomain,
+    EntityDomain,
+    entity_domain,
+)
 
 
 def test_has_affine_parametrization_true_for_degree_one_simplex(lagrange_element):
@@ -56,7 +62,8 @@ def test_entity_domain_has_no_parametrization(lagrange_element):
     """An entity domain carries no parametrization, unlike a parametrized domain."""
     (entity,) = parametrized_domain(lagrange_element("triangle", 1, (2,))).cell_types
 
-    assert not hasattr(entity_domain(entity), "parametrization_element")
+    assert not hasattr(entity_domain(entity), "parametrization_component")
+    assert not isinstance(entity_domain(entity), AbstractParametrizedDomain)
 
 
 @pytest.mark.parametrize("dim", range(1, 4))

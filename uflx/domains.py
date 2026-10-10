@@ -32,11 +32,16 @@ a single type: one could contain (eg) a mixture of triangles and
 quadrilaterals, or even a mixture of (eq) tetrahedra and intervals.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from uflx.entities import AbstractEntity
-from uflx.finite_elements import AbstractMappedFiniteElement
+
+if TYPE_CHECKING:
+    from uflx.expressions import AbstractExpression
+    from uflx.points import AbstractPoint
 
 
 class AbstractDomain(ABC):
@@ -120,9 +125,9 @@ class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
     """The coordinate realization of a single topological entity.
 
     The geometry of an entity domain is the identity, so unlike a
-    :class:`ParametrizedDomain` it has no parametrization. The
-    coordinates of its points are fixed by whoever defines the elements
-    on the entity, not by UFLx.
+    parametrized domain it has no parametrization. The coordinates of its
+    points are fixed by whoever defines the elements on the entity, not
+    by UFLx.
     """
 
     def __init__(self, entity: AbstractEntity):
@@ -159,102 +164,46 @@ class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
 class AbstractParametrizedDomain(AbstractCellularDomain):
     """Base class for a domain presented as the image of a map.
 
-    The map out of a cell's coordinate domain into the ambient
-    coordinates is its parametrization, and a finite element per cell
-    type gives that map's basis. The element alone is not the map:
-    evaluating it on a cell also needs that cell's coordinate dofs, which
-    come from the external mesh.
+    Each cell type has a parametrization: a map out of that cell's
+    coordinate domain into the ambient coordinates. How the map is
+    described is the implementer's business, so this class asks only that
+    it can be evaluated and differentiated at a point. A finite element
+    basis summed against a mesh's coordinate dofs is one such
+    description, and a closed form expression is another.
     """
 
     @abstractmethod
-    def parametrization_element(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
-        """Get the element giving the basis of the given cell type's parametrization.
+    def parametrization_component(
+        self,
+        cell: AbstractEntity,
+        point: AbstractPoint,
+        component: int,
+        derivative: tuple[int, ...],
+    ) -> AbstractExpression:
+        """Evaluate one ambient component of a cell's parametrization at a point.
 
-        The parametrization itself cannot be returned: it is this basis
-        summed against a particular cell's coordinate dofs, and those
-        come from the external mesh.
+        Args:
+            cell: The cell type whose parametrization to evaluate, one of
+                this domain's cell types
+            point: A point of that cell's coordinate domain
+            component: Which ambient coordinate to return, in
+                ``range(geometric_dimension)``
+            derivative: How many times to differentiate in each of the
+                cell's coordinate directions, so a tuple as long as the
+                cell's topological dimension
+
+        Returns:
+            The component, as an expression
         """
 
     @property
     def has_affine_parametrization(self) -> bool:
-        """Is the parametrization of this domain affine?"""
-        return all(self.parametrization_element(c).describes_affine_map for c in self.cell_types)
+        """Whether every cell's parametrization is affine.
 
-
-class ParametrizedDomain(AbstractParametrizedDomain):
-    """A domain whose geometry is described by a finite element per cell."""
-
-    def __init__(self, elements: tuple[AbstractMappedFiniteElement, ...]):
-        """Initialise."""
-        self._elements = {e.cell: e for e in elements}
-        for e in elements:
-            if not e.value_map.is_identity:
-                raise ValueError(
-                    "A parametrization's values are the ambient coordinates, "
-                    "so its element must be identity mapped."
-                )
-        # Hence a parametrization's value shape is (gdim,), and reading it
-        # in the entity's coordinates is the same as reading it in the
-        # ambient ones -- which is just as well, since the ambient shape
-        # would need the gdim being computed here.
-        shapes = {e.entity_value_shape for e in elements}
-        if len(shapes) != 1:
-            raise ValueError(
-                f"Every parametrization of a domain must have the same value shape, got {shapes}."
-            )
-        (shape,) = shapes
-        if len(shape) != 1:
-            raise ValueError(
-                f"A parametrization's values are a point of R^gdim, so it must be vector "
-                f"valued, but its value shape is {shape}."
-            )
-        (self._gdim,) = shape
-
-    @property
-    def geometric_dimension(self) -> int:
-        """The number of coordinates needed to name a point of this domain."""
-        return self._gdim
-
-    @property
-    def topological_dimension(self) -> int | None:
-        """The topological dimension of the domain.
-
-        This returns None iff the domain contains entities of a mixture
-        of topological dimensions.
+        Conservative by default (False): a subclass overrides this when
+        it knows its maps are affine.
         """
-        dims = {c.topological_dimension for c in self.cell_types}
-        if len(dims) == 1:
-            (dim,) = dims
-            return dim
-        else:
-            return None
-
-    @property
-    def cell_types(self) -> tuple[AbstractEntity, ...]:
-        """Get the cell types in this domain."""
-        return tuple(self._elements.keys())
-
-    def parametrization_element(self, cell: AbstractEntity) -> AbstractMappedFiniteElement:
-        """Get the element giving the basis of the given cell type's parametrization."""
-        return self._elements[cell]
-
-    def __repr__(self) -> str:
-        """Representation."""
-        elements = ", ".join(repr(e) for e in self._elements.values())
-        return f"ParametrizedDomain({elements})"
-
-    def __eq__(self, other) -> bool:
-        """Check for equality.
-
-        Two parametrized domains are equal when they have the same
-        geometric description. This says nothing about the meshes a
-        consumer may attach to them, which UFLx never sees.
-        """
-        return isinstance(other, ParametrizedDomain) and self._elements == other._elements
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.ParametrizedDomain", frozenset(self._elements.items())))
+        return False
 
 
 def entity_domain(entity: AbstractEntity) -> EntityDomain:
@@ -267,19 +216,3 @@ def entity_domain(entity: AbstractEntity) -> EntityDomain:
         The entity's coordinate domain
     """
     return EntityDomain(entity)
-
-
-def parametrized_domain(
-    elements: Sequence[AbstractMappedFiniteElement] | AbstractMappedFiniteElement,
-) -> ParametrizedDomain:
-    """Create a parametrized domain.
-
-    Args:
-        elements: The finite element(s) used to define the geometry of each cell type
-
-    Returns:
-        A domain whose geometry is described by the given element(s)
-    """
-    if isinstance(elements, AbstractMappedFiniteElement):
-        elements = (elements,)
-    return ParametrizedDomain(tuple(elements))
