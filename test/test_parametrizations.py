@@ -1,5 +1,7 @@
 """Test parametrizations of a domain, and compositions of them."""
 
+import math
+
 import pytest
 from conftest import Interval
 
@@ -18,14 +20,22 @@ from uflx.domains import (
     RD,
     AbstractCoordinateDomain,
     AbstractParametrization,
+    EntityDomain,
     IdentityParametrization,
     entity_domain,
 )
-from uflx.expressions import AbstractExpression, Integer, MatrixProduct, RealScalar
+from uflx.expressions import (
+    AbstractExpression,
+    Integer,
+    MatrixProduct,
+    RealScalar,
+    expression_sum,
+)
 from uflx.functions import AbstractVariable
 from uflx.geometry import (
     AbstractGeometricQuantity,
     Jacobian,
+    JacobianDeterminant,
     MetricTensor,
     PushedForwardPoint,
     SpatialCoordinate,
@@ -36,6 +46,7 @@ from uflx.geometry import (
     expand_geometry,
 )
 from uflx.graphs import as_graph
+from uflx.integrals import Integral
 from uflx.parametrizations import ComposedParametrization, FiniteElementParametrization
 from uflx.points import Point
 from uflx.tensors import Matrix, Vector
@@ -81,6 +92,78 @@ class Parabolic(AbstractParametrization):
         return hash("uflx.test.Parabolic")
 
 
+class LinearPlaneMap(AbstractParametrization):
+    """A linear map of the plane, given by its matrix.
+
+    A second closed form map, so that a curve can be composed with
+    something after it rather than only before it. A rotation and a
+    reflection are isometries and a uniform scaling is not, which is what
+    makes them worth composing with: the metric a map induces has to
+    notice the difference, and the measure that follows from it has to
+    notice the same difference.
+    """
+
+    def __init__(self, entries: tuple[tuple[float, ...], ...]):
+        """Initialise.
+
+        Args:
+            entries: The rows of the matrix of the map
+        """
+        self._entries = tuple(tuple(row) for row in entries)
+
+    @property
+    def source(self) -> AbstractCoordinateDomain:
+        """This map starts in the plane."""
+        return RD(2)
+
+    @property
+    def target_dimension(self) -> int:
+        """This map lands in the plane."""
+        return 2
+
+    @property
+    def determinant(self) -> float:
+        """The determinant of the matrix, which says if it reverses orientation."""
+        (a, b), (c, d) = self._entries
+        return a * d - b * c
+
+    def apply(self, coordinates: list[float]) -> list[float]:
+        """Apply the map to ordinary numbers, to say what is expected of it."""
+        return [sum(a * x for a, x in zip(row, coordinates, strict=True)) for row in self._entries]
+
+    def value(self, point: AbstractVariable) -> AbstractExpression:
+        """Multiply the matrix by the point."""
+        return Vector(
+            [
+                expression_sum(
+                    RealScalar(a) * point.component(j) for j, a in enumerate(self._entries[i])
+                )
+                for i in range(2)
+            ]
+        )
+
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
+        """A linear map is its own derivative."""
+        return Matrix([[RealScalar(a) for a in row] for row in self._entries])
+
+    @property
+    def is_affine(self) -> bool:
+        """A linear map is affine."""
+        return True
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"LinearPlaneMap({self._entries})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return isinstance(other, LinearPlaneMap) and other._entries == self._entries
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.test.LinearPlaneMap", self._entries))
+
+
 @pytest.fixture
 def parabola():
     """The analytic map, on its own."""
@@ -109,6 +192,46 @@ def mesh_on_a_parabola(line, parabola):
 def entity_point():
     """A point of an interval's coordinate domain."""
     return Point([RealScalar(0.25)], entity_domain(Interval()))
+
+
+@pytest.fixture
+def curve(parabola):
+    """The parabola alone, as a domain: one cell, mapped in closed form.
+
+    A mesh of the line carries coordinate dofs into every Jacobian, which
+    no simplification turns into a number. Starting from the reference
+    interval instead keeps the geometry concrete, so it can be evaluated
+    and checked rather than matched against the expression it should be.
+    """
+    return composed_domain(entity_domain(Interval()), parabola)
+
+
+@pytest.fixture
+def rotation():
+    """A quarter turn of the plane, which is an isometry."""
+    return LinearPlaneMap(((0.0, -1.0), (1.0, 0.0)))
+
+
+@pytest.fixture
+def reflection():
+    """A reflection of the plane, an isometry that reverses orientation."""
+    return LinearPlaneMap(((1.0, 0.0), (0.0, -1.0)))
+
+
+@pytest.fixture
+def scaling():
+    """A uniform scaling of the plane by three, which is not an isometry."""
+    return LinearPlaneMap(((3.0, 0.0), (0.0, 3.0)))
+
+
+def arc_length_element(y: float) -> float:
+    """The arc length element of y -> (y, y^2), whose tangent is (1, 2y)."""
+    return math.sqrt(1.0 + 4.0 * y * y)
+
+
+def at(y: float) -> Point:
+    """A point of an interval's coordinate domain."""
+    return Point([RealScalar(y)], entity_domain(Interval()))
 
 
 def test_a_closed_form_map_needs_no_element(parabola, entity_point):
@@ -299,3 +422,126 @@ def test_the_spatial_coordinate_of_a_curve_is_the_point_on_it(parabola, entity_p
     assert coordinates.value_shape == (2,)
     assert coordinates[0].expand_geometry().as_float() == pytest.approx(0.25)
     assert coordinates[1].expand_geometry().as_float() == pytest.approx(0.0625)
+
+
+@pytest.mark.parametrize("y", [0.0, 0.25, 1.0])
+def test_the_volume_element_of_a_curve_is_its_arc_length_element(curve, y):
+    """On y -> (y, y^2) the measure is sqrt(1 + 4y^2), and nothing is a determinant.
+
+    The map is not square, so it has no determinant to take. What an
+    integral over the curve picks up is the length the map gives a unit
+    length of the interval, which is the norm of its one tangent.
+    """
+    point = at(y)
+
+    jacobian = _as_dense_matrix(Jacobian(curve, point).expand_geometry())
+    tangent = [jacobian.component(i, 0).as_float() for i in range(2)]
+    metric = MetricTensor(curve, point).expand_geometry()
+
+    assert VolumeElement(curve, point).expand_geometry().as_float() == pytest.approx(
+        arc_length_element(y)
+    )
+    assert math.sqrt(sum(c * c for c in tangent)) == pytest.approx(arc_length_element(y))
+    assert math.sqrt(metric.component(0, 0).as_float()) == pytest.approx(arc_length_element(y))
+
+    with pytest.raises(ValueError, match="has no determinant"):
+        JacobianDeterminant(curve, point).expand_geometry()
+
+
+@pytest.mark.parametrize("isometry", ["rotation", "reflection"])
+def test_an_ambient_isometry_leaves_a_curves_measure_alone(curve, isometry, request):
+    """Composing with an isometry of the plane cannot change a length on the curve.
+
+    The metric is the ambient one pulled back, so a map that preserves
+    the ambient one preserves it, and the measure that follows from it.
+    The normal is not so indifferent: the generalised cross product
+    tracks orientation, so a map that reverses orientation flips the
+    normal it gives while leaving the measure untouched. That difference
+    is the whole of what a density discards.
+    """
+    isometry = request.getfixturevalue(isometry)
+    point = at(0.25)
+    moved = composed_domain(curve, isometry)
+
+    assert VolumeElement(moved, point).expand_geometry().as_float() == pytest.approx(
+        VolumeElement(curve, point).expand_geometry().as_float()
+    )
+    assert MetricTensor(moved, point).expand_geometry().component(0, 0).as_float() == pytest.approx(
+        MetricTensor(curve, point).expand_geometry().component(0, 0).as_float()
+    )
+
+    normal = [UnitNormal(curve, point).component(i).as_float() for i in range(2)]
+    moved_normal = [UnitNormal(moved, point).component(i).as_float() for i in range(2)]
+    carried = isometry.apply(normal)
+    sign = 1.0 if isometry.determinant > 0 else -1.0
+
+    assert moved_normal == pytest.approx([sign * c for c in carried])
+
+
+def test_an_ambient_scaling_scales_a_curves_measure(curve, scaling):
+    """A uniform scaling by c stretches a length by c and leaves a direction alone.
+
+    The metric picks up c^2, being quadratic in the map, and the measure
+    picks up c^tdim, which on a curve is c itself.
+    """
+    point = at(0.25)
+    scaled = composed_domain(curve, scaling)
+
+    assert VolumeElement(scaled, point).expand_geometry().as_float() == pytest.approx(
+        3.0 * arc_length_element(0.25)
+    )
+    assert MetricTensor(scaled, point).expand_geometry().component(
+        0, 0
+    ).as_float() == pytest.approx(9.0 * (1.0 + 4.0 * 0.25 * 0.25))
+
+    normal = [UnitNormal(curve, point).component(i).as_float() for i in range(2)]
+    scaled_normal = [UnitNormal(scaled, point).component(i).as_float() for i in range(2)]
+
+    assert scaled_normal == pytest.approx(normal)
+
+
+def test_composing_twice_applies_the_maps_in_turn(curve, rotation):
+    """A composite composes again, so a curve can be carried onward.
+
+    The reference interval, then the parabola, then a quarter turn: three
+    maps, and the point of the plane they land on is the parabola's point
+    rotated.
+    """
+    point = at(0.25)
+    rotated = composed_domain(curve, rotation)
+    (cell,) = rotated.cell_types
+
+    assert isinstance(rotated.parametrization(cell), ComposedParametrization)
+    assert rotated.topological_dimension == 1
+    assert rotated.geometric_dimension == 2
+    assert Jacobian(rotated, point).value_shape == (2, 1)
+
+    on_the_curve = SpatialCoordinate(curve, point).expand_geometry()
+    on_the_curve = [on_the_curve.component(i).as_float() for i in range(2)]
+    rotated_coordinates = SpatialCoordinate(rotated, point).expand_geometry()
+
+    assert on_the_curve == pytest.approx([0.25, 0.0625])
+    assert [rotated_coordinates.component(i).as_float() for i in range(2)] == pytest.approx(
+        rotation.apply(on_the_curve)
+    )
+
+
+def test_pulling_a_form_over_a_parabola_back_uses_the_volume_element(
+    mesh_on_a_parabola, lagrange_element
+):
+    """A manifold's measure is its volume element, which is not a determinant.
+
+    A form over a mesh carried onto the parabola has a non-square
+    Jacobian, so pulling it back cannot reach for a determinant. The
+    measure follows the integral onto the cell it is pulled back to.
+    """
+    space = function_space(mesh_on_a_parabola, lagrange_element("interval", 1))
+    form = inner(Coefficient(space), TestFunction(space)) * dx(mesh_on_a_parabola)
+
+    pulled = pull_back_to_entity(form)
+
+    assert isinstance(pulled, Integral)
+    assert pulled.measure.domain == EntityDomain(Interval())
+    nodes = list(as_graph(pulled))
+    assert any(isinstance(n, VolumeElement) for n in nodes)
+    assert not any(isinstance(n, JacobianDeterminant) for n in nodes)
