@@ -277,13 +277,13 @@ class PulledBackPoint(AbstractPoint):
         return self._point.index
 
 
-class AbstractJacobian(AbstractExpression):
-    """Base class for the derivative of a parametrization, and quantities built on it.
+class AbstractGeometricQuantity(AbstractExpression):
+    """Base class for a quantity read off a domain's parametrization at a point.
 
-    A Jacobian is evaluated somewhere, but when one is created during a
-    pull back there is no point to evaluate it at yet. It is therefore
-    built without one and told later, by the integral whose dummy
-    variable stands for the point.
+    A geometric quantity is evaluated somewhere, but when one is created
+    during a pull back there is no point to evaluate it at yet. It is
+    therefore built without one and told later, by the integral whose
+    dummy variable stands for the point.
     """
 
     def __init__(self, domain: AbstractParametrizedDomain, point: AbstractVariable | None = None):
@@ -348,7 +348,7 @@ class AbstractJacobian(AbstractExpression):
         return f"{self.__class__.__name__}({self._domain!r}, {self._point!r})"
 
     def _simplified_against(
-        self, other: GraphNode, partner: type[AbstractJacobian]
+        self, other: GraphNode, partner: type[AbstractGeometricQuantity]
     ) -> GraphNode | None:
         """Give the identity when `other` is the matching inverse of this quantity.
 
@@ -379,7 +379,7 @@ class AbstractJacobian(AbstractExpression):
         return self.__class__(self.domain, variable)
 
 
-class Jacobian(AbstractJacobian):
+class Jacobian(AbstractGeometricQuantity):
     """The Jacobian."""
 
     @property
@@ -416,7 +416,36 @@ class Jacobian(AbstractJacobian):
         return self._simplified_against(other, JacobianInverse)
 
 
-class JacobianDeterminant(AbstractJacobian):
+class MetricTensor(AbstractGeometricQuantity):
+    """The metric a parametrization induces, also called the first fundamental form.
+
+    The pull back of the Euclidean metric on the ambient coordinates by
+    the map, ``g = J^T J``, so that lengths and angles measured in a
+    cell's coordinates agree with the ambient ones. It is symmetric, and
+    positive definite wherever the map is an immersion.
+
+    Its determinant is the squared volume scaling, so ``sqrt(det g)`` is
+    the factor an integral picks up on being pulled back, which is what
+    :class:`JacobianDeterminant` gives.
+    """
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        tdim = self._jacobian.value_shape[1]
+        return (tdim, tdim)
+
+    def expand_geometry(self) -> AbstractExpression:
+        """Expand geometry."""
+        j = _as_dense_matrix(self._jacobian.expand_geometry())
+        return j.transpose().matmat(j)
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get a component of the expression."""
+        return self.expand_geometry().component(*indices)
+
+
+class JacobianDeterminant(AbstractGeometricQuantity):
     """The determinant of the Jacobian."""
 
     @property
@@ -434,7 +463,7 @@ class JacobianDeterminant(AbstractJacobian):
         raise ValueError("Cannot get a component of a scalar expression")
 
 
-class JacobianInverse(AbstractJacobian):
+class JacobianInverse(AbstractGeometricQuantity):
     """The inverse of the Jacobian."""
 
     @property
@@ -459,7 +488,7 @@ class JacobianInverse(AbstractJacobian):
         return self._simplified_against(other, Jacobian)
 
 
-class JacobianTranspose(AbstractJacobian):
+class JacobianTranspose(AbstractGeometricQuantity):
     """The transpose of the Jacobian."""
 
     @property
@@ -484,7 +513,7 @@ class JacobianTranspose(AbstractJacobian):
         return self._simplified_against(other, JacobianInverseTranspose)
 
 
-class JacobianInverseTranspose(AbstractJacobian):
+class JacobianInverseTranspose(AbstractGeometricQuantity):
     """The inverse transpose of the Jacobian."""
 
     @property

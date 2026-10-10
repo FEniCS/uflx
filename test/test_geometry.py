@@ -3,18 +3,19 @@
 import pytest
 
 from uflx import Coefficient, TestFunction, dx, function_space, inner, parametrized_domain
-from uflx.algorithms import pull_back_to_entity
+from uflx.algorithms import pull_back_to_entity, simplify
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import RD, EntityDomain
-from uflx.expressions import RealScalar
+from uflx.expressions import RealScalar, Sqrt
 from uflx.functions import create_variable
 from uflx.geometry import (
-    AbstractJacobian,
+    AbstractGeometricQuantity,
     Jacobian,
     JacobianDeterminant,
     JacobianInverse,
     JacobianInverseTranspose,
     JacobianTranspose,
+    MetricTensor,
     PulledBackPoint,
     PushedForwardPoint,
     expand_geometry,
@@ -22,7 +23,7 @@ from uflx.geometry import (
 from uflx.graphs import as_graph
 from uflx.integrals import Integral
 from uflx.points import Point
-from uflx.tensors import FlattenedTensorMap
+from uflx.tensors import FlattenedTensorMap, Matrix
 
 cells_and_gdims = [
     ("interval", 1),
@@ -193,7 +194,7 @@ def test_a_jacobian_is_told_where_it_is_evaluated(lagrange_element):
     pulled = pull_back_to_entity(mass_form("triangle", 2, lagrange_element))
 
     assert isinstance(pulled, Integral)
-    jacobians = [n for n in as_graph(pulled) if isinstance(n, AbstractJacobian)]
+    jacobians = [n for n in as_graph(pulled) if isinstance(n, AbstractGeometricQuantity)]
     assert len(jacobians) > 0
     for j in jacobians:
         assert j.point is not None
@@ -210,7 +211,7 @@ def test_a_pulled_back_integral_expands_its_geometry(cell, gdim, lagrange_elemen
     """
     expanded = expand_geometry(pull_back_to_entity(mass_form(cell, gdim, lagrange_element)))
 
-    assert not any(isinstance(n, AbstractJacobian) for n in as_graph(expanded))
+    assert not any(isinstance(n, AbstractGeometricQuantity) for n in as_graph(expanded))
 
 
 def test_geometry_refuses_a_variable_in_the_wrong_coordinates(lagrange_element):
@@ -281,6 +282,7 @@ def test_a_jacobian_without_a_point_knows_no_cell(mixed_mesh):
 geometric_quantities = [
     Jacobian,
     JacobianDeterminant,
+    MetricTensor,
     JacobianInverse,
     JacobianTranspose,
     JacobianInverseTranspose,
@@ -330,3 +332,53 @@ def test_pulling_back_needs_a_point_in_ambient_coordinates(lagrange_element):
 
     with pytest.raises(ValueError, match="nothing to pull back"):
         PulledBackPoint(entity_point, domain.parametrization(cell))
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_metric_is_square_in_the_cells_own_dimension(cell, gdim, lagrange_element):
+    """The metric measures in the cell's coordinates, so it is tdim by tdim."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+
+    assert MetricTensor(domain).value_shape == (tdim, tdim)
+    assert Jacobian(domain).value_shape == (gdim, tdim)
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_metric_is_symmetric(cell, gdim, lagrange_element):
+    """G = J^T J, so g[i, j] and g[j, i] are the same sum."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    g = MetricTensor(domain, point).expand_geometry()
+
+    assert isinstance(g, Matrix)
+    for i in range(tdim):
+        for j in range(tdim):
+            assert simplify(g.component(i, j)) == simplify(g.component(j, i))
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_volume_scaling_is_the_metrics_gram_determinant(cell, gdim, lagrange_element):
+    """On a manifold the factor an integral picks up is sqrt(det g).
+
+    For a square map the same identity holds, but JacobianDeterminant
+    takes the direct and much cheaper abs(det J) instead, so the two are
+    equal as numbers without being equal as expressions.
+    """
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    if gdim == tdim:
+        pytest.skip("Not a manifold, so the direct determinant is used.")
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    g = MetricTensor(domain, point).expand_geometry()
+    assert isinstance(g, Matrix)
+
+    assert simplify(abs(Sqrt(g.compute_determinant()))) == simplify(
+        JacobianDeterminant(domain, point).expand_geometry()
+    )
