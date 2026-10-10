@@ -1,5 +1,7 @@
 """Test maps."""
 
+from conftest import PiolaLikeValueMap
+
 from uflx.expressions import Integer
 from uflx.maps import (
     BlockedValueMap,
@@ -27,7 +29,9 @@ def test_blocked_map(lagrange_element):
     assert b_map.pull_back(v) == v
 
 
-def test_only_the_identity_map_says_it_is_the_identity():
-    """is_identity is conservative, so a wrapping map does not inherit it."""
+def test_a_blocked_map_is_the_identity_when_its_component_map_is():
+    """Blocking replicates a map across components, so it keeps an identity identical."""
     assert IdentityValueMap().is_identity
-    assert not BlockedValueMap(IdentityValueMap(), (2,)).is_identity
+    assert BlockedValueMap(IdentityValueMap(), (2,)).is_identity
+    assert not PiolaLikeValueMap().is_identity
+    assert not BlockedValueMap(PiolaLikeValueMap(), (2,)).is_identity

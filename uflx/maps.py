@@ -107,6 +107,11 @@ class BlockedValueMap(AbstractValueMap):
         """A blocked map preserves constants iff its component map does."""
         return self._component_map.preserves_constant_values
 
+    @property
+    def is_identity(self) -> bool:
+        """A blocked map leaves values untouched iff its component map does."""
+        return self._component_map.is_identity
+
 
 class SymmetricValueMap(AbstractValueMap):
     """Symmetric map."""
