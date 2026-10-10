@@ -177,7 +177,15 @@ class FiniteElementVariable(AbstractVariable):
         return FiniteElementVariable(domain, self._label)
 
     def to_entity_coordinates(self, cell: AbstractEntity) -> FiniteElementVariable:
-        """Make a version of this variable in the given cell's coordinates."""
+        """Make a version of this variable in the given cell's coordinates.
+
+        Args:
+            cell: A cell type of this variable's domain. A sub-entity of
+                one is not a cell of the domain, and a point in its
+                coordinates reaches a cell element only through an
+                inclusion, not through this.
+        """
+        assert cell in self._domain.cell_types
         return FiniteElementVariable(EntityDomain(cell), self._label)
 
     def component(self, *indices: int) -> AbstractExpression:
