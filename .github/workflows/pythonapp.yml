@@ -32,9 +32,7 @@ jobs:
       - name: Install UFLx
         run: pip install -e ".[lint,ci]"
       - name: Install external libraries
-        run: |
-          pip install external/codegeneration
-          pip install external/basix_uflx
+        run: pip install external/basix_uflx
       - name: Pyrefly check
         run: pyrefly check
 
@@ -58,9 +56,7 @@ jobs:
         run: pytest -n auto --durations 20 test/
 
       - name: Install external libraries
-        run: |
-          pip -v install external/codegeneration
-          pip -v install external/basix_uflx
+        run: pip -v install external/basix_uflx
       - name: Run units tests
         run: pytest -n auto --durations 20 external/*/test/
 

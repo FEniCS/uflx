@@ -3,11 +3,6 @@
 from uflx.entities import AbstractEntity
 
 
-def indented(code: str, spaces: int) -> str:
-    """Add indentation to a block of code."""
-    return "\n".join(" " * spaces + line for line in code.split("\n"))
-
-
 def index(*indices: int):
     """Get the index from a set of indices using triangular (2D) or tetrahedral (3D) ordering."""
     match len(indices):
