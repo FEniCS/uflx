@@ -5,7 +5,7 @@ import pytest
 from uflx import Coefficient, TestFunction, dx, function_space, inner, parametrized_domain
 from uflx.algorithms import pull_back_to_entity
 from uflx.domains import EntityDomain, entity_domain
-from uflx.geometry import AbstractJacobian, expand_geometry
+from uflx.geometry import AbstractGeometricQuantity, expand_geometry
 from uflx.graphs import as_graph
 from uflx.integrals import Integral, IntegralSum
 
@@ -179,7 +179,7 @@ def test_a_mixed_mesh_form_pulls_back_to_one_integral_per_cell_type(mixed_form, 
 
     for cell, term in zip(mixed_mesh.cell_types, pulled.terms, strict=True):
         assert term.variable.domain == EntityDomain(cell)
-        jacobians = [n for n in as_graph(term) if isinstance(n, AbstractJacobian)]
+        jacobians = [n for n in as_graph(term) if isinstance(n, AbstractGeometricQuantity)]
         assert len(jacobians) > 0
         for jacobian in jacobians:
             assert jacobian.parametrization.source == EntityDomain(cell)
@@ -190,7 +190,7 @@ def test_a_pulled_back_mixed_form_expands_its_geometry(mixed_form):
     expanded = expand_geometry(pull_back_to_entity(mixed_form))
 
     assert isinstance(expanded, IntegralSum)
-    assert not any(isinstance(n, AbstractJacobian) for n in as_graph(expanded))
+    assert not any(isinstance(n, AbstractGeometricQuantity) for n in as_graph(expanded))
 
 
 def test_a_form_over_one_cell_type_is_still_a_plain_integral(lagrange_element):
