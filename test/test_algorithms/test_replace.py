@@ -13,7 +13,7 @@ def test_replace(lagrange_element):
     u = TrialFunction(space)
     v = TestFunction(space)
 
-    form = u * dx
+    form = u * dx(domain)
     assert isinstance(form, Integral)
 
     replaced_form = replace(form, {u: v})

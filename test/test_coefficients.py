@@ -13,8 +13,8 @@ def test_coefficient_labelling(lagrange_element):
     w = Coefficient(space)
     v = TestFunction(space)
 
-    form1 = inner(w, v) * dx
-    form2 = inner(w, v) * dx
+    form1 = inner(w, v) * dx(domain)
+    form2 = inner(w, v) * dx(domain)
 
     assert isinstance(form1, Integral)
     assert isinstance(form2, Integral)

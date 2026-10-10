@@ -264,7 +264,7 @@ def test_a_composed_domain_has_a_measure(mesh_on_a_parabola, entity_point):
 def test_a_form_over_a_composed_domain_expands(mesh_on_a_parabola, lagrange_element):
     """Pulling a form back onto a composed domain leaves no geometry behind."""
     space = function_space(mesh_on_a_parabola, lagrange_element("interval", 1))
-    form = inner(Coefficient(space), TestFunction(space)) * dx
+    form = inner(Coefficient(space), TestFunction(space)) * dx(mesh_on_a_parabola)
 
     expanded = expand_geometry(pull_back_to_entity(form))
 

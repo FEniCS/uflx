@@ -56,11 +56,13 @@ The actual mesh is still external to UFLx.
 ### Function spaces
 
 A function space defines a finite-dimensional space of functions. There are three types of function spaces:
+
 1. standard finite-element spaces, defined by a domain and an element,
-2. constant function spaces, defined by a shape and a scalar type,
-3. non-finite-element function spaces, defined by domain, shape and scalar type, but no element.
+1. constant function spaces, defined by a shape and a scalar type,
+1. non-finite-element function spaces, defined by domain, shape and scalar type, but no element.
 
 Examples:
+
 ```python
 V = FunctionSpace(domain=domain, element=element)  # standard finite-element space
 C = FunctionSpace(shape=(2,), scalar_type="real")  # constant function space
@@ -79,12 +81,14 @@ The essential terminals are:
 
 - `Argument`, representing an arbitrary basis function of a function space,
 
-   It has a `number` attribute to represent the position of the `Argument` in the form. For example, consider a bilinear form `a(u, v)`. The `Argument` representing `u` has `number=1`, and the `Argument` representing `v` has `number=0`.
+  It has a `number` attribute to represent the position of the `Argument` in the form. For example, consider a bilinear form `a(u, v)`. The `Argument` representing `u` has `number=1`, and the `Argument` representing `v` has `number=0`.
 
-   > Experimental (API breaking) note: Existence of an `Argument` and a `Coefficient` is rooted deep into the legacy UFL. However, more useful concept would be to only allow for `Function` terminals, which can represent both known and unknown functions. It would be a responsibility of the user, when creating a form, to define which of the `Function` terminals are to be considered as "arguments" and which not. This would be much closer to a mathematical notation and would solve many user error of having to treat `Argument` and `Coefficient` differently.
+  > Experimental (API breaking) note: Existence of an `Argument` and a `Coefficient` is rooted deep into the legacy UFL. However, more useful concept would be to only allow for `Function` terminals, which can represent both known and unknown functions. It would be a responsibility of the user, when creating a form, to define which of the `Function` terminals are to be considered as "arguments" and which not. This would be much closer to a mathematical notation and would solve many user error of having to treat `Argument` and `Coefficient` differently.
 
 - `Coefficient`, representing a known function in a function space,
+
 - literals such as numbers,
+
 - and geometric quantities such as coordinates, normals, Jacobians, cell diameter, facet area, etc.
 
 Example:
@@ -122,23 +126,19 @@ These properties are enough to reject many meaningless expressions before loweri
 
 ### Measures
 
-A measure describes where and how an integrand is integrated.
+A measure is the domain integrated over paired with the density used on it. Neither half is optional. A function is not a differential form, so integrating one needs a density, and a density is a density of something.
 
-TODO.
-
-The standard measures are:
-
-- `dx` for cell integrals,
-- `ds` for exterior-facet integrals,
-- `dS` for interior-facet integrals.
-
-Examples:
+The density is not stated by the caller. `dx(domain)` is the measure the domain's own parametrization induces, `sqrt(det g)`, so that volumes measured in a cell's coordinates agree with the ambient ones. A measure that weighs its domain some other way, such as the `r dr dz` of an axisymmetric problem, is a measure of its own kind rather than an argument given here.
 
 ```python
-dx
-ds
-dS
+dx(mesh)  # the measure of a mesh
+dx(mesh).domain  # mesh
+dx(mesh).density  # VolumeElement(mesh)
 ```
+
+A measure always names its domain: there is no measure of no domain in particular, and an integral never guesses which domain was meant. Pulling an integral back onto a cell's coordinates moves its measure onto that cell, which is what change of variables does to a measure.
+
+`ds` and `dS` are not kinds of measure. In UFL they are, because the measure does not name its domain and so has to encode it; here an exterior-facet integral is this same measure over the boundary, and an interior-facet integral is it over an interface. Those domains are not yet constructible, so neither spelling exists yet. The `+`/`-` restriction below belongs to the integrand, being a field pulled back along one side's inclusion, and not to the measure.
 
 ### Integrals
 
@@ -147,35 +147,34 @@ An integral is made by multiplying a scalar expression by a measure.
 Examples:
 
 ```python
-v * f * dx
-inner(grad(v), grad(u)) * dx
-jump(v) * dS
+v * f * dx(mesh)
+inner(grad(v), grad(u)) * dx(mesh)
+jump(v) * dS  # once an interface domain exists
 ```
 
 A valid integral has a scalar-valued integrand with no unresolved free indices.
 
 ### Forms
 
-A form is a multi-linear functional $a(u, v, w, \ldots): U \times V \times W \times \ldots \to \{\mathbb{R}, \mathbb C\}$.
+A form is a multi-linear functional $a(u, v, w, \\ldots): U \\times V \\times W \\times \\ldots \\to {\\mathbb{R}, \\mathbb C}$.
 
 Arguments determine the arity of a form.
 
-> Legacy note: In contrast to the legacy UFL, in UFLx a form does not need to be defined as a sum of integrals. For example, the following is a valid UFLx form: `a = (u * dx) * (v * dx)`, or `a = PointEvaluation(u, (0.5, 0.5)) * PointEvaluation(v, (0.5, 0.5))`.
+> Legacy note: In contrast to the legacy UFL, in UFLx a form does not need to be defined as a sum of integrals. For example, the following is a valid UFLx form: `a = (u * dx(mesh)) * (v * dx(mesh))`, or `a = PointEvaluation(u, (0.5, 0.5)) * PointEvaluation(v, (0.5, 0.5))`.
 
 Examples:
 
 ```python
-a = inner(grad(v), grad(u)) * dx
-L = v * f * dx
+a = inner(grad(v), grad(u)) * dx(mesh)
+L = v * f * dx(mesh)
 F = a - L
 ```
 
 > Experimental (API breaking) note: Similar to the `Argument` and `Coefficient` terminals, the `Form` in the legacy UFL is defined implicitly, by the presence of `Argument` terminals. In UFLx, a `Form` could be an explicit object that can be created by the user, e.g.
 
 ```python
-a = Form(inner(grad(v), grad(u)) * dx, arguments=[u, v])
+a = Form(inner(grad(v), grad(u)) * dx(mesh), arguments=[u, v])
 ```
-
 
 ## 3. Minimal validity rules
 
@@ -187,10 +186,10 @@ The language is small, but it is typed.
 - Spatial derivatives require a spatial domain.
 - Facet quantities such as `FacetNormal` are only meaningful in facet integration contexts.
 - Interior-facet expressions may use side restrictions:
-    ```python
-    u("+")
-    u("-")
-    ```
+  ```python
+  u("+")
+  u("-")
+  ```
 - Operators such as `jump` and `avg` are shorthand for combinations of such restrictions.
 - An integral is valid only when the final integrand is scalar and has no free indices.
 - A form is valid when all of its integrals are valid and their domains, arguments, and coefficients are mutually consistent.
@@ -206,11 +205,11 @@ There are two key transformation procedures that the UFLx core provides:
    Example:
 
    ```python
-    a = inner(grad(v), grad(u)) * dx
+    a = inner(grad(v), grad(u)) * dx(mesh)
     da = derivative(a, u, du)
-    ```
+   ```
 
-2. Expression and integral transformation between different configurations.
+1. Expression and integral transformation between different configurations.
 
    > Legacy note: In legacy UFL, there is a very central perspective on the configuration of where objects are defined. Usually, all expressions are defined in the physical configuration, and UFL applies pullbacks to the entire expression tree.
 
@@ -273,7 +272,6 @@ u = TrialFunction(V, name="u")
 v = TestFunction(V, name="v")
 f = Coefficient(V, name="f")
 
-a = inner(grad(v), grad(u)) * dx
-L = v * f * dx
+a = inner(grad(v), grad(u)) * dx(mesh)
+L = v * f * dx(mesh)
 ```
-
