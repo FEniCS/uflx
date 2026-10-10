@@ -67,5 +67,5 @@ def test_point_components_must_match_its_domain(lagrange_element):
     domain = parametrized_domain(lagrange_element("interval", 1, (1,)))
     a, b = RealScalar(0.5), RealScalar(1.0)
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError, match="named by 1 coordinates"):
         Point([a, b], EntityDomain(domain.cell_types[0]))
