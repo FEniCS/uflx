@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from uflx import Coefficient, parametrized_domain, function_space, inner
+from uflx import Coefficient, function_space, inner, parametrized_domain
 from uflx.complex import conj, take_imaginary_part, take_real_part
 from uflx.expressions import ComplexScalar, Integer, RealScalar, to_scalar
 

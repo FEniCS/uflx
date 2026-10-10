@@ -153,11 +153,14 @@ class Integral(AbstractIntegral):
                     assert domain == node.function_space.domain
         assert domain is not None
         assert isinstance(domain, AbstractParametrizedDomain)
+        if len(domain.cell_types) != 1:
+            raise NotImplementedError("Only domains with exactly one cell type supported for now.")
+        (cell,) = domain.cell_types
         det = abs(JacobianDeterminant(domain))
 
         assert isinstance(integrand, AbstractExpression)
 
-        return Integral(det * integrand, self._measure, self._variable.to_entity_coordinates())
+        return Integral(det * integrand, self._measure, self._variable.to_entity_coordinates(cell))
 
     def __repr__(self) -> str:
         """Representation."""

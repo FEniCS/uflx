@@ -7,6 +7,7 @@ from conftest import LagrangeElement
 
 from uflx import Coefficient, TestFunction, dx, function_space, grad, inner, parametrized_domain
 from uflx.algorithms import pull_back_to_entity, reconstruct_node, replace
+from uflx.domains import EntityDomain
 from uflx.expressions import AbstractExpression
 from uflx.functions import FiniteElementVariable
 from uflx.graphs import as_graph
@@ -53,7 +54,8 @@ def test_dg0_value_and_gradient(lagrange_element, cell, dim, geometry_degree):
     assert reconstructed.is_cellwise_constant
     assert_zero(grad(c), (dim,))
     assert_zero(pull_back_to_entity(Grad(c)), (dim,))
-    reference = Coefficient(space, in_entity_coordinates=True)
+    entity_space = function_space(EntityDomain(space.elements[0].cell), space.elements[0])
+    reference = Coefficient(entity_space)
     assert_zero(EntityGrad(reference).expand_geometry(), (dim,))
     for i in range(dim):
         assert_zero(c.diff(i), ())
@@ -111,7 +113,8 @@ def test_unknown_mapping_is_not_constant(lagrange_element):
     c = Coefficient(space)
     assert not c.is_cellwise_constant
     assert isinstance(grad(c), Grad)
-    reference = Coefficient(space, in_entity_coordinates=True)
+    entity_space = function_space(EntityDomain(space.elements[0].cell), space.elements[0])
+    reference = Coefficient(entity_space)
     assert reference.is_cellwise_constant
     assert_zero(EntityGrad(reference).expand_geometry(), (2,))
     assert not BlockedValueMap(UnknownMap(), (2,)).preserves_constant_values
@@ -141,7 +144,8 @@ def test_blocked_constant_derivatives(lagrange_element, shape):
     assert_zero(grad(c), (*shape, 2))
     assert_zero(pull_back_to_entity(Grad(c)), (*shape, 2))
     assert_zero(c.diff(0), shape)
-    reference = Coefficient(space, in_entity_coordinates=True)
+    entity_space = function_space(EntityDomain(space.elements[0].cell), space.elements[0])
+    reference = Coefficient(entity_space)
     assert_zero(EntityGrad(reference).expand_geometry(), (*shape, 2))
 
 

@@ -141,9 +141,9 @@ def test_the_two_mapped_points_do_not_collide(lagrange_element):
 def test_jacobian_derivatives_are_entity_derivatives(cell, gdim, lagrange_element):
     """Test that the Jacobian differentiates in the tdim directions of the cell's coordinates."""
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
-    tdim = domain.cells[0].topological_dimension
+    tdim = domain.cell_types[0].topological_dimension
 
-    point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cells[0]))
+    point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cell_types[0]))
     mat = Jacobian(domain, point).expand_geometry()
     derivatives = {
         node.derivative
@@ -166,8 +166,8 @@ def coordinate_dof_entries(expression):
 def test_jacobian_coordinate_dofs(cell, gdim, lagrange_element):
     """Test that the Jacobian uses the coordinate DOFs of the map it differentiates."""
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
-    tdim = domain.cells[0].topological_dimension
-    point = Point([RealScalar(0.1)] * tdim, EntityDomain(domain.cells[0]))
+    tdim = domain.cell_types[0].topological_dimension
+    point = Point([RealScalar(0.1)] * tdim, EntityDomain(domain.cell_types[0]))
 
     x_dofs = coordinate_dof_entries(PushedForwardPoint(point, domain).expand_geometry())
     assert len(x_dofs) > 0

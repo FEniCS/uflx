@@ -15,8 +15,13 @@ from itertools import count
 from typing import Any, Self, cast
 
 from uflx.domains import AbstractCellularDomain, AbstractDomain, EntityDomain
+from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression, Im, Re
-from uflx.function_spaces import AbstractFunctionSpace, AbstractMappedFunctionSpace
+from uflx.function_spaces import (
+    AbstractFunctionSpace,
+    AbstractMappedFunctionSpace,
+    function_space,
+)
 from uflx.graphs import GraphNode
 from uflx.maps import PushedForward
 from uflx.tensors import zero
@@ -48,9 +53,9 @@ class AbstractVariable(AbstractExpression):
         """Check if this variable's components are in an entity's coordinates."""
         return isinstance(self.domain, EntityDomain)
 
-    def to_entity_coordinates(self) -> FiniteElementVariable:
-        """Make a version of this variable in the entity's coordinates."""
-        raise ValueError("Cannot pull this variable back to the entity's coordinates.")
+    def to_entity_coordinates(self, cell: AbstractEntity) -> FiniteElementVariable:
+        """Make a version of this variable in the given cell's coordinates."""
+        raise ValueError("Cannot pull this variable back to a cell's coordinates.")
 
 
 class Variable(AbstractVariable):
@@ -112,7 +117,6 @@ class FiniteElementVariable(AbstractVariable):
         self,
         domain: AbstractCellularDomain,
         label: str | None = None,
-        in_entity_coordinates: bool = False,
     ):
         """Initialise."""
         if label is None:
@@ -120,7 +124,6 @@ class FiniteElementVariable(AbstractVariable):
         else:
             self._label = label
         self._domain = domain
-        self._in_entity_coordinates = in_entity_coordinates
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -130,7 +133,7 @@ class FiniteElementVariable(AbstractVariable):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return (self._domain, self._label, self._in_entity_coordinates)
+        return (self._domain, self._label)
 
     @property
     def label(self) -> str:
@@ -143,40 +146,39 @@ class FiniteElementVariable(AbstractVariable):
         return self._domain
 
     def __eq__(self, other) -> bool:
-        """Check for equality."""
+        """Check for equality.
+
+        The domain counts: pulling a variable back keeps its label and
+        changes only where it lives.
+        """
         return (
             isinstance(other, FiniteElementVariable)
             and other.label == self.label
-            and other.in_entity_coordinates == self.in_entity_coordinates
+            and other.domain == self.domain
         )
 
     def __repr__(self) -> str:
         """Representation."""
-        if self._in_entity_coordinates:
-            return f"FiniteElementVariable({self._label}, in_entity_coordinates=True)"
-        else:
-            return f"FiniteElementVariable({self._label})"
+        return f"FiniteElementVariable({self._label}, {self._domain!r})"
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.FiniteElementVariable", self._label, self._in_entity_coordinates))
+        return hash(("uflx.FiniteElementVariable", self._label, self._domain))
 
-    @property
-    def in_entity_coordinates(self) -> bool:
-        """Check if this variable's components are in an entity's coordinates.
+    def to_ambient_coordinates(self, domain: AbstractCellularDomain) -> FiniteElementVariable:
+        """Make a version of this variable in a domain's ambient coordinates.
 
-        Stored rather than derived from the domain, because
-        to_entity_coordinates keeps the same domain for now.
+        Args:
+            domain: The domain to push the variable onto. A variable in a
+                cell's coordinates does not know which domain it came
+                from, and those coordinates belong to no domain in
+                particular, so the target is named rather than recalled.
         """
-        return self._in_entity_coordinates
+        return FiniteElementVariable(domain, self._label)
 
-    def to_entity_coordinates(self) -> FiniteElementVariable:
-        """Make a version of this variable in the entity's coordinates."""
-        return FiniteElementVariable(self._domain, self._label, True)
-
-    def to_ambient_coordinates(self) -> FiniteElementVariable:
-        """Make a version of this variable in ambient coordinates."""
-        return FiniteElementVariable(self._domain, self._label, False)
+    def to_entity_coordinates(self, cell: AbstractEntity) -> FiniteElementVariable:
+        """Make a version of this variable in the given cell's coordinates."""
+        return FiniteElementVariable(EntityDomain(cell), self._label)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -193,10 +195,15 @@ class AbstractFunction(AbstractExpression):
 
     @property
     def in_entity_coordinates(self) -> bool:
-        """Check if this function's components are in an entity's coordinates."""
+        """Check if this function's components are in an entity's coordinates.
+
+        The variable answers when there is one, since a basis function
+        keeps its mesh space and is told which coordinates by the point
+        it is evaluated at. Otherwise the space's domain says.
+        """
         if self.variable is not None:
             return self.variable.in_entity_coordinates
-        return False
+        return isinstance(self.function_space.domain, EntityDomain)
 
     @abstractmethod
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
@@ -278,7 +285,6 @@ class Argument(AbstractFunction):
         self,
         space: AbstractFunctionSpace,
         component: int,
-        in_entity_coordinates: bool = False,
         variable: AbstractVariable | None = None,
     ):
         """Initialise.
@@ -287,24 +293,15 @@ class Argument(AbstractFunction):
             space: The function space that this function lives in
             component: The component of the finite element tensor
                        to be assembled that this function represents
-            in_entity_coordinates: Are this argument's components in the entity's coordinates?
             variable: The variable that is this argument's input
         """
-        if variable is not None:
-            assert in_entity_coordinates == variable.in_entity_coordinates
         self._space = space
-        self._in_entity_coordinates = in_entity_coordinates
         self._variable = variable
         self._component = component
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
-        return self.__class__(self._space, self._component, self._in_entity_coordinates, variable)
-
-    @property
-    def in_entity_coordinates(self) -> bool:
-        """Check if this function's components are in an entity's coordinates."""
-        return self._in_entity_coordinates
+        return self.__class__(self._space, self._component, variable)
 
     @property
     def function_space(self) -> AbstractFunctionSpace:
@@ -329,7 +326,7 @@ class Argument(AbstractFunction):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._space, self._component, self._in_entity_coordinates, self._variable
+        return self._space, self._component, self._variable
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -361,7 +358,6 @@ class Coefficient(AbstractFunction):
         self,
         space: AbstractFunctionSpace,
         coefficient_label: str | None = None,
-        in_entity_coordinates: bool = False,
         variable: AbstractVariable | None = None,
     ):
         """Initialise.
@@ -369,16 +365,9 @@ class Coefficient(AbstractFunction):
         Args:
             space: The function space that this function lives in
             coefficient_label: The label for this coefficient
-            in_entity_coordinates: Are this argument's components in the entity's coordinates?
             variable: The variable that is this argument's input
         """
-        if variable is not None:
-            if isinstance(variable, FiniteElementVariable):
-                assert in_entity_coordinates == variable.in_entity_coordinates
-            else:
-                assert not in_entity_coordinates
         self._space = space
-        self._in_entity_coordinates = in_entity_coordinates
         self._variable = variable
         if coefficient_label is None:
             self._label = f"coefficient-{next(self._n)}"
@@ -387,12 +376,7 @@ class Coefficient(AbstractFunction):
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
-        return self.__class__(self._space, self._label, self._in_entity_coordinates, variable)
-
-    @property
-    def in_entity_coordinates(self) -> bool:
-        """Check if this function's components are in an entity's coordinates."""
-        return self._in_entity_coordinates
+        return self.__class__(self._space, self._label, variable)
 
     @property
     def function_space(self) -> AbstractFunctionSpace:
@@ -417,7 +401,7 @@ class Coefficient(AbstractFunction):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._space, self._label, self._in_entity_coordinates, self._variable
+        return self._space, self._label, self._variable
 
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""
@@ -461,17 +445,12 @@ class Coefficient(AbstractFunction):
         if self.in_entity_coordinates:
             raise ValueError("Cannot pull back a function already in the entity's coordinates")
         assert isinstance(self._space, AbstractMappedFunctionSpace)
-        if self._variable is None:
-            return PushedForward(
-                self._space.elements[0].value_map,
-                Coefficient(self._space, self._label, True, None),
-            )
-        else:
-            assert isinstance(self._variable, FiniteElementVariable)
-            return PushedForward(
-                self._space.elements[0].value_map,
-                Coefficient(self._space, self._label, True, self._variable.to_entity_coordinates()),
-            )
+        element = self._space.elements[0]
+        space = function_space(EntityDomain(element.cell), element)
+        variable = (
+            None if self._variable is None else self._variable.to_entity_coordinates(element.cell)
+        )
+        return PushedForward(element.value_map, Coefficient(space, self._label, variable))
 
 
 class TestFunction(Argument):
@@ -482,11 +461,10 @@ class TestFunction(Argument):
     def __init__(
         self,
         space: AbstractFunctionSpace,
-        in_entity_coordinates: bool = False,
         variable: AbstractVariable | None = None,
     ):
         """Initialise."""
-        super().__init__(space, 0, in_entity_coordinates, variable)
+        super().__init__(space, 0, variable)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -494,12 +472,12 @@ class TestFunction(Argument):
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
-        return self.__class__(self._space, self._in_entity_coordinates, variable)
+        return self.__class__(self._space, variable)
 
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._space, self.in_entity_coordinates, self.variable
+        return self._space, self.variable
 
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""
@@ -510,17 +488,12 @@ class TestFunction(Argument):
         if self.in_entity_coordinates:
             raise ValueError("Cannot pull back a function already in the entity's coordinates")
         assert isinstance(self._space, AbstractMappedFunctionSpace)
-        if self.variable is None:
-            return PushedForward(
-                self._space.elements[0].value_map,
-                TestFunction(self._space, True, None),
-            )
-        else:
-            assert isinstance(self.variable, FiniteElementVariable)
-            return PushedForward(
-                self._space.elements[0].value_map,
-                TestFunction(self._space, True, self.variable.to_entity_coordinates()),
-            )
+        element = self._space.elements[0]
+        space = function_space(EntityDomain(element.cell), element)
+        variable = (
+            None if self.variable is None else self.variable.to_entity_coordinates(element.cell)
+        )
+        return PushedForward(element.value_map, TestFunction(space, variable))
 
 
 class TrialFunction(Argument):
@@ -529,11 +502,10 @@ class TrialFunction(Argument):
     def __init__(
         self,
         space: AbstractFunctionSpace,
-        in_entity_coordinates: bool = False,
         variable: AbstractVariable | None = None,
     ):
         """Initialise."""
-        super().__init__(space, 1, in_entity_coordinates, variable)
+        super().__init__(space, 1, variable)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -541,12 +513,12 @@ class TrialFunction(Argument):
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
-        return self.__class__(self._space, self._in_entity_coordinates, variable)
+        return self.__class__(self._space, variable)
 
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._space, self.in_entity_coordinates, self.variable
+        return self._space, self.variable
 
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""
@@ -557,17 +529,12 @@ class TrialFunction(Argument):
         if self.in_entity_coordinates:
             raise ValueError("Cannot pull back a function already in the entity's coordinates")
         assert isinstance(self._space, AbstractMappedFunctionSpace)
-        if self.variable is None:
-            return PushedForward(
-                self._space.elements[0].value_map,
-                TrialFunction(self._space, True, None),
-            )
-        else:
-            assert isinstance(self.variable, FiniteElementVariable)
-            return PushedForward(
-                self._space.elements[0].value_map,
-                TrialFunction(self._space, True, self.variable.to_entity_coordinates()),
-            )
+        element = self._space.elements[0]
+        space = function_space(EntityDomain(element.cell), element)
+        variable = (
+            None if self.variable is None else self.variable.to_entity_coordinates(element.cell)
+        )
+        return PushedForward(element.value_map, TrialFunction(space, variable))
 
 
 def create_variable(domain: AbstractDomain) -> AbstractVariable:
