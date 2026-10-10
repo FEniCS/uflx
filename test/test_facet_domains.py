@@ -21,9 +21,16 @@ an edge in space has no single normal direction.
 import math
 
 import pytest
-from conftest import Entity, Interval, Tetrahedron, Triangle
+from conftest import Entity, Interval, LagrangeElement, Tetrahedron, Triangle
 
-from uflx.domains import EntityDomain, SubEntityDomain, entity_domain, sub_entity_domain
+from uflx import composed_domain, parametrized_domain
+from uflx.domains import (
+    RD,
+    EntityDomain,
+    SubEntityDomain,
+    entity_domain,
+    sub_entity_domain,
+)
 from uflx.expressions import RealScalar
 from uflx.geometry import (
     ImagePoint,
@@ -33,7 +40,12 @@ from uflx.geometry import (
     VolumeElement,
     _as_dense_matrix,
 )
-from uflx.parametrizations import AffineParametrization
+from uflx.parametrizations import (
+    AffineParametrization,
+    ComposedParametrization,
+    facets_of,
+    sub_entities_of,
+)
 from uflx.points import Point
 
 
@@ -234,3 +246,116 @@ def test_a_facet_of_a_tetrahedron_is_a_triangle_with_a_normal():
     # against the reference triangle's half, so its volume element is sqrt(3).
     assert measure_of(facet, point) == pytest.approx(math.sqrt(3.0))
     assert normal_of(facet, point) == pytest.approx([1.0 / math.sqrt(3.0)] * 3)
+
+
+@pytest.fixture
+def mesh():
+    """A mesh of placed triangles in the plane, geometry described by an element."""
+    return parametrized_domain(LagrangeElement(PlacedTriangle(), 1, (2,)))
+
+
+@pytest.fixture
+def stretched_cell():
+    """The reference triangle with the first axis doubled, in closed form.
+
+    A domain of one cell whose map expands to numbers, which a mesh's
+    cannot: a mesh's coordinate dofs are external. So this is what lets a
+    facet's measure be checked against the length it should be.
+    """
+    return composed_domain(
+        entity_domain(PlacedTriangle()),
+        AffineParametrization(RD(2), ((2.0, 0.0), (0.0, 1.0)), (0.0, 0.0)),
+    )
+
+
+def test_the_facets_of_a_mesh_are_its_cells_facets_mapped_on(mesh):
+    """One piece per cell type and local facet, and each is a composition.
+
+    The inclusion of the reference facet into the cell followed by the
+    cell's own map, which is the whole of what an exterior facet integral
+    is over.
+    """
+    cell = PlacedTriangle()
+
+    facets = facets_of(mesh)
+
+    assert len(facets.pieces) == 3
+    assert facets.geometric_dimension == 2
+    assert facets.topological_dimension == 1
+    for k, piece in enumerate(facets.pieces):
+        assert piece.inner_domain == sub_entity_domain(cell, 1, k)
+        assert piece.map == mesh.parametrization(cell)
+        assert piece.cell_types == (Interval(),)
+        assert piece.parametrization_out_of(entity_domain(Interval())) == ComposedParametrization(
+            cell.sub_entity_inclusion(1, k), mesh.parametrization(cell)
+        )
+
+
+def test_the_facets_of_a_mesh_of_two_cell_types_are_both_cells_facets(mesh):
+    """The fan out is over cell types and local facets together."""
+    elements = (
+        LagrangeElement(PlacedTriangle(), 1, (3,)),
+        LagrangeElement(PlacedTetrahedron(), 1, (3,)),
+    )
+    mixed = parametrized_domain(elements)
+
+    facets = facets_of(mixed)
+
+    assert len(facets.pieces) == 3 + 4
+    # A triangle's facets are one dimensional and a tetrahedron's are two.
+    assert facets.topological_dimension is None
+    assert facets.geometric_dimension == 3
+
+
+def test_a_label_tells_one_part_of_a_boundary_from_another(mesh):
+    """The consumer says which facets it means; the measure never carries an id."""
+    assert facets_of(mesh) == facets_of(mesh)
+    assert facets_of(mesh, 1) != facets_of(mesh, 2)
+    assert facets_of(mesh, 1).label == 1
+    assert facets_of(mesh).label is None
+
+
+def test_sub_entities_of_a_codimension_a_cell_does_not_have_are_refused(mesh):
+    """A triangle has no sub-entities of codimension three."""
+    with pytest.raises(ValueError, match="no sub-entities of codimension 3"):
+        sub_entities_of(mesh, 3)
+
+
+def test_the_codimension_two_sub_entities_of_a_tetrahedral_mesh_are_its_edges():
+    """Nothing in the construction is specific to a facet."""
+    mesh = parametrized_domain(LagrangeElement(PlacedTetrahedron(), 1, (3,)))
+
+    edges = sub_entities_of(mesh, 2)
+
+    assert len(edges.pieces) == 6
+    assert edges.topological_dimension == 1
+    assert edges.geometric_dimension == 3
+    assert facets_of(mesh).topological_dimension == 2
+
+
+@pytest.mark.parametrize(("k", "length"), [(0, 2.0), (1, 1.0), (2, math.sqrt(5.0))])
+def test_a_facet_of_a_mapped_cell_measures_the_mapped_length(
+    stretched_cell, on_the_facet, k, length
+):
+    """Doubling the first axis of the reference triangle, facet by facet.
+
+    Facet 0 runs along that axis and doubles, facet 1 is across it and is
+    unchanged, and the hypotenuse becomes the diagonal of a 2 by 1 box.
+    The measure is the one measure: nothing about it is a facet measure.
+    """
+    facets = facets_of(stretched_cell)
+
+    assert measure_of(facets.pieces[k], on_the_facet) == pytest.approx(length)
+
+
+def test_the_normal_of_a_facet_of_a_mapped_cell_is_not_the_mapped_normal(
+    stretched_cell, on_the_facet
+):
+    """A normal is carried by the cofactor rule, not by the map, as test_boundaries says."""
+    hypotenuse = facets_of(stretched_cell).pieces[2]
+
+    normal = normal_of(hypotenuse, on_the_facet)
+
+    assert sum(c * c for c in normal) == pytest.approx(1.0)
+    assert abs(normal[0]) == pytest.approx(1.0 / math.sqrt(5.0))
+    assert abs(normal[1]) == pytest.approx(2.0 / math.sqrt(5.0))

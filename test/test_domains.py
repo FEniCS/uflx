@@ -6,16 +6,24 @@
 """Test domains."""
 
 import pytest
-from conftest import BlockedIdentityMappedElement, NonIdentityMappedElement
+from conftest import (
+    BlockedIdentityMappedElement,
+    Interval,
+    NonIdentityMappedElement,
+    Tetrahedron,
+    Triangle,
+)
 
-from uflx import parametrized_domain
+from uflx import composed_domain, parametrized_domain
 from uflx.domains import (
     RD,
     AbstractCellularDomain,
     AbstractCoordinateDomain,
     EntityDomain,
     entity_domain,
+    union_domain,
 )
+from uflx.parametrizations import AffineParametrization
 
 
 def test_has_affine_parametrization_true_for_degree_one_simplex(lagrange_element):
@@ -138,3 +146,69 @@ def test_parametrization_may_block_an_identity_map(lagrange_element):
 
     assert domain.geometric_dimension == 2
     assert domain.topological_dimension == 2
+
+
+def in_the_plane(matrix, offset):
+    """A domain of the plane, being the reference interval mapped into it."""
+    source = entity_domain(Interval())
+    return composed_domain(source, AffineParametrization(source, matrix, offset))
+
+
+def test_a_union_takes_the_dimensions_of_its_pieces():
+    """Named in the pieces' coordinates, of the pieces' topological dimension."""
+    pieces = [
+        in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)),
+        in_the_plane(((0.0,), (1.0,)), (0.0, 0.0)),
+    ]
+
+    union = union_domain(pieces)
+
+    assert union.geometric_dimension == 2
+    assert union.topological_dimension == 1
+    assert union.pieces == tuple(pieces)
+
+
+def test_a_union_of_pieces_of_different_dimension_has_no_topological_dimension():
+    """As a domain of mixed cell types has none: there is no one answer."""
+    union = union_domain([in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)), entity_domain(Triangle())])
+
+    assert union.topological_dimension is None
+    assert union.geometric_dimension == 2
+
+
+def test_a_union_needs_pieces_in_the_same_coordinates():
+    """A piece of the plane and a piece of space are not one domain."""
+    with pytest.raises(ValueError, match="same coordinates"):
+        union_domain([entity_domain(Triangle()), entity_domain(Tetrahedron())])
+
+    with pytest.raises(ValueError, match="union of no pieces"):
+        union_domain([])
+
+
+def test_a_unions_label_tells_it_from_another_of_the_same_pieces():
+    """Which is what names a part of a boundary without the measure carrying an id."""
+    pieces = [in_the_plane(((1.0,), (0.0,)), (0.0, 0.0))]
+
+    assert union_domain(pieces) == union_domain(pieces)
+    assert hash(union_domain(pieces)) == hash(union_domain(pieces))
+    assert union_domain(pieces, 1) != union_domain(pieces, 2)
+    assert union_domain(pieces, 1) != union_domain(pieces)
+    assert len({union_domain(pieces), union_domain(pieces, 1), union_domain(pieces, 1)}) == 2
+
+
+def test_a_union_hands_out_a_chart_only_where_one_piece_has_it():
+    """Several pieces over one region is why a union exists, so it will not choose."""
+    pieces = [
+        in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)),
+        in_the_plane(((0.0,), (1.0,)), (0.0, 0.0)),
+    ]
+    interval = entity_domain(Interval())
+
+    assert union_domain(pieces[:1]).parametrization_out_of(interval) == pieces[
+        0
+    ].parametrization_out_of(interval)
+
+    with pytest.raises(ValueError, match="2 pieces of"):
+        union_domain(pieces).parametrization_out_of(interval)
+    with pytest.raises(ValueError, match="No piece of"):
+        union_domain(pieces).parametrization_out_of(RD(2))

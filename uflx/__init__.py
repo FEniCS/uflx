@@ -12,4 +12,9 @@ from uflx.functions import Coefficient, TestFunction, TrialFunction
 from uflx.geometry import SpatialCoordinate
 from uflx.integrals import dx
 from uflx.operators import dev, grad, inner, skew, sqrt, sym, tr, transpose
-from uflx.parametrizations import composed_domain, parametrized_domain
+from uflx.parametrizations import (
+    composed_domain,
+    facets_of,
+    parametrized_domain,
+    sub_entities_of,
+)

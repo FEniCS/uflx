@@ -21,6 +21,7 @@ interpolated through the nodes of a higher degree coordinate element.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import (
@@ -28,6 +29,8 @@ from uflx.domains import (
     AbstractCoordinateDomain,
     AbstractParametrization,
     EntityDomain,
+    SubEntityDomain,
+    UnionDomain,
 )
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression, MatrixProduct, RealScalar, expression_sum
@@ -429,6 +432,20 @@ class ComposedDomain(AbstractCellularDomain):
         self._outer_map = outer_map
 
     @property
+    def inner_domain(self) -> AbstractCellularDomain:
+        """The domain being mapped on.
+
+        What a composite is a composite *of*, which is how a restriction
+        asks a facet of a mesh which sub-entity of which cell it is.
+        """
+        return self._domain
+
+    @property
+    def map(self) -> AbstractParametrization:
+        """The map applied to that domain's own coordinates."""
+        return self._map
+
+    @property
     def geometric_dimension(self) -> int:
         """The composite lands wherever the outer map lands."""
         return self._outer_map.target_dimension
@@ -515,3 +532,66 @@ def affine_parametrization(
         That affine map
     """
     return AffineParametrization(source, matrix, offset)
+
+
+def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = None) -> UnionDomain:
+    """Create the domain the sub-entities of a given codimension make up.
+
+    A piece per cell type and sub-entity of that type, each the inclusion
+    of the sub-entity into its cell followed by the cell's own map. For
+    codimension one and a mesh, that is the domain an exterior facet
+    integral is over: one measure over another domain rather than a
+    measure of its own.
+
+    The codimension is relative to each cell type, so in a domain of
+    mixed topological dimension codimension one is the triangles' edges
+    and the tetrahedra's faces at once, and the union reports no
+    topological dimension of its own.
+
+    Which sub-entities a mesh actually has, and how many cells each is
+    shared by, is external, as its cells are. This says only how such a
+    domain is parametrized.
+
+    Args:
+        domain: The domain whose cells' sub-entities are taken
+        codim: Their codimension in each cell
+        label: Anything hashable telling this domain from another of the
+            same sub-entities
+
+    Returns:
+        The union of those sub-entities, mapped on by the domain
+
+    Raises:
+        ValueError: If a cell type has no sub-entities of that codimension
+    """
+    pieces = []
+    for cell in domain.cell_types:
+        dim = cell.topological_dimension - codim
+        if dim < 0:
+            raise ValueError(
+                f"{cell} has topological dimension {cell.topological_dimension}, so it "
+                f"has no sub-entities of codimension {codim}."
+            )
+        parametrization = domain.parametrization(cell)
+        pieces.extend(
+            ComposedDomain(SubEntityDomain(cell, dim, index), parametrization)
+            for index in range(cell.sub_entity_count(dim))
+        )
+    return UnionDomain(tuple(pieces), label)
+
+
+def facets_of(domain: AbstractCellularDomain, label: Any = None) -> UnionDomain:
+    """Create the domain a domain's facets make up.
+
+    The codimension one case of :func:`sub_entities_of`, facet being the
+    name of a sub-entity of that codimension.
+
+    Args:
+        domain: The domain whose cells' facets are taken
+        label: Anything hashable telling this domain from another of the
+            same facets
+
+    Returns:
+        The union of those facets, mapped on by the domain
+    """
+    return sub_entities_of(domain, 1, label)

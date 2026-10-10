@@ -41,7 +41,8 @@ quadrilaterals, or even a mixture of (eq) tetrahedra and intervals.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 from uflx.entities import AbstractEntity
 from uflx.tensors import Identity, Vector
@@ -319,7 +320,133 @@ class IdentityParametrization(AbstractParametrization):
         return hash(("uflx.IdentityParametrization", self._domain))
 
 
-class AbstractCellularDomain(AbstractParametrizedDomain):
+class UnionDomain(AbstractParametrizedDomain):
+    """A domain presented as several parametrized pieces.
+
+    Every other parametrized domain here has one parametrization per cell type, keyed by
+    the parameter region it starts from. The facets of a triangle are not
+    like that: all three are parametrized from the reference interval, so they
+    cannot be told apart by their region. A union holds them as pieces
+    instead, each a parametrized domain in its own right, and integration over
+    the union is the sum of the integrals over the pieces.
+
+    Not an atlas. An atlas's parametrizations cover one set and are related by
+    transition maps; these are separate pieces with no claim of a relation
+    between them. Whether they meet, and which of them a mesh actually
+    has, is external, as the cells of a mesh are.
+
+    A label rides along, opaque: two unions of the same pieces and
+    different labels are different domains. It is what lets a consumer
+    name a part of a boundary without the measure acquiring a subdomain
+    id, since a subdomain is a domain.
+    """
+
+    def __init__(self, pieces: tuple[AbstractParametrizedDomain, ...], label: Any = None):
+        """Initialise.
+
+        Args:
+            pieces: The parametrized domains being united, in order
+            label: Anything hashable the consumer uses to tell this union
+                from another of the same pieces, compared by value and
+                never interpreted
+
+        Raises:
+            ValueError: If there are no pieces, or they are not in the same
+                coordinates
+        """
+        if len(pieces) == 0:
+            raise ValueError("A union of no pieces is not a domain.")
+        dimensions = {piece.geometric_dimension for piece in pieces}
+        if len(dimensions) != 1:
+            raise ValueError(
+                f"Every piece of a union must be named in the same coordinates, but "
+                f"these are in {sorted(dimensions)}."
+            )
+        self._pieces = pieces
+        self._label = label
+
+    @property
+    def pieces(self) -> tuple[AbstractParametrizedDomain, ...]:
+        """The parametrized domains being united."""
+        return self._pieces
+
+    @property
+    def label(self) -> Any:
+        """What tells this union from another of the same pieces."""
+        return self._label
+
+    @property
+    def geometric_dimension(self) -> int:
+        """The coordinates every piece is named in."""
+        return self._pieces[0].geometric_dimension
+
+    @property
+    def topological_dimension(self) -> int | None:
+        """The pieces' common topological dimension, or None when they differ."""
+        dimensions = {piece.topological_dimension for piece in self._pieces}
+        if len(dimensions) == 1:
+            (dimension,) = dimensions
+            return dimension
+        return None
+
+    @property
+    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """The parameter regions the pieces are parametrized by, each once."""
+        return tuple(
+            dict.fromkeys(source for piece in self._pieces for source in piece.parameter_regions)
+        )
+
+    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """Get the map out of the given parameter region.
+
+        Only where one piece is parametrized by it. Several pieces of one
+        region is the whole reason a union exists, and choosing between
+        them is not this domain's to do: an integral over it is split into
+        one per piece first.
+
+        Args:
+            source: One of this domain's parametrization sources
+
+        Returns:
+            The map that piece is parametrized by
+
+        Raises:
+            ValueError: If no piece is parametrized by that region, or more than
+                one is
+        """
+        parametrized = [piece for piece in self._pieces if source in piece.parameter_regions]
+        if len(parametrized) == 0:
+            raise ValueError(f"No piece of {self!r} is parametrized by {source!r}.")
+        if len(parametrized) > 1:
+            raise ValueError(
+                f"{len(parametrized)} pieces of {self!r} are parametrized by {source!r}, so there "
+                f"is no one map out of it. Split an integral over this domain into one "
+                f"per piece first."
+            )
+        (piece,) = parametrized
+        return piece.parametrization_out_of(source)
+
+    def __repr__(self) -> str:
+        """Representation."""
+        pieces = ", ".join(repr(piece) for piece in self._pieces)
+        if self._label is None:
+            return f"UnionDomain(({pieces}))"
+        return f"UnionDomain(({pieces}), {self._label!r})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, UnionDomain)
+            and self._pieces == other._pieces
+            and self._label == other._label
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.UnionDomain", self._pieces, self._label))
+
+
+class AbstractCellularDomain(AbstractDomain):
     """Base class for a domain decomposed into cells.
 
     Being made of cells is what lets a finite element be attached per
@@ -584,3 +711,17 @@ def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> SubEntityDo
         That sub-entity, as a domain in the cell's coordinates
     """
     return SubEntityDomain(cell, dim, index)
+
+
+def union_domain(pieces: Sequence[AbstractParametrizedDomain], label: Any = None) -> UnionDomain:
+    """Create the domain several parametrized pieces make up.
+
+    Args:
+        pieces: The parametrized domains being united, in order
+        label: Anything hashable telling this union from another of the
+            same pieces
+
+    Returns:
+        The union of those pieces
+    """
+    return UnionDomain(tuple(pieces), label)
