@@ -4,7 +4,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from uflx.algorithms import replace
 from uflx.basis_functions import EvaluatedBasisFunction
-from uflx.domains import AbstractCoordinateElement
+from uflx.domains import RD, AbstractParametrizedDomain, EntityDomain
 from uflx.expressions import AbstractExpression, expression_sum
 from uflx.function_spaces import function_space
 from uflx.graphs import GraphNode, as_graph
@@ -82,22 +82,22 @@ class SpatialCoordinate(AbstractExpression):
         return SingleSpatialCoordinate(self._dimension, i)
 
 
-class ReferenceToPhysical(AbstractPoint):
-    """A point mapped from the reference cell to a physical cell."""
+class PushedForwardPoint(AbstractPoint):
+    """A point in an entity's coordinates, mapped to ambient coordinates."""
 
-    def __init__(self, point: AbstractPoint, domain: AbstractCoordinateElement):
+    def __init__(self, point: AbstractPoint, domain: AbstractParametrizedDomain):
         """Initialise."""
-        assert point.is_reference
+        assert isinstance(point.domain, EntityDomain)
         self._point = point
         self._domain = domain
 
     @property
-    def reference_point(self) -> AbstractPoint:
-        """The point on the reference."""
+    def entity_point(self) -> AbstractPoint:
+        """The point in the entity's coordinates."""
         return self._point
 
     @property
-    def domain(self) -> AbstractCoordinateElement:
+    def domain(self) -> AbstractParametrizedDomain:
         """The domain."""
         return self._domain
 
@@ -123,35 +123,37 @@ class ReferenceToPhysical(AbstractPoint):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        if len(self.domain.cells) != 1:
+        if len(self.domain.cell_types) != 1:
             raise NotImplementedError("Only domains with exactly on element supported for now.")
-        element = self.domain.element(self.domain.cells[0])
-        (dim,) = element.reference_value_shape
+        element = self.domain.parametrization_element(self.domain.cell_types[0])
+        (dim,) = element.entity_value_shape
 
         components = [
             expression_sum(
                 FlattenedTensorMap((i // dim, i % dim), (dim,))
                 * EvaluatedBasisFunction(
-                    function_space(self.domain, element), i, self.reference_point, component=j
+                    function_space(self.domain, element), i, self.entity_point, component=j
                 )
                 for i in range(element.dim)
             )
             for j in range(dim)
         ]
 
-        return Point(components)
+        # The expansion is an interpolation sum of coordinate dofs, so what
+        # comes out is explicit ambient coordinates.
+        return Point(components, RD(dim))
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
-            isinstance(other, ReferenceToPhysical)
+            isinstance(other, PushedForwardPoint)
             and self._point == other._point
             and self._domain == other._domain
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.ReferenceToPhysical", hash(self._point), hash(self._domain)))
+        return hash(("uflx.PushedForwardPoint", hash(self._point), hash(self._domain)))
 
     @property
     def index(self) -> int | str:
@@ -159,23 +161,39 @@ class ReferenceToPhysical(AbstractPoint):
         return self._point.index
 
 
-class PhysicalToReference(AbstractPoint):
-    """A point mapped from a physical cell to the reference cell."""
+class PulledBackPoint(AbstractPoint):
+    """A point in ambient coordinates, mapped to an entity's coordinates."""
 
-    def __init__(self, point: AbstractPoint, domain: AbstractCoordinateElement):
-        """Initialise."""
+    def __init__(self, point: AbstractPoint, domain: AbstractParametrizedDomain):
+        """Initialise.
+
+        Args:
+            point: The point in ambient coordinates
+            domain: The parametrized domain the point is pulled back through
+        """
+        assert not isinstance(point.domain, EntityDomain)
         self._point = point
-        self._domain = domain
+        self._parametrized_domain = domain
 
     @property
-    def physical_point(self) -> AbstractPoint:
-        """The point on the physical cell."""
+    def ambient_point(self) -> AbstractPoint:
+        """The point in ambient coordinates."""
         return self._point
 
     @property
-    def domain(self) -> AbstractCoordinateElement:
-        """The domain."""
-        return self._domain
+    def domain(self) -> EntityDomain:
+        """The domain.
+
+        A pulled back point lies in the entity's coordinates, not on the
+        parametrized domain it came from.
+        """
+        (cell,) = self._parametrized_domain.cell_types
+        return EntityDomain(cell)
+
+    @property
+    def parametrized_domain(self) -> AbstractParametrizedDomain:
+        """The parametrized domain that this point was pulled back through."""
+        return self._parametrized_domain
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -185,11 +203,11 @@ class PhysicalToReference(AbstractPoint):
     @property
     def dim(self) -> int:
         """The dimension of the point."""
-        tdim = self._domain.topological_dimension
+        tdim = self._parametrized_domain.topological_dimension
         if tdim is None:
             raise NotImplementedError(
-                "Reference points on domains with cells of several topological "
-                "dimensions are not supported."
+                "Points in a cell's coordinates are not supported on domains with "
+                "cells of several topological dimensions."
             )
         return tdim
 
@@ -201,19 +219,19 @@ class PhysicalToReference(AbstractPoint):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._point, self._domain
+        return self._point, self._parametrized_domain
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
-            isinstance(other, ReferenceToPhysical)
+            isinstance(other, PulledBackPoint)
             and self._point == other._point
-            and self._domain == other._domain
+            and self._parametrized_domain == other._parametrized_domain
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.ReferenceToPhysical", hash(self._point), hash(self._domain)))
+        return hash(("uflx.PulledBackPoint", self._point, self._parametrized_domain))
 
     @property
     def index(self) -> int | str:
@@ -224,7 +242,7 @@ class PhysicalToReference(AbstractPoint):
 class Jacobian(AbstractExpression):
     """The Jacobian."""
 
-    def __init__(self, domain: AbstractCoordinateElement, point: AbstractPoint | None = None):
+    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractPoint | None = None):
         """Initalise."""
         self.domain = domain
         self.point = point
@@ -248,10 +266,10 @@ class Jacobian(AbstractExpression):
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
         gdim, tdim = self.value_shape
-        if len(self.domain.cells) > 1:
+        if len(self.domain.cell_types) > 1:
             raise NotImplementedError()
-        (cell,) = self.domain.cells
-        element = self.domain.element(cell)
+        (cell,) = self.domain.cell_types
+        element = self.domain.parametrization_element(cell)
 
         assert self.point is not None
 
@@ -299,7 +317,7 @@ class Jacobian(AbstractExpression):
 class JacobianDeterminant(AbstractExpression):
     """The determinant of the Jacobian."""
 
-    def __init__(self, domain: AbstractCoordinateElement, point: AbstractPoint | None = None):
+    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractPoint | None = None):
         """Initialise."""
         self._jacobian = Jacobian(domain, point)
         self.domain = domain
@@ -334,7 +352,7 @@ class JacobianDeterminant(AbstractExpression):
 class JacobianInverse(AbstractExpression):
     """The inverse of the Jacobian."""
 
-    def __init__(self, domain: AbstractCoordinateElement, point: AbstractPoint | None = None):
+    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractPoint | None = None):
         """Initalise."""
         self._jacobian = Jacobian(domain, point)
         self.domain = domain
@@ -385,7 +403,7 @@ class JacobianInverse(AbstractExpression):
 class JacobianTranspose(AbstractExpression):
     """The transpose of the Jacobian."""
 
-    def __init__(self, domain: AbstractCoordinateElement, point: AbstractPoint | None = None):
+    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractPoint | None = None):
         """Initalise."""
         self._jacobian = Jacobian(domain, point)
         self.domain = domain
@@ -436,7 +454,7 @@ class JacobianTranspose(AbstractExpression):
 class JacobianInverseTranspose(AbstractExpression):
     """The inverse transpose of the Jacobian."""
 
-    def __init__(self, domain: AbstractCoordinateElement, point: AbstractPoint | None = None):
+    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractPoint | None = None):
         """Initalise."""
         self._jacobian = Jacobian(domain, point)
         self.domain = domain

@@ -6,10 +6,10 @@ from uflx import (
     Coefficient,
     TestFunction,
     TrialFunction,
-    coordinate_element,
     dx,
     function_space,
     inner,
+    parametrized_domain,
 )
 from uflx.algorithms import simplify
 from uflx.expressions import MatrixProduct, Product
@@ -21,7 +21,7 @@ from uflx.operators import Inner
 def test_add_and_subtract_integer(lagrange_element):
     """Test that adding 2 and -2 are successfully cancelled."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
 
@@ -35,7 +35,7 @@ def test_add_and_subtract_integer(lagrange_element):
 def test_add_and_subtract_more_integers(lagrange_element):
     """Test that adding and subtracting integers are successfully cancelled."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
 
@@ -49,7 +49,7 @@ def test_add_and_subtract_more_integers(lagrange_element):
 def test_multiply_and_divide_integer(lagrange_element):
     """Test that multiplication then division by 2 are successfully cancelled."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
 
@@ -63,7 +63,7 @@ def test_multiply_and_divide_integer(lagrange_element):
 def test_multiply_and_divide_more_integers(lagrange_element):
     """Test that multiplication then division by integers are successfully cancelled."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
 
@@ -77,7 +77,7 @@ def test_multiply_and_divide_more_integers(lagrange_element):
 def test_add_and_subtract_function(lagrange_element):
     """Test that Function and -Function are successfully cancelled."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
 
@@ -93,7 +93,7 @@ def test_add_and_subtract_function(lagrange_element):
 def test_add_real_zero(lagrange_element):
     """Test that adding 0.0 is removed."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
 
@@ -105,7 +105,7 @@ def test_multiply_and_divide_integer_form(lagrange_element):
     pytest.xfail()
 
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
     v = TestFunction(space)
@@ -127,7 +127,7 @@ def test_multiply_and_divide_integer_form(lagrange_element):
 def test_multiply_and_divide_function_form(lagrange_element):
     """Test that Function and 1/Function are successfully cancelled."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
     v = TestFunction(space)
@@ -157,7 +157,7 @@ def test_multiply_and_divide_function_form(lagrange_element):
 def test_jacobian_and_inverse_matvec(lagrange_element, v_first, inv_first, transpose):
     """Test that Jacobian and inverse Jacobian are successfully cancelled."""
     element = lagrange_element("triangle", 2, (2,))
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     v = TestFunction(space)
 
@@ -185,7 +185,7 @@ def test_jacobian_and_inverse_form(lagrange_element):
     pytest.xfail()
 
     element = lagrange_element("triangle", 2, (2,))
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
     v = TestFunction(space)
@@ -218,7 +218,7 @@ def test_jacobian_and_inverse_form(lagrange_element):
 def test_commutative_operands_are_sorted(lagrange_element):
     """Test that sums and products equal up to the order of operands simplify equally."""
     element = lagrange_element("triangle", 2)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     u = TrialFunction(space)
     f = Coefficient(space)

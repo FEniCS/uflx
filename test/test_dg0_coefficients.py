@@ -5,14 +5,15 @@ from itertools import product
 import pytest
 from conftest import LagrangeElement
 
-from uflx import Coefficient, TestFunction, coordinate_element, dx, function_space, grad, inner
-from uflx.algorithms import pull_back_to_reference, reconstruct_node, replace
+from uflx import Coefficient, TestFunction, dx, function_space, grad, inner, parametrized_domain
+from uflx.algorithms import pull_back_to_entity, reconstruct_node, replace
+from uflx.domains import EntityDomain
 from uflx.expressions import AbstractExpression
 from uflx.functions import FiniteElementVariable
 from uflx.graphs import as_graph
 from uflx.integrals import Integral
-from uflx.maps import AbstractReferenceMap, BlockedReferenceMap, IdentityReferenceMap
-from uflx.operators import Grad, ReferenceGrad
+from uflx.maps import AbstractValueMap, BlockedValueMap, IdentityValueMap
+from uflx.operators import EntityGrad, Grad
 from uflx.tensors import zero
 
 
@@ -31,7 +32,7 @@ def assert_zero(expression, shape):
 @pytest.mark.parametrize("geometry_degree", [1, 2])
 def test_dg0_value_and_gradient(lagrange_element, cell, dim, geometry_degree):
     """DG0 values survive in forms, but their gradients contain no coefficient."""
-    domain = coordinate_element(lagrange_element(cell, geometry_degree, (dim,)))
+    domain = parametrized_domain(lagrange_element(cell, geometry_degree, (dim,)))
     space = function_space(domain, lagrange_element(cell, 0))
     c = Coefficient(space)
     other = Coefficient(space)
@@ -40,7 +41,7 @@ def test_dg0_value_and_gradient(lagrange_element, cell, dim, geometry_degree):
     assert c.label != other.label
     form = inner(c, v) * dx
     assert isinstance(form, Integral)
-    for expression in [form, pull_back_to_reference(form)]:
+    for expression in [form, pull_back_to_entity(form)]:
         coefficients = [n for n in as_graph(expression) if isinstance(n, Coefficient)]
         assert len(coefficients) == 1
         assert coefficients[0].label == c.label
@@ -52,9 +53,10 @@ def test_dg0_value_and_gradient(lagrange_element, cell, dim, geometry_degree):
     assert isinstance(reconstructed, Coefficient)
     assert reconstructed.is_cellwise_constant
     assert_zero(grad(c), (dim,))
-    assert_zero(pull_back_to_reference(Grad(c)), (dim,))
-    reference = Coefficient(space, is_reference=True)
-    assert_zero(ReferenceGrad(reference).expand_geometry(), (dim,))
+    assert_zero(pull_back_to_entity(Grad(c)), (dim,))
+    entity_space = function_space(EntityDomain(space.elements[0].cell), space.elements[0])
+    reference = Coefficient(entity_space)
+    assert_zero(EntityGrad(reference).expand_geometry(), (dim,))
     for i in range(dim):
         assert_zero(c.diff(i), ())
         assert_zero(reference.diff(i), ())
@@ -63,7 +65,7 @@ def test_dg0_value_and_gradient(lagrange_element, cell, dim, geometry_degree):
     # Replacement must retain the new coefficient's constancy on reconstruction.
     variable = Coefficient(v.function_space)
     replaced = replace(Grad(variable), {variable: c})
-    assert_zero(pull_back_to_reference(replaced), (dim,))
+    assert_zero(pull_back_to_entity(replaced), (dim,))
     with pytest.raises(ValueError):
         c.diff(dim)
 
@@ -71,7 +73,7 @@ def test_dg0_value_and_gradient(lagrange_element, cell, dim, geometry_degree):
 @pytest.mark.parametrize("degree", [1, 2])
 def test_nonconstant_control(lagrange_element, degree):
     """Higher-order coefficients must retain their gradients."""
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     c = Coefficient(function_space(domain, lagrange_element("triangle", degree)))
     assert not c.is_cellwise_constant
     assert isinstance(grad(c), Grad)
@@ -79,7 +81,7 @@ def test_nonconstant_control(lagrange_element, degree):
         c.diff(0)
 
 
-class UnknownMap(AbstractReferenceMap):
+class UnknownMap(AbstractValueMap):
     """A mapping with no guarantee that it preserves reference constants."""
 
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
@@ -90,32 +92,33 @@ class UnknownMap(AbstractReferenceMap):
         """Leave this mock map unimplemented."""
         raise NotImplementedError()
 
-    def physical_value_shape(
-        self, reference_value_shape: tuple[int, ...], geometric_dimension: int
+    def ambient_value_shape(
+        self, entity_value_shape: tuple[int, ...], geometric_dimension: int
     ) -> tuple[int, ...]:
         """Use scalar values."""
         return ()
 
 
 def test_unknown_mapping_is_not_constant(lagrange_element):
-    """Reference degree zero alone is insufficient on the physical cell."""
+    """Degree zero in the entity's coordinates alone is insufficient in ambient coordinates."""
     base = lagrange_element("triangle", 0)
 
     class MappedElement(LagrangeElement):
         @property
-        def reference_map(self):
+        def value_map(self):
             return UnknownMap()
 
-    domain = coordinate_element(lagrange_element("triangle", 2, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 2, (2,)))
     space = function_space(domain, MappedElement(base.cell, 0))
     c = Coefficient(space)
     assert not c.is_cellwise_constant
     assert isinstance(grad(c), Grad)
-    reference = Coefficient(space, is_reference=True)
+    entity_space = function_space(EntityDomain(space.elements[0].cell), space.elements[0])
+    reference = Coefficient(entity_space)
     assert reference.is_cellwise_constant
-    assert_zero(ReferenceGrad(reference).expand_geometry(), (2,))
-    assert not BlockedReferenceMap(UnknownMap(), (2,)).preserves_constant_values
-    assert BlockedReferenceMap(IdentityReferenceMap(), (2,)).preserves_constant_values
+    assert_zero(EntityGrad(reference).expand_geometry(), (2,))
+    assert not BlockedValueMap(UnknownMap(), (2,)).preserves_constant_values
+    assert BlockedValueMap(IdentityValueMap(), (2,)).preserves_constant_values
 
 
 @pytest.mark.parametrize("shape", [(), (2,), (2, 3), (2, 2, 2)])
@@ -130,19 +133,20 @@ def test_blocked_constant_derivatives(lagrange_element, shape):
 
     class BlockedElement(LagrangeElement):
         @property
-        def reference_map(self):
-            return BlockedReferenceMap(IdentityReferenceMap(), shape)
+        def value_map(self):
+            return BlockedValueMap(IdentityValueMap(), shape)
 
     scalar = lagrange_element("triangle", 0)
-    domain = coordinate_element(lagrange_element("triangle", 2, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 2, (2,)))
     space = function_space(domain, BlockedElement(scalar.cell, 0, shape))
     c = Coefficient(space)
     assert c.is_cellwise_constant
     assert_zero(grad(c), (*shape, 2))
-    assert_zero(pull_back_to_reference(Grad(c)), (*shape, 2))
+    assert_zero(pull_back_to_entity(Grad(c)), (*shape, 2))
     assert_zero(c.diff(0), shape)
-    reference = Coefficient(space, is_reference=True)
-    assert_zero(ReferenceGrad(reference).expand_geometry(), (*shape, 2))
+    entity_space = function_space(EntityDomain(space.elements[0].cell), space.elements[0])
+    reference = Coefficient(entity_space)
+    assert_zero(EntityGrad(reference).expand_geometry(), (*shape, 2))
 
 
 def test_unknown_degree_and_multielement_space(lagrange_element):
@@ -154,7 +158,7 @@ def test_unknown_degree_and_multielement_space(lagrange_element):
             return None
 
     p0 = lagrange_element("triangle", 0)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     for elements in [UnknownDegreeElement(p0.cell, 0), (p0, lagrange_element("triangle", 1))]:
         c = Coefficient(function_space(domain, elements))
         assert not c.is_cellwise_constant

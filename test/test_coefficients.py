@@ -1,6 +1,6 @@
 """Test coefficients."""
 
-from uflx import TestFunction, coordinate_element, dx, function_space, inner
+from uflx import TestFunction, dx, function_space, inner, parametrized_domain
 from uflx.functions import Coefficient
 from uflx.integrals import Integral
 
@@ -8,7 +8,7 @@ from uflx.integrals import Integral
 def test_coefficient_labelling(lagrange_element):
     """Test the integral labelling of coefficients."""
     element = lagrange_element("triangle", 1)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     w = Coefficient(space)
     v = TestFunction(space)
@@ -42,7 +42,7 @@ def test_coefficient_labelling(lagrange_element):
 def test_coefficient_count_is_auto_generated(lagrange_element):
     """Test that distinct Coefficients on the same space get distinct counts."""
     element = lagrange_element("triangle", 1)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
 
     w1 = Coefficient(space)
@@ -53,7 +53,7 @@ def test_coefficient_count_is_auto_generated(lagrange_element):
 def test_coefficient_function_space(lagrange_element):
     """Test that a Coefficient reports the function space it was built from."""
     element = lagrange_element("triangle", 1)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     w = Coefficient(space)
     assert w.function_space == space

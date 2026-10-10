@@ -6,7 +6,7 @@
 """Operators."""
 
 from uflx.complex import conj
-from uflx.domains import AbstractCoordinateElement, AbstractDomain
+from uflx.domains import AbstractDomain, AbstractParametrizedDomain
 from uflx.expressions import AbstractExpression, BinaryOperator, Sqrt, UnaryOperator
 from uflx.functions import AbstractFunction
 from uflx.geometry import JacobianInverse
@@ -100,7 +100,7 @@ class Grad(UnaryOperator):
 
     def __init__(self, argument: GraphNode):
         """Initialise."""
-        assert isinstance(argument, AbstractFunction) and not argument.is_reference
+        assert isinstance(argument, AbstractFunction) and not argument.in_entity_coordinates
         self._physical_argument = argument
         super().__init__(argument)
 
@@ -114,8 +114,8 @@ class Grad(UnaryOperator):
         """Get a component of the expression."""
         raise NotImplementedError("Cannot get a 'component' of a Grad")
 
-    def pull_back_to_reference(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
-        """Pull the node back to the reference cell."""
+    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
+        """Pull the node back to the entity's coordinates."""
         if self._physical_argument.is_cellwise_constant:
             # The gradient of a cellwise constant is exactly zero.
             return zero(self.value_shape)
@@ -127,7 +127,7 @@ class Grad(UnaryOperator):
             """Extract the domain associated with a node."""
             domain: AbstractDomain | None = None
             for i in as_graph(node).descendants(node):
-                if isinstance(i, AbstractFunction) and not i.is_reference:
+                if isinstance(i, AbstractFunction) and not i.in_entity_coordinates:
                     if domain is None:
                         domain = i.function_space.domain
                     else:
@@ -136,36 +136,36 @@ class Grad(UnaryOperator):
             return domain
 
         domain = extract_domain(self)
-        assert isinstance(domain, AbstractCoordinateElement)
+        assert isinstance(domain, AbstractParametrizedDomain)
         if isinstance(argument, PushedForward):
-            # The last index of the reference gradient is the derivative direction.
-            return ReferenceGrad(argument.function) @ JacobianInverse(domain)
+            # The last index of the entity gradient is the derivative direction.
+            return EntityGrad(argument.function) @ JacobianInverse(domain)
         raise NotImplementedError()
 
 
-class ReferenceGrad(UnaryOperator):
+class EntityGrad(UnaryOperator):
     """Gradient operator."""
 
     def __init__(self, argument: GraphNode):
         """Initialise."""
-        assert isinstance(argument, AbstractFunction) and argument.is_reference
-        self._reference_argument = argument
+        assert isinstance(argument, AbstractFunction) and argument.in_entity_coordinates
+        self._entity_argument = argument
         super().__init__(argument)
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        return (*self._reference_argument.value_shape, self._reference_argument.domain_size)
+        return (*self._entity_argument.value_shape, self._entity_argument.domain_size)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise NotImplementedError(
-            "Cannot get a 'component' of a ReferenceGrad. Try calling expand_geometry first"
+            "Cannot get a 'component' of a EntityGrad. Try calling expand_geometry first"
         )
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        argument = self._reference_argument
+        argument = self._entity_argument
         d = argument.domain_size
         if argument.is_cellwise_constant:
             return zero((*argument.value_shape, d))
@@ -197,7 +197,7 @@ class ReferenceGrad(UnaryOperator):
 
 def grad(a: AbstractExpression) -> AbstractExpression:
     """The gradient of an expression."""
-    if isinstance(a, AbstractFunction) and not a.is_reference and a.is_cellwise_constant:
+    if isinstance(a, AbstractFunction) and not a.in_entity_coordinates and a.is_cellwise_constant:
         # The Grad of a cellwise constant physical function is zero.
         gdim = a.function_space.domain.geometric_dimension
         return zero((*a.value_shape, gdim))
