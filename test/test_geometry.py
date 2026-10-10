@@ -43,7 +43,7 @@ def test_jacobian_expand_geometry(cell, gdim, lagrange_element):
     tdim = domain.cell_types[0].topological_dimension
 
     point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cell_types[0]))
-    j = Jacobian(domain, point)
+    j = Jacobian(domain.sole_parametrization, point)
     assert j.value_shape == (gdim, tdim)
 
     mat = j.expand_geometry()
@@ -57,7 +57,7 @@ def test_jacobian_inverse_expand_geometry(cell, gdim, lagrange_element):
     tdim = domain.cell_types[0].topological_dimension
 
     point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cell_types[0]))
-    j = JacobianInverse(domain, point)
+    j = JacobianInverse(domain.sole_parametrization, point)
     assert j.value_shape == (tdim, gdim)
 
     mat = j.expand_geometry()
@@ -71,7 +71,7 @@ def test_jacobian_tranpose_expand_geometry(cell, gdim, lagrange_element):
     tdim = domain.cell_types[0].topological_dimension
 
     point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cell_types[0]))
-    j = JacobianTranspose(domain, point)
+    j = JacobianTranspose(domain.sole_parametrization, point)
     assert j.value_shape == (tdim, gdim)
 
     mat = j.expand_geometry()
@@ -85,7 +85,7 @@ def test_jacobian_inverse_transpose_expand_geometry(cell, gdim, lagrange_element
     tdim = domain.cell_types[0].topological_dimension
 
     point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cell_types[0]))
-    j = JacobianInverseTranspose(domain, point)
+    j = JacobianInverseTranspose(domain.sole_parametrization, point)
     assert j.value_shape == (gdim, tdim)
 
     mat = j.expand_geometry()
@@ -100,8 +100,8 @@ def test_pushed_forward_point_expands_to_ambient_coordinates(cell, gdim, lagrang
     tdim = entity.topological_dimension
 
     entity_point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
-    pushed = PushedForwardPoint(entity_point, domain)
-    assert pushed.domain == domain
+    pushed = PushedForwardPoint(entity_point, domain.sole_parametrization)
+    assert pushed.domain == RD(gdim)
 
     expanded = pushed.expand_geometry()
     assert isinstance(expanded, Point)
@@ -114,11 +114,11 @@ def test_pulled_back_point_lands_in_entity_coordinates(lagrange_element):
     domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
     (entity,) = domain.cell_types
 
-    pulled = PulledBackPoint(Point([RealScalar(1.0)] * 3, RD(3)), domain)
+    pulled = PulledBackPoint(Point([RealScalar(1.0)] * 3, RD(3)), domain.sole_parametrization)
 
     assert pulled.domain == EntityDomain(entity)
     assert pulled.in_entity_coordinates
-    assert pulled.parametrized_domain == domain
+    assert pulled.parametrization == domain.sole_parametrization
 
 
 def test_the_two_mapped_points_do_not_collide(lagrange_element):
@@ -129,8 +129,8 @@ def test_the_two_mapped_points_do_not_collide(lagrange_element):
     entity_point = Point([RealScalar(0.25)], EntityDomain(entity))
     ambient_point = Point([RealScalar(0.25)], RD(1))
 
-    pushed = PushedForwardPoint(entity_point, domain)
-    pulled = PulledBackPoint(ambient_point, domain)
+    pushed = PushedForwardPoint(entity_point, domain.sole_parametrization)
+    pulled = PulledBackPoint(ambient_point, domain.sole_parametrization)
 
     assert pushed != pulled
     assert pulled != pushed
@@ -144,7 +144,7 @@ def test_jacobian_derivatives_are_entity_derivatives(cell, gdim, lagrange_elemen
     tdim = domain.cell_types[0].topological_dimension
 
     point = Point([RealScalar(1.0)] * tdim, EntityDomain(domain.cell_types[0]))
-    mat = Jacobian(domain, point).expand_geometry()
+    mat = Jacobian(domain.sole_parametrization, point).expand_geometry()
     derivatives = {
         node.derivative
         for node in as_graph(mat).ordered_nodes()
@@ -169,6 +169,11 @@ def test_jacobian_coordinate_dofs(cell, gdim, lagrange_element):
     tdim = domain.cell_types[0].topological_dimension
     point = Point([RealScalar(0.1)] * tdim, EntityDomain(domain.cell_types[0]))
 
-    x_dofs = coordinate_dof_entries(PushedForwardPoint(point, domain).expand_geometry())
+    x_dofs = coordinate_dof_entries(
+        PushedForwardPoint(point, domain.sole_parametrization).expand_geometry()
+    )
     assert len(x_dofs) > 0
-    assert coordinate_dof_entries(Jacobian(domain, point).expand_geometry()) == x_dofs
+    assert (
+        coordinate_dof_entries(Jacobian(domain.sole_parametrization, point).expand_geometry())
+        == x_dofs
+    )

@@ -153,10 +153,8 @@ class Integral(AbstractIntegral):
                     assert domain == node.function_space.domain
         assert domain is not None
         assert isinstance(domain, AbstractParametrizedDomain)
-        if len(domain.cell_types) != 1:
-            raise NotImplementedError("Only domains with exactly one cell type supported for now.")
         (cell,) = domain.cell_types
-        det = abs(JacobianDeterminant(domain))
+        det = abs(JacobianDeterminant(domain.sole_parametrization))
 
         assert isinstance(integrand, AbstractExpression)
 

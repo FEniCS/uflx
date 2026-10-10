@@ -71,17 +71,21 @@ consumers, e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` exte
   implemented as graph rewrites.
 - `domains.py` — `AbstractDomain`: a set you can integrate over. A coordinate
   domain's points are tuples of numbers (`RD`, `EntityDomain`); a parametrized
-  domain is the image of a map out of one. The actual mesh stays external to UFLx.
+  domain is the image of a map out of one. `AbstractParametrization` is that map,
+  evaluated by `value` and differentiated by `jacobian`; `IdentityParametrization`
+  is an entity domain's. The actual mesh stays external to UFLx.
 - `function_spaces.py` — `AbstractFunctionSpace`: standard FE spaces (domain +
   element), constant spaces (shape + scalar type), or non-FE spaces (domain + shape,
   no element). Do not construct `Argument`/`Coefficient` directly from an element —
   they must come from a `FunctionSpace`.
 - `functions.py` / `basis_functions.py` — `AbstractFunction` and basis functions
   evaluated at points, in either an entity's coordinates or ambient coordinates.
-- `parametrizations.py` — `ParametrizedDomain`: a parametrized domain whose map is
-  described by a finite element per cell. Evaluating such a map is an interpolation
-  sum, so this sits above `function_spaces`/`basis_functions` rather than in
-  `domains`, which must not know how a parametrization is described.
+- `parametrizations.py` — `FiniteElementParametrization` and `ParametrizedDomain`,
+  where a map is described by a finite element per cell, plus
+  `ComposedParametrization`/`ComposedDomain`, which apply two maps in turn via the
+  chain rule. Evaluating an element map is an interpolation sum, so this sits above
+  `function_spaces`/`basis_functions` rather than in `domains`, which must not know
+  how a parametrization is described.
 - `expressions.py` — `AbstractExpression`: the base of every symbolic node
   (`BinaryOperator`, `UnaryOperator`, terminals). Carries value shape, free indices,
   domain, scalar type as static, extensible attributes (unlike legacy UFL's fixed
