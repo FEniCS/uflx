@@ -12,11 +12,11 @@ from uflx.domains import (
     AbstractParametrizedDomain,
     EntityDomain,
 )
-from uflx.expressions import AbstractExpression
+from uflx.expressions import AbstractExpression, Sqrt, expression_sum
 from uflx.functions import AbstractVariable
 from uflx.graphs import GraphNode, as_graph
 from uflx.points import AbstractPoint, Point
-from uflx.tensors import Identity, Matrix
+from uflx.tensors import Identity, Matrix, Vector
 
 
 @runtime_checkable
@@ -495,6 +495,64 @@ class TangentialProjector(AbstractGeometricQuantity):
             # A projection projected again is the same projection.
             return self
         return None
+
+
+class UnitNormal(AbstractGeometricQuantity):
+    """The unit normal to a domain of codimension one in its ambient coordinates.
+
+    Where ``gdim == tdim + 1`` the directions orthogonal to every column of
+    the Jacobian form a line, so the tangent space fixes the normal up to
+    sign with no further information. The component form is the
+    generalised cross product of the Jacobian's columns, ``n_i = (-1)^i``
+    times the determinant of the Jacobian with row ``i`` removed,
+    normalised.
+
+    Which of the two directions is meant is a convention this does not
+    fix. A consumer that needs the outward one of a cell supplies that
+    orientation itself, since nothing here knows which side the cell is
+    on.
+
+    Hand it a facet's domain and it is the facet normal; hand it a surface
+    mesh's own domain and it is that surface's normal.
+    """
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        gdim, tdim = self._jacobian.value_shape
+        if gdim != tdim + 1:
+            raise ValueError(
+                f"A normal is a single direction only where a domain has codimension "
+                f"one, but this one has topological dimension {tdim} in {gdim} "
+                f"coordinates."
+            )
+        if tdim == 0:
+            raise NotImplementedError(
+                "The normal to a domain of topological dimension zero is a sign, which "
+                "is a convention rather than something to compute."
+            )
+        return (gdim,)
+
+    def expand_geometry(self) -> AbstractExpression:
+        """Expand geometry."""
+        (gdim,) = self.value_shape
+        j = _as_dense_matrix(self._jacobian.expand_geometry())
+        tdim = gdim - 1
+
+        components = []
+        for i in range(gdim):
+            minor = Matrix(
+                [[j.component(r, c) for c in range(tdim)] for r in range(gdim) if r != i]
+            )
+            determinant = minor.compute_determinant()
+            components.append(determinant if i % 2 == 0 else -determinant)
+
+        norm = Sqrt(expression_sum(c * c for c in components))
+        return Vector([c / norm for c in components])
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get a component of the expression."""
+        return self.expand_geometry().component(*indices)
 
 
 class JacobianDeterminant(AbstractGeometricQuantity):
