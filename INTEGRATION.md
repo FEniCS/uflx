@@ -247,7 +247,7 @@ other.
 1. **Pull back off a cell.** Change of variables onto a chart's parameter region is
    meaningful for any charted domain — the identity for `R^d` and for a region, the
    inclusion for a face — but the variable it hands the integrand is a cell's, so
-   `restricted_to` and `pull_back_to_entity` require a cellular domain and say so.
+   `on_cell_type` and `pull_back_to_entity` require a cellular domain and say so.
 1. **Atomic measures**, for a point evaluation and for a quadrature rule as a sum of
    Diracs. A sibling of `Measure` rather than a weighting of one.
 
