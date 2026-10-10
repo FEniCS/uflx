@@ -440,10 +440,10 @@ def test_opposite_faces_are_indistinguishable_to_the_normal(gdim):
     tell them apart, so no amount of work inside UnitNormal can produce
     an outward normal.
 
-    This is not about cells. The reference triangle's facets made the
-    same point less sharply, where one facet of three came out inward
-    and it looked like a question of ordering its vertices. Here two
-    faces are given identical data and must give opposite answers.
+    This is not about cells. Two faces are given identical data here and
+    must give opposite answers, which is sharper than a facet of a
+    reference triangle whose normal comes out inward, where the vertex
+    ordering is also in play.
 
     What it needs is for the domain to say, as BoxFace.outward_normal
     does, or for the chart to be oriented so that the cross product
