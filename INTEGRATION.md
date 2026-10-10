@@ -73,7 +73,7 @@ functions on two domains is rejected:
 
 ```python
 V1, V2 = function_space(m1, P1), function_space(m2, P1)
-inner(Coefficient(V1), TestFunction(V2)) * dx   # AssertionError
+inner(Coefficient(V1), TestFunction(V2)) * dx  # AssertionError
 ```
 
 That is the motivating example of this branch — two subdomains meeting on an interface —
@@ -135,8 +135,8 @@ the `None`-means-not-yet-known allowance in `DESIGN_CHOICES.md` rather than a de
 chosen in `__init__`:
 
 ```python
-dx            # Measure(domain=None), the domain to be inferred as today
-dx(omega)     # Measure(omega), the domain stated
+dx  # Measure(domain=None), the domain to be inferred as today
+dx(omega)  # Measure(omega), the domain stated
 ```
 
 Inference then stays available as sugar for the common case and is documented as sugar,

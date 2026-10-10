@@ -26,12 +26,12 @@ from uflx.functions import AbstractVariable
 from uflx.geometry import (
     AbstractGeometricQuantity,
     Jacobian,
-    JacobianDeterminant,
     MetricTensor,
     PushedForwardPoint,
     SpatialCoordinate,
     TangentialProjector,
     UnitNormal,
+    VolumeElement,
     _as_dense_matrix,
     expand_geometry,
 )
@@ -248,15 +248,15 @@ def test_restricting_a_composed_domain_keeps_its_map(mesh_on_a_parabola, parabol
 def test_a_composed_domain_has_a_measure(mesh_on_a_parabola, entity_point):
     """A composed map's Jacobian is a matrix product, which still has to reduce.
 
-    The determinant, the metric and the projector all have to write the
+    The volume element, the metric and the projector all have to write the
     Jacobian out before working on it, and a chain rule does not hand
     them a Matrix.
     """
-    for quantity in [JacobianDeterminant, MetricTensor, TangentialProjector]:
+    for quantity in [VolumeElement, MetricTensor, TangentialProjector]:
         expanded = quantity(mesh_on_a_parabola, entity_point).expand_geometry()
         assert expanded.value_shape == quantity(mesh_on_a_parabola, entity_point).value_shape
 
-    assert JacobianDeterminant(mesh_on_a_parabola, entity_point).value_shape == ()
+    assert VolumeElement(mesh_on_a_parabola, entity_point).value_shape == ()
     assert MetricTensor(mesh_on_a_parabola, entity_point).value_shape == (1, 1)
     assert TangentialProjector(mesh_on_a_parabola, entity_point).value_shape == (2, 2)
 

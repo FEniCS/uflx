@@ -22,7 +22,7 @@ from uflx.functions import (
     create_variable,
     extract_domain,
 )
-from uflx.geometry import AbstractGeometricQuantity, JacobianDeterminant
+from uflx.geometry import AbstractGeometricQuantity, VolumeElement
 from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
 
 
@@ -220,11 +220,13 @@ class Integral(AbstractIntegral):
                 "coordinates. Split it by cell type first."
             )
         (cell,) = domain.cell_types
-        det = abs(JacobianDeterminant(domain))
+        density = VolumeElement(domain)
 
         assert isinstance(integrand, AbstractExpression)
 
-        return Integral(det * integrand, self._measure, self._variable.to_entity_coordinates(cell))
+        return Integral(
+            density * integrand, self._measure, self._variable.to_entity_coordinates(cell)
+        )
 
     def __repr__(self) -> str:
         """Representation."""
