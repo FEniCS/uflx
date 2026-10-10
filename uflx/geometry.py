@@ -27,68 +27,6 @@ class ExpandableGeometry(Protocol):
         """Expand geometry."""
 
 
-class SingleSpatialCoordinate(AbstractExpression):
-    """A variable representing a component of R^d."""
-
-    def __init__(self, dimension: int, component: int):
-        """Initialise."""
-        self._dimension = dimension
-        self._component = component
-
-    @property
-    def value_shape(self) -> tuple[int, ...]:
-        """The value shape of the expression."""
-        return ()
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._dimension, self._component
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        raise ValueError("Cannot get a component of a scalar expression")
-
-
-class SpatialCoordinate(AbstractExpression):
-    """A variable on R^d."""
-
-    def __init__(self, dimension: int):
-        """Initialise."""
-        self._dimension = dimension
-
-    def __getitem__(self, component: int) -> SingleSpatialCoordinate:
-        """Get item."""
-        if component < 0 or component >= self._dimension:
-            raise IndexError("coordinate index out of range")
-        return SingleSpatialCoordinate(self._dimension, component)
-
-    @property
-    def value_shape(self) -> tuple[int, ...]:
-        """The value shape of the expression."""
-        return (self._dimension,)
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._dimension,)
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        (i,) = indices
-        return SingleSpatialCoordinate(self._dimension, i)
-
-
 def _as_dense_matrix(jacobian: AbstractExpression) -> Matrix:
     """Write a Jacobian out entry by entry, so it can be inverted or reduced.
 
@@ -104,7 +42,18 @@ def _as_dense_matrix(jacobian: AbstractExpression) -> Matrix:
 
 
 class PushedForwardPoint(AbstractPoint):
-    """A point in an entity's coordinates, mapped through a parametrization."""
+    """A point in an entity's coordinates, mapped through a parametrization.
+
+    The point level action of a map: the same thing
+    :class:`SpatialCoordinate` gives as an expression, but being a point
+    it can be the variable a basis function is evaluated at. An element
+    defined on the physical cell rather than on a reference one needs
+    that, having no map to compose from.
+
+    It takes the domain rather than the map because the point it starts
+    from already lies in a cell's coordinate domain, and so names the
+    cell whose map carries it. Contrast :class:`PulledBackPoint`.
+    """
 
     def __init__(self, point: AbstractPoint, domain: AbstractParametrizedDomain):
         """Initialise.
@@ -175,7 +124,9 @@ class PushedForwardPoint(AbstractPoint):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        value = self.parametrization.value(self._point)
+        # Expanding has to reach the bottom in one go, since the walk that
+        # calls this does not revisit what it returns.
+        value = SpatialCoordinate(self._parametrized_domain, self._point).expand_geometry()
 
         # The map's values are ambient coordinates, so what comes out is a
         # point of R^gdim rather than one of the domain it parametrizes.
@@ -200,7 +151,21 @@ class PushedForwardPoint(AbstractPoint):
 
 
 class PulledBackPoint(AbstractPoint):
-    """A point in ambient coordinates, mapped to an entity's coordinates."""
+    """A point in ambient coordinates, mapped to an entity's coordinates.
+
+    A terminal, deliberately: it has no expansion and will not get one.
+    A parametrization offers a value and a derivative and no inverse,
+    because inverting a finite element map is a Newton solve rather than
+    anything symbolic. So this names a point a consumer computes, the way
+    a coordinate dof names a number a mesh holds.
+
+    It takes the map rather than the domain because a point of the ambient
+    coordinates does not say which cell it should land in; that is part of
+    the question being asked. Contrast :class:`PushedForwardPoint`.
+
+    What wants it is evaluation at a physical location: a reference basis
+    read at ``phi^-1(x)``, which is what a point evaluation needs.
+    """
 
     def __init__(self, point: AbstractPoint, parametrization: AbstractParametrization):
         """Initialise.
@@ -373,6 +338,13 @@ class AbstractGeometricQuantity(AbstractExpression):
             return Identity(gdim)
         return TangentialProjector(self._domain, self._point)
 
+    def _at_point(self, point: AbstractVariable) -> Self:
+        """This quantity at a point, rebuilt.
+
+        A subclass carrying more than a domain and a point overrides this.
+        """
+        return self.__class__(self._domain, point)
+
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Evaluate this quantity at the given variable.
 
@@ -385,7 +357,93 @@ class AbstractGeometricQuantity(AbstractExpression):
         (cell,) = source.cell_types
         if cell not in self.domain.cell_types:
             return self
-        return self.__class__(self.domain, variable)
+        return self._at_point(variable)
+
+
+class SpatialCoordinate(AbstractGeometricQuantity):
+    """The ambient coordinates a domain's parametrization lands on.
+
+    ``x = phi(X)``, the map's own value: where a point of a cell's
+    coordinate domain sits in the ambient coordinates. Writing a source
+    term as ``sin(x[0])`` is what this is for.
+    """
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        return (self._domain.geometric_dimension,)
+
+    def expand_geometry(self) -> AbstractExpression:
+        """Expand geometry."""
+        parametrization = self.parametrization
+        assert self._point is not None
+        return parametrization.value(self._point)
+
+    def __getitem__(self, component: int) -> SingleSpatialCoordinate:
+        """Get one coordinate."""
+        return self.component(component)
+
+    def component(self, *indices: int) -> SingleSpatialCoordinate:
+        """Get a component of the expression."""
+        (i,) = indices
+        (dimension,) = self.value_shape
+        if i < 0 or i >= dimension:
+            raise IndexError("coordinate index out of range")
+        return SingleSpatialCoordinate(self._domain, i, self._point)
+
+
+class SingleSpatialCoordinate(AbstractGeometricQuantity):
+    """One of the ambient coordinates a domain's parametrization lands on.
+
+    Kept as a node of its own rather than expanded on sight, so that
+    ``sin(x[0])`` stays readable until geometry is expanded.
+    """
+
+    def __init__(
+        self,
+        domain: AbstractParametrizedDomain,
+        component: int,
+        point: AbstractVariable | None = None,
+    ):
+        """Initialise.
+
+        Args:
+            domain: The domain whose coordinates these are
+            component: Which coordinate, in ``range(geometric_dimension)``
+            point: Where to evaluate it, if that is known yet
+        """
+        super().__init__(domain, point)
+        self._component = component
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        return ()
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return self._domain, self._component, self._point
+
+    def _at_point(self, point: AbstractVariable) -> Self:
+        """This coordinate at a point, rebuilt."""
+        return self.__class__(self._domain, self._component, point)
+
+    def expand_geometry(self) -> AbstractExpression:
+        """Expand geometry."""
+        return (
+            SpatialCoordinate(self._domain, self._point)
+            .expand_geometry()
+            .component(self._component)
+        )
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"SingleSpatialCoordinate({self._domain!r}, {self._component}, {self._point!r})"
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get a component of the expression."""
+        raise ValueError("Cannot get a component of a scalar expression")
 
 
 class Jacobian(AbstractGeometricQuantity):

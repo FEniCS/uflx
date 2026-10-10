@@ -29,6 +29,7 @@ from uflx.geometry import (
     JacobianDeterminant,
     MetricTensor,
     PushedForwardPoint,
+    SpatialCoordinate,
     TangentialProjector,
     UnitNormal,
     _as_dense_matrix,
@@ -288,3 +289,13 @@ def test_the_normal_of_a_curve_is_a_unit_vector_across_the_tangent(parabola, ent
     assert tangent == pytest.approx([1.0, 0.5])
     assert sum(c * c for c in normal) == pytest.approx(1.0)
     assert sum(a * b for a, b in zip(tangent, normal, strict=True)) == pytest.approx(0.0)
+
+
+def test_the_spatial_coordinate_of_a_curve_is_the_point_on_it(parabola, entity_point):
+    """On y = x^2 at x = 1/4, x is (1/4, 1/16)."""
+    curve = composed_domain(entity_domain(Interval()), parabola)
+    coordinates = SpatialCoordinate(curve, entity_point)
+
+    assert coordinates.value_shape == (2,)
+    assert coordinates[0].expand_geometry().as_float() == pytest.approx(0.25)
+    assert coordinates[1].expand_geometry().as_float() == pytest.approx(0.0625)

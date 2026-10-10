@@ -18,6 +18,8 @@ from uflx.geometry import (
     MetricTensor,
     PulledBackPoint,
     PushedForwardPoint,
+    SingleSpatialCoordinate,
+    SpatialCoordinate,
     TangentialProjector,
     UnitNormal,
     expand_geometry,
@@ -441,3 +443,75 @@ def test_a_domain_of_no_topological_dimension_has_no_normal_to_compute(lagrange_
 
     with pytest.raises(NotImplementedError, match="sign"):
         UnitNormal(domain).value_shape
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_spatial_coordinate_is_the_maps_value(cell, gdim, lagrange_element):
+    """X is phi(X), so expanding it is asking the map what it gives."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    coordinates = SpatialCoordinate(domain, point)
+
+    assert coordinates.value_shape == (gdim,)
+    assert coordinates.expand_geometry() == domain.parametrization(entity).value(point)
+
+
+def test_both_ways_of_indexing_a_coordinate_check_their_range(lagrange_element):
+    """`x[i]` and `x.component(i)` are the same path, so they agree.
+
+    They used not to: one raised and the other gave a nonsense node.
+    """
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    coordinates = SpatialCoordinate(domain)
+
+    assert coordinates[1] == coordinates.component(1)
+    for out_of_range in [-1, 2]:
+        with pytest.raises(IndexError, match="out of range"):
+            coordinates[out_of_range]
+        with pytest.raises(IndexError, match="out of range"):
+            coordinates.component(out_of_range)
+
+
+def test_one_coordinate_stays_a_node_of_its_own(lagrange_element):
+    """`sin(x[0])` should stay readable until geometry is expanded."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    (entity,) = domain.cell_types
+    point = Point([RealScalar(0.25)] * 2, EntityDomain(entity))
+
+    single = SpatialCoordinate(domain, point)[1]
+
+    assert isinstance(single, SingleSpatialCoordinate)
+    assert single.value_shape == ()
+    assert single.expand_geometry() == SpatialCoordinate(domain, point).expand_geometry().component(
+        1
+    )
+    with pytest.raises(ValueError, match="scalar"):
+        single.component(0)
+
+
+def test_one_coordinate_keeps_which_coordinate_it_is_when_told_a_point(lagrange_element):
+    """It carries more than a domain and a point, so it rebuilds itself."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    (cell,) = domain.cell_types
+    variable = create_variable(domain).to_entity_coordinates(cell)
+
+    told = SingleSpatialCoordinate(domain, 1).reconstruct_with_variable(variable)
+
+    assert told.point == variable
+    assert told == SingleSpatialCoordinate(domain, 1, variable)
+
+
+def test_a_pushed_forward_point_is_the_spatial_coordinate_as_a_point(lagrange_element):
+    """The two are one computation; the difference is only the type."""
+    domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
+    (entity,) = domain.cell_types
+    point = Point([RealScalar(0.25)] * 2, EntityDomain(entity))
+
+    pushed = PushedForwardPoint(point, domain).expand_geometry()
+    coordinates = SpatialCoordinate(domain, point).expand_geometry()
+
+    assert isinstance(pushed, Point)
+    assert [pushed.component(i) for i in range(3)] == [coordinates.component(i) for i in range(3)]
