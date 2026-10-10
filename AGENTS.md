@@ -73,9 +73,13 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   triangle/.../hexahedron), defined recursively via their sub-entities.
 - `finite_elements.py` — `AbstractFiniteElement` / `AbstractMappedFiniteElement`: what
   basis functions look like on a cell; depends on `entities` and `maps`.
-- `maps.py` — `AbstractValueMap` (e.g. `IdentityValueMap`): push-forward/ pull-back of
-  values between an entity's coordinates and ambient coordinates, implemented as graph
-  rewrites.
+- `maps.py` — `AbstractValueMap` (e.g. `IdentityValueMap`): push-forward/pull-back of
+  field values between an entity's coordinates and ambient coordinates, implemented as
+  graph rewrites. Which map a field needs follows from the degree of the form it
+  represents — identity for a 0-form, `J⁻ᵀ` for a 1-form, `J / det J` for an (n-1)-form
+  — and the module docstring pairs each with the `geometry.py` quantity it is. Applying
+  a chart to a *point* is a different operation, named `ImagePoint` and `PreimagePoint`
+  in `geometry.py`.
 - `domains.py` — `AbstractDomain`: a set you can integrate over. A coordinate domain's
   points are tuples of numbers (`RD`, `EntityDomain`); a parametrized domain is the
   image of a map out of one. `AbstractParametrization` is that map, evaluated by `value`

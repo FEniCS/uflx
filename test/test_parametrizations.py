@@ -34,11 +34,11 @@ from uflx.expressions import (
 from uflx.functions import AbstractVariable
 from uflx.geometry import (
     AbstractGeometricQuantity,
+    ImagePoint,
     Jacobian,
     JacobianDeterminant,
     JacobianInverse,
     MetricTensor,
-    PushedForwardPoint,
     SpatialCoordinate,
     TangentialProjector,
     UnitNormal,
@@ -410,7 +410,7 @@ def test_composing_incompatible_maps_is_rejected(line, line_map):
 
 def test_a_composed_push_forward_squares_the_inner_map(mesh_on_a_parabola, entity_point):
     """The second ambient coordinate is the first one squared."""
-    x = PushedForwardPoint(entity_point, mesh_on_a_parabola)
+    x = ImagePoint(entity_point, mesh_on_a_parabola)
     expanded = x.expand_geometry()
 
     assert isinstance(expanded, Point)

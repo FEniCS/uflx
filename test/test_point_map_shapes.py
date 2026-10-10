@@ -5,7 +5,7 @@ import pytest
 from uflx import parametrized_domain
 from uflx.domains import RD, EntityDomain
 from uflx.expressions import RealScalar
-from uflx.geometry import PulledBackPoint, PushedForwardPoint
+from uflx.geometry import ImagePoint, PreimagePoint
 from uflx.points import Point
 
 cells_and_gdims = [
@@ -25,7 +25,7 @@ def test_reference_to_physical_shape(cell, gdim, lagrange_element):
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cell_types[0].topological_dimension
 
-    point = PushedForwardPoint(
+    point = ImagePoint(
         Point([RealScalar(0.1)] * tdim, EntityDomain(domain.cell_types[0])),
         domain,
     )
@@ -41,7 +41,7 @@ def test_physical_to_reference_shape(cell, gdim, lagrange_element):
     tdim = domain.cell_types[0].topological_dimension
 
     (cell_type,) = domain.cell_types
-    point = PulledBackPoint(
+    point = PreimagePoint(
         Point([RealScalar(0.1)] * gdim, RD(gdim)), domain.parametrization(cell_type)
     )
     assert point.value_shape == (tdim,)
