@@ -185,7 +185,10 @@ class FiniteElementVariable(AbstractVariable):
                 coordinates reaches a cell element only through an
                 inclusion, not through this.
         """
-        assert cell in self._domain.cell_types
+        if cell not in self._domain.cell_types:
+            raise ValueError(
+                f"Cannot pull back to {cell}, which is not a cell type of this variable's domain."
+            )
         return FiniteElementVariable(EntityDomain(cell), self._label)
 
     def component(self, *indices: int) -> AbstractExpression:
