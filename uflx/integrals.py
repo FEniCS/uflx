@@ -161,8 +161,16 @@ class Integral(AbstractIntegral):
                     assert domain == node.function_space.domain
         assert domain is not None
         assert isinstance(domain, AbstractParametrizedDomain)
+        if len(domain.cell_types) != 1:
+            # Each cell type has its own map, hence its own measure, so this
+            # wants one integral per cell type and a sum of integrals to
+            # hold them.
+            raise NotImplementedError(
+                "Pulling an integral back over a domain with several cell types is "
+                "not supported yet."
+            )
         (cell,) = domain.cell_types
-        det = abs(JacobianDeterminant(domain.sole_parametrization))
+        det = abs(JacobianDeterminant(domain))
 
         assert isinstance(integrand, AbstractExpression)
 

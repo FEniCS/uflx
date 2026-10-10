@@ -3,7 +3,13 @@
 from typing import Any, Protocol, Self, runtime_checkable
 
 from uflx.algorithms import replace
-from uflx.domains import RD, AbstractCoordinateDomain, AbstractParametrization, EntityDomain
+from uflx.domains import (
+    RD,
+    AbstractCoordinateDomain,
+    AbstractParametrization,
+    AbstractParametrizedDomain,
+    EntityDomain,
+)
 from uflx.expressions import AbstractExpression
 from uflx.functions import AbstractVariable
 from uflx.graphs import GraphNode, as_graph
@@ -97,16 +103,16 @@ def as_matrix(jacobian: AbstractExpression) -> Matrix:
 class PushedForwardPoint(AbstractPoint):
     """A point in an entity's coordinates, mapped through a parametrization."""
 
-    def __init__(self, point: AbstractPoint, parametrization: AbstractParametrization):
+    def __init__(self, point: AbstractPoint, domain: AbstractParametrizedDomain):
         """Initialise.
 
         Args:
             point: The point in the entity's coordinates
-            parametrization: The map to push the point forward through
+            domain: The domain to push the point forward onto
         """
         assert isinstance(point.domain, EntityDomain)
         self._point = point
-        self._parametrization = parametrization
+        self._parametrized_domain = domain
 
     @property
     def entity_point(self) -> AbstractPoint:
@@ -114,9 +120,21 @@ class PushedForwardPoint(AbstractPoint):
         return self._point
 
     @property
+    def parametrized_domain(self) -> AbstractParametrizedDomain:
+        """The domain this point is pushed forward onto."""
+        return self._parametrized_domain
+
+    @property
     def parametrization(self) -> AbstractParametrization:
-        """The map this point is pushed forward through."""
-        return self._parametrization
+        """The map this point is pushed forward through.
+
+        The point already lies in a cell's coordinate domain, so it names
+        the cell whose map carries it.
+        """
+        source = self._point.domain
+        assert isinstance(source, EntityDomain)
+        (cell,) = source.cell_types
+        return self._parametrized_domain.parametrization(cell)
 
     @property
     def domain(self) -> RD:
@@ -124,7 +142,7 @@ class PushedForwardPoint(AbstractPoint):
 
         A pushed forward point lies in the coordinates the map lands in.
         """
-        return RD(self._parametrization.target_dimension)
+        return RD(self._parametrized_domain.geometric_dimension)
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -134,7 +152,7 @@ class PushedForwardPoint(AbstractPoint):
     @property
     def dim(self) -> int:
         """The dimension of the point."""
-        return self._parametrization.target_dimension
+        return self._parametrized_domain.geometric_dimension
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -144,11 +162,11 @@ class PushedForwardPoint(AbstractPoint):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._point, self._parametrization
+        return self._point, self._parametrized_domain
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        value = self._parametrization.value(self._point)
+        value = self.parametrization.value(self._point)
 
         # The map's values are ambient coordinates, so what comes out is a
         # point of R^gdim rather than one of the domain it parametrizes.
@@ -159,12 +177,12 @@ class PushedForwardPoint(AbstractPoint):
         return (
             isinstance(other, PushedForwardPoint)
             and self._point == other._point
-            and self._parametrization == other._parametrization
+            and self._parametrized_domain == other._parametrized_domain
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.PushedForwardPoint", self._point, self._parametrization))
+        return hash(("uflx.PushedForwardPoint", self._point, self._parametrized_domain))
 
     @property
     def index(self) -> int | str:
@@ -180,7 +198,8 @@ class PulledBackPoint(AbstractPoint):
 
         Args:
             point: The point in ambient coordinates
-            parametrization: The map the point is pulled back through
+            parametrization: The map the point is pulled back through, which says
+                which cell's coordinates it lands in
         """
         assert not isinstance(point.domain, EntityDomain)
         self._point = point
@@ -252,22 +271,42 @@ class AbstractJacobian(AbstractExpression):
     variable stands for the point.
     """
 
-    def __init__(
-        self, parametrization: AbstractParametrization, point: AbstractVariable | None = None
-    ):
+    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractVariable | None = None):
         """Initialise.
 
         Args:
-            parametrization: The map being differentiated
+            domain: The domain whose geometry is being differentiated
             point: Where to differentiate it, if that is known yet
         """
-        self.parametrization = parametrization
+        self.domain = domain
         self.point = point
+
+    @property
+    def parametrization(self) -> AbstractParametrization:
+        """The map this quantity differentiates, for the cell its point lies in.
+
+        A point lies in a cell's coordinate domain, so it names the cell.
+        Until a point arrives this quantity is generic over the domain's
+        cell types, which is what lets it be built during a pull back.
+        """
+        if self.point is None:
+            raise ValueError(
+                "This quantity has not been told where it is evaluated, so the cell "
+                "whose map it differentiates is not known."
+            )
+        source = self.point.domain
+        if not isinstance(source, EntityDomain):
+            raise ValueError(
+                f"This quantity is evaluated at a point of a cell's coordinate domain, "
+                f"not of {source!r}."
+            )
+        (cell,) = source.cell_types
+        return self.domain.parametrization(cell)
 
     @property
     def _jacobian(self) -> "Jacobian":
         """The Jacobian this quantity is built from."""
-        return Jacobian(self.parametrization, self.point)
+        return Jacobian(self.domain, self.point)
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -277,17 +316,21 @@ class AbstractJacobian(AbstractExpression):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self.parametrization, self.point
+        return self.domain, self.point
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Evaluate this quantity at the given variable.
 
-        The variable stands for a point of the map's source, so one in
-        any other coordinates is not this quantity's to take.
+        The variable stands for a point of one of this domain's cells, so
+        one in any other coordinates is not this quantity's to take.
         """
-        if variable.domain != self.parametrization.source:
+        source = variable.domain
+        if not isinstance(source, EntityDomain):
             return self
-        return self.__class__(self.parametrization, variable)
+        (cell,) = source.cell_types
+        if cell not in self.domain.cell_types:
+            return self
+        return self.__class__(self.domain, variable)
 
 
 class Jacobian(AbstractJacobian):
@@ -301,19 +344,23 @@ class Jacobian(AbstractJacobian):
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        return (
-            self.parametrization.target_dimension,
-            self.parametrization.source.geometric_dimension,
-        )
+        tdim = self.domain.topological_dimension
+        if tdim is None:
+            raise NotImplementedError(
+                "A Jacobian is not supported on a domain whose cells have several "
+                "topological dimensions."
+            )
+        return (self.domain.geometric_dimension, tdim)
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
+        parametrization = self.parametrization
         assert self.point is not None
-        return self.parametrization.jacobian(self.point)
+        return parametrization.jacobian(self.point)
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"Jacobian({self.parametrization!r}, {self.point!r})"
+        return f"Jacobian({self.domain!r}, {self.point!r})"
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -326,7 +373,7 @@ class Jacobian(AbstractJacobian):
         """
         if (
             isinstance(other, JacobianInverse)
-            and self.parametrization == other.parametrization
+            and self.domain == other.domain
             and self.point == other.point
         ):
             return Identity(self.value_shape[0])
@@ -365,7 +412,7 @@ class JacobianInverse(AbstractJacobian):
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"JacobianInverse({self.parametrization!r}, {self.point!r})"
+        return f"JacobianInverse({self.domain!r}, {self.point!r})"
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -378,7 +425,7 @@ class JacobianInverse(AbstractJacobian):
         """
         if (
             isinstance(other, Jacobian)
-            and self.parametrization == other.parametrization
+            and self.domain == other.domain
             and self.point == other.point
         ):
             return Identity(self.value_shape[0])
@@ -399,7 +446,7 @@ class JacobianTranspose(AbstractJacobian):
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"JacobianTranspose({self.parametrization!r}, {self.point!r})"
+        return f"JacobianTranspose({self.domain!r}, {self.point!r})"
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -412,7 +459,7 @@ class JacobianTranspose(AbstractJacobian):
         """
         if (
             isinstance(other, JacobianInverseTranspose)
-            and self.parametrization == other.parametrization
+            and self.domain == other.domain
             and self.point == other.point
         ):
             return Identity(self.value_shape[0])
@@ -433,7 +480,7 @@ class JacobianInverseTranspose(AbstractJacobian):
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"JacobianInverseTranspose({self.parametrization!r}, {self.point!r})"
+        return f"JacobianInverseTranspose({self.domain!r}, {self.point!r})"
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -446,7 +493,7 @@ class JacobianInverseTranspose(AbstractJacobian):
         """
         if (
             isinstance(other, JacobianTranspose)
-            and self.parametrization == other.parametrization
+            and self.domain == other.domain
             and self.point == other.point
         ):
             return Identity(self.value_shape[0])

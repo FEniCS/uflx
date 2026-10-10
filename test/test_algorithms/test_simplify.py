@@ -162,11 +162,11 @@ def test_jacobian_and_inverse_matvec(lagrange_element, v_first, inv_first, trans
     v = TestFunction(space)
 
     if transpose:
-        first = JacobianTranspose(domain.sole_parametrization)
-        second = JacobianInverseTranspose(domain.sole_parametrization)
+        first = JacobianTranspose(domain)
+        second = JacobianInverseTranspose(domain)
     else:
-        first = Jacobian(domain.sole_parametrization)
-        second = JacobianInverse(domain.sole_parametrization)
+        first = Jacobian(domain)
+        second = JacobianInverse(domain)
     if inv_first:
         first, second = second, first
     if v_first:
@@ -190,8 +190,8 @@ def test_jacobian_and_inverse_form(lagrange_element):
     u = TrialFunction(space)
     v = TestFunction(space)
 
-    j = Jacobian(domain.sole_parametrization)
-    j_inv_t = JacobianInverseTranspose(domain.sole_parametrization)
+    j = Jacobian(domain)
+    j_inv_t = JacobianInverseTranspose(domain)
 
     form = inner(j @ u, j_inv_t @ v) * dx
     simpler_form = simplify(form)
