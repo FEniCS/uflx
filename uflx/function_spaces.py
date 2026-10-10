@@ -15,6 +15,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
 from uflx.domains import AbstractCellularDomain, AbstractDomain
+from uflx.entities import AbstractEntity
 from uflx.finite_elements import AbstractMappedFiniteElement
 
 
@@ -50,8 +51,38 @@ class AbstractMappedFunctionSpace(AbstractFunctionSpace):
 
     @property
     @abstractmethod
+    def domain(self) -> AbstractCellularDomain:
+        """Domain of the function space.
+
+        An element is attached per cell, so the domain is decomposed into
+        cells.
+        """
+
+    @property
+    @abstractmethod
     def elements(self) -> tuple[AbstractMappedFiniteElement, ...]:
         """Elements in the function space."""
+
+    def restricted_to(self, cell: AbstractEntity) -> AbstractMappedFunctionSpace:
+        """Get this space on the part of its domain made of one cell type.
+
+        Every element on that cell is kept, which is what makes this right
+        both for a space holding several elements on one cell and for a
+        space holding one element per cell type of a mixed domain.
+
+        Args:
+            cell: A cell type of this space's domain
+
+        Returns:
+            The space with that cell's elements on the restricted domain
+
+        Raises:
+            ValueError: If this space has no element on that cell
+        """
+        elements = tuple(e for e in self.elements if e.cell == cell)
+        if len(elements) == 0:
+            raise ValueError(f"This space has no element on {cell}.")
+        return function_space(self.domain.restricted_to(cell), elements)
 
 
 class FunctionSpace(AbstractMappedFunctionSpace):
