@@ -30,6 +30,8 @@ from uflx.geometry import (
     MetricTensor,
     PushedForwardPoint,
     TangentialProjector,
+    UnitNormal,
+    _as_dense_matrix,
     expand_geometry,
 )
 from uflx.graphs import as_graph
@@ -266,3 +268,23 @@ def test_a_form_over_a_composed_domain_expands(mesh_on_a_parabola, lagrange_elem
     expanded = expand_geometry(pull_back_to_entity(form))
 
     assert not any(isinstance(n, AbstractGeometricQuantity) for n in as_graph(expanded))
+
+
+def test_the_normal_of_a_curve_is_a_unit_vector_across_the_tangent(parabola, entity_point):
+    """Check the normal numerically, on a map whose Jacobian is concrete.
+
+    An element map's Jacobian sums over coordinate dofs, which no amount
+    of simplification turns into a number. A closed form map's does not,
+    so here the normal can be evaluated and checked rather than matched
+    against the expression it is expected to be.
+    """
+    curve = composed_domain(entity_domain(Interval()), parabola)
+
+    jacobian = _as_dense_matrix(Jacobian(curve, entity_point).expand_geometry())
+    tangent = [jacobian.component(i, 0).as_float() for i in range(2)]
+    normal = [UnitNormal(curve, entity_point).component(i).as_float() for i in range(2)]
+
+    # y = x^2 at x = 0.25, so the tangent is (1, 1/2).
+    assert tangent == pytest.approx([1.0, 0.5])
+    assert sum(c * c for c in normal) == pytest.approx(1.0)
+    assert sum(a * b for a, b in zip(tangent, normal, strict=True)) == pytest.approx(0.0)

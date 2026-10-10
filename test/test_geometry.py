@@ -19,6 +19,7 @@ from uflx.geometry import (
     PulledBackPoint,
     PushedForwardPoint,
     TangentialProjector,
+    UnitNormal,
     expand_geometry,
 )
 from uflx.graphs import as_graph
@@ -285,6 +286,7 @@ geometric_quantities = [
     JacobianDeterminant,
     MetricTensor,
     TangentialProjector,
+    UnitNormal,
     JacobianInverse,
     JacobianTranspose,
     JacobianInverseTranspose,
@@ -417,3 +419,25 @@ def test_the_projector_is_idempotent(lagrange_element):
     projector = TangentialProjector(domain)
 
     assert simplify(projector @ projector) == projector
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_normal_exists_exactly_at_codimension_one(cell, gdim, lagrange_element):
+    """One direction is orthogonal to the tangent space only when one is left over."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+
+    if gdim == tdim + 1:
+        assert UnitNormal(domain).value_shape == (gdim,)
+    else:
+        with pytest.raises(ValueError, match="codimension"):
+            UnitNormal(domain).value_shape
+
+
+def test_a_domain_of_no_topological_dimension_has_no_normal_to_compute(lagrange_element):
+    """The normal to a point is a sign, which is a convention rather than a value."""
+    domain = parametrized_domain(lagrange_element("point", 1, (1,)))
+
+    with pytest.raises(NotImplementedError, match="sign"):
+        UnitNormal(domain).value_shape
