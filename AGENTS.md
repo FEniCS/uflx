@@ -6,11 +6,13 @@ Guidance for agents (Claude Code and others) working in this repository.
 
 UFLx is an experimental, minimal reimplementation of UFL (Unified Form Language): a
 symbolic language embedded in Python for writing finite-element variational forms (e.g.
-`inner(grad(v), grad(u)) * dx`). It does not own meshes, boundary markers, coefficient
-values, or assembly — those belong to a surrounding solver environment (e.g.
+`inner(grad(v), grad(u)) * dx(mesh)`). It does not own meshes, boundary markers,
+coefficient values, or assembly — those belong to a surrounding solver environment (e.g.
 DOLFIN/DOLFINx). See [LANGUAGE.md](LANGUAGE.md) for the full language spec and
 [DESIGN_CHOICES.md](DESIGN_CHOICES.md) for naming/API conventions — read both before
-adding to the object model.
+adding to the object model. [INTEGRATION.md](INTEGRATION.md) is the argument behind the
+measure and integral model, written against differential geometry, and lists what is not
+built.
 
 ## Commands
 
@@ -77,8 +79,11 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
 - `domains.py` — `AbstractDomain`: a set you can integrate over. A coordinate domain's
   points are tuples of numbers (`RD`, `EntityDomain`); a parametrized domain is the
   image of a map out of one. `AbstractParametrization` is that map, evaluated by `value`
-  and differentiated by `jacobian`; `IdentityParametrization` is an entity domain's. The
-  actual mesh stays external to UFLx.
+  and differentiated by `jacobian`; `IdentityParametrization` is an entity domain's and
+  `RD`'s own. `AbstractChartedDomain` is what geometry and a measure ask for: a map out
+  of a parameter region, a reference cell being one kind of region and a region of `RD`
+  another, so being integrable over does not imply being made of cells. The actual mesh
+  stays external to UFLx.
 - `function_spaces.py` — `AbstractFunctionSpace`: standard FE spaces (domain + element),
   constant spaces (shape + scalar type), or non-FE spaces (domain + shape, no element).
   Do not construct `Argument`/`Coefficient` directly from an element — they must come
@@ -100,10 +105,14 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   quantities (spatial coordinates, Jacobians, ...), and complex-number support
   (`re`/`im` via the `ComplexValued` protocol), all built as `AbstractExpression`
   subclasses / graph rewrites over them.
-- `integrals.py` — measures (`dx`, `ds`, `dS`), `Integral` (`expr * measure`) and
-  `IntegralSum`, which adding integrals gives. An integral over a domain of several cell
-  types is pulled back as one integral per cell type, since each has its own coordinate
-  domain; `Integral.restricted_to` and `split_by_cell_type` do that.
+- `integrals.py` — `Measure`, a domain paired with the density on it, built by
+  `dx(domain)`; `Integral` (`expr * measure`), which takes its domain from its measure;
+  and `IntegralSum`, which adding integrals gives. An integral over a domain of several
+  cell types is pulled back as one integral per cell type, since each has its own
+  coordinate domain; `Integral.restricted_to` and `split_by_cell_type` do that, carrying
+  the measure onto the restricted domain. There is no `ds` or `dS`: an exterior or
+  interior facet integral is this measure over a domain of codimension one, which
+  [INTEGRATION.md](INTEGRATION.md) §4 argues for and §7 says is not yet constructible.
 
 Symbolic (Gateaux) differentiation and expression/integral transformation between domain
 configurations are the two core transformation procedures UFLx provides on top of this
@@ -161,4 +170,5 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
   (mid-word capitals become `_x`, e.g. a hypothetical `FooX` class pairs with
   `foo_x()`).
 - `__init__` methods do not choose a value for the caller; add a factory or named
-  instance instead (as `dx` is). A `None` default for a field not yet known is fine.
+  instance instead (as `dx(domain)` is a factory for a measure). A `None` default for a
+  field not yet known is fine.
