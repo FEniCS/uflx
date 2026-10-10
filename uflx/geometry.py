@@ -7,8 +7,7 @@ from typing import Any, Protocol, Self, runtime_checkable
 
 from uflx.algorithms import replace
 from uflx.domains import (
-    RD,
-    AbstractCellularDomain,
+    AbstractParametrizedDomain,
     AbstractCoordinateDomain,
     AbstractParametrization,
     AbstractParametrizedDomain,
@@ -57,9 +56,14 @@ class ImagePoint(AbstractPoint):
     It takes the domain rather than the map because the point it starts
     from already lies in a cell's coordinate domain, and so names the
     cell whose map carries it. Contrast :class:`PreimagePoint`.
+
+    Where it lands is the domain's coordinate domain, which is the
+    ambient one for a mesh and the cell's own for a sub-entity of a
+    reference cell. That is what lets a cell's basis be read at a point
+    of one of its facets.
     """
 
-    def __init__(self, point: AbstractPoint, domain: AbstractCellularDomain):
+    def __init__(self, point: AbstractVariable, domain: AbstractCellularDomain):
         """Initialise.
 
         Args:
@@ -77,7 +81,7 @@ class ImagePoint(AbstractPoint):
         self._parametrized_domain = domain
 
     @property
-    def entity_point(self) -> AbstractPoint:
+    def entity_point(self) -> AbstractVariable:
         """The point in the entity's coordinates."""
         return self._point
 
@@ -99,12 +103,13 @@ class ImagePoint(AbstractPoint):
         return self._parametrized_domain.parametrization(cell)
 
     @property
-    def domain(self) -> RD:
+    def domain(self) -> AbstractCoordinateDomain:
         """The domain.
 
-        A pushed forward point lies in the coordinates the map lands in.
+        An image lies in the coordinates the map lands in, which the
+        domain being mapped onto names.
         """
-        return RD(self._parametrized_domain.geometric_dimension)
+        return self._parametrized_domain.coordinate_domain
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -150,7 +155,14 @@ class ImagePoint(AbstractPoint):
 
     @property
     def index(self) -> int | str:
-        """The point's index in the set of points."""
+        """The point's index in the set of points.
+
+        Raises:
+            NotImplementedError: If the point mapped is a variable
+                standing for a point rather than one of a set
+        """
+        if not isinstance(self._point, AbstractPoint):
+            raise NotImplementedError(f"{self._point!r} is not a point of a set of them.")
         return self._point.index
 
 
