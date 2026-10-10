@@ -122,8 +122,9 @@ No, in three separable ways.
   spanning two domains, and cannot be retargeted by a pullback.
 - It carries topological selection (`dim`, `codim`, `boundary_only`) that is not a
   property of a measure and that only means anything relative to an external mesh.
-- It carries no density, so the one thing a measure is for is supplied by an algorithm
-  instead, hardcoded to the induced Riemannian one.
+- It carries no density at all, so the one thing a measure is for is supplied by an
+  algorithm instead. That the density is the induced one is right; that it is reachable
+  only by calling `pull_back_to_entity` is not.
 
 Removing all three leaves a measure that is the pair a measure actually is:
 
@@ -131,9 +132,10 @@ Removing all three leaves a measure that is the pair a measure actually is:
 measure = (the domain integrated over, the density on it)
 ```
 
-with the density being the one the domain's own parametrization induces, `√det g`. The
-domain is stated, never inferred: `dx` is a function of it rather than a thing that
-acquires one.
+with the density being the one the domain's own chart induces, `√det g`, and read off the
+measure rather than from an algorithm. It is a property of the domain and not a second
+argument, for the reason below. The domain is stated, never inferred: `dx` is a function
+of it rather than a thing that acquires one.
 
 ```python
 dx(omega)  # Measure(omega), whose density is VolumeElement(omega)
@@ -144,18 +146,51 @@ integrand, as sugar for the single-domain case. That is what the code did before
 what UFL does, and it was rejected for being implicit: an integral that guesses its
 domain is an integral that cannot be told it guessed wrong.
 
-A measure that carries its density also buys something UFL cannot express at all. An
-axisymmetric problem integrates against `r dr dz`, and in UFL the `r` is multiplied into
-every integrand by hand, where it is indistinguishable from part of the physics. As a
-measure of its own kind it is where it belongs:
+### No weighted measures
 
-```python
-dx_axi = WeightedMeasure(dx(omega), x[0])
+An earlier draft of this section argued the other way: that a measure carrying its
+density buys what UFL cannot express, an axisymmetric problem integrating against
+`r dr dz` where UFL multiplies the `r` into every integrand by hand. It offered
+`WeightedMeasure(dx(omega), x[0])` as where the `r` belongs. That was wrong, and the
+example was the clearest case of why.
+
+The `r` is not a weight. The cylindrical chart `psi(r, z, theta) = (r cos theta, r sin theta, z)` has
+
+```
+g = J^T J = diag(1, 1, r^2)        sqrt(det g) = r        |det J| = r
 ```
 
-The same slot holds a surface measure that is not the induced one, and — stretching
-further — a Dirac measure on a point domain, which is what `LANGUAGE.md`'s
-`PointEvaluation` is.
+so `r` is the volume element of a domain presented through that chart: ordinary induced
+geometry, already expressible. What makes it look like a weight is then pretending the
+domain is two-dimensional. Stated honestly, the axisymmetric measure is the pushforward
+of the three-dimensional one along the projection that forgets `theta`, and the `2 pi` is
+`∫ dtheta`. A chart, then a map out of it. Nothing weighs anything.
+
+That generalises. For any factor one might want to put in a measure:
+
+- if it is geometric, it is the density of some chart, so it comes from composing — the
+  thing to change is the domain and not the measure;
+- if it is not geometric, it is physics, and belongs in the integrand.
+
+The original argument was that the `r` looks like physics but is really geometry, so it
+belongs in the measure. The inversion is the right reading: that is an argument for
+modelling the domain properly, and a factor not recoverable from a chart has no claim on
+the measure either.
+
+Completeness cuts the same way. Every absolutely continuous measure is the pushforward of
+Lebesgue measure under some diffeomorphism — in one dimension the inverse of the
+distribution function, in higher dimensions Moser's argument — so a weight adds nothing
+composition cannot give. For `exp(-|x|^2) dx` that map is not elementary, which is a
+reason not to pretend it is a composition one can write down, not a reason to add a
+weight.
+
+So `Measure(domain)` takes no density argument and the density is a property of the
+domain's chart. What remains outside that is not a weight but a different kind of
+measure: a Dirac measure has no density with respect to anything, so it cannot be
+`w . mu`, and a quadrature rule is a sum of Diracs. Those are atomic, and would be a
+sibling of `Measure` rather than a weighting of one. Restriction to a subdomain is
+likewise a domain and not an indicator weight, which suggests UFL's subdomain ids on the
+measure are the same mistake from the other side.
 
 ## 4. `ds` and `dS` are not kinds of measure
 
@@ -313,9 +348,10 @@ Acceptance criteria, as tests to write rather than prose to agree with.
 - ~~**Change of variables holds by construction.**~~ Covered by
   `test_pulling_back_retargets_the_measure`. Pulling an integral back moves the measure
   onto the reference cell and multiplies its density into the integrand.
-- **A weighted measure is distinguishable from physics.** `∫ f r dx` as an axisymmetric
-  measure and `∫ (f r) dx` as a weighted integrand are different objects, and the
-  measure survives differentiation of the form with respect to a coefficient untouched.
+- **An axisymmetric measure is the volume element of a cylindrical chart.** `r` comes
+  out of `VolumeElement` on a domain presented through that chart, and no weighted
+  measure is involved. Needs trigonometric functions in the expression language, which
+  `Sqrt` is currently the only neighbour of.
 - ~~**A composed domain's measure is `√det g`.**~~ Covered by
   `test_the_volume_element_is_the_metrics_gram_determinant`, which no longer has to
   apologise for a determinant that was not one.
