@@ -13,9 +13,28 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import prod
+from typing import Protocol, runtime_checkable
 
 from uflx.entities import AbstractEntity
 from uflx.maps import AbstractValueMap
+
+
+@runtime_checkable
+class HasAGeometricDimension(Protocol):
+    """Anything that says how many coordinates name a point of it.
+
+    All a value map needs of a domain: the shape a value takes once
+    mapped depends on how many coordinates it is mapped into, and on
+    nothing else about where it is mapped to. Asking for the capability
+    rather than importing the domain leaves this module where the
+    layering puts it, below `domains`, and still leaves no room to pass a
+    topological dimension, which is what the number used to be before it
+    was asked for this way.
+    """
+
+    @property
+    def geometric_dimension(self) -> int:
+        """The number of coordinates needed to name a point."""
 
 
 class AbstractFiniteElement(ABC):
@@ -43,12 +62,22 @@ class AbstractFiniteElement(ABC):
         """Check if this element is real-valued."""
 
     @abstractmethod
-    def mapped_value_shape(self, geometric_dimension: int) -> tuple[int, ...]:
-        """Return the shape of the value space in ambient coordinates."""
+    def mapped_value_shape(self, domain: HasAGeometricDimension) -> tuple[int, ...]:
+        """Return the shape of the value space in a domain's own coordinates.
 
-    def mapped_value_size(self, geometric_dimension: int) -> int:
-        """Return the value size of the value space in ambient coordinates."""
-        return prod(self.mapped_value_shape(geometric_dimension))
+        The shape a value has once the value map has been applied, which
+        is why it is named for the map: those coordinates are the ambient
+        ones only when the domain says so, as `coordinate_domain` has it.
+
+        Args:
+            domain: The domain whose coordinates the values are expressed
+                in. Asking it for its dimension rather than being handed
+                one leaves no room to pass a topological dimension.
+        """
+
+    def mapped_value_size(self, domain: HasAGeometricDimension) -> int:
+        """Return the value size of the value space in a domain's own coordinates."""
+        return prod(self.mapped_value_shape(domain))
 
     @property
     @abstractmethod
@@ -117,6 +146,8 @@ class AbstractMappedFiniteElement(AbstractFiniteElement):
         """
         return self.cell.is_simplex and self.lagrange_superdegree == 1
 
-    def mapped_value_shape(self, geometric_dimension: int) -> tuple[int, ...]:
-        """Return the shape of the value space in ambient coordinates."""
-        return self.value_map.mapped_value_shape(self.entity_value_shape, geometric_dimension)
+    def mapped_value_shape(self, domain: HasAGeometricDimension) -> tuple[int, ...]:
+        """Return the shape of the value space in a domain's own coordinates."""
+        return self.value_map.mapped_value_shape(
+            self.entity_value_shape, domain.geometric_dimension
+        )
