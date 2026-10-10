@@ -7,6 +7,7 @@ from typing import Any, Protocol, Self, runtime_checkable
 from uflx.algorithms import replace
 from uflx.domains import (
     RD,
+    AbstractChartedDomain,
     AbstractCoordinateDomain,
     AbstractParametrization,
     AbstractParametrizedDomain,
@@ -252,7 +253,7 @@ class AbstractGeometricQuantity(AbstractExpression):
     dummy variable stands for the point.
     """
 
-    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractVariable | None = None):
+    def __init__(self, domain: AbstractChartedDomain, point: AbstractVariable | None = None):
         """Initialise.
 
         Args:
@@ -263,7 +264,7 @@ class AbstractGeometricQuantity(AbstractExpression):
         self._point = point
 
     @property
-    def domain(self) -> AbstractParametrizedDomain:
+    def domain(self) -> AbstractChartedDomain:
         """The domain whose geometry this quantity differentiates."""
         return self._domain
 
@@ -274,25 +275,24 @@ class AbstractGeometricQuantity(AbstractExpression):
 
     @property
     def parametrization(self) -> AbstractParametrization:
-        """The map this quantity differentiates, for the cell its point lies in.
+        """The map this quantity differentiates, being the chart its point lies in.
 
-        A point lies in a cell's coordinate domain, so it names the cell.
-        Until a point arrives this quantity is generic over the domain's
-        cell types, which is what lets it be built during a pull back.
+        A point lies in the parameter region of one of the domain's
+        charts, so it names that chart. Until a point arrives this
+        quantity is generic over the domain's charts, which is what lets
+        it be built during a pull back.
         """
         if self.point is None:
             raise ValueError(
-                "This quantity has not been told where it is evaluated, so the cell "
+                "This quantity has not been told where it is evaluated, so the chart "
                 "whose map it differentiates is not known."
             )
         source = self.point.domain
-        if not isinstance(source, EntityDomain):
+        if not isinstance(source, AbstractCoordinateDomain):
             raise ValueError(
-                f"This quantity is evaluated at a point of a cell's coordinate domain, "
-                f"not of {source!r}."
+                f"This quantity is evaluated at a point of a coordinate domain, not of {source!r}."
             )
-        (cell,) = source.cell_types
-        return self.domain.parametrization(cell)
+        return self.domain.chart(source)
 
     @property
     def _jacobian(self) -> Jacobian:
@@ -348,14 +348,13 @@ class AbstractGeometricQuantity(AbstractExpression):
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Evaluate this quantity at the given variable.
 
-        The variable stands for a point of one of this domain's cells, so
-        one in any other coordinates is not this quantity's to take.
+        The variable stands for a point of one of this domain's charts,
+        so one in any other coordinates is not this quantity's to take.
         """
         source = variable.domain
-        if not isinstance(source, EntityDomain):
+        if not isinstance(source, AbstractCoordinateDomain):
             return self
-        (cell,) = source.cell_types
-        if cell not in self.domain.cell_types:
+        if source not in self._domain.chart_sources:
             return self
         return self._at_point(variable)
 
@@ -401,7 +400,7 @@ class SingleSpatialCoordinate(AbstractGeometricQuantity):
 
     def __init__(
         self,
-        domain: AbstractParametrizedDomain,
+        domain: AbstractChartedDomain,
         component: int,
         point: AbstractVariable | None = None,
     ):

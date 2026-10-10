@@ -47,9 +47,8 @@ A **density** is the absolute value of an `n`-form. It integrates over an unorie
 manifold and is always non-negative. Taking `|det J|` rather than `det J` is the choice
 of densities over forms, and it is the right choice for finite elements — a mesh's cells
 are not consistently oriented and a cell volume must be positive — but it is a choice,
-and discarding the sign discards exactly the information an outward normal needs. The
-unexpressible orientation in `OPEN_ISSUES.md` and the unsigned `UnitNormal` are not two
-gaps. They are one.
+and discarding the sign is a real loss. What it is not is the thing an outward normal
+needs: see §6, which this note originally got wrong.
 
 ## 2. What UFLx did
 
@@ -250,6 +249,30 @@ opposite orientations on `Γ`, so once a restriction names a side the normal's s
 determined by that name and needs no separate orientation terminal. An outward normal
 asks "outward from which side", the restriction already answers it, and integration by
 parts becomes statable in the language rather than in a consumer's conventions.
+
+### Three things, not one
+
+An earlier draft of §1 ended by claiming that the unexpressible orientation and the
+unsigned `UnitNormal` were one gap. They are three, and the difference matters for how
+much `ds` costs.
+
+- **A facet's outward conormal needs no orientation at all.** Outwardness is about the
+  interior, not the orientation: `φ` carries interior to interior, so if `n̂·v > 0` for
+  outward `v` then `(J⁻ᵀn̂)·(Jv) = n̂·v > 0`. Checked against a reflection, where `J⁻ᵀ n̂`
+  gives the outward normal and the cross product of the mapped facet's own Jacobian does
+  not. So this costs no new information, only a reference normal and a transport rule.
+- **A manifold's surface normal needs a genuine external choice** of which side is up,
+  and `det J` does not exist there to supply it. This is `OPEN_ISSUES.md`'s item.
+- **`sign(det J)`**, which `VolumeElement` splitting off made nameable again, is about
+  whether a cell map inverts. It feeds contravariant Piola, not normals.
+
+What a normal does need is the domain it is a facet *of*, and that is a structural gap
+rather than a missing number. `test/test_regions.py` makes it exact: a box face's chart
+is an inclusion whose offset holds one coordinate fixed, a Jacobian does not see an
+offset, so the lower and upper faces of one axis have identical Jacobians at every point
+while their outward normals are opposite. No function of the Jacobian can tell them
+apart. The information belongs to the domain, which is where a region puts it and where
+a cell complex does not.
 
 ## 7. A staged proposal
 

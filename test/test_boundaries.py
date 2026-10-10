@@ -24,7 +24,7 @@ from conftest import AffineMap, Interval, Triangle
 from conftest import Point as PointEntity
 
 from uflx import composed_domain
-from uflx.domains import entity_domain
+from uflx.domains import RD, entity_domain
 from uflx.expressions import RealScalar
 from uflx.geometry import (
     Jacobian,
@@ -56,7 +56,9 @@ def facet_inclusion(facet: int) -> AffineMap:
     """
     first, second = Triangle().sub_entity_vertices(1)[facet]
     start, end = reference_vertices[first], reference_vertices[second]
-    return AffineMap(tuple((end[i] - start[i],) for i in range(2)), start)
+    return AffineMap(
+        entity_domain(Interval()), tuple((end[i] - start[i],) for i in range(2)), start
+    )
 
 
 @pytest.fixture
@@ -86,13 +88,13 @@ def in_the_cell():
 @pytest.fixture
 def stretch():
     """A map of the plane that scales the two axes differently."""
-    return AffineMap(((2.0, 0.0), (0.0, 1.0)), (0.0, 0.0))
+    return AffineMap(RD(2), ((2.0, 0.0), (0.0, 1.0)), (0.0, 0.0))
 
 
 @pytest.fixture
 def scaling():
     """A uniform scaling of the plane by three."""
-    return AffineMap(((3.0, 0.0), (0.0, 3.0)), (0.0, 0.0))
+    return AffineMap(RD(2), ((3.0, 0.0), (0.0, 3.0)), (0.0, 0.0))
 
 
 def tangent_of(domain, point) -> list[float]:
@@ -280,7 +282,10 @@ def test_reparametrizing_a_facet_keeps_its_measure_and_flips_its_normal(facets, 
     interior facet integral will have to reckon with, where the two
     charts are the two cells' own.
     """
-    backwards = composed_domain(entity_domain(Interval()), AffineMap(((1.0,), (-1.0,)), (0.0, 1.0)))
+    backwards = composed_domain(
+        entity_domain(Interval()),
+        AffineMap(entity_domain(Interval()), ((1.0,), (-1.0,)), (0.0, 1.0)),
+    )
 
     assert measure_of(backwards, on_the_facet) == pytest.approx(facet_lengths[2])
     assert normal_of(backwards, on_the_facet) == pytest.approx(
@@ -294,7 +299,9 @@ def test_the_boundary_of_an_interval_is_two_points_with_no_normal():
     The normal to a point is a sign, which is a convention rather than
     something to compute, so the quantity says so rather than guessing.
     """
-    end = composed_domain(entity_domain(PointEntity()), AffineMap(((),), (1.0,)))
+    end = composed_domain(
+        entity_domain(PointEntity()), AffineMap(entity_domain(PointEntity()), ((),), (1.0,))
+    )
     origin = Point([], entity_domain(PointEntity()))
 
     assert end.topological_dimension == 0
@@ -314,7 +321,9 @@ def test_the_measure_of_a_point_is_the_counting_measure():
     until a measure over a point domain is wanted, which is what a point
     evaluation is.
     """
-    end = composed_domain(entity_domain(PointEntity()), AffineMap(((),), (1.0,)))
+    end = composed_domain(
+        entity_domain(PointEntity()), AffineMap(entity_domain(PointEntity()), ((),), (1.0,))
+    )
     origin = Point([], entity_domain(PointEntity()))
 
     assert measure_of(end, origin) == pytest.approx(1.0)

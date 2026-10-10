@@ -1,10 +1,17 @@
 """Implmentations of domains."""
 
+from __future__ import annotations
+
 from collections.abc import Sequence
 
 import pytest
 
-from uflx.domains import RD, AbstractCoordinateDomain, AbstractParametrization
+from uflx.domains import (
+    AbstractChartedDomain,
+    AbstractCoordinateDomain,
+    AbstractParametrization,
+    IdentityParametrization,
+)
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression, RealScalar, expression_sum
 from uflx.finite_elements import AbstractMappedFiniteElement
@@ -170,24 +177,33 @@ class AffineMap(AbstractParametrization):
     finite element anywhere near it.
     """
 
-    def __init__(self, matrix: Sequence[Sequence[float]], offset: Sequence[float]):
+    def __init__(
+        self,
+        source: AbstractCoordinateDomain,
+        matrix: Sequence[Sequence[float]],
+        offset: Sequence[float],
+    ):
         """Initialise.
 
         Args:
+            source: The region this map starts from
             matrix: The rows of the matrix of the map
             offset: Where the source's origin lands
         """
+        self._source = source
         self._matrix = tuple(tuple(row) for row in matrix)
         self._offset = tuple(offset)
         if len({len(row) for row in self._matrix}) != 1:
             raise ValueError("Every row of the matrix must be the same length.")
         if len(self._offset) != len(self._matrix):
             raise ValueError("The offset must have one entry per row of the matrix.")
+        if len(self._matrix[0]) != source.geometric_dimension:
+            raise ValueError("The matrix must have one column per coordinate of the source.")
 
     @property
     def source(self) -> AbstractCoordinateDomain:
-        """This map starts in as many coordinates as the matrix has columns."""
-        return RD(len(self._matrix[0]))
+        """The region this map starts from."""
+        return self._source
 
     @property
     def target_dimension(self) -> int:
@@ -225,19 +241,212 @@ class AffineMap(AbstractParametrization):
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"uflx.test.AffineMap({self._matrix}, {self._offset})"
+        return f"uflx.test.AffineMap({self._source!r}, {self._matrix}, {self._offset})"
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
             isinstance(other, AffineMap)
+            and other._source == self._source
             and other._matrix == self._matrix
             and other._offset == self._offset
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.test.AffineMap", self._matrix, self._offset))
+        return hash(("uflx.test.AffineMap", self._source, self._matrix, self._offset))
+
+
+class Box(AbstractChartedDomain, AbstractCoordinateDomain):
+    """An axis aligned box of R^d, as a domain in its own right.
+
+    A region whose points are coordinate tuples, charted by itself
+    through the identity. There are no cells in it, no entities and no
+    elements: a box is named by its extent and that is the whole of its
+    description.
+    """
+
+    def __init__(self, bounds: Sequence[tuple[float, float]]):
+        """Initialise.
+
+        Args:
+            bounds: The lower and upper end of each coordinate's range
+        """
+        self._bounds = tuple((float(lower), float(upper)) for lower, upper in bounds)
+        if any(upper <= lower for lower, upper in self._bounds):
+            raise ValueError("Each coordinate of a box must run from a lower end to a higher one.")
+
+    @property
+    def bounds(self) -> tuple[tuple[float, float], ...]:
+        """The lower and upper end of each coordinate's range."""
+        return self._bounds
+
+    @property
+    def geometric_dimension(self) -> int:
+        """One coordinate per pair of bounds."""
+        return len(self._bounds)
+
+    @property
+    def chart_sources(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """A box is charted by itself."""
+        return (self,)
+
+    def chart(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """A box's own chart is the identity.
+
+        Raises:
+            ValueError: If the region is not this box
+        """
+        if source != self:
+            raise ValueError(f"{self!r} is charted by itself, not by {source!r}.")
+        return IdentityParametrization(self)
+
+    def face(self, axis: int, upper: bool) -> BoxFace:
+        """Get the face where one coordinate is held at an end of its range.
+
+        Args:
+            axis: Which coordinate is held
+            upper: Whether it is held at the upper end rather than the lower
+
+        Returns:
+            That face, as a domain
+        """
+        return BoxFace(self, axis, upper)
+
+    @property
+    def faces(self) -> tuple[BoxFace, ...]:
+        """Every face of this box, two per coordinate."""
+        return tuple(
+            self.face(axis, upper)
+            for axis in range(self.geometric_dimension)
+            for upper in (False, True)
+        )
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"uflx.test.Box({self._bounds})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return isinstance(other, Box) and other._bounds == self._bounds
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.test.Box", self._bounds))
+
+
+class BoxFace(AbstractChartedDomain):
+    """One face of a box, a domain of codimension one in the box's coordinates.
+
+    Its parameter region is the box with the held coordinate dropped, and
+    its chart is the affine inclusion that puts that coordinate back.
+
+    A face knows which way is out of the box from its own description:
+    the held coordinate decreases out of the box at the lower end and
+    increases out of it at the upper, so the outward normal is minus or
+    plus that axis. Nothing is inferred from a vertex ordering, and
+    nothing needs a convention. What the geometry cannot do with it is
+    the subject of the tests.
+    """
+
+    def __init__(self, box: Box, axis: int, upper: bool):
+        """Initialise.
+
+        Args:
+            box: The box this is a face of
+            axis: Which coordinate is held at an end of its range
+            upper: Whether it is held at the upper end rather than the lower
+        """
+        if axis < 0 or axis >= box.geometric_dimension:
+            raise ValueError(f"{box!r} has no coordinate {axis}.")
+        self._box = box
+        self._axis = axis
+        self._upper = upper
+
+    @property
+    def box(self) -> Box:
+        """The box this is a face of."""
+        return self._box
+
+    @property
+    def axis(self) -> int:
+        """Which coordinate is held."""
+        return self._axis
+
+    @property
+    def held_at(self) -> float:
+        """The value the held coordinate takes on this face."""
+        return self._box.bounds[self._axis][1 if self._upper else 0]
+
+    @property
+    def outward_normal(self) -> tuple[float, ...]:
+        """The direction out of the box, as ordinary numbers.
+
+        Minus or plus the held axis, which the face's own description
+        gives with nothing to compute and no sign left open.
+        """
+        sign = 1.0 if self._upper else -1.0
+        return tuple(sign if i == self._axis else 0.0 for i in range(self._box.geometric_dimension))
+
+    @property
+    def geometric_dimension(self) -> int:
+        """A face lives in the coordinates of the box it bounds."""
+        return self._box.geometric_dimension
+
+    @property
+    def topological_dimension(self) -> int:
+        """One less than the box, a coordinate being held."""
+        return self._box.geometric_dimension - 1
+
+    @property
+    def parameter_region(self) -> Box:
+        """The box with the held coordinate dropped."""
+        bounds = self._box.bounds
+        return Box(tuple(b for i, b in enumerate(bounds) if i != self._axis))
+
+    @property
+    def chart_sources(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """A face is charted by the box with the held coordinate dropped."""
+        return (self.parameter_region,)
+
+    def chart(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """The inclusion that puts the held coordinate back.
+
+        Raises:
+            ValueError: If the region is not this face's parameter region
+        """
+        region = self.parameter_region
+        if source != region:
+            raise ValueError(f"{self!r} is charted by {region!r}, not by {source!r}.")
+        kept = [i for i in range(self.geometric_dimension) if i != self._axis]
+        matrix = tuple(
+            tuple(1.0 if j == kept.index(i) else 0.0 for j in range(len(kept)))
+            if i != self._axis
+            else tuple(0.0 for _ in kept)
+            for i in range(self.geometric_dimension)
+        )
+        offset = tuple(
+            self.held_at if i == self._axis else 0.0 for i in range(self.geometric_dimension)
+        )
+        return AffineMap(region, matrix, offset)
+
+    def __repr__(self) -> str:
+        """Representation."""
+        end = "upper" if self._upper else "lower"
+        return f"uflx.test.BoxFace({self._box!r}, {self._axis}, {end})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, BoxFace)
+            and other._box == self._box
+            and other._axis == self._axis
+            and other._upper == self._upper
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.test.BoxFace", self._box, self._axis, self._upper))
 
 
 class LagrangeElement(AbstractMappedFiniteElement):

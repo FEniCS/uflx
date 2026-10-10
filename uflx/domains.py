@@ -246,6 +246,42 @@ class IdentityParametrization(AbstractParametrization):
         return hash(("uflx.IdentityParametrization", self._domain))
 
 
+class AbstractChartedDomain(AbstractDomain):
+    """Base class for a domain presented through maps out of coordinate domains.
+
+    A chart is a map out of a parameter region: a set whose points are
+    coordinate tuples, carried by the map into this domain. The region is
+    what identifies the chart, since naming a point of this domain means
+    naming a point of some region and composing.
+
+    A reference cell is one kind of parameter region and not the only
+    kind, so being charted does not imply being made of cells. A region
+    of R^d charted by itself is a domain of this kind with no cells in
+    it, and its boundary is another. What a geometric quantity needs of a
+    domain is a chart, which is why it asks for one here rather than for
+    a cell's parametrization.
+    """
+
+    @property
+    @abstractmethod
+    def chart_sources(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """The parameter regions this domain is charted by."""
+
+    @abstractmethod
+    def chart(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """Get the map out of the given parameter region.
+
+        Args:
+            source: One of this domain's chart sources
+
+        Returns:
+            The map out of that region
+
+        Raises:
+            ValueError: If this domain has no chart out of that region
+        """
+
+
 class AbstractCellularDomain(AbstractDomain):
     """Base class for a domain decomposed into cells.
 
@@ -280,12 +316,38 @@ class AbstractCellularDomain(AbstractDomain):
         """
 
 
-class AbstractParametrizedDomain(AbstractCellularDomain):
+class AbstractParametrizedDomain(AbstractChartedDomain, AbstractCellularDomain):
     """Base class for a domain presented as the image of a map.
 
     Each cell type has a parametrization: a map out of that cell's
-    coordinate domain into the coordinates this domain lives in.
+    coordinate domain into the coordinates this domain lives in. A cell's
+    coordinate domain is the parameter region of that chart, which is how
+    such a domain is charted.
     """
+
+    @property
+    def chart_sources(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """The coordinate domains of this domain's cell types."""
+        return tuple(EntityDomain(cell) for cell in self.cell_types)
+
+    def chart(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """Get the map out of the given cell's coordinate domain.
+
+        Args:
+            source: The coordinate domain of one of this domain's cell types
+
+        Returns:
+            That cell type's parametrization
+
+        Raises:
+            ValueError: If the region is not a cell of this domain
+        """
+        if not isinstance(source, EntityDomain):
+            raise ValueError(
+                f"{self!r} is charted by its cells' coordinate domains, not by {source!r}."
+            )
+        (cell,) = source.cell_types
+        return self.parametrization(cell)
 
     @abstractmethod
     def parametrization(self, cell: AbstractEntity) -> AbstractParametrization:
