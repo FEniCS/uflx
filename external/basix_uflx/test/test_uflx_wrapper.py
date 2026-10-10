@@ -33,7 +33,7 @@ def test_element(input_args, input_kwargs):
     """Test element initialisation and tabulate shape."""
     e = basix_uflx.element(*input_args, **input_kwargs)
     table = e.tabulate(0, np.array([[0, 0]]))
-    assert table.shape == (1, 1, e.dim, e.reference_value_size)
+    assert table.shape == (1, 1, e.dim, e.entity_value_size)
 
 
 @pytest.mark.parametrize(
@@ -76,7 +76,7 @@ def test_quadrature_element(cell, degree, shape):
     for i in shape:
         size *= i
 
-    assert e.reference_value_size == scalar_e.reference_value_size * size
+    assert e.entity_value_size == scalar_e.entity_value_size * size
     assert e.dim == scalar_e.dim * size
 
 
@@ -128,24 +128,24 @@ def test_mixed_element_eq_hash(e1, e2):
 
 
 @pytest.mark.parametrize(
-    ("cell_type", "degree", "reference_map"),
+    ("cell_type", "degree", "value_map"),
     [
-        ("triangle", 2, uflx.maps.IdentityReferenceMap()),
-        ("quadrilateral", 2, uflx.maps.IdentityReferenceMap()),
-        ("triangle", 3, uflx.maps.IdentityReferenceMap()),
-        # ("triangle", 2, uflx.maps.CovariantPiolaReferenceMap()),
+        ("triangle", 2, uflx.maps.IdentityValueMap()),
+        ("quadrilateral", 2, uflx.maps.IdentityValueMap()),
+        ("triangle", 3, uflx.maps.IdentityValueMap()),
+        # ("triangle", 2, uflx.maps.CovariantPiolaValueMap()),
     ],
 )
-def test_quadrature_element_eq_hash(cell_type, degree, reference_map):
+def test_quadrature_element_eq_hash(cell_type, degree, value_map):
     """Test hashing and equality of quadrature elements."""
     e1 = basix_uflx.quadrature_element(
         "triangle",
         scheme="default",
         degree=2,
-        reference_map=uflx.maps.IdentityReferenceMap(),
+        value_map=uflx.maps.IdentityValueMap(),
     )
     e2 = basix_uflx.quadrature_element(
-        cell_type, scheme="default", degree=degree, reference_map=reference_map
+        cell_type, scheme="default", degree=degree, value_map=value_map
     )
     assert (e1 == e2) == (hash(e1) == hash(e2))
 

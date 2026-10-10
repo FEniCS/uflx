@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from uflx import Coefficient, coordinate_element, function_space, grad
+from uflx import Coefficient, function_space, grad, parametrized_domain
 from uflx.graphs import as_graph
 
 from basix_uflx import element
@@ -19,7 +19,7 @@ def test_basix_dg0(cell, dim, geometry_degree, blocked):
     np.testing.assert_allclose(table[0], 1)
     np.testing.assert_allclose(table[1:], 0)
     field = element("Lagrange", cell, 0, shape=(dim,), discontinuous=True) if blocked else scalar
-    domain = coordinate_element(element("Lagrange", cell, geometry_degree, shape=(dim,)))
+    domain = parametrized_domain(element("Lagrange", cell, geometry_degree, shape=(dim,)))
     c = Coefficient(function_space(domain, field))
     assert c.is_cellwise_constant
     result = grad(c)
