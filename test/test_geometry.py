@@ -211,8 +211,8 @@ def test_a_jacobian_is_told_where_it_is_evaluated(lagrange_element):
 def test_a_pulled_back_integral_expands_its_geometry(cell, gdim, lagrange_element):
     """Expanding a pulled back form leaves no geometry behind.
 
-    A Jacobian built during a pull back used to keep point=None, so
-    expanding one asserted instead of giving an expression.
+    A Jacobian built during a pull back has no point of its own, so it
+    can only expand once the integral has told it where it is evaluated.
     """
     expanded = expand_geometry(pull_back_to_entity(mass_form(cell, gdim, lagrange_element)))
 
