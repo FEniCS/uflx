@@ -381,6 +381,24 @@ class AbstractGeometricQuantity(AbstractExpression):
         """
         return self.__class__(self._domain, point)
 
+    def on_domain(self, domain: AbstractParametrizedDomain) -> Self:
+        """This quantity on another domain, not yet told where it is read.
+
+        What splitting an integral over a union of pieces does to the
+        quantities in it: the normal of a domain of facets is the normal
+        of the piece the integral is split onto, read at that piece's own
+        point rather than at the union's.
+
+        Args:
+            domain: The domain to read this quantity off instead
+
+        Returns:
+            The same kind of quantity there
+        """
+        # init_args run the domain first and the point last, so what lies
+        # between is whatever else the quantity is of.
+        return self.__class__(domain, *self.init_args[1:-1])
+
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Evaluate this quantity at the given variable.
 

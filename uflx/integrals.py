@@ -13,7 +13,12 @@ from itertools import count
 from typing import Any, cast
 
 from uflx.algorithms import replace
-from uflx.domains import AbstractCellularDomain, AbstractParametrizedDomain, EntityDomain
+from uflx.domains import (
+    AbstractParametrizedDomain,
+    AbstractCellularDomain,
+    EntityDomain,
+    UnionDomain,
+)
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
 from uflx.functions import (
@@ -22,7 +27,7 @@ from uflx.functions import (
     Variable,
     create_variable,
 )
-from uflx.geometry import VolumeElement
+from uflx.geometry import AbstractGeometricQuantity, VolumeElement
 from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
 from uflx.restrictions import Restriction, evaluate_at
 
@@ -119,6 +124,11 @@ class AbstractIntegral(ABC):
     @abstractmethod
     def measure(self) -> AbstractMeasure:
         """The integral measure."""
+
+    @property
+    def domain(self) -> AbstractParametrizedDomain:
+        """The domain this integral is over, which its measure names."""
+        return self.measure.domain
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -238,11 +248,6 @@ class Integral(AbstractIntegral):
         return self._integrand, self._measure, self._variable
 
     @property
-    def domain(self) -> AbstractParametrizedDomain:
-        """The domain this integral is over, which its measure names."""
-        return self._measure.domain
-
-    @property
     def cellular_domain(self) -> AbstractCellularDomain:
         """The domain this integral is over, which must be made of cells.
 
@@ -286,6 +291,48 @@ class Integral(AbstractIntegral):
         if isinstance(variable, Variable):
             variable = variable.to_domain_coordinates(domain)
         return Integral(integrand, self._measure.with_domain(domain), variable)
+
+    def restricted_to_piece(self, piece: AbstractParametrizedDomain) -> Integral:
+        """Get this integral over one piece of its domain.
+
+        The measure moves onto the piece, and so does everything in the
+        integrand that was written against the whole union: a restriction
+        is read through that piece's parametrization, and a geometric quantity is
+        read off that piece's geometry.
+
+        Args:
+            piece: One piece of this integral's domain
+
+        Returns:
+            The same integrand over that piece alone
+        """
+        domain = self.domain
+        replacements: dict[GraphNode, GraphNode] = {}
+        for node in as_graph(self._integrand):
+            if isinstance(node, Restriction) and node.domain == domain:
+                replacements[node] = node.restricted_to_piece(piece)
+            elif isinstance(node, AbstractGeometricQuantity) and node.domain == domain:
+                replacements[node] = node.on_domain(piece)
+        integrand = replace(self._integrand, replacements) if replacements else self._integrand
+        assert isinstance(integrand, AbstractExpression)
+        return Integral(integrand, self._measure.with_domain(piece))
+
+    def split_by_piece(self) -> IntegralSum | None:
+        """Split this integral into one over each piece of its domain.
+
+        Returns:
+            A sum of integrals, one per piece, or None when the domain is
+            not made of pieces
+
+        Note:
+            A union of one piece is still split. The union is a different
+            domain from the piece, and it is the piece that names the
+            parametrization a restriction reads a field through.
+        """
+        domain = self.domain
+        if not isinstance(domain, UnionDomain):
+            return None
+        return IntegralSum(tuple(self.restricted_to_piece(p) for p in domain.pieces))
 
     def split_by_cell_type(self) -> IntegralSum | None:
         """Split this integral into one over each cell type of its domain.

@@ -40,6 +40,7 @@ from uflx.domains import (
     SubEntityDomain,
     entity_domain,
     sub_entity_domain,
+    union_domain,
 )
 from uflx.expressions import RealScalar
 from uflx.geometry import (
@@ -47,13 +48,15 @@ from uflx.geometry import (
     ImagePoint,
     JacobianInverse,
     MetricTensor,
+    SingleSpatialCoordinate,
+    SpatialCoordinate,
     TangentialProjector,
     UnitNormal,
     VolumeElement,
     _as_dense_matrix,
 )
 from uflx.graphs import as_graph
-from uflx.integrals import Integral
+from uflx.integrals import Integral, IntegralSum
 from uflx.parametrizations import (
     AffineParametrization,
     ComposedDomain,
@@ -529,3 +532,125 @@ def test_a_restriction_to_a_union_has_no_one_inclusion_to_read_through(space, me
     assert restriction.variable == integral.variable
     with pytest.raises(ValueError, match="parametrization per piece"):
         restriction.image_point
+
+
+def test_an_integral_over_the_facets_splits_into_one_per_facet(space, mesh):
+    """The second fan out: a piece names a parametrization, as a cell type does for a mesh."""
+    v = TestFunction(space)
+    facets = facets_of(mesh)
+
+    integral = restrict(v, facets) * dx(facets)
+    assert isinstance(integral, Integral)
+    split = integral.split_by_piece()
+
+    assert isinstance(split, IntegralSum)
+    assert len(split.terms) == 3
+    for piece, term in zip(facets.pieces, split.terms, strict=True):
+        assert term.domain == piece
+        assert term.measure == dx(piece)
+        assert term.variable.domain == piece
+
+
+def test_a_union_of_one_piece_is_still_split(space, mesh):
+    """The union is not the piece, and only a piece names the parametrization to read through."""
+    v = TestFunction(space)
+    one = union_domain(facets_of(mesh).pieces[:1])
+
+    integral = restrict(v, one) * dx(one)
+    assert isinstance(integral, Integral)
+    split = integral.split_by_piece()
+
+    assert isinstance(split, IntegralSum)
+    assert len(split.terms) == 1
+    assert split.terms[0].domain == one.pieces[0]
+
+
+def test_an_integral_over_a_mesh_has_no_pieces_to_split_by(space, mesh):
+    """A cell integral is over one domain, not over a union of them."""
+    v = TestFunction(space)
+
+    integral = v * dx(mesh)
+    assert isinstance(integral, Integral)
+
+    assert integral.split_by_piece() is None
+
+
+def test_splitting_reads_a_quantity_off_the_piece_it_lands_on(space, mesh):
+    """A normal written against the facets is each facet's own normal.
+
+    The union has a parametrization per piece, so a quantity on it says nothing
+    until the split says which piece. Where on the piece it is read is a
+    later question, answered when the integral is pulled back onto
+    coordinates. The coordinate goes the same way, which also says the
+    retargeting carries a quantity's other arguments.
+    """
+    v = TestFunction(space)
+    facets = facets_of(mesh)
+
+    integral = (
+        inner(SpatialCoordinate(facets), UnitNormal(facets))
+        * SpatialCoordinate(facets).component(1)
+        * restrict(v, facets)
+        * dx(facets)
+    )
+    assert isinstance(integral, Integral)
+    split = integral.split_by_piece()
+    assert isinstance(split, IntegralSum)
+
+    for piece, term in zip(facets.pieces, split.terms, strict=True):
+        quantities = quantities_in(term.integrand)
+        assert quantities["UnitNormal"] == UnitNormal(piece)
+        assert quantities["SpatialCoordinate"] == SpatialCoordinate(piece)
+        coordinate = quantities["SingleSpatialCoordinate"]
+        assert isinstance(coordinate, SingleSpatialCoordinate)
+        assert coordinate == SingleSpatialCoordinate(piece, 1)
+
+
+def test_pulling_back_an_integral_over_the_facets_gives_one_kernel_per_facet(space, mesh):
+    """The whole of an exterior facet integral, from the one measure.
+
+    Each term is over a reference facet, carries that facet's volume
+    element as its density, reads the normal off that facet, and reads
+    the cell's inverse Jacobian at the point the facet's inclusion gives.
+    That is what UFL's ds means, with no measure of its own anywhere in
+    it.
+    """
+    v = TestFunction(space)
+    u = Coefficient(space)
+    facets = facets_of(mesh)
+
+    pulled = pull_back_to_entity(
+        inner(restrict(grad(u), facets), UnitNormal(facets)) * restrict(v, facets) * dx(facets)
+    )
+
+    assert isinstance(pulled, IntegralSum)
+    assert len(pulled.terms) == 3
+    for piece, term in zip(facets.pieces, pulled.terms, strict=True):
+        assert isinstance(term, Integral)
+        assert isinstance(piece, ComposedDomain)
+        assert term.domain == EntityDomain(Interval())
+        included = ImagePoint(term.variable.to_entity_coordinates(Interval()), piece.inner_domain)
+        quantities = quantities_in(term.integrand)
+        assert quantities["VolumeElement"] == VolumeElement(piece, term.variable)
+        assert quantities["UnitNormal"] == UnitNormal(piece, term.variable)
+        assert quantities["JacobianInverse"] == JacobianInverse(mesh, included)
+
+
+def test_the_facets_of_a_mesh_of_two_cell_types_give_a_kernel_each(space):
+    """A piece per cell type and local facet, so the cell type split has nothing left."""
+    triangles = LagrangeElement(PlacedTriangle(), 1, (3,))
+    tetrahedra = LagrangeElement(PlacedTetrahedron(), 1, (3,))
+    mixed = parametrized_domain((triangles, tetrahedra))
+    mixed_space = function_space(
+        mixed, (LagrangeElement(PlacedTriangle(), 1), LagrangeElement(PlacedTetrahedron(), 1))
+    )
+    v = TestFunction(mixed_space)
+    facets = facets_of(mixed)
+
+    pulled = pull_back_to_entity(restrict(v, facets) * dx(facets))
+
+    assert isinstance(pulled, IntegralSum)
+    assert len(pulled.terms) == 3 + 4
+    reference_facets = [term.domain for term in pulled.terms]
+    assert reference_facets.count(EntityDomain(Interval())) == 3
+    assert reference_facets.count(EntityDomain(Triangle())) == 4
