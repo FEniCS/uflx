@@ -78,6 +78,10 @@ consumers, e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` exte
   they must come from a `FunctionSpace`.
 - `functions.py` / `basis_functions.py` — `AbstractFunction` and basis functions
   evaluated at points, in either an entity's coordinates or ambient coordinates.
+- `parametrizations.py` — `ParametrizedDomain`: a parametrized domain whose map is
+  described by a finite element per cell. Evaluating such a map is an interpolation
+  sum, so this sits above `function_spaces`/`basis_functions` rather than in
+  `domains`, which must not know how a parametrization is described.
 - `expressions.py` — `AbstractExpression`: the base of every symbolic node
   (`BinaryOperator`, `UnaryOperator`, terminals). Carries value shape, free indices,
   domain, scalar type as static, extensible attributes (unlike legacy UFL's fixed
