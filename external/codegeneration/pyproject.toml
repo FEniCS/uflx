@@ -1,7 +1,7 @@
 [project]
-name = "basix-uflx"
+name = "uflx-codegeneration"
 version = "0.0.1"
-description = "UFLx interface for Basix"
+description = "Code generation built on top of ULFx"
 readme = "README.md"
 requires-python = ">=3.11.0"
 license = "MIT"
@@ -9,7 +9,7 @@ authors = [
     { name = "Matthew Scroggs", email = "ufl@mscroggs.co.uk" },
     { name = "Garth Wells", email = "gnw20@cam.ac.uk" }
 ]
-dependencies = ["uflx", "numpy", "fenics-basix", "uflx-codegeneration"]
+dependencies = ["uflx", "numpy", "cffi", "setuptools", "quadraturerules"]
 
 [project.urls]
 homepage = "https://github.com/garth-wells/uflx"

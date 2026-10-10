@@ -1,0 +1,170 @@
+"""Generation of C code."""
+
+from typing import Protocol, runtime_checkable
+
+import numpy as np
+from uflx.expressions import (
+    Abs,
+    Div,
+    Integer,
+    Neg,
+    Product,
+    RealScalar,
+    Reciprocal,
+    Sqrt,
+    Subtract,
+    Sum,
+)
+from uflx.points import PointComponent
+from uflx.tensors import FlattenedTensorMap
+
+from uflx_codegeneration import symbols
+
+
+@runtime_checkable
+class GenerateC(Protocol):
+    """Protocol for Objects that can be converted to C code."""
+
+    def generate_c(self) -> str:
+        """Generate code for this object."""
+
+
+def c_table(table: np.ndarray) -> str:
+    """Convert a numpy array to C."""
+    if len(table.shape) == 1:
+        return "{" + ", ".join(f"{i}" for i in table) + "}"
+    return "{" + ", ".join(c_table(i) for i in table) + "}"
+
+
+def tables_to_c(tables: dict[str, np.ndarray]) -> str:
+    """Convert tables of values to a string of code."""
+    return "\n".join(
+        f"static const double {variable}["
+        + "][".join(f"{i}" for i in table.shape)
+        + "] = "
+        + c_table(table)
+        + ";"
+        for variable, table in tables.items()
+    )
+
+
+def product_generate_c(self) -> str:
+    """Generate code for this object."""
+    if self.value_shape != ():
+        raise NotImplementedError("Cannot generate code for multiplication of non-scalars")
+    items = []
+    for i in self._items:
+        if not isinstance(i, GenerateC):
+            raise NotImplementedError(f"GenerateC is not implemented for {i.__class__}")
+        items.append(i.generate_c())
+    return "(" + " * ".join(items) + ")"
+
+
+setattr(Product, "generate_c", product_generate_c)
+
+
+def div_generate_c(self) -> str:
+    """Generate code for this object."""
+    if not isinstance(self.first, GenerateC):
+        raise NotImplementedError(f"GenerateC is not implemented for {self.first.__class__}")
+    if not isinstance(self.second, GenerateC):
+        raise NotImplementedError(f"GenerateC is not implemented for {self.second.__class__}")
+    return f"({self.first.generate_c()} / {self.second.generate_c()})"
+
+
+setattr(Div, "generate_c", div_generate_c)
+
+
+def reciprocal_generate_c(self) -> str:
+    """Generate code for this object."""
+    if not isinstance(self.argument, GenerateC):
+        raise NotImplementedError(f"GenerateC is not implemented for {self.argument.__class__}")
+    return f"(1.0 / {self.argument.generate_c()})"
+
+
+setattr(Reciprocal, "generate_c", reciprocal_generate_c)
+
+
+def sum_generate_c(self) -> str:
+    """Generate code for this object."""
+    items = []
+    for i in self._items:
+        if not isinstance(i, GenerateC):
+            raise NotImplementedError(f"GenerateC is not implemented for {i.__class__}")
+        items.append(i.generate_c())
+    return "(" + " + ".join(items) + ")"
+
+
+setattr(Sum, "generate_c", sum_generate_c)
+
+
+def subtract_generate_c(self) -> str:
+    """Generate code for this object."""
+    if not isinstance(self.first, GenerateC):
+        raise NotImplementedError(f"GenerateC is not implemented for {self.first.__class__}")
+    if not isinstance(self.second, GenerateC):
+        raise NotImplementedError(f"GenerateC is not implemented for {self.second.__class__}")
+    return f"({self.first.generate_c()} - {self.second.generate_c()})"
+
+
+setattr(Subtract, "generate_c", subtract_generate_c)
+
+
+def abs_generate_c(self) -> str:
+    """Generate code for this object."""
+    if not isinstance(self.argument, GenerateC):
+        raise NotImplementedError(f"GenerateC is not implemented for {self.argument.__class__}")
+    return f"fabs({self.argument.generate_c()})"
+
+
+setattr(Abs, "generate_c", abs_generate_c)
+
+
+def sqrt_generate_c(self) -> str:
+    """Generate code for this object."""
+    if not isinstance(self.argument, GenerateC):
+        raise NotImplementedError(f"GenerateC is not implemented for {self.argument.__class__}")
+    return f"sqrt({self.argument.generate_c()})"
+
+
+setattr(Sqrt, "generate_c", sqrt_generate_c)
+
+
+def neg_generate_c(self) -> str:
+    """Generate code for this object."""
+    if not isinstance(self.argument, GenerateC):
+        raise NotImplementedError(f"GenerateC is not implemented for {self.argument.__class__}")
+    return f"-{self.argument.generate_c()}"
+
+
+setattr(Neg, "generate_c", neg_generate_c)
+
+
+def pc_generate_c(self) -> str:
+    """Generate code for this object."""
+    c = self.point.component(self.component_index)
+    if isinstance(c, PointComponent):
+        raise NotImplementedError(f"GenerateC is not implemented for {self.__class__}")
+    if not isinstance(c, GenerateC):
+        raise NotImplementedError(f"GenerateC is not implemented for {c.__class__}")
+    return c.generate_c()
+
+
+setattr(PointComponent, "generate_c", pc_generate_c)
+
+
+def ftm_generate_c(self) -> str:
+    """Generate code for this object, an entry of the coordinate DOFs."""
+    return f"{symbols.coordinate_dofs}[{self.flat_index}]"
+
+
+setattr(FlattenedTensorMap, "generate_c", ftm_generate_c)
+
+
+def scalar_generate_c(self) -> str:
+    """Generate code for this object."""
+    return f"{self.value}"
+
+
+setattr(RealScalar, "generate_c", scalar_generate_c)
+setattr(Integer, "generate_c", scalar_generate_c)

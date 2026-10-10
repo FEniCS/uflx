@@ -33,11 +33,12 @@ pytest test/test_forms.py::test_name    # single test
 pytest -n auto test/                    # parallel, matches CI (needs pytest-xdist)
 ```
 
-`external/basix_uflx` is a separate installable package excluded from the main `uflx`
-package; install and test it independently:
+The `external/` packages (`external/codegeneration`, `external/basix_uflx`) are
+separate installable packages excluded from the main `uflx` package; install and test
+them independently:
 ```
-pip install external/basix_uflx
-pytest external/basix_uflx/test
+pip install external/codegeneration external/basix_uflx
+pytest external/codegeneration/test external/basix_uflx/test
 ```
 
 Build docs:
