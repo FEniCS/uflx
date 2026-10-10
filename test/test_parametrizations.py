@@ -3,7 +3,7 @@
 import math
 
 import pytest
-from conftest import Interval
+from conftest import Interval, Triangle
 
 from uflx import (
     Coefficient,
@@ -36,6 +36,7 @@ from uflx.geometry import (
     AbstractGeometricQuantity,
     Jacobian,
     JacobianDeterminant,
+    JacobianInverse,
     MetricTensor,
     PushedForwardPoint,
     SpatialCoordinate,
@@ -92,24 +93,16 @@ class Parabolic(AbstractParametrization):
         return hash("uflx.test.Parabolic")
 
 
-class LinearPlaneMap(AbstractParametrization):
-    """A linear map of the plane, given by its matrix.
+class Paraboloidal(AbstractParametrization):
+    """The analytic map (u, v) -> (u, v, u^2 + v^2) from the plane into space.
 
-    A second closed form map, so that a curve can be composed with
-    something after it rather than only before it. A rotation and a
-    reflection are isometries and a uniform scaling is not, which is what
-    makes them worth composing with: the metric a map induces has to
-    notice the difference, and the measure that follows from it has to
-    notice the same difference.
+    The surface analogue of :class:`Parabolic`, and the graph of a
+    function as that one is, so its area element is
+    ``sqrt(1 + |grad f|^2)`` and its normal is ``(-grad f, 1)`` divided by
+    the same thing. Unlike a curve it has a metric with off-diagonal
+    entries, a tangent plane rather than a tangent line, and three minors
+    in its normal rather than two.
     """
-
-    def __init__(self, entries: tuple[tuple[float, ...], ...]):
-        """Initialise.
-
-        Args:
-            entries: The rows of the matrix of the map
-        """
-        self._entries = tuple(tuple(row) for row in entries)
 
     @property
     def source(self) -> AbstractCoordinateDomain:
@@ -118,14 +111,88 @@ class LinearPlaneMap(AbstractParametrization):
 
     @property
     def target_dimension(self) -> int:
-        """This map lands in the plane."""
-        return 2
+        """This map lands in space."""
+        return 3
+
+    def value(self, point: AbstractVariable) -> AbstractExpression:
+        """Sum the squares of the coordinates to get the third component."""
+        u, v = point.component(0), point.component(1)
+        return Vector([u, v, u * u + v * v])
+
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
+        """Differentiate (u, v, u^2 + v^2) by hand."""
+        u, v = point.component(0), point.component(1)
+        return Matrix(
+            [
+                [Integer(1), Integer(0)],
+                [Integer(0), Integer(1)],
+                [Integer(2) * u, Integer(2) * v],
+            ]
+        )
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return "Paraboloidal()"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return isinstance(other, Paraboloidal)
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash("uflx.test.Paraboloidal")
+
+
+class LinearMap(AbstractParametrization):
+    """A linear map of the coordinates it starts in, given by its matrix.
+
+    A closed form map to apply after another one, so that a curve or a
+    surface can be composed with something downstream of it. A rotation
+    and a reflection are isometries and a uniform scaling is not, which
+    is what makes them worth composing with: the metric a map induces has
+    to notice the difference, and the measure that follows from it has to
+    notice the same difference.
+    """
+
+    def __init__(self, entries: tuple[tuple[float, ...], ...]):
+        """Initialise.
+
+        Args:
+            entries: The rows of the square matrix of the map
+        """
+        self._entries = tuple(tuple(row) for row in entries)
+        if any(len(row) != len(self._entries) for row in self._entries):
+            raise ValueError("A linear map of its own coordinates has a square matrix.")
+
+    @property
+    def source(self) -> AbstractCoordinateDomain:
+        """This map starts where it lands."""
+        return RD(len(self._entries))
+
+    @property
+    def target_dimension(self) -> int:
+        """This map lands where it starts."""
+        return len(self._entries)
 
     @property
     def determinant(self) -> float:
-        """The determinant of the matrix, which says if it reverses orientation."""
-        (a, b), (c, d) = self._entries
-        return a * d - b * c
+        """The determinant of the matrix, which says if it reverses orientation.
+
+        Expanded along the first row in ordinary arithmetic, this being
+        what the test expects of UFLx rather than something it asks UFLx
+        for.
+        """
+
+        def expand(rows: tuple[tuple[float, ...], ...]) -> float:
+            if len(rows) == 1:
+                return rows[0][0]
+            total = 0.0
+            for j, entry in enumerate(rows[0]):
+                minor = tuple(row[:j] + row[j + 1 :] for row in rows[1:])
+                total += (-1.0) ** j * entry * expand(minor)
+            return total
+
+        return expand(self._entries)
 
     def apply(self, coordinates: list[float]) -> list[float]:
         """Apply the map to ordinary numbers, to say what is expected of it."""
@@ -135,10 +202,8 @@ class LinearPlaneMap(AbstractParametrization):
         """Multiply the matrix by the point."""
         return Vector(
             [
-                expression_sum(
-                    RealScalar(a) * point.component(j) for j, a in enumerate(self._entries[i])
-                )
-                for i in range(2)
+                expression_sum(RealScalar(a) * point.component(j) for j, a in enumerate(row))
+                for row in self._entries
             ]
         )
 
@@ -153,15 +218,15 @@ class LinearPlaneMap(AbstractParametrization):
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"LinearPlaneMap({self._entries})"
+        return f"LinearMap({self._entries})"
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
-        return isinstance(other, LinearPlaneMap) and other._entries == self._entries
+        return isinstance(other, LinearMap) and other._entries == self._entries
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.test.LinearPlaneMap", self._entries))
+        return hash(("uflx.test.LinearMap", self._entries))
 
 
 @pytest.fixture
@@ -207,21 +272,55 @@ def curve(parabola):
 
 
 @pytest.fixture
+def paraboloid():
+    """The analytic surface map, on its own."""
+    return Paraboloidal()
+
+
+@pytest.fixture
+def surface(paraboloid):
+    """The paraboloid alone, as a domain: one cell, mapped in closed form.
+
+    The surface counterpart of ``curve``, and concrete for the same
+    reason.
+    """
+    return composed_domain(entity_domain(Triangle()), paraboloid)
+
+
+@pytest.fixture
 def rotation():
     """A quarter turn of the plane, which is an isometry."""
-    return LinearPlaneMap(((0.0, -1.0), (1.0, 0.0)))
+    return LinearMap(((0.0, -1.0), (1.0, 0.0)))
 
 
 @pytest.fixture
 def reflection():
     """A reflection of the plane, an isometry that reverses orientation."""
-    return LinearPlaneMap(((1.0, 0.0), (0.0, -1.0)))
+    return LinearMap(((1.0, 0.0), (0.0, -1.0)))
 
 
 @pytest.fixture
 def scaling():
     """A uniform scaling of the plane by three, which is not an isometry."""
-    return LinearPlaneMap(((3.0, 0.0), (0.0, 3.0)))
+    return LinearMap(((3.0, 0.0), (0.0, 3.0)))
+
+
+@pytest.fixture
+def space_rotation():
+    """A quarter turn of space about the third axis, which is an isometry."""
+    return LinearMap(((0.0, -1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0)))
+
+
+@pytest.fixture
+def space_reflection():
+    """A reflection of space, an isometry that reverses orientation."""
+    return LinearMap(((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, -1.0)))
+
+
+@pytest.fixture
+def space_scaling():
+    """A uniform scaling of space by three, which is not an isometry."""
+    return LinearMap(((3.0, 0.0, 0.0), (0.0, 3.0, 0.0), (0.0, 0.0, 3.0)))
 
 
 def arc_length_element(y: float) -> float:
@@ -229,9 +328,40 @@ def arc_length_element(y: float) -> float:
     return math.sqrt(1.0 + 4.0 * y * y)
 
 
-def at(y: float) -> Point:
+def area_element(u: float, v: float) -> float:
+    """The area element of (u, v) -> (u, v, u^2 + v^2).
+
+    The graph of a function has ``sqrt(1 + |grad f|^2)``, and here
+    ``grad f`` is ``(2u, 2v)``.
+    """
+    return math.sqrt(1.0 + 4.0 * u * u + 4.0 * v * v)
+
+
+def on_the_interval(y: float) -> Point:
     """A point of an interval's coordinate domain."""
     return Point([RealScalar(y)], entity_domain(Interval()))
+
+
+def on_the_triangle(u: float, v: float) -> Point:
+    """A point of a triangle's coordinate domain."""
+    return Point([RealScalar(u), RealScalar(v)], entity_domain(Triangle()))
+
+
+def columns_of(quantity, rows: int, cols: int) -> list[list[float]]:
+    """Read a matrix valued quantity column by column, as numbers."""
+    matrix = _as_dense_matrix(quantity.expand_geometry())
+    return [[matrix.component(i, j).as_float() for i in range(rows)] for j in range(cols)]
+
+
+def entries_of(quantity, rows: int, cols: int) -> list[list[float]]:
+    """Read a matrix valued quantity row by row, as numbers."""
+    matrix = _as_dense_matrix(quantity.expand_geometry())
+    return [[matrix.component(i, j).as_float() for j in range(cols)] for i in range(rows)]
+
+
+def flat(matrix: list[list[float]]) -> list[float]:
+    """Flatten a matrix, pytest.approx not comparing nested sequences."""
+    return [entry for row in matrix for entry in row]
 
 
 def test_a_closed_form_map_needs_no_element(parabola, entity_point):
@@ -432,7 +562,7 @@ def test_the_volume_element_of_a_curve_is_its_arc_length_element(curve, y):
     integral over the curve picks up is the length the map gives a unit
     length of the interval, which is the norm of its one tangent.
     """
-    point = at(y)
+    point = on_the_interval(y)
 
     jacobian = _as_dense_matrix(Jacobian(curve, point).expand_geometry())
     tangent = [jacobian.component(i, 0).as_float() for i in range(2)]
@@ -460,7 +590,7 @@ def test_an_ambient_isometry_leaves_a_curves_measure_alone(curve, isometry, requ
     is the whole of what a density discards.
     """
     isometry = request.getfixturevalue(isometry)
-    point = at(0.25)
+    point = on_the_interval(0.25)
     moved = composed_domain(curve, isometry)
 
     assert VolumeElement(moved, point).expand_geometry().as_float() == pytest.approx(
@@ -484,7 +614,7 @@ def test_an_ambient_scaling_scales_a_curves_measure(curve, scaling):
     The metric picks up c^2, being quadratic in the map, and the measure
     picks up c^tdim, which on a curve is c itself.
     """
-    point = at(0.25)
+    point = on_the_interval(0.25)
     scaled = composed_domain(curve, scaling)
 
     assert VolumeElement(scaled, point).expand_geometry().as_float() == pytest.approx(
@@ -507,7 +637,7 @@ def test_composing_twice_applies_the_maps_in_turn(curve, rotation):
     maps, and the point of the plane they land on is the parabola's point
     rotated.
     """
-    point = at(0.25)
+    point = on_the_interval(0.25)
     rotated = composed_domain(curve, rotation)
     (cell,) = rotated.cell_types
 
@@ -545,3 +675,150 @@ def test_pulling_a_form_over_a_parabola_back_uses_the_volume_element(
     nodes = list(as_graph(pulled))
     assert any(isinstance(n, VolumeElement) for n in nodes)
     assert not any(isinstance(n, JacobianDeterminant) for n in nodes)
+
+
+surface_points = [(0.0, 0.0), (0.25, 0.5), (0.5, 0.5)]
+
+
+@pytest.mark.parametrize(("u", "v"), surface_points)
+def test_the_volume_element_of_a_surface_is_its_area_element(surface, u, v):
+    """On (u, v) -> (u, v, u^2 + v^2) the measure is sqrt(1 + 4u^2 + 4v^2).
+
+    A surface has a metric with off-diagonal entries, where a curve's is
+    a single number, so this is the first check that the Gram
+    determinant of a two by two metric is taken as a number and not only
+    as the right shape.
+    """
+    point = on_the_triangle(u, v)
+    metric = entries_of(MetricTensor(surface, point), 2, 2)
+
+    assert VolumeElement(surface, point).expand_geometry().as_float() == pytest.approx(
+        area_element(u, v)
+    )
+    assert flat(metric) == pytest.approx(
+        [1.0 + 4.0 * u * u, 4.0 * u * v, 4.0 * u * v, 1.0 + 4.0 * v * v]
+    )
+    determinant = metric[0][0] * metric[1][1] - metric[0][1] * metric[1][0]
+    assert math.sqrt(determinant) == pytest.approx(area_element(u, v))
+
+    with pytest.raises(ValueError, match="has no determinant"):
+        JacobianDeterminant(surface, point).expand_geometry()
+
+
+@pytest.mark.parametrize(("u", "v"), surface_points)
+def test_the_normal_of_a_surface_is_the_graphs_gradient_formula(surface, u, v):
+    """The graph of a function has normal (-grad f, 1), over the area element.
+
+    Three minors rather than a curve's two, and the middle one is the
+    negated term, which is where an alternating sign is easiest to lose.
+    """
+    point = on_the_triangle(u, v)
+    normal = [UnitNormal(surface, point).component(i).as_float() for i in range(3)]
+    tangents = columns_of(Jacobian(surface, point), 3, 2)
+
+    assert normal == pytest.approx(
+        [-2.0 * u / area_element(u, v), -2.0 * v / area_element(u, v), 1.0 / area_element(u, v)]
+    )
+    assert sum(c * c for c in normal) == pytest.approx(1.0)
+    for tangent in tangents:
+        assert sum(a * b for a, b in zip(normal, tangent, strict=True)) == pytest.approx(0.0)
+
+
+def test_the_tangential_projector_keeps_a_surfaces_tangent_plane(surface):
+    """It keeps the two directions the surface can move in and discards the third.
+
+    Its rank is the topological dimension, which for a projection is its
+    trace, so on a surface in space the trace is two and not three.
+    """
+    point = on_the_triangle(0.25, 0.5)
+    projector = entries_of(TangentialProjector(surface, point), 3, 3)
+    normal = [UnitNormal(surface, point).component(i).as_float() for i in range(3)]
+    tangents = columns_of(Jacobian(surface, point), 3, 2)
+
+    def apply(matrix, vector):
+        return [sum(row[k] * vector[k] for k in range(3)) for row in matrix]
+
+    assert sum(projector[i][i] for i in range(3)) == pytest.approx(2.0)
+    assert apply(projector, normal) == pytest.approx([0.0, 0.0, 0.0])
+    for tangent in tangents:
+        assert apply(projector, tangent) == pytest.approx(tangent)
+    for i in range(3):
+        assert apply(projector, projector[i]) == pytest.approx(projector[i])
+        for j in range(3):
+            assert projector[i][j] == pytest.approx(projector[j][i])
+
+
+def test_the_pseudo_inverse_inverts_a_surface_map_on_its_tangent_plane(surface):
+    """J+ J is the identity on the cell, and J J+ is the projector, not the identity.
+
+    The two products differ in which space they act on, and only the
+    first is an identity. Taking the second for one is the manifold
+    mistake worth a number rather than a shape.
+    """
+    point = on_the_triangle(0.25, 0.5)
+    jacobian = entries_of(Jacobian(surface, point), 3, 2)
+    pseudo_inverse = entries_of(JacobianInverse(surface, point), 2, 3)
+    projector = entries_of(TangentialProjector(surface, point), 3, 3)
+
+    on_the_cell = [
+        [sum(pseudo_inverse[i][k] * jacobian[k][j] for k in range(3)) for j in range(2)]
+        for i in range(2)
+    ]
+    in_space = [
+        [sum(jacobian[i][k] * pseudo_inverse[k][j] for k in range(2)) for j in range(3)]
+        for i in range(3)
+    ]
+
+    assert flat(on_the_cell) == pytest.approx([1.0, 0.0, 0.0, 1.0])
+    assert flat(in_space) == pytest.approx(flat(projector))
+
+
+@pytest.mark.parametrize("isometry", ["space_rotation", "space_reflection"])
+def test_an_ambient_isometry_leaves_a_surfaces_measure_alone(surface, isometry, request):
+    """The same law as for a curve, with three components in the normal.
+
+    An isometry of space preserves the metric the surface induces and so
+    its area element, while the normal picks up the sign of the map's
+    determinant.
+    """
+    isometry = request.getfixturevalue(isometry)
+    point = on_the_triangle(0.25, 0.5)
+    moved = composed_domain(surface, isometry)
+
+    assert VolumeElement(moved, point).expand_geometry().as_float() == pytest.approx(
+        area_element(0.25, 0.5)
+    )
+    assert flat(entries_of(MetricTensor(moved, point), 2, 2)) == pytest.approx(
+        flat(entries_of(MetricTensor(surface, point), 2, 2))
+    )
+
+    normal = [UnitNormal(surface, point).component(i).as_float() for i in range(3)]
+    moved_normal = [UnitNormal(moved, point).component(i).as_float() for i in range(3)]
+    carried = isometry.apply(normal)
+    sign = 1.0 if isometry.determinant > 0 else -1.0
+
+    assert moved_normal == pytest.approx([sign * c for c in carried])
+
+
+def test_an_ambient_scaling_scales_a_surfaces_measure(surface, space_scaling):
+    """A scaling by c multiplies the measure by c to the topological dimension.
+
+    On a curve that was c itself. On a surface it is c squared, the
+    metric picking up c^2 in each of its two directions and the area
+    element being the square root of their determinant.
+    """
+    point = on_the_triangle(0.25, 0.5)
+    scaled = composed_domain(surface, space_scaling)
+
+    assert scaled.topological_dimension == 2
+    assert VolumeElement(scaled, point).expand_geometry().as_float() == pytest.approx(
+        3.0**2 * area_element(0.25, 0.5)
+    )
+    assert flat(entries_of(MetricTensor(scaled, point), 2, 2)) == pytest.approx(
+        [9.0 * e for e in flat(entries_of(MetricTensor(surface, point), 2, 2))]
+    )
+
+    normal = [UnitNormal(surface, point).component(i).as_float() for i in range(3)]
+    scaled_normal = [UnitNormal(scaled, point).component(i).as_float() for i in range(3)]
+
+    assert scaled_normal == pytest.approx(normal)
