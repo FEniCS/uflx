@@ -169,7 +169,7 @@ class LagrangeElement(AbstractMappedFiniteElement):
 
     def __repr__(self):
         """Representation."""
-        return f"uflx.test.LagrangeElement({self._cell!r}, {self._degree}, self._block_shape)"
+        return f"uflx.test.LagrangeElement({self._cell!r}, {self._degree}, {self._block_shape})"
 
     def __eq__(self, other) -> bool:
         """Check if this element is equal to another element."""
@@ -180,6 +180,7 @@ class LagrangeElement(AbstractMappedFiniteElement):
             )
             and self._cell == other._cell
             and self._degree == other._degree
+            and self._block_shape == other._block_shape
         )
 
     @property
@@ -228,7 +229,7 @@ class LagrangeElement(AbstractMappedFiniteElement):
 
     def __hash__(self):
         """Hash."""
-        return hash(("uflx_test.LagrangeElement", self._cell, self._degree))
+        return hash(("uflx_test.LagrangeElement", self._cell, self._degree, self._block_shape))
 
 
 class NonIdentityMappedElement(LagrangeElement):
