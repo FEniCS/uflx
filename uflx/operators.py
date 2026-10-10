@@ -139,7 +139,7 @@ class Grad(UnaryOperator):
         assert isinstance(domain, AbstractParametrizedDomain)
         if isinstance(argument, PushedForward):
             # The last index of the entity gradient is the derivative direction.
-            return EntityGrad(argument.function) @ JacobianInverse(domain)
+            return EntityGrad(argument.function) @ JacobianInverse(domain.sole_parametrization)
         raise NotImplementedError()
 
 

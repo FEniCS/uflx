@@ -45,7 +45,9 @@ A domain is the integration domain of a form. For a minimal language definition,
 
 - topological dimension,
 - geometric dimension,
-- and a parametrization, if geometry is represented using a finite element.
+- and a parametrization per cell type.
+
+A parametrization is a map out of a cell's coordinate domain, which UFLx can evaluate and differentiate but does not otherwise interpret. A finite element basis summed against a mesh's coordinate dofs is one way to describe such a map; a closed form expression is another, and neither is privileged. Two parametrizations compose when the first lands where the second starts, so a mesh can be carried onto a surface given in closed form rather than interpolated through the nodes of a higher degree element.
 
 The actual mesh is still external to UFLx.
 

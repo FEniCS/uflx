@@ -58,12 +58,27 @@ def test_entity_domain_dimensions_agree(cell, lagrange_element):
     assert domain.cell_types == (entity,)
 
 
-def test_entity_domain_has_no_parametrization(lagrange_element):
-    """An entity domain carries no parametrization, unlike a parametrized domain."""
+def test_an_entity_domains_parametrization_is_the_identity(lagrange_element):
+    """An entity domain's points are already coordinates, so nothing maps them."""
     (entity,) = parametrized_domain(lagrange_element("triangle", 1, (2,))).cell_types
+    domain = entity_domain(entity)
 
-    assert not hasattr(entity_domain(entity), "parametrization_component")
-    assert not isinstance(entity_domain(entity), AbstractParametrizedDomain)
+    assert isinstance(domain, AbstractParametrizedDomain)
+    parametrization = domain.sole_parametrization
+    assert parametrization.is_identity
+    assert parametrization.is_affine
+    assert parametrization.source == domain
+    assert parametrization.target_dimension == domain.geometric_dimension
+    assert domain.has_affine_parametrization
+
+
+def test_an_entity_domain_only_parametrizes_its_own_entity(lagrange_element):
+    """Asking for another cell's map is a caller mistake."""
+    (triangle,) = parametrized_domain(lagrange_element("triangle", 1, (2,))).cell_types
+    (interval,) = parametrized_domain(lagrange_element("interval", 1, (1,))).cell_types
+
+    with pytest.raises(ValueError, match="not the entity"):
+        entity_domain(triangle).parametrization(interval)
 
 
 @pytest.mark.parametrize("dim", range(1, 4))
