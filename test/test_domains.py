@@ -6,7 +6,7 @@
 """Test domains."""
 
 import pytest
-from conftest import NonIdentityMappedElement
+from conftest import BlockedIdentityMappedElement, NonIdentityMappedElement
 
 from uflx import parametrized_domain
 from uflx.domains import RD, AbstractCoordinateDomain, EntityDomain, entity_domain
@@ -103,3 +103,16 @@ def test_parametrization_must_be_identity_mapped(lagrange_element):
 
     with pytest.raises(ValueError, match="identity mapped"):
         parametrized_domain(NonIdentityMappedElement(triangle, 1, (2,)))
+
+
+def test_parametrization_may_block_an_identity_map(lagrange_element):
+    """A vector element blocks a scalar identity map, which still leaves values untouched.
+
+    This is what an element library gives for vector Lagrange, so rejecting it
+    would reject every real mesh.
+    """
+    (triangle,) = parametrized_domain(lagrange_element("triangle", 1, (2,))).cell_types
+    domain = parametrized_domain(BlockedIdentityMappedElement(triangle, 1, (2,)))
+
+    assert domain.geometric_dimension == 2
+    assert domain.topological_dimension == 2

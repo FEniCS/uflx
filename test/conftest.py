@@ -232,13 +232,40 @@ class LagrangeElement(AbstractMappedFiniteElement):
         return hash(("uflx_test.LagrangeElement", self._cell, self._degree, self._block_shape))
 
 
+class PiolaLikeValueMap(AbstractValueMap):
+    """A map that genuinely changes the values it carries."""
+
+    def push_forward(self, function):
+        """Leave this mock map unimplemented."""
+        raise NotImplementedError()
+
+    def pull_back(self, function):
+        """Leave this mock map unimplemented."""
+        raise NotImplementedError()
+
+    def ambient_value_shape(
+        self, entity_value_shape: tuple[int, ...], geometric_dimension: int
+    ) -> tuple[int, ...]:
+        """Values take the ambient dimension."""
+        return (geometric_dimension,)
+
+
+class BlockedIdentityMappedElement(LagrangeElement):
+    """A vector element that blocks a scalar identity map, as an element library does."""
+
+    @property
+    def value_map(self) -> AbstractValueMap:
+        """Get the push forward and pull back map."""
+        return BlockedValueMap(IdentityValueMap(), self.entity_value_shape)
+
+
 class NonIdentityMappedElement(LagrangeElement):
     """A Lagrange element whose values are mapped, like a Piola mapped element."""
 
     @property
     def value_map(self) -> AbstractValueMap:
         """Get the push forward and pull back map."""
-        return BlockedValueMap(IdentityValueMap(), self.entity_value_shape)
+        return PiolaLikeValueMap()
 
 
 @pytest.fixture
