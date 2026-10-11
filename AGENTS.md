@@ -139,10 +139,12 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   cell types is pulled back as one integral per cell type, since each has its own
   coordinate domain; `Integral.on_cell_type` and `split_by_cell_type` do that, carrying
   the measure onto the restricted domain. `split_by_piece` is the same fan out over the
-  pieces of a union, run first since a piece names one parametrization and so one cell type. There
-  is no `ds` or `dS`: an exterior facet integral is this measure over `facets_of(mesh)`
-  with the fields restricted, which [INTEGRATION.md](INTEGRATION.md) §3 argues for, and
-  an interior one waits on a parametrization per side, which §6 lists.
+  pieces of a union, run first since a piece names one parametrization and so one cell type.
+  `IntegralSum` splits its own terms both ways, since the pull back walks a sum leaves
+  first and so reaches each integral with no chance to split it on the way. There is no
+  `ds` or `dS`: an exterior facet integral is this measure over `facets_of(mesh)` with
+  the fields restricted, which [INTEGRATION.md](INTEGRATION.md) §3 argues for, and an
+  interior one waits on a parametrization per side, which §6 lists.
 
 Symbolic (Gateaux) differentiation and expression/integral transformation between domain
 configurations are the two core transformation procedures UFLx provides on top of this

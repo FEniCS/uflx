@@ -9,10 +9,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from itertools import count
 from typing import Any, cast
 
 from uflx.algorithms import replace
+from uflx.algorithms.maps import SplitByCellType, SplitByPiece
 from uflx.domains import (
     AbstractParametrizedDomain,
     AbstractCellularDomain,
@@ -420,6 +422,51 @@ class IntegralSum:
         if isinstance(other, AbstractIntegral):
             return IntegralSum((*self._terms, other))
         return NotImplemented
+
+    def _split_terms(
+        self, split: Callable[[AbstractIntegral], GraphNode | None]
+    ) -> IntegralSum | None:
+        """Replace each term by its own split, where it has one.
+
+        A sum is where a fan out reaches the terms. Pulling a sum back
+        walks it leaves first and so reaches each integral already, with
+        no chance to split it on the way, and an integral over several
+        pieces or several cell types cannot be pulled back whole.
+
+        Args:
+            split: What to ask of a term, giving None when it does not split
+
+        Returns:
+            The sum with each term split, or None when no term split
+        """
+        terms: list[AbstractIntegral] = []
+        split_any = False
+        for term in self._terms:
+            result = split(term)
+            if result is None:
+                terms.append(term)
+            elif isinstance(result, IntegralSum):
+                terms.extend(result.terms)
+                split_any = True
+            else:
+                assert isinstance(result, AbstractIntegral)
+                terms.append(result)
+                split_any = True
+        if not split_any:
+            return None
+        return IntegralSum(tuple(terms))
+
+    def split_by_piece(self) -> IntegralSum | None:
+        """Split each term over a union of pieces into one integral per piece."""
+        return self._split_terms(
+            lambda term: term.split_by_piece() if isinstance(term, SplitByPiece) else None
+        )
+
+    def split_by_cell_type(self) -> IntegralSum | None:
+        """Split each term over several cell types into one integral per cell type."""
+        return self._split_terms(
+            lambda term: term.split_by_cell_type() if isinstance(term, SplitByCellType) else None
+        )
 
     def __eq__(self, other) -> bool:
         """Check for equality.

@@ -820,3 +820,24 @@ def test_a_form_on_the_facets_of_a_curved_patch_pulls_back_per_facet(patch):
             patch,
             ImagePoint(term.variable.to_entity_coordinates(Interval()), piece.inner_domain),
         )
+
+
+def test_a_sum_of_a_cell_integral_and_a_facet_one_pulls_back(mesh, space):
+    """A cell integral and a facet integral added, which a - L is.
+
+    The two fan out differently -- one over cell types, one over pieces --
+    so a sum of them is where both have to reach the terms. It pulls back
+    to one kernel over the reference triangle and one per facet over the
+    reference interval.
+    """
+    u, v = Coefficient(space), TestFunction(space)
+    facets = facets_of(mesh)
+
+    form = inner(u, v) * dx(mesh) + inner(restrict(u, facets), restrict(v, facets)) * dx(facets)
+
+    pulled = pull_back_to_entity(form)
+
+    assert isinstance(pulled, IntegralSum)
+    domains = [term.domain for term in pulled.terms]
+    assert domains.count(EntityDomain(PlacedTriangle())) == 1
+    assert domains.count(EntityDomain(Interval())) == 3
