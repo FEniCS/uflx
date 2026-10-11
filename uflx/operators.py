@@ -12,7 +12,7 @@ from uflx.functions import AbstractFunction
 from uflx.geometry import JacobianInverse
 from uflx.graphs import GraphNode, as_graph
 from uflx.maps import PushedForward
-from uflx.tensors import Identity, Tensor, Vector, zero
+from uflx.tensors import Identity, Tensor, vector, zero
 
 
 class Inner(BinaryOperator):
@@ -175,7 +175,7 @@ class ReferenceGrad(UnaryOperator):
         if value_shape == ():
             # A scalar argument's directional derivatives are themselves
             # scalars -- nothing to index into.
-            return Vector(diffs)
+            return vector(diffs)
 
         # A non-scalar (eg vector-valued) argument's directional
         # derivatives are each still full value_shape-shaped expressions
@@ -183,7 +183,7 @@ class ReferenceGrad(UnaryOperator):
         # component), so build the (*value_shape, d) result by indexing
         # into each direction's derivative rather than treating the
         # derivatives themselves as the leaves -- a plain
-        # Vector(diffs)/Tensor(diffs) would silently misreport its own
+        # vector(diffs)/Tensor(diffs) would silently misreport its own
         # shape as (d,), since Tensor's shape inference only looks at the
         # nesting of the Python list it is given, not each leaf's own
         # value_shape.

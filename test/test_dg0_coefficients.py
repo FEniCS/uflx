@@ -161,8 +161,19 @@ def test_unknown_degree_and_multielement_space(lagrange_element):
         assert isinstance(grad(c), Grad)
 
 
-@pytest.mark.parametrize("shape", [(0,), (-1,), (2, 0)])
-def test_zero_rejects_invalid_shape(shape):
-    """Reject tensor extents the core tensor representation cannot express."""
-    with pytest.raises(ValueError):
+@pytest.mark.parametrize("shape", [(-1,), (2, -3)])
+def test_zero_rejects_a_negative_extent(shape):
+    """There is no tensor of a negative extent."""
+    with pytest.raises(ValueError, match="non-negative"):
         zero(shape)
+
+
+@pytest.mark.parametrize("shape", [(0,), (2, 0), (0, 3), (2, 0, 5)])
+def test_zero_takes_an_extent_of_zero(shape):
+    """A tensor with no entries along some axis, which an empty one has.
+
+    The gradient of a cellwise constant on a domain of topological
+    dimension zero is one of these: there is no direction to
+    differentiate in, so the tensor has no entries.
+    """
+    assert zero(shape).value_shape == shape

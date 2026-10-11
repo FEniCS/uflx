@@ -66,8 +66,19 @@ class FlattenedTensorMap(AbstractExpression):
 class Tensor(AbstractExpression):
     """A general tensor."""
 
-    def __init__(self, entries: NestedSequence):
-        """Initalise."""
+    def __init__(self, entries: NestedSequence, shape: tuple[int, ...] | None = None):
+        """Initalise.
+
+        Args:
+            entries: The entries, nested as deeply as the rank
+            shape: The shape, where the entries cannot give one: an axis
+                of length zero says nothing about the axes below it, so a
+                matrix with no rows needs telling how many columns it
+                has. It must agree with the entries as far as they go.
+
+        Raises:
+            ValueError: If the shape disagrees with the entries
+        """
 
         def to_shape_and_tuple(items) -> tuple[tuple[int, ...], NestedTuple]:
             if isinstance(items, AbstractExpression):
@@ -85,12 +96,23 @@ class Tensor(AbstractExpression):
             if s is None:
                 # Nothing to stack, so this axis is of length zero and there
                 # are no axes below it. A matrix with no rows cannot be read
-                # this way, since nothing says how many columns it has; Matrix
-                # takes that shape.
+                # this way, since nothing says how many columns it has, so
+                # the shape is given instead.
                 return (0,), ()
             return (len(t), *s), tuple(t)
 
         self._shape, self._entries = to_shape_and_tuple(entries)
+        if shape is not None:
+            # An axis of length zero says nothing about the axes below it:
+            # a matrix with no rows has some number of columns, and the
+            # entries cannot say which. So a given shape may extend the
+            # one read off the entries past its first zero, and must
+            # agree with it up to there.
+            zeros = [i for i, length in enumerate(self._shape) if length == 0]
+            known = zeros[0] + 1 if zeros else len(self._shape)
+            if shape[:known] != self._shape[:known]:
+                raise ValueError(f"These entries are of shape {self._shape}, not {shape}.")
+            self._shape = shape
 
     def __repr__(self):
         """Representation."""
@@ -109,8 +131,13 @@ class Tensor(AbstractExpression):
 
     @property
     def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._entries,)
+        """The arguments used to initialise this object.
+
+        The shape is one of them: two tensors of the same (empty) entries
+        and different shapes are different tensors, and a tensor rebuilt
+        from its arguments has to come back the same.
+        """
+        return self._entries, self._shape
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -128,93 +155,58 @@ class Tensor(AbstractExpression):
 
         return extract_component(self._entries, indices)
 
-    def compute_inverse(self) -> Tensor:
-        """Compute the inverse of the tensor."""
-        raise NotImplementedError(
-            "Computing the inverse not implemented for abitrary rank tensors."
-        )
+    def _as_a_matrix(self) -> tuple[int, int]:
+        """This tensor's shape, as a matrix's.
 
-    def transpose(self) -> Tensor:
-        """Get the transpose of the tensor."""
-        raise NotImplementedError("Transpose not implemented for abitrary rank tensors.")
-
-
-class Vector(Tensor):
-    """A vector."""
-
-    def __init__(self, entries: Sequence[AbstractExpression]):
-        """Initalise."""
-        super().__init__(entries)
-        if self._shape != (len(entries),):
-            raise ValueError("Vector entries must be scalars; stack tensors with Tensor.")
-
-    def __repr__(self):
-        """Representation."""
-        return f"Vector({self._entries})"
-
-
-class Matrix(Tensor):
-    """A matrix, i.e. a 2D tensor."""
-
-    def __init__(
-        self,
-        entries: Sequence[Sequence[AbstractExpression]],
-        shape: tuple[int, int] | None = None,
-    ):
-        """Initalise.
-
-        Args:
-            entries: The rows of the matrix
-            shape: Its shape, which is needed only for a matrix with no
-                rows: nothing then says how many columns it has. A
-                mismatch with the entries is an error.
+        The algebra below is a matrix's, so it asks for the rank it needs
+        rather than being defined on a class of that rank: a tensor is
+        told apart by its shape, and a rank two tensor is a matrix.
 
         Raises:
-            ValueError: If the entries are not scalars, if a matrix with no
-                rows is given no shape, or if the shape disagrees with the
-                entries
+            ValueError: If this tensor is not of rank two
         """
-        super().__init__(entries)
-        if len(entries) == 0:
-            if shape is None or len(shape) != 2 or shape[0] != 0:
-                raise ValueError("A matrix with no rows must be given its shape.")
-            self._shape = shape
-            return
-        if self._shape != (len(entries), len(entries[0])):
-            raise ValueError("Matrix entries must be scalars; stack tensors with Tensor.")
-        if shape is not None and shape != self._shape:
-            raise ValueError(f"These entries are of shape {self._shape}, not {shape}.")
-
-    def __repr__(self):
-        """Representation."""
-        return f"Matrix({self._entries})"
-
-    def transpose(self) -> Matrix:
-        """Get the transpose of the matrix."""
+        if len(self._shape) != 2:
+            raise ValueError(f"A tensor of shape {self._shape} is not a matrix.")
         rows, cols = self._shape
+        return rows, cols
+
+    def transpose(self) -> Tensor:
+        """Get the transpose of this tensor, read as a matrix."""
+        rows, cols = self._as_a_matrix()
         entries = cast(tuple[tuple[AbstractExpression, ...], ...], self._entries)
-        return Matrix(
+        return Tensor(
             [[entries[i][j] for i in range(rows)] for j in range(cols)], shape=(cols, rows)
         )
 
-    def matmat(self, other: Matrix) -> Matrix:
-        """Compute a matrix-matrix product."""
-        assert self._shape[1] == other._shape[0]
-        return Matrix(
+    def matmat(self, other: Tensor) -> Tensor:
+        """Compute a matrix-matrix product.
+
+        Raises:
+            ValueError: If either tensor is not a matrix, or the shapes do
+                not meet
+        """
+        rows, cols = self._as_a_matrix()
+        other_rows, other_cols = other._as_a_matrix()
+        if cols != other_rows:
+            raise ValueError(
+                f"A {rows}x{cols} matrix does not multiply a {other_rows}x{other_cols} one."
+            )
+        return Tensor(
             [
                 [
                     expression_sum(
-                        self.component(i, k) * other.component(k, j) for k in range(self._shape[1])
+                        self.component(i, k) * other.component(k, j) for k in range(cols)
                     )
-                    for j in range(other._shape[1])
+                    for j in range(other_cols)
                 ]
-                for i in range(self._shape[0])
-            ]
+                for i in range(rows)
+            ],
+            shape=(rows, other_cols),
         )
 
-    def compute_inverse(self) -> Matrix:
-        """Compute the inverse of the matrix."""
-        rows, cols = self._shape
+    def compute_inverse(self) -> Tensor:
+        """Compute the inverse of this tensor, read as a matrix."""
+        rows, cols = self._as_a_matrix()
         if rows > cols:
             return self.transpose().matmat(self).compute_inverse().matmat(self.transpose())
         elif rows < cols:
@@ -223,11 +215,11 @@ class Matrix(Tensor):
             entries = cast(tuple[tuple[AbstractExpression, ...], ...], self._entries)
             match rows:
                 case 0:
-                    return Matrix([[]])
+                    return Tensor([], shape=(0, 0))
                 case 1:
                     [[a]] = entries
                     assert isinstance(a, AbstractExpression)
-                    return Matrix([[RealScalar(1.0) / a]])
+                    return Tensor([[RealScalar(1.0) / a]])
                 case 2:
                     [[a, b], [c, d]] = entries
                     assert isinstance(a, AbstractExpression)
@@ -235,7 +227,7 @@ class Matrix(Tensor):
                     assert isinstance(c, AbstractExpression)
                     assert isinstance(d, AbstractExpression)
                     det = a * d - b * c
-                    return Matrix([[d / det, -b / det], [-c / det, a / det]])
+                    return Tensor([[d / det, -b / det], [-c / det, a / det]])
                 case 3:
                     [[a, b, c], [d, e, f], [g, h, i]] = entries
                     assert isinstance(a, AbstractExpression)
@@ -249,7 +241,7 @@ class Matrix(Tensor):
                     assert isinstance(i, AbstractExpression)
                     det = a * (e * i - f * h) + b * (f * g - d * i) + c * (d * h - e * g)
                     # Inverse = adjugate / det, adjugate = cofactor matrix transposed.
-                    return Matrix(
+                    return Tensor(
                         [
                             [
                                 (e * i - f * h) / det,
@@ -272,7 +264,7 @@ class Matrix(Tensor):
                     raise NotImplementedError(f"Inverting of {rows}x{rows} not implemented.")
 
     def compute_determinant(self) -> AbstractExpression:
-        """Compute the determinant of the matrix.
+        """Compute the determinant of this tensor, read as a matrix.
 
         For a non-square matrix A this is the pseudo-determinant sqrt(det(A^T A)) (tall A) or
         sqrt(det(A A^T)) (wide A), i.e. the volume scaling of the reference-to-physical map of a
@@ -282,8 +274,11 @@ class Matrix(Tensor):
         product of its blocks', so adding a 0 by 0 block must change
         nothing: det(diag(A, I0)) = det(A) det(I0) = det(A). numpy and
         MATLAB answer one too.
+
+        Raises:
+            ValueError: If this tensor is not a matrix
         """
-        rows, cols = self._shape
+        rows, cols = self._as_a_matrix()
         if rows == 0 or cols == 0:
             # The empty Gram determinant is one: a map out of no coordinates
             # scales no volume, so a domain of topological dimension zero has
@@ -323,43 +318,105 @@ class Matrix(Tensor):
                     return a * (e * i - f * h) + b * (f * g - d * i) + c * (d * h - e * g)
 
 
+def tensor(entries: NestedSequence, shape: tuple[int, ...] | None = None) -> Tensor:
+    """Create a tensor of the given entries.
+
+    Args:
+        entries: The entries, nested as deeply as the rank
+        shape: The shape, where the entries cannot give one
+
+    Returns:
+        That tensor
+    """
+    return Tensor(entries, shape)
+
+
+def _of_rank(
+    entries: NestedSequence, rank: int, shape: tuple[int, ...] | None, name: str
+) -> Tensor:
+    """Create a tensor, insisting on a rank.
+
+    There is one tensor class, told apart by its shape, so a vector and a
+    matrix are ranks rather than kinds. Asking for one is still worth it
+    at the point of writing a literal, where a mis-nested entry is a
+    mistake to catch early.
+
+    Raises:
+        ValueError: If the entries are not of that rank
+    """
+    built = Tensor(entries, shape)
+    if len(built.value_shape) != rank:
+        raise ValueError(
+            f"A {name} is of rank {rank}, and these entries are of shape {built.value_shape}."
+        )
+    return built
+
+
+def vector(entries: NestedSequence, shape: tuple[int, ...] | None = None) -> Tensor:
+    """Create a tensor of rank one.
+
+    Args:
+        entries: The entries, which must be scalars
+        shape: The shape, where the entries cannot give one
+
+    Returns:
+        That tensor
+    """
+    return _of_rank(entries, 1, shape, "vector")
+
+
+def matrix(entries: NestedSequence, shape: tuple[int, ...] | None = None) -> Tensor:
+    """Create a tensor of rank two.
+
+    Args:
+        entries: The rows, whose entries must be scalars
+        shape: The shape, where the entries cannot give one, as a matrix
+            with no rows cannot
+
+    Returns:
+        That tensor
+    """
+    return _of_rank(entries, 2, shape, "matrix")
+
+
 def zero(shape: tuple[int, ...]) -> RealScalar | Tensor:
     """Create a tensor full of zeros.
 
+    An extent of zero is allowed, and gives a tensor with no entries:
+    the gradient of a cellwise constant on a domain of topological
+    dimension zero is one, there being no direction to differentiate in.
+
     Args:
-        shape: The value shape of the zero tensor to build -- () for a
-            scalar, or any tuple of positive extents for a
-            correctly-shaped all-zero Vector/Matrix/Tensor.
+        shape: The value shape to build -- () for a scalar, or any tuple
+            of non-negative extents
 
     Returns:
-        RealScalar(0.0) if shape == (), else a Vector (rank 1), Matrix
-        (rank 2), or Tensor (rank 3+) built from nested RealScalar(0.0)
-        leaves matching `shape`.
+        RealScalar(0.0) if shape == (), else a tensor of that shape built
+        from nested RealScalar(0.0) leaves
 
     Raises:
-        ValueError: if any extent in `shape` is not a positive integer --
-            eg a zero or negative extent, which the underlying
-            Vector/Matrix/Tensor representation cannot express.
+        ValueError: If an extent is not a non-negative integer
     """
-    if any(not isinstance(n, int) or n <= 0 for n in shape):
+    if any(not isinstance(n, int) or n < 0 for n in shape):
         raise ValueError(
             f"Cannot create a zero tensor of shape {shape}: every extent must be "
-            "a positive integer."
+            "a non-negative integer."
         )
     if shape == ():
         return RealScalar(0.0)
-    if len(shape) == 1:
-        return Vector([RealScalar(0.0) for _ in range(shape[0])])
-    if len(shape) == 2:
-        return Matrix([[RealScalar(0.0) for _ in range(shape[1])] for _ in range(shape[0])])
 
     def build_entries(shape: tuple[int, ...]) -> NestedSequence:
-        """Recursively build a zero tensor."""
-        if len(shape) == 1:
+        """Recursively build a zero tensor.
+
+        An axis of length zero stops the recursion, there being no entry
+        to build below it, which is why the shape is given to the tensor
+        rather than read off what comes back.
+        """
+        if len(shape) == 1 or shape[0] == 0:
             return [RealScalar(0.0) for _ in range(shape[0])]
         return [build_entries(shape[1:]) for _ in range(shape[0])]
 
-    return Tensor(build_entries(shape))
+    return Tensor(build_entries(shape), shape=shape)
 
 
 class Identity(AbstractExpression):

@@ -5,7 +5,7 @@ from uflx.maps import (
     BlockedReferenceMap,
     IdentityReferenceMap,
 )
-from uflx.tensors import Vector
+from uflx.tensors import vector
 
 
 def test_identity_map(lagrange_element):
@@ -22,6 +22,6 @@ def test_blocked_map(lagrange_element):
     id_map = IdentityReferenceMap()
     b_map = BlockedReferenceMap(id_map, (4,))
 
-    v = Vector([Integer(i) for i in range(4)])
+    v = vector([Integer(i) for i in range(4)])
     assert b_map.push_forward(v) == v
     assert b_map.pull_back(v) == v

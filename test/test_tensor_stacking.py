@@ -4,7 +4,7 @@ import pytest
 
 from uflx import Coefficient, coordinate_element, function_space, grad
 from uflx.expressions import RealScalar
-from uflx.tensors import Matrix, Tensor, Vector
+from uflx.tensors import Tensor, matrix, vector
 
 
 def test_stacked_shape(lagrange_element):
@@ -18,21 +18,25 @@ def test_stacked_shape(lagrange_element):
 def test_stacked_components():
     """Component (i, j) of a stack of vectors is component j of entry i."""
     a, b, c, d = (RealScalar(float(i)) for i in range(4))
-    t = Tensor([Vector([a, b]), [c, d]])
+    t = Tensor([vector([a, b]), [c, d]])
     assert t.value_shape == (2, 2)
     assert t.component(0, 1) == b
     assert t.component(1, 0) == c
 
 
 def test_vector_and_matrix_entries_are_scalars(lagrange_element):
-    """Vector and Matrix keep scalar entries, and raise for stacked ones."""
+    """Asking for a rank keeps the entries scalar, and raises for stacked ones.
+
+    There is one tensor class, told apart by its shape, so a vector and a
+    matrix are ranks and the factories are where a rank is insisted on.
+    """
     domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
     p = Coefficient(function_space(domain, lagrange_element("triangle", 1)))
 
-    with pytest.raises(ValueError, match="scalars"):
-        Vector([grad(p), grad(p)])
-    with pytest.raises(ValueError, match="scalars"):
-        Matrix([[grad(p)], [grad(p)]])
+    with pytest.raises(ValueError, match="A vector is of rank 1"):
+        vector([grad(p), grad(p)])
+    with pytest.raises(ValueError, match="A matrix is of rank 2"):
+        matrix([[grad(p)], [grad(p)]])
 
 
 def test_entries_of_different_shapes(lagrange_element):

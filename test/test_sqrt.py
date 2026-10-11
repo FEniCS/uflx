@@ -4,7 +4,7 @@ import pytest
 
 from uflx import sqrt
 from uflx.expressions import ComplexScalar, RealScalar, Sqrt
-from uflx.tensors import Vector
+from uflx.tensors import vector
 
 
 def test_sqrt_real():
@@ -24,7 +24,7 @@ def test_sqrt_complex():
 def test_sqrt_rejects_non_scalar():
     """sqrt() is only defined for scalar expressions."""
     with pytest.raises(ValueError):
-        sqrt(Vector([RealScalar(1.0), RealScalar(4.0)]))
+        sqrt(vector([RealScalar(1.0), RealScalar(4.0)]))
 
 
 def test_sqrt_equality_and_hash():

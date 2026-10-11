@@ -6,14 +6,14 @@ import numpy as np
 import pytest
 
 from uflx.expressions import Integer, RealScalar
-from uflx.tensors import FlattenedTensorMap, Matrix, Tensor, Vector
+from uflx.tensors import FlattenedTensorMap, Tensor, matrix, vector
 
 
-def _to_matrix(values: np.ndarray) -> Matrix:
-    return Matrix([[RealScalar(float(v)) for v in row] for row in values])
+def _to_matrix(values: np.ndarray) -> Tensor:
+    return matrix([[RealScalar(float(v)) for v in row] for row in values])
 
 
-def _to_numpy(matrix: Matrix) -> np.ndarray:
+def _to_numpy(matrix: Tensor) -> np.ndarray:
     rows, cols = matrix.value_shape
     return np.array([[matrix.component(i, j).as_float() for j in range(cols)] for i in range(rows)])
 
@@ -117,21 +117,29 @@ def test_flattened_tensor_map_equality():
 
 def test_an_empty_sequence_is_an_axis_of_length_zero():
     """A row with no entries, which a map out of no coordinates has."""
-    assert Vector([]).value_shape == (0,)
-    assert Matrix([[]]).value_shape == (1, 0)
-    assert Matrix([[], []]).value_shape == (2, 0)
+    assert vector([]).value_shape == (0,)
+    assert matrix([[]]).value_shape == (1, 0)
+    assert matrix([[], []]).value_shape == (2, 0)
     assert Tensor([[[]]]).value_shape == (1, 1, 0)
 
 
-def test_a_matrix_with_no_rows_is_given_its_shape():
-    """Nothing in its entries says how many columns it has."""
-    assert Matrix([], shape=(0, 2)).value_shape == (0, 2)
-    assert Matrix([[], []]).transpose().value_shape == (0, 2)
+def test_a_shape_extends_what_the_entries_say():
+    """An axis of length zero says nothing about the axes below it.
 
-    with pytest.raises(ValueError, match="must be given its shape"):
-        Matrix([])
-    with pytest.raises(ValueError, match="not"):
-        Matrix([[Integer(1)]], shape=(0, 1))
+    So a matrix with no rows has to be told how many columns it has, and
+    a shape may extend what the entries give as far as their first zero,
+    while disagreeing with them is an error.
+    """
+    assert matrix([], shape=(0, 2)).value_shape == (0, 2)
+    assert matrix([[], []]).transpose().value_shape == (0, 2)
+    assert Tensor([[], []], shape=(2, 0, 5)).value_shape == (2, 0, 5)
+
+    with pytest.raises(ValueError, match="A matrix is of rank 2"):
+        matrix([])
+    with pytest.raises(ValueError, match="of shape"):
+        matrix([[Integer(1)]], shape=(0, 1))
+    with pytest.raises(ValueError, match="of shape"):
+        Tensor([[], []], shape=(3, 0))
 
 
 def test_the_empty_gram_determinant_is_one():
@@ -140,7 +148,7 @@ def test_the_empty_gram_determinant_is_one():
     So the density of a domain of topological dimension zero is one,
     which is the counting measure, and a vertex can be integrated over.
     """
-    assert Matrix([[], []]).compute_determinant().as_float() == 1.0
-    assert Matrix([[]]).compute_determinant().as_float() == 1.0
-    assert Matrix([], shape=(0, 0)).compute_determinant().as_float() == 1.0
-    assert Matrix([], shape=(0, 3)).compute_determinant().as_float() == 1.0
+    assert matrix([[], []]).compute_determinant().as_float() == 1.0
+    assert matrix([[]]).compute_determinant().as_float() == 1.0
+    assert matrix([], shape=(0, 0)).compute_determinant().as_float() == 1.0
+    assert matrix([], shape=(0, 3)).compute_determinant().as_float() == 1.0
