@@ -29,6 +29,7 @@ from uflx.expressions import (
     Integer,
     MatrixProduct,
     RealScalar,
+    Sqrt,
     expression_sum,
 )
 from uflx.geometry import (
@@ -141,6 +142,85 @@ class Paraboloidal(AbstractParametrization):
     def __hash__(self) -> int:
         """Hash."""
         return hash("uflx.test.Paraboloidal")
+
+
+class Hemispherical(AbstractParametrization):
+    """The map (u, v) -> (u, v, sqrt(1 - u^2 - v^2)), the unit hemisphere.
+
+    A parametrization that is not a polynomial, where :class:`Paraboloidal` is. A
+    graph again, so its area element is ``sqrt(1 + |grad f|^2)`` and its
+    normal is ``(-grad f, 1)`` over the same, but with ``f`` a square root
+    both come out as closed forms with the square root still in them --
+    which is the point. Nothing in the geometry asks a parametrization to be
+    polynomial, and the measure a curved parametrization induces is what the
+    axisymmetric case will want once there are trigonometric functions to
+    write its parametrization with.
+    """
+
+    @property
+    def source(self) -> AbstractCoordinateDomain:
+        """This map starts in the plane."""
+        return RD(2)
+
+    @property
+    def target(self) -> AbstractCoordinateDomain:
+        """This map lands in space."""
+        return RD(3)
+
+    def _height(self, point: AbstractVariable) -> AbstractExpression:
+        """The height of the hemisphere over the point."""
+        u, v = point.component(0), point.component(1)
+        return Sqrt(RealScalar(1.0) - u * u - v * v)
+
+    def value(self, point: AbstractVariable) -> AbstractExpression:
+        """Put the height above the coordinates it is over."""
+        return Vector([point.component(0), point.component(1), self._height(point)])
+
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
+        """Differentiate the square root by hand."""
+        u, v = point.component(0), point.component(1)
+        height = self._height(point)
+        return Matrix(
+            [
+                [Integer(1), Integer(0)],
+                [Integer(0), Integer(1)],
+                [-u / height, -v / height],
+            ]
+        )
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return "Hemispherical()"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return isinstance(other, Hemispherical)
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash("uflx.test.Hemispherical")
+
+
+def test_a_hemisphere_is_charted_by_a_square_root():
+    """A parametrization need not be a polynomial, and its geometry does not care.
+
+    The area element of the unit hemisphere over ``(u, v)`` is
+    ``1 / sqrt(1 - u^2 - v^2)``, which is ``1 / z``, and its normal is the
+    radial direction, the point itself. Both come out of ``sqrt(det g)``
+    and the cofactor rule as they stand, with the square root carried
+    through.
+    """
+    u, v = 0.3, 0.2
+    height = math.sqrt(1.0 - u * u - v * v)
+    patch = composed_domain(entity_domain(Triangle()), Hemispherical())
+    point = Point([RealScalar(u), RealScalar(v)], entity_domain(Triangle()))
+
+    assert patch.topological_dimension == 2
+    assert patch.geometric_dimension == 3
+    assert VolumeElement(patch, point).expand_geometry().as_float() == pytest.approx(1.0 / height)
+
+    normal = UnitNormal(patch, point).expand_geometry()
+    assert [normal.component(i).as_float() for i in range(3)] == pytest.approx([u, v, height])
 
 
 class LinearMap(AbstractParametrization):
