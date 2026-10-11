@@ -133,6 +133,10 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   tangential one. `evaluate_at` is the shared pass that tells an expression where it is
   read, over the `ReadAtAVariable` nodes (`functions.py`) -- a function, a geometric
   quantity or a restriction, each built before there is a point and told later.
+- `legacy.py` — the legacy UFL spellings (`ds`, `ds(3)`, `dx`, and `dS` and
+  `facet_normal` saying why they cannot be built), which infer the domain and insert the
+  restrictions to build the native form. Opt in by importing it; nothing in `uflx`
+  imports it, since inference is what INTEGRATION.md note 2 argues against.
 - `integrals.py` — `Measure`, a domain paired with the density on it, built by
   `dx(domain)`; `Integral` (`expr * measure`), which takes its domain from its measure;
   and `IntegralSum`, which adding integrals gives. An integral over a domain of several

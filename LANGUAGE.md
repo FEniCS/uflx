@@ -221,6 +221,10 @@ An interface is not constructible yet: it needs a parametrization per side. The 
 restriction below belongs to the integrand either way, being a field pulled back along
 one side's inclusion, and not to the measure.
 
+`uflx.legacy` offers UFL's spellings -- a measure with no domain, and fields written
+unrestricted -- by inferring the domain and inserting the restrictions. It is for code
+being moved onto UFLx and not part of the language, which states its domain.
+
 ### Integrals
 
 An integral is made by multiplying a scalar expression by a measure.
