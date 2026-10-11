@@ -281,6 +281,39 @@ class AbstractFunction(AbstractExpression):
             return Im(self)
 
 
+def _pulled_back_to_entity(function: AbstractFunction) -> GraphNode:
+    """Read a function on the element of the cell its space is on.
+
+    The same for every function built from a space, which is why it is
+    written once here: the space moves onto the cell's own coordinate
+    domain, the variable moves with it, and the element's value map
+    carries the values. Which function it is, the function says, through
+    `reconstruct_with_space`.
+
+    Args:
+        function: The function to pull back
+
+    Returns:
+        That function in the entity's coordinates, pushed forward
+
+    Raises:
+        ValueError: If the function is in an entity's coordinates already
+    """
+    if function.in_entity_coordinates:
+        raise ValueError("Cannot pull back a function already in the entity's coordinates")
+    space = function.function_space
+    assert isinstance(space, AbstractMappedFunctionSpace)
+    element = space.elements[0]
+    pulled_back = function.reconstruct_with_space(
+        function_space(EntityDomain(element.cell), element)
+    )
+    if function.variable is not None:
+        pulled_back = pulled_back.reconstruct_with_variable(
+            function.variable.to_entity_coordinates(element.cell)
+        )
+    return PushedForward(element.value_map, pulled_back)
+
+
 class Argument(AbstractFunction):
     """A function that is a dimension of the tensor to be assembled."""
 
@@ -350,6 +383,10 @@ class Argument(AbstractFunction):
                 if isinstance(new, Argument) and self.variable is not None and new.variable is None:
                     return new.reconstruct_with_variable(self.variable)
                 return new
+
+    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
+        """Pull the node back to the entity's coordinates."""
+        return _pulled_back_to_entity(self)
 
 
 class Coefficient(AbstractFunction):
@@ -453,15 +490,7 @@ class Coefficient(AbstractFunction):
 
     def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
         """Pull the node back to the entity's coordinates."""
-        if self.in_entity_coordinates:
-            raise ValueError("Cannot pull back a function already in the entity's coordinates")
-        assert isinstance(self._space, AbstractMappedFunctionSpace)
-        element = self._space.elements[0]
-        space = function_space(EntityDomain(element.cell), element)
-        variable = (
-            None if self._variable is None else self._variable.to_entity_coordinates(element.cell)
-        )
-        return PushedForward(element.value_map, Coefficient(space, self._label, variable))
+        return _pulled_back_to_entity(self)
 
 
 class TestFunction(Argument):
@@ -498,18 +527,6 @@ class TestFunction(Argument):
         """Take a derivative of this function."""
         raise NotImplementedError()
 
-    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
-        """Pull the node back to the entity's coordinates."""
-        if self.in_entity_coordinates:
-            raise ValueError("Cannot pull back a function already in the entity's coordinates")
-        assert isinstance(self._space, AbstractMappedFunctionSpace)
-        element = self._space.elements[0]
-        space = function_space(EntityDomain(element.cell), element)
-        variable = (
-            None if self.variable is None else self.variable.to_entity_coordinates(element.cell)
-        )
-        return PushedForward(element.value_map, TestFunction(space, variable))
-
 
 class TrialFunction(Argument):
     """A trial function."""
@@ -542,18 +559,6 @@ class TrialFunction(Argument):
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""
         raise NotImplementedError()
-
-    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
-        """Pull the node back to the entity's coordinates."""
-        if self.in_entity_coordinates:
-            raise ValueError("Cannot pull back a function already in the entity's coordinates")
-        assert isinstance(self._space, AbstractMappedFunctionSpace)
-        element = self._space.elements[0]
-        space = function_space(EntityDomain(element.cell), element)
-        variable = (
-            None if self.variable is None else self.variable.to_entity_coordinates(element.cell)
-        )
-        return PushedForward(element.value_map, TrialFunction(space, variable))
 
 
 def create_variable(domain: AbstractDomain) -> Variable:
