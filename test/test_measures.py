@@ -5,7 +5,7 @@ import pytest
 from uflx import Coefficient, TestFunction, dx, function_space, inner, parametrized_domain
 from uflx.algorithms import pull_back_to_entity
 from uflx.domains import EntityDomain
-from uflx.geometry import VolumeElement
+from uflx.geometry import SpatialCoordinate, VolumeElement
 from uflx.integrals import AbstractMeasure, Integral, Measure
 
 
@@ -122,6 +122,23 @@ def test_an_integrand_spanning_two_domains_is_rejected(mesh, space, lagrange_ele
 
     with pytest.raises(ValueError, match="Cannot integrate a function on"):
         inner(Coefficient(space), TestFunction(other_space)) * dx(mesh)
+
+
+def test_integrating_a_quantity_of_another_domain_is_rejected(mesh, lagrange_element):
+    """The question asked of a function, asked of geometry too.
+
+    An integrand of no functions at all is allowed -- the domain is
+    stated, so there is nothing to infer -- and that is exactly where
+    nothing used to be checked: a quantity of somewhere else built, pulled
+    back, and failed only when something tried to expand it.
+    """
+    elsewhere = parametrized_domain(lagrange_element("triangle", 2, (2,)))
+    x = SpatialCoordinate(mesh)
+
+    assert isinstance(inner(x, x) * dx(mesh), Integral)
+
+    with pytest.raises(ValueError, match="Cannot read a quantity of"):
+        inner(x, x) * dx(elsewhere)
 
 
 def test_pulling_back_retargets_the_measure(mesh, space):

@@ -189,7 +189,8 @@ class Integral(AbstractIntegral):
 
         Raises:
             ValueError: If a function in the integrand is not on the
-                domain being integrated over
+                domain being integrated over, or a geometric quantity in
+                it cannot be read there
         """
         self._measure = measure
         domain = measure.domain
@@ -225,6 +226,23 @@ class Integral(AbstractIntegral):
         # where it is evaluated. This integral's variable is that point.
         evaluated = evaluate_at(integrand, self._variable, restricted)
         assert isinstance(evaluated, AbstractExpression)
+
+        # The same question of a geometric quantity, which until now was
+        # asked of functions alone: a quantity of another domain in this
+        # integrand built and pulled back and only failed on being
+        # expanded. One that already carries its own point is a quantity a
+        # pull back or a restriction put here, and says where it is read
+        # itself.
+        for node in as_graph(evaluated):
+            if node in restricted or not isinstance(node, AbstractGeometricQuantity):
+                continue
+            if node.variable is None and unlabelled(node.domain) != unlabelled(domain):
+                raise ValueError(
+                    f"Cannot read a quantity of {node.domain!r} over {domain!r}. A "
+                    f"quantity of another domain reaches this one through a map, as a "
+                    f"function does."
+                )
+
         self._integrand = evaluated
         self._graph = generate_graph(self)
 

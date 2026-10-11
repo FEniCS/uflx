@@ -357,6 +357,27 @@ def test_the_facets_of_a_mesh_of_two_cell_types_are_both_cells_facets(mesh):
     assert facets.geometric_dimension == 3
 
 
+def test_the_meshs_own_coordinate_in_a_facet_integral_is_rejected(mesh, space):
+    """Which is what a boundary traction looks like written without a restriction.
+
+    `x` here is the mesh's, and a point of the facets is not a point of
+    the mesh, so reading it there needs the map that carries one to the
+    other. It used to build, split and pull back, and fail only when
+    something tried to expand it. The facets' own coordinate is a
+    different expression, and is read on them.
+    """
+    facets = facets_of(mesh)
+    v = TestFunction(space)
+    x = SpatialCoordinate(mesh)
+
+    with pytest.raises(ValueError, match="Cannot read a quantity of"):
+        inner(x, x) * dx(facets)
+
+    on_the_facets = SpatialCoordinate(facets)
+    assert isinstance(inner(on_the_facets, on_the_facets) * dx(facets), Integral)
+    assert isinstance(restrict(x.component(0) * v, facets) * dx(facets), Integral)
+
+
 def test_a_label_marks_each_piece_so_a_kernel_keeps_it(mesh, space):
     """The consumer says which facets it means, and a kernel still says it.
 
