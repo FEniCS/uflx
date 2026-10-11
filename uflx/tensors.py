@@ -382,42 +382,41 @@ def matrix(entries: NestedSequence, shape: tuple[int, ...] | None = None) -> Ten
 def zero(shape: tuple[int, ...]) -> RealScalar | Tensor:
     """Create a tensor full of zeros.
 
+    An extent of zero is allowed, and gives a tensor with no entries:
+    the gradient of a cellwise constant on a domain of topological
+    dimension zero is one, there being no direction to differentiate in.
+
     Args:
-        shape: The value shape of the zero tensor to build -- () for a
-            scalar, or any tuple of positive extents for a
-            correctly-shaped all-zero tensor.
+        shape: The value shape to build -- () for a scalar, or any tuple
+            of non-negative extents
 
     Returns:
         RealScalar(0.0) if shape == (), else a tensor of that shape built
-        from nested RealScalar(0.0) leaves.
+        from nested RealScalar(0.0) leaves
 
     Raises:
-        ValueError: if any extent in `shape` is not a positive integer --
-            eg a zero or negative extent, which the underlying
-            tensor representation cannot express.
+        ValueError: If an extent is not a non-negative integer
     """
-    if any(not isinstance(n, int) or n <= 0 for n in shape):
+    if any(not isinstance(n, int) or n < 0 for n in shape):
         raise ValueError(
             f"Cannot create a zero tensor of shape {shape}: every extent must be "
-            "a positive integer."
+            "a non-negative integer."
         )
     if shape == ():
         return RealScalar(0.0)
-    if len(shape) == 1:
-        return vector([RealScalar(0.0) for _ in range(shape[0])])
-    if len(shape) == 2:
-        return matrix(
-            [[RealScalar(0.0) for _ in range(shape[1])] for _ in range(shape[0])],
-            shape=shape,
-        )
 
     def build_entries(shape: tuple[int, ...]) -> NestedSequence:
-        """Recursively build a zero tensor."""
-        if len(shape) == 1:
+        """Recursively build a zero tensor.
+
+        An axis of length zero stops the recursion, there being no entry
+        to build below it, which is why the shape is given to the tensor
+        rather than read off what comes back.
+        """
+        if len(shape) == 1 or shape[0] == 0:
             return [RealScalar(0.0) for _ in range(shape[0])]
         return [build_entries(shape[1:]) for _ in range(shape[0])]
 
-    return Tensor(build_entries(shape))
+    return Tensor(build_entries(shape), shape=shape)
 
 
 class Identity(AbstractExpression):
