@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from abc import abstractmethod
 from typing import Any, Protocol, Self, runtime_checkable
 
 from uflx.algorithms import replace
@@ -313,6 +314,24 @@ class AbstractGeometricQuantity(AbstractExpression):
         """Representation."""
         return f"{self.__class__.__name__}({self._domain!r}, {self._point!r})"
 
+    @abstractmethod
+    def expand_geometry(self) -> AbstractExpression:
+        """Expand this quantity into an expression in the domain's parametrization."""
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get a component of the expression.
+
+        Every quantity is read by expanding it, so this is asked of the
+        expansion rather than answered by each quantity in turn. A scalar
+        one has no component to get.
+
+        Raises:
+            ValueError: If this quantity is a scalar
+        """
+        if self.value_shape == ():
+            raise ValueError("Cannot get a component of a scalar expression")
+        return self.expand_geometry().component(*indices)
+
     def _is_partnered_by(self, other: GraphNode, partner: type[AbstractGeometricQuantity]) -> bool:
         """Whether `other` is a quantity of the given kind on the same geometry.
 
@@ -441,10 +460,6 @@ class SingleSpatialCoordinate(AbstractGeometricQuantity):
         """Representation."""
         return f"SingleSpatialCoordinate({self._domain!r}, {self._component}, {self._point!r})"
 
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        raise ValueError("Cannot get a component of a scalar expression")
-
 
 class Jacobian(AbstractGeometricQuantity):
     """The Jacobian."""
@@ -470,10 +485,6 @@ class Jacobian(AbstractGeometricQuantity):
         parametrization = self.parametrization
         assert self.point is not None
         return parametrization.jacobian(self.point)
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        return self.expand_geometry().component(*indices)
 
     def simplified_matrix_product(self, other: GraphNode) -> GraphNode | None:
         """Return a single expression representing the simplified matrix product.
@@ -509,10 +520,6 @@ class MetricTensor(AbstractGeometricQuantity):
         j = _as_dense_matrix(self._jacobian.expand_geometry())
         return j.transpose().matmat(j)
 
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        return self.expand_geometry().component(*indices)
-
 
 class TangentialProjector(AbstractGeometricQuantity):
     """The orthogonal projection of the ambient coordinates onto the tangent space.
@@ -539,10 +546,6 @@ class TangentialProjector(AbstractGeometricQuantity):
             return Identity(gdim)
         j = _as_dense_matrix(self._jacobian.expand_geometry())
         return j.matmat(j.compute_inverse())
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        return self.expand_geometry().component(*indices)
 
     def simplified_matrix_product(self, other: GraphNode) -> GraphNode | None:
         """Return a single expression representing the simplified matrix product.
@@ -608,10 +611,6 @@ class UnitNormal(AbstractGeometricQuantity):
         norm = Sqrt(expression_sum(c * c for c in components))
         return Vector([c / norm for c in components])
 
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        return self.expand_geometry().component(*indices)
-
 
 class JacobianDeterminant(AbstractGeometricQuantity):
     """The determinant of the Jacobian."""
@@ -626,10 +625,6 @@ class JacobianDeterminant(AbstractGeometricQuantity):
         j = _as_dense_matrix(self._jacobian.expand_geometry())
         return abs(j.compute_determinant())
 
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        raise ValueError("Cannot get a component of a scalar expression")
-
 
 class JacobianInverse(AbstractGeometricQuantity):
     """The inverse of the Jacobian."""
@@ -643,10 +638,6 @@ class JacobianInverse(AbstractGeometricQuantity):
         """Expand geometry."""
         j = _as_dense_matrix(self._jacobian.expand_geometry())
         return j.compute_inverse()
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        return self.expand_geometry().component(*indices)
 
     def simplified_matrix_product(self, other: GraphNode) -> GraphNode | None:
         """Return a single expression representing the simplified matrix product.
@@ -672,10 +663,6 @@ class JacobianTranspose(AbstractGeometricQuantity):
         j = _as_dense_matrix(self._jacobian.expand_geometry())
         return j.transpose()
 
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        return self.expand_geometry().component(*indices)
-
     def simplified_matrix_product(self, other: GraphNode) -> GraphNode | None:
         """Return a single expression representing the simplified matrix product.
 
@@ -699,10 +686,6 @@ class JacobianInverseTranspose(AbstractGeometricQuantity):
         """Expand geometry."""
         j = _as_dense_matrix(self._jacobian.expand_geometry())
         return j.compute_inverse().transpose()
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        return self.expand_geometry().component(*indices)
 
     def simplified_matrix_product(self, other: GraphNode) -> GraphNode | None:
         """Return a single expression representing the simplified matrix product.
