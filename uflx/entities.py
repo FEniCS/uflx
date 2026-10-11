@@ -85,8 +85,7 @@ class AbstractEntity(ABC):
                 sub-entities are.
         """
         raise NotImplementedError(
-            f"{self!r} does not say where its sub-entities are. Where they sit is "
-            f"reference geometry, which the definer of the entity supplies."
+            f"{self!r} does not say where its sub-entities are. That is the definer's to supply."
         )
 
     def sub_entity_count(self, dim: int) -> int:

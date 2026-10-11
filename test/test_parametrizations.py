@@ -405,7 +405,7 @@ def test_composing_incompatible_maps_is_rejected(line, line_map):
     with pytest.raises(ValueError, match="Cannot compose"):
         ComposedParametrization(line_map, FromThePlane())
 
-    with pytest.raises(ValueError, match="Cannot map a domain"):
+    with pytest.raises(ValueError, match="is not mapped by a map out of"):
         composed_domain(line, FromThePlane())
 
 
@@ -431,7 +431,7 @@ def test_composing_a_map_written_for_other_coordinates_is_rejected():
         triangle.geometric_dimension
     )
 
-    with pytest.raises(ValueError, match="points are named in"):
+    with pytest.raises(ValueError, match="is not mapped by a map out of"):
         composed_domain(triangle, FromAQuadrilateral(((2.0, 0.0), (0.0, 1.0))))
 
     # A map of the plane takes any two coordinates, so the cell's own are fine.

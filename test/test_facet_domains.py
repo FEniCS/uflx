@@ -483,7 +483,7 @@ def test_a_field_is_restricted_along_an_inclusion_and_not_along_any_map(space, m
     """Restriction is reading a field on a sub-entity of its own cells."""
     u = Coefficient(space)
 
-    with pytest.raises(ValueError, match="not one mapped on by a domain's parametrization"):
+    with pytest.raises(ValueError, match="is not a sub-entity of a cell"):
         restrict(u, mesh)
 
 

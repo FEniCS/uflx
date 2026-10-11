@@ -134,8 +134,7 @@ class AbstractParametrizedDomain(AbstractDomain):
         targets = {parametrization.target for parametrization in self.parametrizations}
         if len(targets) != 1:
             raise ValueError(
-                f"The parametrizations of {self!r} land in {len(targets)} different coordinate "
-                f"domains, so its points are not named one way."
+                f"The parametrizations of {self!r} land in {len(targets)} coordinates."
             )
         (target,) = targets
         return target
@@ -394,8 +393,7 @@ class UnionDomain(AbstractParametrizedDomain):
         dimensions = {piece.geometric_dimension for piece in pieces}
         if len(dimensions) != 1:
             raise ValueError(
-                f"Every piece of a union must be named in the same coordinates, but "
-                f"these are in {sorted(dimensions)}."
+                f"A union's pieces must be in the same coordinates, not {sorted(dimensions)}."
             )
         self._pieces = pieces
 

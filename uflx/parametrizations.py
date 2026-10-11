@@ -251,15 +251,9 @@ class AffineParametrization(AbstractParametrization):
         if len(self._offset) != len(self._matrix):
             raise ValueError("The offset must have one entry per row of the matrix.")
         if len(self._matrix) != target.geometric_dimension:
-            raise ValueError(
-                f"A map into {target!r} lands in {target.geometric_dimension} coordinates, "
-                f"so its matrix must have that many rows."
-            )
+            raise ValueError(f"A map into {target!r} needs that many rows in its matrix.")
         if len(self._matrix[0]) != source.geometric_dimension:
-            raise ValueError(
-                f"A map out of {source!r} takes {source.geometric_dimension} coordinates, "
-                f"so its matrix must have that many columns."
-            )
+            raise ValueError(f"A map out of {source!r} needs that many columns in its matrix.")
 
     @property
     def source(self) -> AbstractCoordinateDomain:
@@ -514,9 +508,8 @@ class ComposedDomain(AbstractCellularDomain):
         generic = RD(domain.geometric_dimension)
         if map.source != here and map.source != generic:
             raise ValueError(
-                f"Cannot map a domain whose points are named in {here!r} with a map "
-                f"starting from {map.source!r}. A map out of {generic!r} takes any "
-                f"{domain.geometric_dimension} coordinates and so would be accepted."
+                f"A domain named in {here!r} is not mapped by a map out of {map.source!r}. "
+                f"A map out of {generic!r} takes any of them."
             )
         self._domain = domain
         self._outer_map = outer_map
@@ -746,10 +739,8 @@ def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = Non
     """
     if not isinstance(domain, AbstractCellularDomain):
         raise ValueError(
-            f"{domain!r} is not made of cells, so its sub-entities are not here to "
-            f"enumerate: a cell's come from its entity's combinatorics. A domain parametrized "
-            f"some other way knows its own boundary pieces -- a box knows its faces from "
-            f"its bounds -- but nothing asks a domain for them yet."
+            f"{domain!r} is not made of cells, so it has no sub-entities to enumerate. "
+            f"A domain parametrized some other way is not yet asked for its boundary pieces."
         )
     pieces: list[AbstractParametrizedDomain] = []
     for cell in domain.cell_types:

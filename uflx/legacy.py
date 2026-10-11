@@ -106,17 +106,11 @@ def _inferred_domain(integrand: AbstractExpression) -> AbstractParametrizedDomai
     ]
     distinct = list(dict.fromkeys(domains))
     if len(distinct) == 0:
-        raise ValueError(
-            "No function in this integrand says which domain it is on, so a measure "
-            "with no domain has nothing to infer from. Pass domain=, or write the "
-            "native spelling, which names the domain."
-        )
+        raise ValueError("No function in this integrand says which domain. Pass domain=.")
     if len(distinct) > 1:
         raise ValueError(
-            f"The functions in this integrand are on {len(distinct)} different domains, "
-            f"so there is no one domain to infer. An integrand spanning two domains is "
-            f"what the native spelling is for: name the domain and read each field "
-            f"there through its own parametrization."
+            f"This integrand's functions are on {len(distinct)} domains, so no one domain "
+            f"can be inferred. Name it, as the native spelling does."
         )
     (domain,) = distinct
     if not isinstance(domain, AbstractParametrizedDomain):
@@ -208,9 +202,7 @@ class CellMeasure:
         """
         if isinstance(subdomain_id, AbstractParametrizedDomain):
             raise ValueError(
-                "This is the legacy dx, whose argument is a subdomain id. Write "
-                "dx(domain=...) for a domain, or import dx from uflx for the native "
-                "measure of a domain."
+                "The legacy dx takes a subdomain id. Write dx(domain=...), or use uflx.dx."
             )
         return CellMeasure(subdomain_id, domain or self._domain)
 
@@ -252,10 +244,7 @@ class ExteriorFacetMeasure(CellMeasure):
     ) -> ExteriorFacetMeasure:
         """Get this measure over a marked part of the facets, or over a named domain."""
         if isinstance(subdomain_id, AbstractParametrizedDomain):
-            raise ValueError(
-                "This is the legacy ds, whose argument is a subdomain id. Write "
-                "ds(domain=...) for a domain."
-            )
+            raise ValueError("The legacy ds takes a subdomain id. Write ds(domain=...).")
         return ExteriorFacetMeasure(subdomain_id, domain or self._domain)
 
     def facets_for(self, integrand: AbstractExpression) -> UnionDomain:
@@ -293,11 +282,8 @@ class InteriorFacetMeasure(CellMeasure):
             NotImplementedError: Always
         """
         raise NotImplementedError(
-            "An interior facet integral is this measure over an interface, which is a "
-            "facet seen from both sides. That needs a parametrization per side, which a union of "
-            "pieces does not express: its pieces carry no relation to each other, where "
-            "the two sides of one interface are two parametrizations of one set related by a "
-            "transition map. INTEGRATION.md section 5 says what it costs."
+            "An interface needs a parametrization per side, which a union of pieces does not "
+            "express. See INTEGRATION.md section 5."
         )
 
     def __repr__(self) -> str:
@@ -330,7 +316,6 @@ def facet_normal(domain: AbstractParametrizedDomain) -> AbstractGeometricQuantit
         NotImplementedError: Always
     """
     raise NotImplementedError(
-        "A facet normal with a sign needs an orientation: which side of the facet the "
-        "cell is on. UnitNormal(facets_of(domain)) is the normal without one, which is "
-        "a direction and not an outward direction."
+        "An outward normal needs an orientation, which nothing carries yet. "
+        "UnitNormal(facets_of(domain)) is the normal without a sign."
     )

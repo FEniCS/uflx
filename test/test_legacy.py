@@ -187,7 +187,7 @@ def test_an_integrand_that_does_not_say_which_domain_is_refused(space):
 
     other = parametrized_domain(LagrangeElement(PlacedTriangle(), 2, (2,)))
     elsewhere = function_space(other, LagrangeElement(PlacedTriangle(), 1))
-    with pytest.raises(ValueError, match="different domains"):
+    with pytest.raises(ValueError, match="on 2 domains"):
         inner(Coefficient(space), TestFunction(elsewhere)) * ds
 
 

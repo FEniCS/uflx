@@ -334,8 +334,7 @@ class AbstractGeometricQuantity(AbstractExpression):
         if len(parametrizations) > 1:
             raise ValueError(
                 f"{self.domain!r} has {len(parametrizations)} parametrizations out of {source!r}, so a point "
-                f"there does not name the map this quantity differentiates. Split an "
-                f"integral over this domain into one per piece first."
+                f"there names no one map. Split the integral by piece first."
             )
         (parametrization,) = parametrizations
         return parametrization

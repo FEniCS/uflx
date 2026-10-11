@@ -105,22 +105,13 @@ class Restriction(AbstractExpression):
         """
         field_domain = extract_domain(field)
         if not isinstance(field_domain, AbstractParametrizedDomain):
-            raise ValueError(
-                f"A field on {field_domain!r} has no cells, so nothing includes a "
-                f"sub-entity into one of them."
-            )
+            raise ValueError(f"{field_domain!r} has no cells to include a sub-entity into.")
         for piece in _pieces_of(domain):
             _, cell, cell_map = _inclusion_of(piece)
             if cell not in field_domain.cell_types:
-                raise ValueError(
-                    f"{cell} is not a cell type of {field_domain!r}, so a field "
-                    f"there is not read on its sub-entities."
-                )
+                raise ValueError(f"{cell} is not a cell type of {field_domain!r}.")
             if cell_map != field_domain.parametrization(cell):
-                raise ValueError(
-                    f"{piece!r} is not a piece of {field_domain!r}, so a field on that "
-                    f"domain is not read through this piece's parametrization."
-                )
+                raise ValueError(f"{piece!r} is not a piece of {field_domain!r}.")
         self._field = field
         self._domain = domain
         self._variable = variable
@@ -194,14 +185,10 @@ class Restriction(AbstractExpression):
                 read, or is over a union rather than one piece
         """
         if self._variable is None:
-            raise ValueError(
-                "This restriction has not been told where it is read, so the point its "
-                "field is read at is not known."
-            )
+            raise ValueError("This restriction has not been told where it is read.")
         if isinstance(self._domain, UnionDomain):
             raise ValueError(
-                f"{self._domain!r} has a parametrization per piece, so there is no one inclusion to "
-                f"read a field through. Split an integral over it into one per piece first."
+                f"{self._domain!r} has a parametrization per piece. Split the integral by piece first."
             )
         inclusion, _, _ = _inclusion_of(self._domain)
         (sub_entity,) = inclusion.cell_types
@@ -252,16 +239,9 @@ def _inclusion_of(
     cell_map = getattr(domain, "map", None)
     sits_in = inner.coordinate_domain if isinstance(inner, AbstractCellularDomain) else None
     if not isinstance(inner, AbstractCellularDomain) or cell_map is None:
-        raise ValueError(
-            f"A field is restricted along the inclusion of a sub-entity into its cell, "
-            f"and {domain!r} is not one mapped on by a domain's parametrization."
-        )
+        raise ValueError(f"{domain!r} is not a sub-entity of a cell, mapped on.")
     if not isinstance(sits_in, EntityDomain):
-        raise ValueError(
-            f"A field is restricted along the inclusion of a sub-entity into its cell, "
-            f"and the points of {inner!r} are named in {sits_in!r} rather than in a "
-            f"cell's coordinates."
-        )
+        raise ValueError(f"{inner!r} is named in {sits_in!r}, not in a cell's coordinates.")
     (cell,) = sits_in.cell_types
     return inner, cell, cell_map
 
