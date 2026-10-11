@@ -414,12 +414,16 @@ class AbstractGeometricQuantity(AbstractExpression):
             return Identity(gdim)
         return TangentialProjector(self._domain, self._variable)
 
-    def _at_variable(self, variable: AbstractVariable) -> Self:
-        """This quantity at a point, rebuilt.
+    def _rebuilt(
+        self, domain: AbstractParametrizedDomain, variable: AbstractVariable | None
+    ) -> Self:
+        """This quantity on a domain, read at a variable.
 
-        A subclass carrying more than a domain and a point overrides this.
+        The one place a quantity is rebuilt, so a subclass carrying more
+        than a domain and a point overrides this alone and neither of the
+        two callers has to know what else it carries.
         """
-        return self.__class__(self._domain, variable)
+        return self.__class__(domain, variable)
 
     def on_domain(self, domain: AbstractParametrizedDomain) -> Self:
         """This quantity on another domain, not yet told where it is read.
@@ -435,9 +439,7 @@ class AbstractGeometricQuantity(AbstractExpression):
         Returns:
             The same kind of quantity there
         """
-        # init_args run the domain first and the point last, so what lies
-        # between is whatever else the quantity is of.
-        return self.__class__(domain, *self.init_args[1:-1])
+        return self._rebuilt(domain, None)
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Evaluate this quantity at the given variable.
@@ -451,7 +453,7 @@ class AbstractGeometricQuantity(AbstractExpression):
             return self
         if len(_parametrizations_out_of(self._domain, source)) == 0:
             return self
-        return self._at_variable(variable)
+        return self._rebuilt(self._domain, variable)
 
 
 class SpatialCoordinate(AbstractGeometricQuantity):
@@ -519,9 +521,11 @@ class SingleSpatialCoordinate(AbstractGeometricQuantity):
         """The arguments used to initialise this object."""
         return self._domain, self._component, self._variable
 
-    def _at_variable(self, variable: AbstractVariable) -> Self:
-        """This coordinate at a point, rebuilt."""
-        return self.__class__(self._domain, self._component, variable)
+    def _rebuilt(
+        self, domain: AbstractParametrizedDomain, variable: AbstractVariable | None
+    ) -> Self:
+        """This coordinate, rebuilt, carrying which coordinate it is."""
+        return self.__class__(domain, self._component, variable)
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
