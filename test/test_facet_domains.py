@@ -501,6 +501,35 @@ def test_the_sub_entities_of_a_marked_domain_are_refused(mesh):
         sub_entities_of(marked, 1, "boundary")
 
 
+def test_the_edges_of_a_cells_faces_are_the_cells_edges():
+    """The boundary of a boundary, measured, agrees with taking the codimension.
+
+    Reaching an edge through a face composes two inclusions where taking
+    codimension two composes one, so the parametrizations differ and the geometry
+    had better not: these are the same six edges of the reference
+    tetrahedron, each face contributing three and each edge shared by two
+    faces. Only the identity differs, which the test below is about.
+    """
+    cell = NestedTetrahedron()
+    at_the_end = Point([RealScalar(0.3)], entity_domain(Interval()))
+
+    through_the_faces = []
+    for face in sub_entities_of(entity_domain(cell), 1).pieces:
+        assert isinstance(face, ComposedDomain)
+        for edge in sub_entities_of(face, 1).pieces:
+            through_the_faces.append(measure_of(edge, at_the_end))
+
+    directly = [
+        measure_of(edge, at_the_end) for edge in sub_entities_of(entity_domain(cell), 2).pieces
+    ]
+
+    assert sorted(directly) == pytest.approx(sorted(edge_lengths))
+    assert len(through_the_faces) == 2 * len(directly)
+    assert sorted(set(round(length, 12) for length in through_the_faces)) == pytest.approx(
+        sorted(set(round(length, 12) for length in directly))
+    )
+
+
 def test_a_sub_entity_of_a_sub_entity_names_no_index_of_the_cell():
     """An edge of a face is included twice, and neither index is the cell's.
 
