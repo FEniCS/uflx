@@ -2,9 +2,10 @@
 
 import pytest
 
-from uflx import coordinate_element
+from uflx import parametrized_domain
+from uflx.domains import RD, EntityDomain
 from uflx.expressions import RealScalar
-from uflx.geometry import PhysicalToReference, ReferenceToPhysical
+from uflx.geometry import PulledBackPoint, PushedForwardPoint
 from uflx.points import Point
 
 cells_and_gdims = [
@@ -21,10 +22,12 @@ cells_and_gdims = [
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
 def test_reference_to_physical_shape(cell, gdim, lagrange_element):
     """A reference point mapped to a physical cell has gdim components."""
-    domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
-    tdim = domain.cells[0].topological_dimension
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    tdim = domain.cell_types[0].topological_dimension
 
-    point = ReferenceToPhysical(Point([RealScalar(0.1)] * tdim, is_reference=True), domain)
+    point = PushedForwardPoint(
+        Point([RealScalar(0.1)] * tdim, EntityDomain(domain.cell_types[0])), domain
+    )
     assert point.value_shape == (gdim,)
     assert point.dim == gdim
     assert point.expand_geometry().value_shape == (gdim,)
@@ -33,9 +36,9 @@ def test_reference_to_physical_shape(cell, gdim, lagrange_element):
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
 def test_physical_to_reference_shape(cell, gdim, lagrange_element):
     """A physical point mapped to the reference cell has tdim components."""
-    domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
-    tdim = domain.cells[0].topological_dimension
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    tdim = domain.cell_types[0].topological_dimension
 
-    point = PhysicalToReference(Point([RealScalar(0.1)] * gdim), domain)
+    point = PulledBackPoint(Point([RealScalar(0.1)] * gdim, RD(gdim)), domain)
     assert point.value_shape == (tdim,)
     assert point.dim == tdim

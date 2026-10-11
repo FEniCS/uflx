@@ -64,18 +64,20 @@ consumers, e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` exte
 
 - `entities.py` — `AbstractEntity`: topological mesh entities (point/interval/
   triangle/.../hexahedron), defined recursively via their sub-entities.
-- `finite_elements.py` — `AbstractFiniteElement` / `AbstractReferenceMappedFiniteElement`:
+- `finite_elements.py` — `AbstractFiniteElement` / `AbstractMappedFiniteElement`:
   what basis functions look like on a cell; depends on `entities` and `maps`.
-- `maps.py` — `AbstractReferenceMap` (e.g. `IdentityReferenceMap`): push-forward/
-  pull-back between reference and physical cells, implemented as graph rewrites.
-- `domains.py` — `AbstractDomain`: the integration domain (topological/geometric
-  dimension + coordinate element); the actual mesh stays external to UFLx.
+- `maps.py` — `AbstractValueMap` (e.g. `IdentityValueMap`): push-forward/
+  pull-back of values between an entity's coordinates and ambient coordinates,
+  implemented as graph rewrites.
+- `domains.py` — `AbstractDomain`: a set you can integrate over. A coordinate
+  domain's points are tuples of numbers (`RD`, `EntityDomain`); a parametrized
+  domain is the image of a map out of one. The actual mesh stays external to UFLx.
 - `function_spaces.py` — `AbstractFunctionSpace`: standard FE spaces (domain +
   element), constant spaces (shape + scalar type), or non-FE spaces (domain + shape,
   no element). Do not construct `Argument`/`Coefficient` directly from an element —
   they must come from a `FunctionSpace`.
-- `functions.py` / `basis_functions.py` — `AbstractFunction` and reference/physical
-  basis functions evaluated at points.
+- `functions.py` / `basis_functions.py` — `AbstractFunction` and basis functions
+  evaluated at points, in either an entity's coordinates or ambient coordinates.
 - `expressions.py` — `AbstractExpression`: the base of every symbolic node
   (`BinaryOperator`, `UnaryOperator`, terminals). Carries value shape, free indices,
   domain, scalar type as static, extensible attributes (unlike legacy UFL's fixed

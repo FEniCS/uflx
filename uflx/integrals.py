@@ -12,7 +12,7 @@ from itertools import count
 from typing import Any, cast
 
 from uflx.algorithms import replace
-from uflx.domains import AbstractCoordinateElement
+from uflx.domains import AbstractParametrizedDomain
 from uflx.expressions import AbstractExpression
 from uflx.functions import (
     AbstractFunction,
@@ -141,23 +141,26 @@ class Integral(AbstractIntegral):
         """The arguments used to initialise this object."""
         return self._integrand, self._measure, self._variable
 
-    def pull_back_to_reference(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
-        """Pull the node back to the reference cell."""
+    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
+        """Pull the node back to the entity's coordinates."""
         integrand = node_map.get(self._integrand, self._integrand)
         domain = None
         for node in self.graph.descendants(self._integrand):
-            if isinstance(node, AbstractFunction) and not node.is_reference:
+            if isinstance(node, AbstractFunction) and not node.in_entity_coordinates:
                 if domain is None:
                     domain = node.function_space.domain
                 else:
                     assert domain == node.function_space.domain
         assert domain is not None
-        assert isinstance(domain, AbstractCoordinateElement)
+        assert isinstance(domain, AbstractParametrizedDomain)
+        if len(domain.cell_types) != 1:
+            raise NotImplementedError("Only domains with exactly one cell type supported for now.")
+        (cell,) = domain.cell_types
         det = abs(JacobianDeterminant(domain))
 
         assert isinstance(integrand, AbstractExpression)
 
-        return Integral(det * integrand, self._measure, self._variable.to_reference())
+        return Integral(det * integrand, self._measure, self._variable.to_entity_coordinates(cell))
 
     def __repr__(self) -> str:
         """Representation."""

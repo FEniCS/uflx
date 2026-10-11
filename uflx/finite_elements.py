@@ -13,9 +13,28 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import prod
+from typing import Protocol, runtime_checkable
 
 from uflx.entities import AbstractEntity
-from uflx.maps import AbstractReferenceMap
+from uflx.maps import AbstractValueMap
+
+
+@runtime_checkable
+class HasAGeometricDimension(Protocol):
+    """Anything that says how many coordinates name a point of it.
+
+    All a value map needs of a domain: the shape a value takes once
+    mapped depends on how many coordinates it is mapped into, and on
+    nothing else about where it is mapped to. Asking for the capability
+    rather than importing the domain leaves this module where the
+    layering puts it, below `domains`, and still leaves no room to pass a
+    topological dimension, which is what the number used to be before it
+    was asked for this way.
+    """
+
+    @property
+    def geometric_dimension(self) -> int:
+        """The number of coordinates needed to name a point."""
 
 
 class AbstractFiniteElement(ABC):
@@ -43,12 +62,22 @@ class AbstractFiniteElement(ABC):
         """Check if this element is real-valued."""
 
     @abstractmethod
-    def physical_value_shape(self, geometric_dimension: int) -> tuple[int, ...]:
-        """Return the shape of the value space on a physical cell."""
+    def mapped_value_shape(self, domain: HasAGeometricDimension) -> tuple[int, ...]:
+        """Return the shape of the value space in a domain's own coordinates.
 
-    def physical_value_size(self, geometric_dimension: int) -> int:
-        """Return the value size of the value space on a physical cell."""
-        return prod(self.physical_value_shape(geometric_dimension))
+        The shape a value has once the value map has been applied, which
+        is why it is named for the map: those coordinates are the ambient
+        ones only when the domain says so, as `coordinate_domain` has it.
+
+        Args:
+            domain: The domain whose coordinates the values are expressed
+                in. Asking it for its dimension rather than being handed
+                one leaves no room to pass a topological dimension.
+        """
+
+    def mapped_value_size(self, domain: HasAGeometricDimension) -> int:
+        """Return the value size of the value space in a domain's own coordinates."""
+        return prod(self.mapped_value_shape(domain))
 
     @property
     @abstractmethod
@@ -81,8 +110,8 @@ class AbstractFiniteElement(ABC):
         """Representation."""
 
 
-class AbstractReferenceMappedFiniteElement(AbstractFiniteElement):
-    """Abstract base class for a reference-mapped finite element.
+class AbstractMappedFiniteElement(AbstractFiniteElement):
+    """Abstract base class for a finite element whose values are mapped from an entity.
 
     To make your element library compatible with UFL, you should make a
     subclass of AbstractFiniteElement and provide implementations of all
@@ -93,21 +122,32 @@ class AbstractReferenceMappedFiniteElement(AbstractFiniteElement):
 
     @property
     @abstractmethod
-    def reference_value_shape(self) -> tuple[int, ...]:
-        """Return the shape of the value space on the reference cell."""
+    def entity_value_shape(self) -> tuple[int, ...]:
+        """Return the shape of the value space in the entity's coordinates."""
 
     @property
-    def reference_value_size(self) -> int:
-        """Return the value size of the value space on the reference cell."""
-        return prod(self.reference_value_shape)
+    def entity_value_size(self) -> int:
+        """Return the value size of the value space in the entity's coordinates."""
+        return prod(self.entity_value_shape)
 
     @property
     @abstractmethod
-    def reference_map(self) -> AbstractReferenceMap:
+    def value_map(self) -> AbstractValueMap:
         """Get the push forward and pull back map."""
 
-    def physical_value_shape(self, geometric_dimension: int) -> tuple[int, ...]:
-        """Return the shape of the value space on a physical cell."""
-        return self.reference_map.physical_value_shape(
-            self.reference_value_shape, geometric_dimension
+    @property
+    def describes_affine_map(self) -> bool:
+        """Whether the map this element describes is affine.
+
+        A degree 1 element on a simplex gives an affine map. On a
+        tensor-product cell even a degree 1 element's map is multilinear,
+        not affine. A library that knows more about its own elements may
+        override this.
+        """
+        return self.cell.is_simplex and self.lagrange_superdegree == 1
+
+    def mapped_value_shape(self, domain: HasAGeometricDimension) -> tuple[int, ...]:
+        """Return the shape of the value space in a domain's own coordinates."""
+        return self.value_map.mapped_value_shape(
+            self.entity_value_shape, domain.geometric_dimension
         )

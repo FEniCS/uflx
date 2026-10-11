@@ -14,9 +14,14 @@ from abc import abstractmethod
 from itertools import count
 from typing import Any, Self, cast
 
-from uflx.domains import AbstractDomain, AbstractFiniteElementDomain
+from uflx.domains import AbstractCellularDomain, AbstractDomain, EntityDomain
+from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression, Im, Re
-from uflx.function_spaces import AbstractFunctionSpace, AbstractReferenceMappedFunctionSpace
+from uflx.function_spaces import (
+    AbstractFunctionSpace,
+    AbstractMappedFunctionSpace,
+    function_space,
+)
 from uflx.graphs import GraphNode
 from uflx.maps import PushedForward
 from uflx.tensors import zero
@@ -44,17 +49,23 @@ class AbstractVariable(AbstractExpression):
         """Hash."""
 
     @property
-    def is_reference(self) -> bool:
-        """Check if this domain is on a reference cell."""
-        return False
+    def in_entity_coordinates(self) -> bool:
+        """Check if this variable's components are in an entity's coordinates."""
+        return isinstance(self.domain, EntityDomain)
 
-    def to_reference(self) -> FiniteElementVariable:
-        """Make a version of this variable on the reference cell."""
-        raise ValueError("Cannot pull this variable back to reference cell.")
+    def to_entity_coordinates(self, cell: AbstractEntity) -> AbstractVariable:
+        """Make a version of this variable in the given cell's coordinates."""
+        raise ValueError("Cannot pull this variable back to a cell's coordinates.")
 
 
 class Variable(AbstractVariable):
-    """A variable that is the input to a function."""
+    """A variable that is the input to a function.
+
+    One in a cellular domain can be moved between that domain's own
+    coordinates and one of its cells', which is what pulling an integral
+    back does to its dummy variable. One in any other domain has nowhere
+    to be moved to and refuses.
+    """
 
     _n = count(0)
 
@@ -76,18 +87,6 @@ class Variable(AbstractVariable):
         """The domain that this variable is in."""
         return self._domain
 
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return isinstance(other, Variable) and other.label == self.label
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"Variable({self._label})"
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.Variable", self._label))
-
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
@@ -98,82 +97,73 @@ class Variable(AbstractVariable):
         """The arguments used to initialise this object."""
         return (self._domain, self._label)
 
+    @property
+    def _cell_types(self) -> tuple[AbstractEntity, ...]:
+        """The cell types of this variable's domain.
+
+        Raises:
+            ValueError: If the domain is not made of cells
+        """
+        if not isinstance(self._domain, AbstractCellularDomain):
+            raise ValueError(
+                f"{self._domain!r} is not made of cells, so a point of it is in no "
+                f"cell's coordinates."
+            )
+        return self._domain.cell_types
+
+    def to_domain_coordinates(self, domain: AbstractCellularDomain) -> Variable:
+        """Make a version of this variable in a domain's own coordinates.
+
+        Args:
+            domain: The domain to push the variable onto. A variable in a
+                cell's coordinates does not know which domain it came
+                from, and those coordinates belong to no domain in
+                particular, so the target is named rather than recalled.
+        """
+        return Variable(domain, self._label)
+
+    def to_entity_coordinates(self, cell: AbstractEntity) -> Variable:
+        """Make a version of this variable in the given cell's coordinates.
+
+        Args:
+            cell: A cell type of this variable's domain. A sub-entity of
+                one is not a cell of the domain, and a point in its
+                coordinates reaches a cell element only through an
+                inclusion, not through this.
+
+        Raises:
+            ValueError: If the cell is not a cell type of this variable's
+                domain
+        """
+        if cell not in self._cell_types:
+            raise ValueError(
+                f"Cannot pull back to {cell}, which is not a cell type of this variable's domain."
+            )
+        return Variable(EntityDomain(cell), self._label)
+
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise NotImplementedError()
 
-
-class FiniteElementVariable(AbstractVariable):
-    """A variable that is the input to a function."""
-
-    _n = count(0)
-
-    def __init__(
-        self, domain: AbstractFiniteElementDomain, label: str | None = None, reference: bool = False
-    ):
-        """Initialise."""
-        if label is None:
-            self._label = f"variable-{next(self._n)}"
-        else:
-            self._label = label
-        self._domain = domain
-        self._reference = reference
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._domain, self._label, self._reference)
-
-    @property
-    def label(self) -> str:
-        """The label of this variable."""
-        return self._label
-
-    @property
-    def domain(self) -> AbstractDomain:
-        """The domain that this variable is in."""
-        return self._domain
-
     def __eq__(self, other) -> bool:
-        """Check for equality."""
+        """Check for equality.
+
+        The domain counts: pulling a variable back keeps its label and
+        changes only where it lives.
+        """
         return (
-            isinstance(other, FiniteElementVariable)
+            isinstance(other, Variable)
             and other.label == self.label
-            and other.is_reference == self.is_reference
+            and other.domain == self.domain
         )
 
     def __repr__(self) -> str:
         """Representation."""
-        if self._reference:
-            return f"FiniteElementVariable({self._label}, reference=True)"
-        else:
-            return f"FiniteElementVariable({self._label})"
+        return f"Variable({self._label}, {self._domain!r})"
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.FiniteElementVariable", self._label, self._reference))
-
-    @property
-    def is_reference(self) -> bool:
-        """Check if this domain is on a reference cell."""
-        return self._reference
-
-    def to_reference(self) -> FiniteElementVariable:
-        """Make a version of this variable on the reference cell."""
-        return FiniteElementVariable(self._domain, self._label, True)
-
-    def to_physical(self) -> FiniteElementVariable:
-        """Make a version of this variable on physical cells."""
-        return FiniteElementVariable(self._domain, self._label, False)
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        raise NotImplementedError()
+        return hash(("uflx.Variable", self._label, self._domain))
 
 
 class AbstractFunction(AbstractExpression):
@@ -185,11 +175,16 @@ class AbstractFunction(AbstractExpression):
         """Get the variable that is this function's input."""
 
     @property
-    def is_reference(self) -> bool:
-        """Check if this function is on a reference cell."""
+    def in_entity_coordinates(self) -> bool:
+        """Check if this function's components are in an entity's coordinates.
+
+        The variable answers when there is one, since a basis function
+        keeps its mesh space and is told which coordinates by the point
+        it is evaluated at. Otherwise the space's domain says.
+        """
         if self.variable is not None:
-            return self.variable.is_reference
-        return False
+            return self.variable.in_entity_coordinates
+        return isinstance(self.function_space.domain, EntityDomain)
 
     @abstractmethod
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
@@ -217,9 +212,9 @@ class AbstractFunction(AbstractExpression):
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        if self.is_reference:
-            assert isinstance(self.function_space, AbstractReferenceMappedFunctionSpace)
-            return self.function_space.elements[0].reference_value_shape
+        if self.in_entity_coordinates:
+            assert isinstance(self.function_space, AbstractMappedFunctionSpace)
+            return self.function_space.elements[0].entity_value_shape
         else:
             return self.function_space.value_shape
 
@@ -229,17 +224,17 @@ class AbstractFunction(AbstractExpression):
 
         True when every element of the function space is known to lie in
         the degree-0 Lagrange space (lagrange_superdegree == 0) and,
-        for a physical (non-reference) function, every element's
-        reference map is known to preserve that constancy when pushed
-        forward (see AbstractReferenceMap.preserves_constant_values).
+        for a function in its domain's own coordinates, every element's value
+        map is known to preserve that constancy when pushed forward
+        (see AbstractValueMap.preserves_constant_values).
         """
-        assert isinstance(self.function_space, AbstractReferenceMappedFunctionSpace)
+        assert isinstance(self.function_space, AbstractMappedFunctionSpace)
         elements = self.function_space.elements
         if any(e.lagrange_superdegree != 0 for e in elements):
             return False
-        if self.is_reference:
+        if self.in_entity_coordinates:
             return True
-        return all(e.reference_map.preserves_constant_values for e in elements)
+        return all(e.value_map.preserves_constant_values for e in elements)
 
     @property
     def domain_size(self) -> int:
@@ -271,7 +266,6 @@ class Argument(AbstractFunction):
         self,
         space: AbstractFunctionSpace,
         component: int,
-        is_reference: bool = False,
         variable: AbstractVariable | None = None,
     ):
         """Initialise.
@@ -280,24 +274,15 @@ class Argument(AbstractFunction):
             space: The function space that this function lives in
             component: The component of the finite element tensor
                        to be assembled that this function represents
-            is_reference: Is this argument's domain the reference cell?
             variable: The variable that is this argument's input
         """
-        if variable is not None:
-            assert is_reference == variable.is_reference
         self._space = space
-        self._is_reference = is_reference
         self._variable = variable
         self._component = component
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
-        return self.__class__(self._space, self._component, self._is_reference, variable)
-
-    @property
-    def is_reference(self) -> bool:
-        """Check if this function is on a reference cell."""
-        return self._is_reference
+        return self.__class__(self._space, self._component, variable)
 
     @property
     def function_space(self) -> AbstractFunctionSpace:
@@ -322,7 +307,7 @@ class Argument(AbstractFunction):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._space, self._component, self._is_reference, self._variable
+        return self._space, self._component, self._variable
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -354,7 +339,6 @@ class Coefficient(AbstractFunction):
         self,
         space: AbstractFunctionSpace,
         coefficient_label: str | None = None,
-        is_reference: bool = False,
         variable: AbstractVariable | None = None,
     ):
         """Initialise.
@@ -362,16 +346,9 @@ class Coefficient(AbstractFunction):
         Args:
             space: The function space that this function lives in
             coefficient_label: The label for this coefficient
-            is_reference: Is this argument's domain the reference cell?
             variable: The variable that is this argument's input
         """
-        if variable is not None:
-            if isinstance(variable, FiniteElementVariable):
-                assert is_reference == variable.is_reference
-            else:
-                assert not is_reference
         self._space = space
-        self._is_reference = is_reference
         self._variable = variable
         if coefficient_label is None:
             self._label = f"coefficient-{next(self._n)}"
@@ -380,12 +357,7 @@ class Coefficient(AbstractFunction):
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
-        return self.__class__(self._space, self._label, self._is_reference, variable)
-
-    @property
-    def is_reference(self) -> bool:
-        """Check if this function is on a reference cell."""
-        return self._is_reference
+        return self.__class__(self._space, self._label, variable)
 
     @property
     def function_space(self) -> AbstractFunctionSpace:
@@ -410,7 +382,7 @@ class Coefficient(AbstractFunction):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._space, self._label, self._is_reference, self._variable
+        return self._space, self._label, self._variable
 
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""
@@ -449,22 +421,17 @@ class Coefficient(AbstractFunction):
                     return new.reconstruct_with_variable(self.variable)
                 return new
 
-    def pull_back_to_reference(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
-        """Pull the node back to the reference cell."""
-        if self.is_reference:
-            raise ValueError("Cannot pull back function already defined on reference")
-        assert isinstance(self._space, AbstractReferenceMappedFunctionSpace)
-        if self._variable is None:
-            return PushedForward(
-                self._space.elements[0].reference_map,
-                Coefficient(self._space, self._label, True, None),
-            )
-        else:
-            assert isinstance(self._variable, FiniteElementVariable)
-            return PushedForward(
-                self._space.elements[0].reference_map,
-                Coefficient(self._space, self._label, True, self._variable.to_reference()),
-            )
+    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
+        """Pull the node back to the entity's coordinates."""
+        if self.in_entity_coordinates:
+            raise ValueError("Cannot pull back a function already in the entity's coordinates")
+        assert isinstance(self._space, AbstractMappedFunctionSpace)
+        element = self._space.elements[0]
+        space = function_space(EntityDomain(element.cell), element)
+        variable = (
+            None if self._variable is None else self._variable.to_entity_coordinates(element.cell)
+        )
+        return PushedForward(element.value_map, Coefficient(space, self._label, variable))
 
 
 class TestFunction(Argument):
@@ -475,11 +442,10 @@ class TestFunction(Argument):
     def __init__(
         self,
         space: AbstractFunctionSpace,
-        is_reference: bool = False,
         variable: AbstractVariable | None = None,
     ):
         """Initialise."""
-        super().__init__(space, 0, is_reference, variable)
+        super().__init__(space, 0, variable)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -487,33 +453,28 @@ class TestFunction(Argument):
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
-        return self.__class__(self._space, self._is_reference, variable)
+        return self.__class__(self._space, variable)
 
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._space, self.is_reference, self.variable
+        return self._space, self.variable
 
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""
         raise NotImplementedError()
 
-    def pull_back_to_reference(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
-        """Pull the node back to the reference cell."""
-        if self.is_reference:
-            raise ValueError("Cannot pull back function already defined on reference")
-        assert isinstance(self._space, AbstractReferenceMappedFunctionSpace)
-        if self.variable is None:
-            return PushedForward(
-                self._space.elements[0].reference_map,
-                TestFunction(self._space, True, None),
-            )
-        else:
-            assert isinstance(self.variable, FiniteElementVariable)
-            return PushedForward(
-                self._space.elements[0].reference_map,
-                TestFunction(self._space, True, self.variable.to_reference()),
-            )
+    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
+        """Pull the node back to the entity's coordinates."""
+        if self.in_entity_coordinates:
+            raise ValueError("Cannot pull back a function already in the entity's coordinates")
+        assert isinstance(self._space, AbstractMappedFunctionSpace)
+        element = self._space.elements[0]
+        space = function_space(EntityDomain(element.cell), element)
+        variable = (
+            None if self.variable is None else self.variable.to_entity_coordinates(element.cell)
+        )
+        return PushedForward(element.value_map, TestFunction(space, variable))
 
 
 class TrialFunction(Argument):
@@ -522,11 +483,10 @@ class TrialFunction(Argument):
     def __init__(
         self,
         space: AbstractFunctionSpace,
-        is_reference: bool = False,
         variable: AbstractVariable | None = None,
     ):
         """Initialise."""
-        super().__init__(space, 1, is_reference, variable)
+        super().__init__(space, 1, variable)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -534,38 +494,30 @@ class TrialFunction(Argument):
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
-        return self.__class__(self._space, self._is_reference, variable)
+        return self.__class__(self._space, variable)
 
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._space, self.is_reference, self.variable
+        return self._space, self.variable
 
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""
         raise NotImplementedError()
 
-    def pull_back_to_reference(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
-        """Pull the node back to the reference cell."""
-        if self.is_reference:
-            raise ValueError("Cannot pull back function already defined on reference")
-        assert isinstance(self._space, AbstractReferenceMappedFunctionSpace)
-        if self.variable is None:
-            return PushedForward(
-                self._space.elements[0].reference_map,
-                TrialFunction(self._space, True, None),
-            )
-        else:
-            assert isinstance(self.variable, FiniteElementVariable)
-            return PushedForward(
-                self._space.elements[0].reference_map,
-                TrialFunction(self._space, True, self.variable.to_reference()),
-            )
+    def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
+        """Pull the node back to the entity's coordinates."""
+        if self.in_entity_coordinates:
+            raise ValueError("Cannot pull back a function already in the entity's coordinates")
+        assert isinstance(self._space, AbstractMappedFunctionSpace)
+        element = self._space.elements[0]
+        space = function_space(EntityDomain(element.cell), element)
+        variable = (
+            None if self.variable is None else self.variable.to_entity_coordinates(element.cell)
+        )
+        return PushedForward(element.value_map, TrialFunction(space, variable))
 
 
-def create_variable(domain: AbstractDomain) -> AbstractVariable:
+def create_variable(domain: AbstractDomain) -> Variable:
     """Create a new variable in a domain."""
-    if isinstance(domain, AbstractFiniteElementDomain):
-        return FiniteElementVariable(domain)
-    else:
-        return Variable(domain)
+    return Variable(domain)

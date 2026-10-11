@@ -2,14 +2,14 @@
 
 import pytest
 
-from uflx import Coefficient, coordinate_element, function_space, grad
+from uflx import Coefficient, function_space, grad, parametrized_domain
 from uflx.expressions import RealScalar
 from uflx.tensors import Matrix, Tensor, Vector
 
 
 def test_stacked_shape(lagrange_element):
     """A tensor of entries of shape (2,) has shape (n, 2)."""
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     p = Coefficient(function_space(domain, lagrange_element("triangle", 1)))
 
     assert Tensor([grad(p), grad(p), grad(p)]).value_shape == (3, 2)
@@ -26,7 +26,7 @@ def test_stacked_components():
 
 def test_vector_and_matrix_entries_are_scalars(lagrange_element):
     """Vector and Matrix keep scalar entries, and raise for stacked ones."""
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     p = Coefficient(function_space(domain, lagrange_element("triangle", 1)))
 
     with pytest.raises(ValueError, match="scalars"):
@@ -37,7 +37,7 @@ def test_vector_and_matrix_entries_are_scalars(lagrange_element):
 
 def test_entries_of_different_shapes(lagrange_element):
     """Entries of different shapes cannot be stacked."""
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     p = Coefficient(function_space(domain, lagrange_element("triangle", 1)))
 
     with pytest.raises(ValueError, match="cannot be stacked"):
