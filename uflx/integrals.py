@@ -14,7 +14,6 @@ from itertools import count
 from typing import Any, cast
 
 from uflx.algorithms import replace
-from uflx.algorithms.maps import SplitByCellType, SplitByPiece
 from uflx.domains import (
     AbstractCellularDomain,
     AbstractParametrizedDomain,
@@ -157,6 +156,22 @@ class AbstractIntegral(ABC):
     @abstractmethod
     def variable(self) -> AbstractVariable:
         """The dummy variable of this integral."""
+
+    def split_by_piece(self) -> IntegralSum | None:
+        """Split this integral into one over each piece of its domain.
+
+        None unless there are pieces to split by, which an integral over
+        a union of them overrides to say.
+        """
+        return None
+
+    def split_by_cell_type(self) -> IntegralSum | None:
+        """Split this integral into one over each cell type of its domain.
+
+        None unless there is more than one cell type, which an integral
+        over a domain of several overrides to say.
+        """
+        return None
 
     def __add__(self, other: Any) -> IntegralSum:
         """Add to another integral, or to a sum of them."""
@@ -480,15 +495,11 @@ class IntegralSum:
 
     def split_by_piece(self) -> IntegralSum | None:
         """Split each term over a union of pieces into one integral per piece."""
-        return self._split_terms(
-            lambda term: term.split_by_piece() if isinstance(term, SplitByPiece) else None
-        )
+        return self._split_terms(lambda term: term.split_by_piece())
 
     def split_by_cell_type(self) -> IntegralSum | None:
         """Split each term over several cell types into one integral per cell type."""
-        return self._split_terms(
-            lambda term: term.split_by_cell_type() if isinstance(term, SplitByCellType) else None
-        )
+        return self._split_terms(lambda term: term.split_by_cell_type())
 
     def __eq__(self, other) -> bool:
         """Check for equality.
