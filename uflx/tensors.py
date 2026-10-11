@@ -82,7 +82,12 @@ class Tensor(AbstractExpression):
                 if s != sub_s:
                     raise ValueError(f"Tensor entries of shapes {s} and {sub_s} cannot be stacked.")
                 t.append(sub_t)
-            assert s is not None
+            if s is None:
+                # Nothing to stack, so this axis is of length zero and there
+                # are no axes below it. A matrix with no rows cannot be read
+                # this way, since nothing says how many columns it has; Matrix
+                # takes that shape.
+                return (0,), ()
             return (len(t), *s), tuple(t)
 
         self._shape, self._entries = to_shape_and_tuple(entries)
@@ -151,11 +156,34 @@ class Vector(Tensor):
 class Matrix(Tensor):
     """A matrix, i.e. a 2D tensor."""
 
-    def __init__(self, entries: Sequence[Sequence[AbstractExpression]]):
-        """Initalise."""
+    def __init__(
+        self,
+        entries: Sequence[Sequence[AbstractExpression]],
+        shape: tuple[int, int] | None = None,
+    ):
+        """Initalise.
+
+        Args:
+            entries: The rows of the matrix
+            shape: Its shape, which is needed only for a matrix with no
+                rows: nothing then says how many columns it has. A
+                mismatch with the entries is an error.
+
+        Raises:
+            ValueError: If the entries are not scalars, if a matrix with no
+                rows is given no shape, or if the shape disagrees with the
+                entries
+        """
         super().__init__(entries)
+        if len(entries) == 0:
+            if shape is None or len(shape) != 2 or shape[0] != 0:
+                raise ValueError("A matrix with no rows must be given its shape.")
+            self._shape = shape
+            return
         if self._shape != (len(entries), len(entries[0])):
             raise ValueError("Matrix entries must be scalars; stack tensors with Tensor.")
+        if shape is not None and shape != self._shape:
+            raise ValueError(f"These entries are of shape {self._shape}, not {shape}.")
 
     def __repr__(self):
         """Representation."""
@@ -163,9 +191,10 @@ class Matrix(Tensor):
 
     def transpose(self) -> Matrix:
         """Get the transpose of the matrix."""
+        rows, cols = self._shape
         entries = cast(tuple[tuple[AbstractExpression, ...], ...], self._entries)
         return Matrix(
-            [[entries[i][j] for i in range(self._shape[0])] for j in range(self._shape[1])]
+            [[entries[i][j] for i in range(rows)] for j in range(cols)], shape=(cols, rows)
         )
 
     def matmat(self, other: Matrix) -> Matrix:
@@ -250,6 +279,11 @@ class Matrix(Tensor):
         manifold cell.
         """
         rows, cols = self._shape
+        if rows == 0 or cols == 0:
+            # The empty Gram determinant is one: a map out of no coordinates
+            # scales no volume, so a domain of topological dimension zero has
+            # a density of one, which is the counting measure.
+            return RealScalar(1.0)
         if rows > cols:
             return Sqrt(self.transpose().matmat(self).compute_determinant())
         elif rows < cols:
