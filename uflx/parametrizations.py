@@ -520,9 +520,10 @@ class ComposedDomain(AbstractCellularDomain):
         # the plane applies to a cell's coordinates, those being a plane's.
         here = domain.coordinate_domain
         generic = RD(domain.geometric_dimension)
-        if map.source != here and map.source != generic:
+        if outer_map.source != here and outer_map.source != generic:
             raise ValueError(
-                f"A domain named in {here!r} is not mapped by a map out of {map.source!r}. "
+                f"A domain named in {here!r} is not mapped by a map out of "
+                f"{outer_map.source!r}. "
                 f"A map out of {generic!r} takes any of them."
             )
         self._domain = domain
@@ -538,9 +539,9 @@ class ComposedDomain(AbstractCellularDomain):
         return self._domain
 
     @property
-    def map(self) -> AbstractParametrization:
+    def outer_map(self) -> AbstractParametrization:
         """The map applied to that domain's own coordinates."""
-        return self._map
+        return self._outer_map
 
     @property
     def geometric_dimension(self) -> int:
@@ -559,7 +560,7 @@ class ComposedDomain(AbstractCellularDomain):
 
     def parametrization(self, cell: AbstractEntity) -> AbstractParametrization:
         """Get the inner map for this cell, followed by the outer map."""
-        return composed_parametrization(self._domain.parametrization(cell), self._map)
+        return composed_parametrization(self._domain.parametrization(cell), self._outer_map)
 
     def on_cell_type(self, cell: AbstractEntity) -> ComposedDomain:
         """Restrict the domain being mapped on, and keep mapping it the same way."""
@@ -649,7 +650,7 @@ def included_sub_entity(domain: AbstractParametrizedDomain) -> tuple[int, int] |
     found: list[tuple[int, int]] = []
     seen: AbstractDomain = unlabelled(domain)
     while isinstance(seen, ComposesADomain):
-        found = _inclusions_in(seen.map) + found
+        found = _inclusions_in(seen.outer_map) + found
         seen = unlabelled(seen.inner_domain)
     if len(found) == 0:
         return None
@@ -714,7 +715,7 @@ def parametrized_domain(
 
 
 def composed_domain(
-    domain: AbstractCellularDomain, map: AbstractParametrization
+    domain: AbstractCellularDomain, outer_map: AbstractParametrization
 ) -> AbstractCellularDomain:
     """Create a domain by mapping another domain onward.
 
@@ -737,9 +738,9 @@ def composed_domain(
         A domain whose geometry is the domain's followed by the map, or
         the domain itself where the map does nothing to it
     """
-    if map.is_identity and map.source == domain.coordinate_domain:
+    if outer_map.is_identity and outer_map.source == domain.coordinate_domain:
         return domain
-    return ComposedDomain(domain, map)
+    return ComposedDomain(domain, outer_map)
 
 
 def affine_parametrization(

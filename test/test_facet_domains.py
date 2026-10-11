@@ -412,7 +412,7 @@ def test_the_facets_of_a_mesh_are_its_cells_facets_mapped_on(mesh):
         assert isinstance(piece, ComposedDomain)
         assert piece.inner_domain == sub_entity_domain(cell, 1, k)
         assert piece.inner_domain.coordinate_domain == EntityDomain(cell)
-        assert piece.map == mesh.parametrization(cell)
+        assert piece.outer_map == mesh.parametrization(cell)
         assert piece.cell_types == (Interval(),)
         assert piece.parametrizations == (
             ComposedParametrization(cell.sub_entity_inclusion(1, k), mesh.parametrization(cell)),

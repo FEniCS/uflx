@@ -346,7 +346,7 @@ class ComposesADomain(Protocol):
         """The domain being mapped on."""
 
     @property
-    def map(self) -> AbstractParametrization:
+    def outer_map(self) -> AbstractParametrization:
         """The map applied to that domain's own coordinates."""
 
 
