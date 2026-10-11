@@ -226,7 +226,7 @@ def test_a_labelled_domain_differs_only_in_identity():
     )
 
 
-def test_a_union_holds_every_pieces_chart():
+def test_a_union_holds_every_pieces_parametrization():
     """Several parametrizations out of one region is why a union exists.
 
     It is not asked to choose between them. Needing exactly one parametrization is

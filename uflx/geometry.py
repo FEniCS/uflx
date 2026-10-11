@@ -7,7 +7,7 @@ from typing import Any, Protocol, Self, runtime_checkable
 
 from uflx.algorithms import replace
 from uflx.domains import (
-    AbstractParametrizedDomain,
+    AbstractCellularDomain,
     AbstractCoordinateDomain,
     AbstractParametrization,
     AbstractParametrizedDomain,
@@ -345,8 +345,9 @@ class AbstractGeometricQuantity(AbstractExpression):
             raise ValueError(f"{self.domain!r} has no parametrization out of {source!r}.")
         if len(parametrizations) > 1:
             raise ValueError(
-                f"{self.domain!r} has {len(parametrizations)} parametrizations out of {source!r}, so a point "
-                f"there names no one map. Split the integral by piece first."
+                f"{self.domain!r} has {len(parametrizations)} parametrizations out "
+                f"of {source!r}, so a point there names no one map. Split the integral "
+                f"by piece first."
             )
         (parametrization,) = parametrizations
         return parametrization

@@ -67,17 +67,18 @@ adding the results, since each type has its own coordinate domain and its own ma
 it. Pulling such an integral back to the cells' coordinates therefore gives a sum of
 integrals, one per cell type.
 
-A domain may also be presented as a union of parametrized pieces, each parametrized in its own
-right. That is what the facets of a mesh are: a piece per cell type and local facet,
-each the inclusion of the reference facet into the cell followed by the cell's own map.
-Integrating over a union is integrating over each piece and adding the results, as for
-cell types. A union is not an atlas: its pieces carry no claim of a relation to each
-other, where an atlas's parametrizations cover one set and are related by transition maps.
+A domain may also be presented as a union of parametrized pieces, each parametrized in
+its own right. That is what the facets of a mesh are: a piece per cell type and local
+facet, each the inclusion of the reference facet into the cell followed by the cell's
+own map. Integrating over a union is integrating over each piece and adding the results,
+as for cell types. A union is not an atlas: its pieces carry no claim of a relation to
+each other, where an atlas's parametrizations cover one set and are related by
+transition maps.
 
 The actual mesh is still external to UFLx. So is which facets a union of them has: that
 a facet lies on the boundary is a question about a cell complex, so the domain is named
-for the sub-entities it is parametrized by and claims no boundary. A domain carries an opaque
-label for a consumer to tell one such selection from another.
+for the sub-entities it is parametrized by and claims no boundary. A domain carries an
+opaque label for a consumer to tell one such selection from another.
 
 ### Function spaces
 
@@ -208,7 +209,8 @@ measure over a domain of facets, and an interior-facet integral is it over an in
 The first of those is constructible. `sub_entities_of(mesh, 1)` is the domain a mesh's
 facets make up -- a derived domain at a codimension, with no name of its own, since the
 integral over it is the one measure like any other -- and an exterior-facet integral is
-that measure over it, with the fields in the integrand read there through its parametrization:
+that measure over it, with the fields in the integrand read there through its
+parametrization:
 
 ```python
 facets = sub_entities_of(mesh, 1)
@@ -289,8 +291,8 @@ The language is small, but it is typed.
   u("+")
   u("-")
   ```
-  which are that same restriction along one side's inclusion, once a domain has a parametrization
-  per side.
+  which are that same restriction along one side's inclusion, once a domain has a
+  parametrization per side.
 - Operators such as `jump` and `avg` are shorthand for combinations of such
   restrictions.
 - An integral is valid only when the final integrand is scalar and has no free indices.

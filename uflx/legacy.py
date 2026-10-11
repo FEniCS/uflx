@@ -46,8 +46,8 @@ from typing import Any, NamedTuple
 
 from uflx.algorithms import replace
 from uflx.domains import (
-    AbstractParametrizedDomain,
     AbstractCellularDomain,
+    AbstractParametrizedDomain,
     UnionDomain,
     labelled_domain,
 )
@@ -86,7 +86,7 @@ class InteriorFacets(NamedTuple):
     subdomain_id: Any = None
 
 
-def _inferred_domain(integrand: AbstractExpression) -> AbstractParametrizedDomain:
+def _inferred_domain(integrand: AbstractExpression) -> AbstractCellularDomain:
     """Read the domain off the functions in an integrand.
 
     Args:
@@ -113,7 +113,7 @@ def _inferred_domain(integrand: AbstractExpression) -> AbstractParametrizedDomai
             f"can be inferred. Name it, as the native spelling does."
         )
     (domain,) = distinct
-    if not isinstance(domain, AbstractParametrizedDomain):
+    if not isinstance(domain, AbstractCellularDomain):
         raise ValueError(f"{domain!r} is not made of cells, so it has no facets.")
     return domain
 
@@ -181,7 +181,7 @@ class CellMeasure:
     which is the point of importing it.
     """
 
-    def __init__(self, subdomain_id: Any = None, domain: AbstractParametrizedDomain | None = None):
+    def __init__(self, subdomain_id: Any = None, domain: AbstractCellularDomain | None = None):
         """Initialise.
 
         Args:
@@ -192,7 +192,7 @@ class CellMeasure:
         self._domain = domain
 
     def __call__(
-        self, subdomain_id: Any = None, domain: AbstractParametrizedDomain | None = None
+        self, subdomain_id: Any = None, domain: AbstractCellularDomain | None = None
     ) -> CellMeasure:
         """Get this measure over a marked subdomain, or over a named domain.
 
@@ -211,7 +211,7 @@ class CellMeasure:
         """What the consumer marked the cells with."""
         return self._subdomain_id
 
-    def domain_of(self, integrand: AbstractExpression) -> AbstractParametrizedDomain:
+    def domain_of(self, integrand: AbstractExpression) -> AbstractCellularDomain:
         """The domain an integrand of this measure is over."""
         return self._domain or _inferred_domain(integrand)
 
@@ -240,7 +240,7 @@ class ExteriorFacetMeasure(CellMeasure):
     """
 
     def __call__(
-        self, subdomain_id: Any = None, domain: AbstractParametrizedDomain | None = None
+        self, subdomain_id: Any = None, domain: AbstractCellularDomain | None = None
     ) -> ExteriorFacetMeasure:
         """Get this measure over a marked part of the facets, or over a named domain."""
         if isinstance(subdomain_id, AbstractParametrizedDomain):
@@ -270,7 +270,7 @@ class InteriorFacetMeasure(CellMeasure):
     """`dS` as UFL writes it, which cannot be built yet."""
 
     def __call__(
-        self, subdomain_id: Any = None, domain: AbstractParametrizedDomain | None = None
+        self, subdomain_id: Any = None, domain: AbstractCellularDomain | None = None
     ) -> InteriorFacetMeasure:
         """Get this measure over a marked part of the interface."""
         return InteriorFacetMeasure(subdomain_id, domain or self._domain)
@@ -296,7 +296,7 @@ ds = ExteriorFacetMeasure()
 dS = InteriorFacetMeasure()
 
 
-def facet_normal(domain: AbstractParametrizedDomain) -> AbstractGeometricQuantity:
+def facet_normal(domain: AbstractCellularDomain) -> AbstractGeometricQuantity:
     """`FacetNormal` as UFL writes it, which cannot be built yet.
 
     UFL's facet normal is the *outward* one. UFLx gives a facet a unit

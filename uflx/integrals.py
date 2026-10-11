@@ -16,8 +16,8 @@ from typing import Any, cast
 from uflx.algorithms import replace
 from uflx.algorithms.maps import SplitByCellType, SplitByPiece
 from uflx.domains import (
-    AbstractParametrizedDomain,
     AbstractCellularDomain,
+    AbstractParametrizedDomain,
     EntityDomain,
     UnionDomain,
     unlabelled,

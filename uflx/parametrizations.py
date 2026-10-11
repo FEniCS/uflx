@@ -26,11 +26,11 @@ from typing import Any
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import (
     RD,
-    AbstractParametrizedDomain,
+    AbstractCellularDomain,
     AbstractCoordinateDomain,
     AbstractDomain,
     AbstractParametrization,
-    AbstractCellularDomain,
+    AbstractParametrizedDomain,
     ComposesADomain,
     EntityDomain,
     IncludesASubEntity,

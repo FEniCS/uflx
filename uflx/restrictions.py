@@ -45,7 +45,7 @@ from typing import Any
 
 from uflx.algorithms import replace
 from uflx.domains import (
-    AbstractParametrizedDomain,
+    AbstractCellularDomain,
     AbstractParametrization,
     AbstractParametrizedDomain,
     ComposesADomain,
@@ -131,7 +131,7 @@ class Restriction(AbstractExpression):
                 f"the sub-entities of the cell, with sub_entities_of(domain, codim)."
             )
         field_domain = extract_domain(field)
-        if not isinstance(field_domain, AbstractParametrizedDomain):
+        if not isinstance(field_domain, AbstractCellularDomain):
             raise ValueError(f"{field_domain!r} has no cells to include a sub-entity into.")
         for piece in _pieces_of(domain):
             _, cell, cell_map = _inclusion_of(piece)
@@ -232,7 +232,8 @@ class Restriction(AbstractExpression):
             raise ValueError("This restriction has not been told where it is read.")
         if isinstance(self._domain, UnionDomain):
             raise ValueError(
-                f"{self._domain!r} has a parametrization per piece. Split the integral by piece first."
+                f"{self._domain!r} has a parametrization per piece. Split the "
+                f"integral by piece first."
             )
         inclusion, _, _ = _inclusion_of(self._domain)
         (sub_entity,) = inclusion.cell_types

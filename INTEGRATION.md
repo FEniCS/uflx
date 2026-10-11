@@ -96,8 +96,8 @@ is real and necessary, and it belongs to domain construction — see §3.
 
 - `dx` is the induced density on `Ω`.
 - `ds` is the induced density on a codimension-one domain of facets, in its own right.
-  Its parametrization per facet is the reference facet's inclusion into the cell followed by the
-  cell's own map, which is a `ComposedParametrization`.
+  Its parametrization per facet is the reference facet's inclusion into the cell
+  followed by the cell's own map, which is a `ComposedParametrization`.
 - `dS` is the induced density on an interface, a codimension-one domain again [4].
 
 The `+`/`-` of UFL is not part of the measure either. It is a *restriction of a field*,
@@ -106,8 +106,8 @@ which is a pullback along one side's inclusion map, and it lives in the integran
 So a codimension and a boundary flag become operators on domains —
 `sub_entities_of(omega, codim)`, and an `interface_of(omega_plus, omega_minus)` still to
 come — returning domains that then need only the one measure. That is the home for a
-mesh-relative query, and it makes the derived domain an object carrying a parametrization, a
-metric, a normal and a measure like any other.
+mesh-relative query, and it makes the derived domain an object carrying a
+parametrization, a metric, a normal and a measure like any other.
 
 The derived domain is named for the sub-entities it is parametrized by and not for a
 boundary. Which facets it has — those with one adjacent cell, those with two, those a
@@ -117,27 +117,27 @@ domain is parametrized.
 
 A marked selection of them is a domain and not an id on a measure, which is what UFL
 encodes as a subdomain id. `LabelledDomain` is a domain and an opaque label a consumer
-selects it by, changing no cell, no parametrization and no coordinate, so changing no density and
-no kernel either — only identity, which is the point. It labels each *piece* rather than
-the union of them, because splitting an integral retargets it onto one piece at a time:
-a label on the union alone would be gone by the time there were kernels to assign to it,
-where a label on the pieces rides into the kernel the way the facet's own geometry does,
-through the quantities that name the piece. The same mechanism serves marked cells, so
-`dx` of a subdomain needs no special case. A label says which entities a consumer means
-and nothing about the fields on them, so an integral takes a label off before asking
-whether a function belongs to the domain it is over.
+selects it by, changing no cell, no parametrization and no coordinate, so changing no
+density and no kernel either — only identity, which is the point. It labels each *piece*
+rather than the union of them, because splitting an integral retargets it onto one piece
+at a time: a label on the union alone would be gone by the time there were kernels to
+assign to it, where a label on the pieces rides into the kernel the way the facet's own
+geometry does, through the quantities that name the piece. The same mechanism serves
+marked cells, so `dx` of a subdomain needs no special case. A label says which entities
+a consumer means and nothing about the fields on them, so an integral takes a label off
+before asking whether a function belongs to the domain it is over.
 
-The local index of a sub-entity is not a label of this kind. It is part of a parametrization's
-identity, picking which inclusion and so which kernel, where a tag picks which entities
-a kernel runs on. The inclusion an entity supplies says which sub-entity it is
-(`IncludesASubEntity`), so the index is read off a pulled back integral rather than
-recovered by matching the inclusion's matrix.
+The local index of a sub-entity is not a label of this kind. It is part of a
+parametrization's identity, picking which inclusion and so which kernel, where a tag
+picks which entities a kernel runs on. The inclusion an entity supplies says which
+sub-entity it is (`IncludesASubEntity`), so the index is read off a pulled back integral
+rather than recovered by matching the inclusion's matrix.
 
-Several facets are parametrized from one reference facet, so the parameter region no longer
-identifies the parametrization, and the domain is held as a union of parametrized pieces. A union is
-not an atlas: its pieces carry no claim of a relation to each other. Integrating over
-one is the sum over its pieces, which generalises the fan out over cell types, and a
-piece names one parametrization and so one cell type too.
+Several facets are parametrized from one reference facet, so the parameter region no
+longer identifies the parametrization, and the domain is held as a union of parametrized
+pieces. A union is not an atlas: its pieces carry no claim of a relation to each other.
+Integrating over one is the sum over its pieces, which generalises the fan out over cell
+types, and a piece names one parametrization and so one cell type too.
 
 A region of `R^d` shows this with no cells involved: a box carries a measure, and so
 does each of its faces, which is an exterior facet measure rather than a second kind of
@@ -243,11 +243,11 @@ Built, as `ds`:
    coordinates. Any codimension, not a facet's: `sub_entities_of(omega, codim)` is the
    general form, and what fails to generalise above codimension one is a claim rather
    than a construction, a normal being a single direction only there.
-1. **Restriction as a pullback along a named parametrization.** `restrict(u, domain)` is `ι*u`,
-   the field read at the point the domain's parametrization gives. It lives in the integrand, and
-   a gradient shows why: inside a restriction the entity gradient is still carried by
-   the *cell's* inverse Jacobian, read at the included point, where the facet's own
-   would be the tangential gradient.
+1. **Restriction as a pullback along a named parametrization.** `restrict(u, domain)` is
+   `ι*u`, the field read at the point the domain's parametrization gives. It lives in
+   the integrand, and a gradient shows why: inside a restriction the entity gradient is
+   still carried by the *cell's* inverse Jacobian, read at the included point, where the
+   facet's own would be the tangential gradient.
 1. **The fan out over pieces.** `Integral.split_by_piece` gives one integral per piece,
    carrying the measure, the restrictions and the geometric quantities onto it, and runs
    before the cell type split. Pulling back then multiplies the piece's volume element
@@ -255,16 +255,17 @@ Built, as `ds`:
 
 Not built:
 
-1. **A parametrization per side**, generalising `parametrization(cell)`. This is `dS` in both
-   cases of §5, and it subsumes `+`/`-`. The restriction it needs is the one above, told
-   which side.
+1. **A parametrization per side**, generalising `parametrization(cell)`. This is `dS` in
+   both cases of §5, and it subsumes `+`/`-`. The restriction it needs is the one above,
+   told which side.
 1. **Orientation carried on a restriction**, giving a signed normal and a statable
    divergence theorem. Without it the facet normal is a direction with no outwardness,
    as `test_a_facets_normal_is_normal_but_not_outward` records.
-1. **Pull back off a cell.** Change of variables onto a parametrization's parameter region is
-   meaningful for any parametrized domain — the identity for `R^d` and for a region, the
-   inclusion for a face — but the variable it hands the integrand is a cell's, so
-   `on_cell_type` and `pull_back_to_entity` require a cellular domain and say so.
+1. **Pull back off a cell.** Change of variables onto a parametrization's parameter
+   region is meaningful for any parametrized domain — the identity for `R^d` and for a
+   region, the inclusion for a face — but the variable it hands the integrand is a
+   cell's, so `on_cell_type` and `pull_back_to_entity` require a cellular domain and
+   say so.
 1. **A measure over a domain of topological dimension zero**, which is the counting
    measure a sub-entity domain of full codimension would give. The empty Gram
    determinant is one, but the empty matrix its Jacobian needs cannot be built, as
@@ -298,9 +299,9 @@ Acceptance criteria, as tests rather than prose to agree with.
 - **A measure needs a parametrization and not a cell.**
   `test_a_measure_on_r_d_is_the_lebesgue_one` and
   `test_a_measure_on_a_regions_boundary_is_an_exterior_facet_measure`.
-- **An axisymmetric measure is the volume element of a cylindrical parametrization.** Needs
-  trigonometric functions in the expression language, of which `Sqrt` is currently the
-  only neighbour.
+- **An axisymmetric measure is the volume element of a cylindrical parametrization.**
+  Needs trigonometric functions in the expression language, of which `Sqrt` is currently
+  the only neighbour.
 - **A marked part of a domain is a domain, as far as a kernel.** `ds(3)` and `ds(4)`
   pull back to kernels that still say which selection they are for, and which
   sub-entity. `test_a_marked_tag_is_still_there_in_the_kernels` and

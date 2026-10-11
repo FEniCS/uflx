@@ -488,7 +488,7 @@ class UnionDomain(AbstractParametrizedDomain):
         return hash(("uflx.UnionDomain", self._pieces))
 
 
-class AbstractCellularDomain(AbstractDomain):
+class AbstractCellularDomain(AbstractParametrizedDomain):
     """Base class for a domain decomposed into cells.
 
     Being made of cells is what lets a finite element be attached per

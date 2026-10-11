@@ -201,7 +201,7 @@ class Hemispherical(AbstractParametrization):
         return hash("uflx.test.Hemispherical")
 
 
-def test_a_hemisphere_is_charted_by_a_square_root():
+def test_a_hemisphere_is_parametrized_by_a_square_root():
     """A parametrization need not be a polynomial, and its geometry does not care.
 
     The area element of the unit hemisphere over ``(u, v)`` is
