@@ -5,9 +5,9 @@ from typing import Any, Protocol, Self, runtime_checkable
 from uflx.algorithms import replace
 from uflx.domains import (
     RD,
+    AbstractCellularDomain,
     AbstractCoordinateDomain,
     AbstractParametrization,
-    AbstractParametrizedDomain,
     EntityDomain,
 )
 from uflx.expressions import AbstractExpression
@@ -103,7 +103,7 @@ def as_matrix(jacobian: AbstractExpression) -> Matrix:
 class PushedForwardPoint(AbstractPoint):
     """A point in an entity's coordinates, mapped through a parametrization."""
 
-    def __init__(self, point: AbstractPoint, domain: AbstractParametrizedDomain):
+    def __init__(self, point: AbstractPoint, domain: AbstractCellularDomain):
         """Initialise.
 
         Args:
@@ -120,7 +120,7 @@ class PushedForwardPoint(AbstractPoint):
         return self._point
 
     @property
-    def parametrized_domain(self) -> AbstractParametrizedDomain:
+    def parametrized_domain(self) -> AbstractCellularDomain:
         """The domain this point is pushed forward onto."""
         return self._parametrized_domain
 
@@ -271,7 +271,7 @@ class AbstractJacobian(AbstractExpression):
     variable stands for the point.
     """
 
-    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractVariable | None = None):
+    def __init__(self, domain: AbstractCellularDomain, point: AbstractVariable | None = None):
         """Initialise.
 
         Args:

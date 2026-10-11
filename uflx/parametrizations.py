@@ -22,9 +22,9 @@ from collections.abc import Sequence
 
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import (
+    AbstractCellularDomain,
     AbstractCoordinateDomain,
     AbstractParametrization,
-    AbstractParametrizedDomain,
     EntityDomain,
 )
 from uflx.entities import AbstractEntity
@@ -45,7 +45,7 @@ class FiniteElementParametrization(AbstractParametrization):
     against as well as the element.
     """
 
-    def __init__(self, domain: AbstractParametrizedDomain, element: AbstractMappedFiniteElement):
+    def __init__(self, domain: AbstractCellularDomain, element: AbstractMappedFiniteElement):
         """Initialise.
 
         Args:
@@ -206,7 +206,7 @@ class ComposedParametrization(AbstractParametrization):
         return hash(("uflx.ComposedParametrization", self._inner, self._outer))
 
 
-class ParametrizedDomain(AbstractParametrizedDomain):
+class ParametrizedDomain(AbstractCellularDomain):
     """A domain whose parametrization is described by a finite element per cell."""
 
     def __init__(self, elements: tuple[AbstractMappedFiniteElement, ...]):
@@ -286,7 +286,7 @@ class ParametrizedDomain(AbstractParametrizedDomain):
         return hash(("uflx.ParametrizedDomain", frozenset(self._elements.items())))
 
 
-class ComposedDomain(AbstractParametrizedDomain):
+class ComposedDomain(AbstractCellularDomain):
     """A parametrized domain post-composed with a further map.
 
     The cells and the topology are the inner domain's; the coordinates
@@ -295,7 +295,7 @@ class ComposedDomain(AbstractParametrizedDomain):
     given in closed form.
     """
 
-    def __init__(self, domain: AbstractParametrizedDomain, map: AbstractParametrization):
+    def __init__(self, domain: AbstractCellularDomain, map: AbstractParametrization):
         """Initialise.
 
         Args:
@@ -362,9 +362,7 @@ def parametrized_domain(
     return ParametrizedDomain(tuple(elements))
 
 
-def composed_domain(
-    domain: AbstractParametrizedDomain, map: AbstractParametrization
-) -> ComposedDomain:
+def composed_domain(domain: AbstractCellularDomain, map: AbstractParametrization) -> ComposedDomain:
     """Create a domain by mapping another domain onward.
 
     Args:

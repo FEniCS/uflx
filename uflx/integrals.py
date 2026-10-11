@@ -12,7 +12,7 @@ from itertools import count
 from typing import Any, cast
 
 from uflx.algorithms import replace
-from uflx.domains import AbstractParametrizedDomain
+from uflx.domains import AbstractCellularDomain
 from uflx.expressions import AbstractExpression
 from uflx.functions import (
     AbstractFunction,
@@ -160,7 +160,7 @@ class Integral(AbstractIntegral):
                 else:
                     assert domain == node.function_space.domain
         assert domain is not None
-        assert isinstance(domain, AbstractParametrizedDomain)
+        assert isinstance(domain, AbstractCellularDomain)
         if len(domain.cell_types) != 1:
             # Each cell type has its own map, hence its own measure, so this
             # wants one integral per cell type and a sum of integrals to

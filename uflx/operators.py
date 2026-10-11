@@ -6,7 +6,7 @@
 """Operators."""
 
 from uflx.complex import conj
-from uflx.domains import AbstractDomain, AbstractParametrizedDomain
+from uflx.domains import AbstractCellularDomain, AbstractDomain
 from uflx.expressions import AbstractExpression, BinaryOperator, Sqrt, UnaryOperator
 from uflx.functions import AbstractFunction
 from uflx.geometry import JacobianInverse
@@ -136,7 +136,7 @@ class Grad(UnaryOperator):
             return domain
 
         domain = extract_domain(self)
-        assert isinstance(domain, AbstractParametrizedDomain)
+        assert isinstance(domain, AbstractCellularDomain)
         if isinstance(argument, PushedForward):
             # The last index of the entity gradient is the derivative direction.
             return EntityGrad(argument.function) @ JacobianInverse(domain)

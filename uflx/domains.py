@@ -254,20 +254,17 @@ class AbstractCellularDomain(AbstractDomain):
     live on. The decomposition itself stays external, like the mesh: such
     a domain says which cell types occur in it, not how many cells there
     are or where they sit.
+
+    Each cell type has a parametrization: a map out of that cell's
+    coordinate domain into the coordinates this domain lives in. Being
+    made of cells and being the image of a map per cell are one thing
+    here, since the cells are what the maps are out of.
     """
 
     @property
     @abstractmethod
     def cell_types(self) -> tuple[AbstractEntity, ...]:
         """Get the cell types that occur in this domain."""
-
-
-class AbstractParametrizedDomain(AbstractCellularDomain):
-    """Base class for a domain presented as the image of a map.
-
-    Each cell type has a parametrization: a map out of that cell's
-    coordinate domain into the coordinates this domain lives in.
-    """
 
     @abstractmethod
     def parametrization(self, cell: AbstractEntity) -> AbstractParametrization:
@@ -286,7 +283,7 @@ class AbstractParametrizedDomain(AbstractCellularDomain):
         return all(self.parametrization(c).is_affine for c in self.cell_types)
 
 
-class EntityDomain(AbstractCoordinateDomain, AbstractParametrizedDomain):
+class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
     """The coordinate realization of a single topological entity.
 
     An entity domain's points are already coordinate tuples, so its

@@ -11,8 +11,8 @@ from conftest import BlockedIdentityMappedElement, NonIdentityMappedElement
 from uflx import parametrized_domain
 from uflx.domains import (
     RD,
+    AbstractCellularDomain,
     AbstractCoordinateDomain,
-    AbstractParametrizedDomain,
     EntityDomain,
     entity_domain,
 )
@@ -63,7 +63,7 @@ def test_an_entity_domains_parametrization_is_the_identity(lagrange_element):
     (entity,) = parametrized_domain(lagrange_element("triangle", 1, (2,))).cell_types
     domain = entity_domain(entity)
 
-    assert isinstance(domain, AbstractParametrizedDomain)
+    assert isinstance(domain, AbstractCellularDomain)
     parametrization = domain.parametrization(entity)
     assert parametrization.is_identity
     assert parametrization.is_affine
