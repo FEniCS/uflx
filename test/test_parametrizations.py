@@ -218,7 +218,7 @@ def test_restricting_a_composed_domain_keeps_its_map(mesh_on_a_parabola, parabol
     """Restriction reaches the mesh underneath; the chart is unchanged by it."""
     (cell,) = mesh_on_a_parabola.cell_types
 
-    restricted = mesh_on_a_parabola.restricted_to(cell)
+    restricted = mesh_on_a_parabola.on_cell_type(cell)
 
     assert restricted.cell_types == (cell,)
     assert restricted.geometric_dimension == 2

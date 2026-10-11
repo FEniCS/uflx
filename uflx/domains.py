@@ -267,7 +267,7 @@ class AbstractCellularDomain(AbstractDomain):
         """Get the cell types that occur in this domain."""
 
     @abstractmethod
-    def restricted_to(self, cell: AbstractEntity) -> AbstractCellularDomain:
+    def on_cell_type(self, cell: AbstractEntity) -> AbstractCellularDomain:
         """Get the part of this domain made of cells of one type.
 
         Integrating over a domain of several cell types means integrating
@@ -334,7 +334,7 @@ class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
             raise ValueError(f"{cell} is not the entity of this domain.")
         return IdentityParametrization(self)
 
-    def restricted_to(self, cell: AbstractEntity) -> EntityDomain:
+    def on_cell_type(self, cell: AbstractEntity) -> EntityDomain:
         """An entity domain has one cell type already, which is its entity."""
         if cell != self._entity:
             raise ValueError(f"{cell} is not the entity of this domain.")

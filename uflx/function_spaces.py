@@ -63,7 +63,7 @@ class AbstractMappedFunctionSpace(AbstractFunctionSpace):
     def elements(self) -> tuple[AbstractMappedFiniteElement, ...]:
         """Elements in the function space."""
 
-    def restricted_to(self, cell: AbstractEntity) -> AbstractMappedFunctionSpace:
+    def on_cell_type(self, cell: AbstractEntity) -> AbstractMappedFunctionSpace:
         """Get this space on the part of its domain made of one cell type.
 
         Every element on that cell is kept, which is what makes this right
@@ -74,7 +74,7 @@ class AbstractMappedFunctionSpace(AbstractFunctionSpace):
             cell: A cell type of this space's domain
 
         Returns:
-            The space with that cell's elements on the restricted domain
+            The space with that cell's elements, on that part of the domain
 
         Raises:
             ValueError: If this space has no element on that cell
@@ -82,7 +82,7 @@ class AbstractMappedFunctionSpace(AbstractFunctionSpace):
         elements = tuple(e for e in self.elements if e.cell == cell)
         if len(elements) == 0:
             raise ValueError(f"This space has no element on {cell}.")
-        return function_space(self.domain.restricted_to(cell), elements)
+        return function_space(self.domain.on_cell_type(cell), elements)
 
 
 class FunctionSpace(AbstractMappedFunctionSpace):

@@ -186,23 +186,23 @@ class AbstractFunction(AbstractExpression):
             return self.variable.in_entity_coordinates
         return isinstance(self.function_space.domain, EntityDomain)
 
-    def restricted_to(self, cell: AbstractEntity) -> AbstractFunction:
-        """Get this function on its space restricted to one cell type.
+    def on_cell_type(self, cell: AbstractEntity) -> AbstractFunction:
+        """Get this function on the part of its space made of one cell type.
 
         Args:
             cell: A cell type of this function's space's domain
 
         Returns:
-            The same function on the restricted space, or this function
+            The same function on that part of the space, or this function
             when its space does not change
         """
         space = self.function_space
         if not isinstance(space, AbstractMappedFunctionSpace):
             return self
-        restricted = space.restricted_to(cell)
-        if restricted == space:
+        on_cell = space.on_cell_type(cell)
+        if on_cell == space:
             return self
-        return self.reconstruct_with_space(restricted)
+        return self.reconstruct_with_space(on_cell)
 
     @abstractmethod
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:

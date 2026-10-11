@@ -269,7 +269,7 @@ class ParametrizedDomain(AbstractCellularDomain):
         """Get the element giving the basis of the given cell type's parametrization."""
         return self._elements[cell]
 
-    def restricted_to(self, cell: AbstractEntity) -> ParametrizedDomain:
+    def on_cell_type(self, cell: AbstractEntity) -> ParametrizedDomain:
         """Keep the element of one cell type, which is a domain of that type alone."""
         if cell not in self._elements:
             raise ValueError(f"{cell} is not a cell type of this domain.")
@@ -337,9 +337,9 @@ class ComposedDomain(AbstractCellularDomain):
         """Get the inner map for this cell, followed by the outer map."""
         return ComposedParametrization(self._domain.parametrization(cell), self._outer_map)
 
-    def restricted_to(self, cell: AbstractEntity) -> ComposedDomain:
+    def on_cell_type(self, cell: AbstractEntity) -> ComposedDomain:
         """Restrict the domain being mapped on, and keep mapping it the same way."""
-        return ComposedDomain(self._domain.restricted_to(cell), self._outer_map)
+        return ComposedDomain(self._domain.on_cell_type(cell), self._outer_map)
 
     def __repr__(self) -> str:
         """Representation."""

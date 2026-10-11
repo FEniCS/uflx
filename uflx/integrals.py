@@ -177,7 +177,7 @@ class Integral(AbstractIntegral):
         assert isinstance(domain, AbstractCellularDomain)
         return domain
 
-    def restricted_to(self, cell: AbstractEntity) -> Integral:
+    def on_cell_type(self, cell: AbstractEntity) -> Integral:
         """Get this integral over the part of its domain made of one cell type.
 
         Args:
@@ -186,19 +186,19 @@ class Integral(AbstractIntegral):
         Returns:
             The same integrand over that cell type alone
         """
-        restricted_domain = self.domain.restricted_to(cell)
-        restrictions: dict[GraphNode, GraphNode] = {}
+        domain = self.domain.on_cell_type(cell)
+        narrowed: dict[GraphNode, GraphNode] = {}
         for node in as_graph(self._integrand):
             if isinstance(node, AbstractFunction):
-                restricted = node.restricted_to(cell)
-                if restricted is not node:
-                    restrictions[node] = restricted
-        integrand = replace(self._integrand, restrictions) if restrictions else self._integrand
+                on_cell = node.on_cell_type(cell)
+                if on_cell is not node:
+                    narrowed[node] = on_cell
+        integrand = replace(self._integrand, narrowed) if narrowed else self._integrand
         assert isinstance(integrand, AbstractExpression)
 
         variable = self._variable
         if isinstance(variable, Variable):
-            variable = variable.to_domain_coordinates(restricted_domain)
+            variable = variable.to_domain_coordinates(domain)
         return Integral(integrand, self._measure, variable)
 
     def split_by_cell_type(self) -> IntegralSum | None:
@@ -211,7 +211,7 @@ class Integral(AbstractIntegral):
         cell_types = self.domain.cell_types
         if len(cell_types) == 1:
             return None
-        return IntegralSum(tuple(self.restricted_to(cell) for cell in cell_types))
+        return IntegralSum(tuple(self.on_cell_type(cell) for cell in cell_types))
 
     def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
         """Pull the node back to the entity's coordinates."""

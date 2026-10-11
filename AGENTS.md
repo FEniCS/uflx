@@ -98,7 +98,7 @@ consumers, e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` exte
 - `integrals.py` — measures (`dx`, `ds`, `dS`), `Integral` (`expr * measure`) and
   `IntegralSum`, which adding integrals gives. An integral over a domain of several
   cell types is pulled back as one integral per cell type, since each has its own
-  coordinate domain; `Integral.restricted_to` and `split_by_cell_type` do that.
+  coordinate domain; `Integral.on_cell_type` and `split_by_cell_type` do that.
 
 Symbolic (Gateaux) differentiation and expression/integral transformation between
 domain configurations are the two core transformation procedures UFLx provides on top

@@ -21,7 +21,7 @@ def mixed_mesh(lagrange_element):
 def test_a_mixed_domain_restricts_to_each_of_its_cell_types(mixed_mesh):
     """Each restriction has one cell type and keeps that type's map."""
     for cell in mixed_mesh.cell_types:
-        restricted = mixed_mesh.restricted_to(cell)
+        restricted = mixed_mesh.on_cell_type(cell)
 
         assert restricted.cell_types == (cell,)
         assert restricted.geometric_dimension == mixed_mesh.geometric_dimension
@@ -35,7 +35,7 @@ def test_restricting_a_domain_of_one_cell_type_changes_nothing(lagrange_element)
     domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     (cell,) = domain.cell_types
 
-    assert domain.restricted_to(cell) == domain
+    assert domain.on_cell_type(cell) == domain
 
 
 def test_restricting_a_domain_to_a_cell_it_lacks_is_rejected(mixed_mesh, lagrange_element):
@@ -43,7 +43,7 @@ def test_restricting_a_domain_to_a_cell_it_lacks_is_rejected(mixed_mesh, lagrang
     (interval,) = parametrized_domain(lagrange_element("interval", 1, (1,))).cell_types
 
     with pytest.raises(ValueError, match="not a cell type"):
-        mixed_mesh.restricted_to(interval)
+        mixed_mesh.on_cell_type(interval)
 
 
 def test_an_entity_domain_restricts_to_itself(lagrange_element):
@@ -52,10 +52,10 @@ def test_an_entity_domain_restricts_to_itself(lagrange_element):
     (interval,) = parametrized_domain(lagrange_element("interval", 1, (1,))).cell_types
     domain = entity_domain(triangle)
 
-    assert domain.restricted_to(triangle) is domain
+    assert domain.on_cell_type(triangle) is domain
 
     with pytest.raises(ValueError, match="not the entity"):
-        domain.restricted_to(interval)
+        domain.on_cell_type(interval)
 
 
 def test_a_space_restricts_to_the_elements_on_one_cell(mixed_mesh, lagrange_element):
@@ -64,10 +64,10 @@ def test_a_space_restricts_to_the_elements_on_one_cell(mixed_mesh, lagrange_elem
     space = function_space(mixed_mesh, list(elements.values()))
 
     for cell, element in elements.items():
-        restricted = space.restricted_to(cell)
+        restricted = space.on_cell_type(cell)
 
         assert restricted.elements == (element,)
-        assert restricted.domain == mixed_mesh.restricted_to(cell)
+        assert restricted.domain == mixed_mesh.on_cell_type(cell)
 
 
 def test_a_space_keeps_every_element_on_the_cell_it_restricts_to(lagrange_element):
@@ -77,7 +77,7 @@ def test_a_space_keeps_every_element_on_the_cell_it_restricts_to(lagrange_elemen
     elements = (lagrange_element("triangle", 0), lagrange_element("triangle", 1))
     space = function_space(domain, elements)
 
-    assert space.restricted_to(cell).elements == elements
+    assert space.on_cell_type(cell).elements == elements
 
 
 def test_a_space_with_no_element_on_a_cell_is_rejected(mixed_mesh, lagrange_element):
@@ -86,7 +86,7 @@ def test_a_space_with_no_element_on_a_cell_is_rejected(mixed_mesh, lagrange_elem
     (quad,) = (c for c in mixed_mesh.cell_types if c != space.elements[0].cell)
 
     with pytest.raises(ValueError, match="no element on"):
-        space.restricted_to(quad)
+        space.on_cell_type(quad)
 
 
 def test_a_function_restricts_onto_the_restricted_space(mixed_mesh, lagrange_element):
@@ -98,12 +98,12 @@ def test_a_function_restricts_onto_the_restricted_space(mixed_mesh, lagrange_ele
     argument = TestFunction(space)
 
     for cell in mixed_mesh.cell_types:
-        restricted = coefficient.restricted_to(cell)
+        restricted = coefficient.on_cell_type(cell)
         assert isinstance(restricted, Coefficient)
-        assert restricted.function_space == space.restricted_to(cell)
+        assert restricted.function_space == space.on_cell_type(cell)
         assert restricted.label == coefficient.label
 
-        assert isinstance(argument.restricted_to(cell), TestFunction)
+        assert isinstance(argument.on_cell_type(cell), TestFunction)
 
 
 def test_restricting_a_function_that_does_not_move_gives_it_back(lagrange_element):
@@ -112,7 +112,7 @@ def test_restricting_a_function_that_does_not_move_gives_it_back(lagrange_elemen
     (cell,) = domain.cell_types
     coefficient = Coefficient(function_space(domain, lagrange_element("triangle", 1)))
 
-    assert coefficient.restricted_to(cell) is coefficient
+    assert coefficient.on_cell_type(cell) is coefficient
 
 
 @pytest.fixture
@@ -137,10 +137,10 @@ def test_an_integral_knows_the_domain_it_is_over(mixed_form, mixed_mesh):
 def test_an_integral_restricts_to_one_cell_type(mixed_form, mixed_mesh):
     """Restricting takes the integrand and the dummy variable with it."""
     for cell in mixed_mesh.cell_types:
-        restricted = mixed_form.restricted_to(cell)
+        restricted = mixed_form.on_cell_type(cell)
 
-        assert restricted.domain == mixed_mesh.restricted_to(cell)
-        assert restricted.variable.domain == mixed_mesh.restricted_to(cell)
+        assert restricted.domain == mixed_mesh.on_cell_type(cell)
+        assert restricted.variable.domain == mixed_mesh.on_cell_type(cell)
         assert restricted.measure == mixed_form.measure
 
 
@@ -157,7 +157,7 @@ def test_splitting_by_cell_type(mixed_form, mixed_mesh, lagrange_element):
 
 def test_integrals_add_to_a_sum_that_flattens(mixed_form, mixed_mesh):
     """A sum of integrals is flat, however it is built up."""
-    first, second = (mixed_form.restricted_to(c) for c in mixed_mesh.cell_types)
+    first, second = (mixed_form.on_cell_type(c) for c in mixed_mesh.cell_types)
 
     total = first + second
     assert isinstance(total, IntegralSum)
