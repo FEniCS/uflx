@@ -106,8 +106,20 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   constant spaces (shape + scalar type), or non-FE spaces (domain + shape, no element).
   Do not construct `Argument`/`Coefficient` directly from an element — they must come
   from a `FunctionSpace`.
+- `variables.py` — `AbstractVariable`: a point of a domain without naming one, which an
+  integral's dummy variable is. A variable in a coordinate domain has coordinates, as
+  `PointComponent`s, and that is where expanding a parametrization written in closed form bottoms
+  out; one on a mesh or on a union has none and says to pull back or split first. It
+  sits beside `domains.py` rather than in `functions.py` because a domain's parametrizations take
+  a variable and the geometry built on them does too; the two are peers and refer to
+  each other, which is why `domains.py` names this module only in its type hints.
+  `ReadAtAVariable` is the protocol for a node told later where it is read.
 - `functions.py` / `basis_functions.py` — `AbstractFunction` and basis functions
   evaluated at points, in either an entity's coordinates or ambient coordinates.
+  `extract_domain` is which domain an expression is read on, read off the parts of it
+  that implement `ReadOnADomain`: a function from its space, a geometric quantity from
+  the domain it differentiates, a restriction from the domain it restricts to. A part
+  already positioned says nothing, which is the same rule an integral's own check uses.
 - `parametrizations.py` — `FiniteElementParametrization` and `ParametrizedDomain`, where
   a map is described by a finite element per cell, plus
   `ComposedParametrization`/`ComposedDomain`, which apply two maps in turn via the chain
@@ -124,9 +136,13 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   sits above `function_spaces`/`basis_functions` rather than in `domains`, which must
   not know how a parametrization is described.
 - `expressions.py` — `AbstractExpression`: the base of every symbolic node
-  (`BinaryOperator`, `UnaryOperator`, terminals). Carries value shape, free indices,
-  domain, scalar type as static, extensible attributes (unlike legacy UFL's fixed
-  attribute set).
+  (`BinaryOperator`, `UnaryOperator`, terminals). What it carries is `value_shape`,
+  `successors` and `init_args`, and nothing else: what a node can answer about itself
+  alone. The rest is asked of a node where it makes sense to ask, through a protocol
+  rather than an attribute every node has to have -- which domain an expression is read
+  on is `ReadOnADomain` and `functions.extract_domain`, being real or complex is
+  `complex.ComplexValued`, and neither is something a `Sum` can say on its own. There
+  are no free indices; index notation is not built.
 - `operators.py`, `tensors.py`, `points.py`, `geometry.py`, `complex.py` — concrete
   operators (`inner`, `grad`, ...), tensor/vector construction, point sets, geometric
   quantities (spatial coordinates, Jacobians, ...), and complex-number support
@@ -137,8 +153,11 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   over its facets. It lives in the integrand and not in the measure, which is why a
   gradient under one keeps the cell's inverse Jacobian rather than the facet's
   tangential one. `evaluate_at` is the shared pass that tells an expression where it is
-  read, over the `ReadAtAVariable` nodes (`functions.py`) -- a function, a geometric
-  quantity or a restriction, each built before there is a point and told later.
+  read, over the `ReadAtAVariable` nodes (`variables.py`) -- a function, a geometric
+  quantity or a restriction, each built before there is a point and told later. A field
+  is read through one map and never two: restricting along the composition is what a
+  second restriction would be, so a sub-entity of a sub-entity is reached with
+  `sub_entities_of` at the cell's codimension.
 - `legacy.py` — the legacy UFL spellings (`ds`, `ds(3)`, `dx`, `dx(2)`, and `dS` and
   `facet_normal` saying why they cannot be built), which infer the domain and insert the
   restrictions to build the native form. Opt in by importing it; nothing in `uflx`
@@ -187,7 +206,7 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
 
 - **File header**: most files under `uflx/` (the core object-model layer —
   `entities.py`, `finite_elements.py`, `domains.py`, `function_spaces.py`,
-  `functions.py`, `expressions.py`, `operators.py`, `integrals.py`,
+  `functions.py`, `variables.py`, `expressions.py`, `operators.py`, `integrals.py`,
   `basis_functions.py`, `__init__.py`) start with:
 
   ```python
