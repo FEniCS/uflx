@@ -39,8 +39,8 @@ from uflx.domains import (
 )
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
-from uflx.functions import AbstractFunction, AbstractVariable, extract_domain
-from uflx.geometry import AbstractGeometricQuantity, ImagePoint
+from uflx.functions import AbstractVariable, ReadAtAVariable, extract_domain
+from uflx.geometry import ImagePoint
 from uflx.graphs import GraphNode, as_graph
 
 
@@ -66,12 +66,11 @@ def evaluate_at(
     for node in as_graph(expression):
         if node in skip:
             continue
-        if isinstance(node, AbstractFunction | Restriction) and node.variable is None:
-            replacements[node] = node.reconstruct_with_variable(variable)
-        elif isinstance(node, AbstractGeometricQuantity) and node.point is None:
-            evaluated = node.reconstruct_with_variable(variable)
-            if evaluated is not node:
-                replacements[node] = evaluated
+        if isinstance(node, ReadAtAVariable) and node.variable is None:
+            # A node whose coordinates these are not gives itself back.
+            read = node.reconstruct_with_variable(variable)
+            if read is not node:
+                replacements[node] = read
     if len(replacements) == 0:
         return expression
     return replace(expression, replacements)

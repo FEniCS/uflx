@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from itertools import count
-from typing import Any, Self, cast
+from typing import Any, Protocol, Self, cast, runtime_checkable
 
 from uflx.domains import AbstractCellularDomain, AbstractDomain, EntityDomain
 from uflx.entities import AbstractEntity
@@ -25,6 +25,27 @@ from uflx.function_spaces import (
 from uflx.graphs import GraphNode, as_graph
 from uflx.maps import PushedForward
 from uflx.tensors import zero
+
+
+@runtime_checkable
+class ReadAtAVariable(GraphNode, Protocol):
+    """An expression that is told where it is read after being built.
+
+    A function, a geometric quantity and a restriction are all built
+    before there is a point to read them at -- during a pull back there
+    is none yet -- and are told later, by whatever knows the point: an
+    integral hands over its dummy variable, and a restriction hands over
+    the point its parametrization gives. `variable` is None until then, and
+    reconstructing gives the node back unchanged when the variable is in
+    coordinates that are none of its business.
+    """
+
+    @property
+    def variable(self) -> AbstractVariable | None:
+        """Where this is read, if it has been told yet."""
+
+    def reconstruct_with_variable(self, variable: AbstractVariable) -> GraphNode:
+        """Read this at the given variable."""
 
 
 class AbstractVariable(AbstractExpression):

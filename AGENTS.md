@@ -131,7 +131,8 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   over its facets. It lives in the integrand and not in the measure, which is why a
   gradient under one keeps the cell's inverse Jacobian rather than the facet's
   tangential one. `evaluate_at` is the shared pass that tells an expression where it is
-  read.
+  read, over the `ReadAtAVariable` nodes (`functions.py`) -- a function, a geometric
+  quantity or a restriction, each built before there is a point and told later.
 - `integrals.py` — `Measure`, a domain paired with the density on it, built by
   `dx(domain)`; `Integral` (`expr * measure`), which takes its domain from its measure;
   and `IntegralSum`, which adding integrals gives. An integral over a domain of several

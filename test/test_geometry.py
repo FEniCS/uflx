@@ -202,9 +202,9 @@ def test_a_jacobian_is_told_where_it_is_evaluated(lagrange_element):
     jacobians = [n for n in as_graph(pulled) if isinstance(n, AbstractGeometricQuantity)]
     assert len(jacobians) > 0
     for j in jacobians:
-        assert j.point is not None
-        assert j.point == pulled.variable
-        assert j.point.domain == j.parametrization.source
+        assert j.variable is not None
+        assert j.variable == pulled.variable
+        assert j.variable.domain == j.parametrization.source
 
 
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
@@ -227,17 +227,17 @@ def test_geometry_refuses_a_variable_in_the_wrong_coordinates(lagrange_element):
 
     ambient = create_variable(domain)
     assert not ambient.in_entity_coordinates
-    assert Jacobian(domain).reconstruct_with_variable(ambient).point is None
+    assert Jacobian(domain).reconstruct_with_variable(ambient).variable is None
 
     foreign = (
         ambient.to_entity_coordinates(cell)
         .to_domain_coordinates(parametrized_domain(lagrange_element("interval", 1, (1,))))
         .to_entity_coordinates(other_cell)
     )
-    assert Jacobian(domain).reconstruct_with_variable(foreign).point is None
+    assert Jacobian(domain).reconstruct_with_variable(foreign).variable is None
 
     entity = ambient.to_entity_coordinates(cell)
-    assert Jacobian(domain).reconstruct_with_variable(entity).point == entity
+    assert Jacobian(domain).reconstruct_with_variable(entity).variable == entity
 
 
 @pytest.fixture
@@ -274,7 +274,7 @@ def test_a_mixed_mesh_accepts_a_variable_on_any_of_its_cells(mixed_mesh):
 
         told = Jacobian(mixed_mesh).reconstruct_with_variable(variable)
 
-        assert told.point == variable
+        assert told.variable == variable
         assert told.parametrization == mixed_mesh.parametrization(cell)
 
 
@@ -318,7 +318,7 @@ def test_a_geometric_quantity_cannot_be_mutated(quantity, lagrange_element):
     found_by = {node: "here"}
 
     with pytest.raises(AttributeError):
-        node.point = Point([RealScalar(0.25)] * 2, EntityDomain(cell))
+        node.variable = Point([RealScalar(0.25)] * 2, EntityDomain(cell))
 
     assert node in found_by
 
@@ -535,7 +535,7 @@ def test_one_coordinate_keeps_which_coordinate_it_is_when_told_a_point(lagrange_
 
     told = SingleSpatialCoordinate(domain, 1).reconstruct_with_variable(variable)
 
-    assert told.point == variable
+    assert told.variable == variable
     assert told == SingleSpatialCoordinate(domain, 1, variable)
 
 
