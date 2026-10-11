@@ -299,8 +299,6 @@ class Matrix(Tensor):
         else:
             entries = cast(tuple[tuple[AbstractExpression, ...], ...], self._entries)
             match rows:
-                case 0:
-                    return RealScalar(1.0)
                 case 1:
                     [[a]] = entries
                     assert isinstance(a, AbstractExpression)
