@@ -295,25 +295,25 @@ class ComposedDomain(AbstractCellularDomain):
     given in closed form.
     """
 
-    def __init__(self, domain: AbstractCellularDomain, map: AbstractParametrization):
+    def __init__(self, domain: AbstractCellularDomain, outer_map: AbstractParametrization):
         """Initialise.
 
         Args:
             domain: The domain whose cells are being mapped on
-            map: The map applied to the domain's own coordinates
+            outer_map: The map applied to the domain's own coordinates
         """
-        if map.source.geometric_dimension != domain.geometric_dimension:
+        if outer_map.source.geometric_dimension != domain.geometric_dimension:
             raise ValueError(
                 f"Cannot map a domain in {domain.geometric_dimension} coordinates "
-                f"with a map starting from {map.source!r}."
+                f"with a map starting from {outer_map.source!r}."
             )
         self._domain = domain
-        self._map = map
+        self._outer_map = outer_map
 
     @property
     def geometric_dimension(self) -> int:
         """The composite lands wherever the outer map lands."""
-        return self._map.target_dimension
+        return self._outer_map.target_dimension
 
     @property
     def topological_dimension(self) -> int | None:
@@ -327,23 +327,23 @@ class ComposedDomain(AbstractCellularDomain):
 
     def parametrization(self, cell: AbstractEntity) -> ComposedParametrization:
         """Get the inner map for this cell, followed by the outer map."""
-        return ComposedParametrization(self._domain.parametrization(cell), self._map)
+        return ComposedParametrization(self._domain.parametrization(cell), self._outer_map)
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"ComposedDomain({self._domain!r}, {self._map!r})"
+        return f"ComposedDomain({self._domain!r}, {self._outer_map!r})"
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
             isinstance(other, ComposedDomain)
             and self._domain == other._domain
-            and self._map == other._map
+            and self._outer_map == other._outer_map
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.ComposedDomain", self._domain, self._map))
+        return hash(("uflx.ComposedDomain", self._domain, self._outer_map))
 
 
 def parametrized_domain(
@@ -362,14 +362,16 @@ def parametrized_domain(
     return ParametrizedDomain(tuple(elements))
 
 
-def composed_domain(domain: AbstractCellularDomain, map: AbstractParametrization) -> ComposedDomain:
+def composed_domain(
+    domain: AbstractCellularDomain, outer_map: AbstractParametrization
+) -> ComposedDomain:
     """Create a domain by mapping another domain onward.
 
     Args:
         domain: The domain whose cells are being mapped on
-        map: The map applied to the domain's own coordinates
+        outer_map: The map applied to the domain's own coordinates
 
     Returns:
         A domain whose geometry is the domain's followed by the map
     """
-    return ComposedDomain(domain, map)
+    return ComposedDomain(domain, outer_map)
