@@ -52,7 +52,9 @@ from uflx.expressions import AbstractExpression, RealScalar
 from uflx.geometry import (
     AbstractGeometricQuantity,
     ImagePoint,
+    Jacobian,
     JacobianInverse,
+    JacobianInverseTranspose,
     MetricTensor,
     SingleSpatialCoordinate,
     SpatialCoordinate,
@@ -177,6 +179,43 @@ def normal_of(domain, point) -> list[float]:
     """A domain's unit normal, as numbers."""
     (gdim,) = UnitNormal(domain, point).value_shape
     return [UnitNormal(domain, point).component(i).as_float() for i in range(gdim)]
+
+
+def entries_of(quantity, rows: int, cols: int) -> list[list[float]]:
+    """A matrix valued quantity, as numbers."""
+    expanded = expand_geometry(quantity)
+    assert isinstance(expanded, AbstractExpression)
+    matrix = _as_dense_matrix(expanded)
+    return [[matrix.component(i, j).as_float() for j in range(cols)] for i in range(rows)]
+
+
+def normalised(vector: list[float]) -> list[float]:
+    """A vector of numbers, scaled to unit length."""
+    length = math.sqrt(sum(c * c for c in vector))
+    return [c / length for c in vector]
+
+
+def transported_normal(cell, domain, index, point) -> list[float]:
+    """The reference facet's normal carried onto a domain by ``J^-T``.
+
+    INTEGRATION.md section 4's transport rule, written in the language:
+    the reference facet is a domain of codimension one in the cell's
+    coordinates, so it has a normal with no reference geometry needed
+    beyond the inclusion, and the cell's inverse Jacobian at the included
+    point carries it.
+    """
+    reference_facet = sub_entity_domain(cell, cell.topological_dimension - 1, index)
+    nhat = normal_of(reference_facet, point)
+    # Written out, since a parametrization whose Jacobian depends on its point reads
+    # the coordinates and an image point only has them once expanded.
+    included = ImagePoint(point, reference_facet).expand_geometry()
+    assert isinstance(included, Point)
+    jacobian_inverse_transpose = entries_of(
+        JacobianInverseTranspose(domain, included), domain.geometric_dimension, len(nhat)
+    )
+    return normalised(
+        [sum(row[j] * nhat[j] for j in range(len(nhat))) for row in jacobian_inverse_transpose]
+    )
 
 
 def test_a_sub_entity_of_a_cell_is_a_domain_in_the_cells_coordinates(facets):
@@ -605,6 +644,59 @@ def test_the_variable_of_an_unsplit_facet_integral_names_no_coordinates(space, m
     assert isinstance(integral, Integral)
     with pytest.raises(ValueError, match="is not a coordinate tuple"):
         integral.variable.component(0)
+
+
+@pytest.mark.parametrize("k", range(3))
+def test_a_facets_normal_is_its_reference_normal_carried_by_the_cofactor_rule(
+    stretched_cell, on_the_facet, k
+):
+    """INTEGRATION.md section 4's transport rule, which costs no new information.
+
+    A reference facet is a domain of codimension one in the cell's
+    coordinates, so it has a normal already, and ``J^-T`` at the included
+    point carries it to the mapped facet's. Up to sign, which is the
+    thing still missing: outwardness is about the interior and the sign
+    here is the parametrization's.
+
+    What it buys is an outward normal for free once a reference normal is
+    oriented, since the transport is exact rather than approximate.
+    """
+    facet = sub_entities_of(stretched_cell, 1).pieces[k]
+
+    transported = transported_normal(PlacedTriangle(), stretched_cell, k, on_the_facet)
+    own = normal_of(facet, on_the_facet)
+
+    assert transported == pytest.approx(own) or transported == pytest.approx([-c for c in own])
+
+
+def test_the_conormal_of_a_facet_of_a_surface_is_the_same_transport(patch, on_the_facet):
+    """Where a normal does not exist at all, the transport still gives the right vector.
+
+    A facet of a curved patch is a curve in space, codimension two, so it
+    has a normal plane and ``UnitNormal`` refuses. What a surface form
+    wants there is the conormal: the direction in the surface, across the
+    facet. ``J^-T nhat`` is it, with no cross product and no new
+    quantity -- it lies in the tangent plane and is orthogonal to the
+    facet, which is the whole of what a conormal is.
+    """
+    cell = PlacedTriangle()
+
+    for k in range(3):
+        facet = sub_entities_of(patch, 1).pieces[k]
+        with pytest.raises(ValueError, match="codimension one"):
+            UnitNormal(facet, on_the_facet).value_shape
+
+        conormal = transported_normal(cell, patch, k, on_the_facet)
+        tangent = [row[0] for row in entries_of(Jacobian(facet, on_the_facet), 3, 1)]
+        included = ImagePoint(on_the_facet, sub_entity_domain(cell, 1, k)).expand_geometry()
+        assert isinstance(included, Point)
+        projector = entries_of(TangentialProjector(patch, included), 3, 3)
+        projected = [sum(projector[i][j] * conormal[j] for j in range(3)) for i in range(3)]
+
+        assert sum(a * b for a, b in zip(conormal, tangent, strict=True)) == pytest.approx(
+            0.0, abs=1e-12
+        )
+        assert projected == pytest.approx(conormal)
 
 
 def test_the_normal_of_a_facet_of_a_mapped_cell_is_not_the_mapped_normal(
