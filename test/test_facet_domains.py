@@ -39,6 +39,7 @@ from uflx import (
 )
 from uflx.algorithms import pull_back_to_entity, replace, simplify
 from uflx.domains import RD, EntityDomain, LabelledDomain, entity_domain, union_domain
+from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression, RealScalar
 from uflx.geometry import (
     AbstractGeometricQuantity,
@@ -113,6 +114,23 @@ class PlacedTetrahedron(Placed, Tetrahedron):
     """The reference tetrahedron, with its vertices where Basix puts them."""
 
     vertices = ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+
+
+class NestedTetrahedron(PlacedTetrahedron):
+    """A tetrahedron whose faces place their own vertices as well.
+
+    An element library does this at every level -- Basix gives reference
+    coordinates for a cell, its faces and its edges alike -- so a face of
+    a cell is a cell with facets of its own, and the boundary of a
+    boundary is a domain. The entities above stop at the cell, which is
+    why this is here.
+    """
+
+    def sub_entities(self, dim: int) -> list[AbstractEntity]:
+        """Get the sub-entities, with the faces placed."""
+        if dim == 2:
+            return [PlacedTriangle() for _ in super().sub_entities(dim)]
+        return super().sub_entities(dim)
 
 
 # Facet k of the reference triangle and its length. Facet k's vertices are
@@ -382,6 +400,31 @@ def test_the_sub_entities_of_a_marked_domain_are_refused(mesh):
         facets_of(marked)
     with pytest.raises(ValueError, match="selection of cells"):
         sub_entities_of(marked, 1, "boundary")
+
+
+def test_a_sub_entity_of_a_sub_entity_names_no_index_of_the_cell():
+    """An edge of a face is included twice, and neither index is the cell's.
+
+    The geometry is right either way: the edges of a tetrahedron's faces
+    are its edges, measured the same. What a parametrization built this way cannot
+    say is which edge of the cell it is, since the inner index counts the
+    face's edges and nothing here turns the pair into the cell's
+    numbering. Two different edges would answer the same, so this refuses
+    and says to take the codimension of the cell instead.
+    """
+    cell = NestedTetrahedron()
+    mesh = parametrized_domain(LagrangeElement(cell, 1, (3,)))
+    face = facets_of(mesh).pieces[1]
+    assert isinstance(face, ComposedDomain)
+
+    assert included_sub_entity(face) == (2, 1)
+    assert [included_sub_entity(piece) for piece in sub_entities_of(mesh, 2).pieces] == [
+        (1, k) for k in range(6)
+    ]
+
+    for edge in facets_of(face).pieces:
+        with pytest.raises(ValueError, match="sub-entity of a sub-entity"):
+            included_sub_entity(edge)
 
 
 def test_a_kernel_says_which_sub_entity_it_is_for(mesh, space):

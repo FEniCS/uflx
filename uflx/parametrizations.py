@@ -166,6 +166,16 @@ class ComposedParametrization(AbstractParametrization):
         """Composition lands where the second map lands."""
         return self._outer.target
 
+    @property
+    def inner(self) -> AbstractParametrization:
+        """The map applied first."""
+        return self._inner
+
+    @property
+    def outer(self) -> AbstractParametrization:
+        """The map applied to the result of the first."""
+        return self._outer
+
     def _intermediate_point(self, point: AbstractVariable) -> Point:
         """The point the first map gives the second."""
         value = self._inner.value(point)
@@ -599,29 +609,61 @@ def composed_parametrization(
     return ComposedParametrization(inner, outer)
 
 
+def _inclusions_in(parametrization: AbstractParametrization) -> list[tuple[int, int]]:
+    """Every sub-entity a map includes, in the order it applies them.
+
+    A composition is looked into, since a facet of a mesh is an inclusion
+    composed with the cell's own map and the inclusion is the inner half
+    of it.
+    """
+    if isinstance(parametrization, ComposedParametrization):
+        return _inclusions_in(parametrization.inner) + _inclusions_in(parametrization.outer)
+    if isinstance(parametrization, IncludesASubEntity):
+        return [parametrization.sub_entity]
+    return []
+
+
 def included_sub_entity(domain: AbstractParametrizedDomain) -> tuple[int, int] | None:
     """Which sub-entity of a cell a domain includes, where its parametrization says.
 
     What identifies a kernel along with the cell type. A facet of a mesh
     is the inclusion of a sub-entity followed by the cell's own map, so
-    the question is asked of the inner domain's parametrization, and through a
-    label as well, a selection being no part of the geometry.
+    the question is asked of the domain's parametrizations, and through a label as
+    well, a selection being no part of the geometry.
 
     Args:
         domain: The domain to ask, typically a piece a facet integral was
             split onto
 
     Returns:
-        The dimension and index of the sub-entity, or None where the parametrization
-        does not say
+        The dimension and index of the sub-entity, or None where no parametrization
+        says
+
+    Raises:
+        ValueError: If a parametrization includes a sub-entity of a sub-entity, whose
+            index in the cell these do not give
     """
+    found: list[tuple[int, int]] = []
     seen: AbstractParametrizedDomain | None = domain
     while seen is not None:
         parametrization = getattr(seen, "map", None)
-        if isinstance(parametrization, IncludesASubEntity):
-            return parametrization.sub_entity
+        if isinstance(parametrization, AbstractParametrization):
+            found = _inclusions_in(parametrization) + found
         seen = getattr(seen, "inner_domain", None)
-    return None
+    if len(found) == 0:
+        return None
+    if len(found) > 1:
+        # An edge of a face of a cell is included twice: once into the face
+        # and once into the cell. The index of the first is the face's own
+        # numbering, and nothing here turns the pair into the cell's, so
+        # saying either alone would name a sub-entity this is not.
+        raise ValueError(
+            f"This domain includes {found}, a sub-entity of a sub-entity, so no one "
+            f"index of a cell says which it is. Take it of the cell directly, with "
+            f"sub_entities_of, where the codimension is the cell's."
+        )
+    (sub_entity,) = found
+    return sub_entity
 
 
 def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> ComposedDomain:
