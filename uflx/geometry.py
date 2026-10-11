@@ -14,10 +14,10 @@ from uflx.domains import (
     EntityDomain,
 )
 from uflx.expressions import AbstractExpression, Sqrt, expression_sum
-from uflx.functions import AbstractVariable
 from uflx.graphs import GraphNode, as_graph
 from uflx.points import AbstractPoint, Point
 from uflx.tensors import Identity, Matrix, Vector
+from uflx.variables import AbstractVariable
 
 
 @runtime_checkable

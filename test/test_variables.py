@@ -1,7 +1,7 @@
 """Test variables."""
 
 from uflx import parametrized_domain
-from uflx.functions import Variable
+from uflx.variables import Variable
 
 
 def test_finite_element_variable_round_trip(lagrange_element):

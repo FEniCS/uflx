@@ -6,8 +6,8 @@ from typing import Any
 
 from uflx.domains import AbstractCoordinateDomain, AbstractDomain
 from uflx.expressions import AbstractExpression
-from uflx.functions import AbstractVariable
 from uflx.graphs import GraphNode
+from uflx.variables import AbstractVariable
 
 
 class AbstractSetOfPoints(AbstractDomain):

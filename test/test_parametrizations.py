@@ -31,7 +31,6 @@ from uflx.expressions import (
     RealScalar,
     expression_sum,
 )
-from uflx.functions import AbstractVariable
 from uflx.geometry import (
     AbstractGeometricQuantity,
     ImagePoint,
@@ -51,6 +50,7 @@ from uflx.integrals import Integral
 from uflx.parametrizations import ComposedParametrization, FiniteElementParametrization
 from uflx.points import Point
 from uflx.tensors import Matrix, Vector
+from uflx.variables import AbstractVariable
 
 
 class Parabolic(AbstractParametrization):

@@ -49,7 +49,7 @@ from uflx.tensors import Identity, Vector
 
 if TYPE_CHECKING:
     from uflx.expressions import AbstractExpression
-    from uflx.functions import AbstractVariable
+    from uflx.variables import AbstractVariable
 
 
 class AbstractDomain(ABC):

@@ -8,10 +8,10 @@ from uflx.domains import EntityDomain
 from uflx.functions import (
     AbstractFunction,
     Coefficient,
-    Variable,
 )
 from uflx.graphs import as_graph
 from uflx.integrals import Integral
+from uflx.variables import Variable
 
 
 def test_mass_matrix(lagrange_element):

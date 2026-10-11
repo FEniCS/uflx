@@ -13,10 +13,11 @@ from typing import Any, Self
 from uflx.expressions import AbstractExpression, Im, Re
 from uflx.finite_elements import AbstractFiniteElement, AbstractMappedFiniteElement
 from uflx.function_spaces import AbstractFunctionSpace, AbstractMappedFunctionSpace
-from uflx.functions import AbstractFunction, AbstractVariable
+from uflx.functions import AbstractFunction
 from uflx.graphs import GraphNode
 from uflx.tensors import zero
 from uflx.utils import flatten
+from uflx.variables import AbstractVariable
 
 
 class AbstractEvaluatedBasisFunction(AbstractFunction):

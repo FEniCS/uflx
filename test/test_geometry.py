@@ -7,7 +7,6 @@ from uflx.algorithms import pull_back_to_entity, simplify
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import RD, EntityDomain
 from uflx.expressions import RealScalar, Sqrt
-from uflx.functions import create_variable
 from uflx.geometry import (
     AbstractGeometricQuantity,
     ImagePoint,
@@ -29,6 +28,7 @@ from uflx.graphs import as_graph
 from uflx.integrals import Integral
 from uflx.points import Point
 from uflx.tensors import FlattenedTensorMap, Identity, Matrix
+from uflx.variables import create_variable
 
 cells_and_gdims = [
     ("interval", 1),

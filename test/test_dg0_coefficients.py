@@ -9,12 +9,12 @@ from uflx import Coefficient, TestFunction, dx, function_space, grad, inner, par
 from uflx.algorithms import pull_back_to_entity, reconstruct_node, replace
 from uflx.domains import EntityDomain
 from uflx.expressions import AbstractExpression
-from uflx.functions import Variable
 from uflx.graphs import as_graph
 from uflx.integrals import Integral
 from uflx.maps import AbstractValueMap, BlockedValueMap, IdentityValueMap
 from uflx.operators import EntityGrad, Grad
 from uflx.tensors import zero
+from uflx.variables import Variable
 
 
 def assert_zero(expression, shape):

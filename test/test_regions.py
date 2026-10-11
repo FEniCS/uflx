@@ -32,7 +32,6 @@ from uflx.domains import (
     IdentityParametrization,
 )
 from uflx.expressions import AbstractExpression, Integer, RealScalar
-from uflx.functions import AbstractVariable
 from uflx.geometry import (
     Jacobian,
     MetricTensor,
@@ -45,6 +44,7 @@ from uflx.geometry import (
 from uflx.integrals import Integral
 from uflx.points import Point
 from uflx.tensors import Matrix, Vector
+from uflx.variables import AbstractVariable
 
 
 class FaceInclusion(AbstractParametrization):

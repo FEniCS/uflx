@@ -39,9 +39,10 @@ from uflx.domains import (
 )
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
-from uflx.functions import AbstractVariable, ReadAtAVariable, extract_domain
+from uflx.functions import extract_domain
 from uflx.geometry import ImagePoint
 from uflx.graphs import GraphNode, as_graph
+from uflx.variables import AbstractVariable, ReadAtAVariable
 
 
 def evaluate_at(

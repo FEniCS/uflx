@@ -24,15 +24,15 @@ from uflx.domains import (
 )
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
-from uflx.functions import (
-    AbstractFunction,
+from uflx.functions import AbstractFunction
+from uflx.geometry import AbstractGeometricQuantity, VolumeElement
+from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
+from uflx.restrictions import Restriction, evaluate_at
+from uflx.variables import (
     AbstractVariable,
     Variable,
     create_variable,
 )
-from uflx.geometry import AbstractGeometricQuantity, VolumeElement
-from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
-from uflx.restrictions import Restriction, evaluate_at
 
 
 class AbstractMeasure(ABC):

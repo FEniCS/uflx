@@ -38,9 +38,9 @@ from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression, MatrixProduct, RealScalar, expression_sum
 from uflx.finite_elements import AbstractMappedFiniteElement
 from uflx.function_spaces import function_space
-from uflx.functions import AbstractVariable
 from uflx.points import Point
 from uflx.tensors import FlattenedTensorMap, Matrix, Vector
+from uflx.variables import AbstractVariable
 
 
 class FiniteElementParametrization(AbstractParametrization):
