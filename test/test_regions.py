@@ -2,11 +2,11 @@
 
 Everything else in the suite starts from a reference cell. A cell is a
 finite element idea -- it is what an element is attached to -- and nothing
-about integrating over a set requires one. A chart is a map out of a
+about integrating over a set requires one. A parametrization is a map out of a
 parameter region, and a reference cell is one kind of parameter region.
 
-So here the domain is a box, charted by itself, and its boundary is its
-faces, each charted by the box with one coordinate dropped. No
+So here the domain is a box, parametrized by itself, and its boundary is its
+faces, each parametrized by the box with one coordinate dropped. No
 AbstractEntity, no sub_entity_vertices, no element, no reference cell.
 Box and BoxFace are in conftest, consumers being where concrete domains
 live.
@@ -26,9 +26,9 @@ from uflx.algorithms import pull_back_to_entity
 from uflx.domains import (
     RD,
     AbstractCellularDomain,
-    AbstractChartedDomain,
     AbstractCoordinateDomain,
     AbstractParametrization,
+    AbstractParametrizedDomain,
     IdentityParametrization,
 )
 from uflx.expressions import AbstractExpression, Integer, RealScalar
@@ -52,7 +52,7 @@ class FaceInclusion(AbstractParametrization):
 
     A point of a face's parameter region has one coordinate fewer than
     the box it bounds. This writes the held value in at its own axis and
-    the region's coordinates around it, which is a face's chart.
+    the region's coordinates around it, which is a face's parametrization.
     """
 
     def __init__(self, region: AbstractCoordinateDomain, axis: int, held_at: float, dim: int):
@@ -71,7 +71,7 @@ class FaceInclusion(AbstractParametrization):
 
     @property
     def source(self) -> AbstractCoordinateDomain:
-        """A face's chart starts from the box with the held coordinate dropped."""
+        """A face's parametrization starts from the box with the held coordinate dropped."""
         return self._region
 
     @property
@@ -131,10 +131,10 @@ class FaceInclusion(AbstractParametrization):
         return hash(("FaceInclusion", self._region, self._axis, self._held_at, self._dim))
 
 
-class Box(AbstractChartedDomain, AbstractCoordinateDomain):
+class Box(AbstractParametrizedDomain, AbstractCoordinateDomain):
     """An axis aligned box of R^d, as a domain in its own right.
 
-    A region whose points are coordinate tuples, charted by itself
+    A region whose points are coordinate tuples, parametrized by itself
     through the identity. There are no cells in it, no entities and no
     elements: a box is named by its extent and that is the whole of its
     description.
@@ -161,18 +161,18 @@ class Box(AbstractChartedDomain, AbstractCoordinateDomain):
         return len(self._bounds)
 
     @property
-    def chart_sources(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """A box is charted by itself."""
+    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """A box is parametrized by itself."""
         return (self,)
 
-    def chart(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
-        """A box's own chart is the identity.
+    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """A box's own parametrization is the identity.
 
         Raises:
             ValueError: If the region is not this box
         """
         if source != self:
-            raise ValueError(f"{self!r} is charted by itself, not by {source!r}.")
+            raise ValueError(f"{self!r} is parametrized by itself, not by {source!r}.")
         return IdentityParametrization(self)
 
     def face(self, axis: int, upper: bool) -> BoxFace:
@@ -209,11 +209,11 @@ class Box(AbstractChartedDomain, AbstractCoordinateDomain):
         return hash(("Box", self._bounds))
 
 
-class BoxFace(AbstractChartedDomain):
+class BoxFace(AbstractParametrizedDomain):
     """One face of a box, a domain of codimension one in the box's coordinates.
 
     Its parameter region is the box with the held coordinate dropped, and
-    its chart is the inclusion that puts that coordinate back.
+    its parametrization is the inclusion that puts that coordinate back.
 
     A face knows which way is out of the box from its own description:
     the held coordinate decreases out of the box at the lower end and
@@ -279,11 +279,11 @@ class BoxFace(AbstractChartedDomain):
         return Box(tuple(b for i, b in enumerate(bounds) if i != self._axis))
 
     @property
-    def chart_sources(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """A face is charted by the box with the held coordinate dropped."""
+    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """A face is parametrized by the box with the held coordinate dropped."""
         return (self.parameter_region,)
 
-    def chart(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
         """The inclusion that puts the held coordinate back.
 
         Raises:
@@ -291,7 +291,7 @@ class BoxFace(AbstractChartedDomain):
         """
         region = self.parameter_region
         if source != region:
-            raise ValueError(f"{self!r} is charted by {region!r}, not by {source!r}.")
+            raise ValueError(f"{self!r} is parametrized by {region!r}, not by {source!r}.")
         return FaceInclusion(region, self._axis, self.held_at, self.geometric_dimension)
 
     def __repr__(self) -> str:
@@ -343,16 +343,16 @@ def normal_of(domain, point) -> list[float]:
 
 
 def test_a_region_is_a_domain_with_no_cells_in_it(rectangle):
-    """A box is charted, not cellular. Nothing asks it for a cell type."""
+    """A box is parametrized, not cellular. Nothing asks it for a cell type."""
     assert not isinstance(rectangle, AbstractCellularDomain)
     assert not hasattr(rectangle, "cell_types")
 
     assert rectangle.geometric_dimension == 2
     assert rectangle.topological_dimension == 2
-    assert rectangle.chart_sources == (rectangle,)
+    assert rectangle.parameter_regions == (rectangle,)
 
 
-def test_a_regions_own_chart_is_the_identity(rectangle):
+def test_a_regions_own_parametrization_is_the_identity(rectangle):
     """Its points are coordinate tuples already, so nothing maps them anywhere.
 
     The density is one and not the area: a volume element is the factor
@@ -362,14 +362,14 @@ def test_a_regions_own_chart_is_the_identity(rectangle):
     """
     point = point_in(rectangle, 0.5, 1.5)
 
-    assert rectangle.chart(rectangle).is_identity
+    assert rectangle.parametrization_out_of(rectangle).is_identity
     assert VolumeElement(rectangle, point).expand_geometry().as_float() == pytest.approx(1.0)
     assert entries_of(MetricTensor(rectangle, point), 2, 2) == pytest.approx([1.0, 0.0, 0.0, 1.0])
 
 
-def test_a_region_refuses_a_chart_it_does_not_have(rectangle):
+def test_a_region_refuses_a_parametrization_it_does_not_have(rectangle):
     """Geometry at a point of the wrong region is not this domain's to give."""
-    with pytest.raises(ValueError, match="is charted by itself"):
+    with pytest.raises(ValueError, match="is parametrized by itself"):
         VolumeElement(rectangle, point_in(RD(2), 0.5, 1.5)).expand_geometry()
 
 
@@ -378,12 +378,12 @@ def test_a_face_is_a_domain_of_codimension_one(rectangle):
     for face in rectangle.faces:
         assert face.geometric_dimension == 2
         assert face.topological_dimension == 1
-        assert face.chart_sources == (face.parameter_region,)
+        assert face.parameter_regions == (face.parameter_region,)
         assert face.parameter_region.geometric_dimension == 1
 
 
-def test_a_faces_chart_puts_the_held_coordinate_back(rectangle):
-    """The face where x = 2 is the points (2, y), and its chart says so."""
+def test_a_faces_parametrization_puts_the_held_coordinate_back(rectangle):
+    """The face where x = 2 is the points (2, y), and its parametrization says so."""
     face = rectangle.face(axis=0, upper=True)
     region = face.parameter_region
 
@@ -396,11 +396,11 @@ def test_a_faces_chart_puts_the_held_coordinate_back(rectangle):
 
 
 def test_the_measure_of_a_face_is_one_its_region_carrying_the_length(rectangle):
-    """A face's chart is an inclusion, which stretches nothing.
+    """A face's parametrization is an inclusion, which stretches nothing.
 
     With a reference cell the parameter region is always the unit one, so
     the inclusion's Jacobian carries the facet's length. With a region
-    the extent is in the region, so the chart is unit and the length
+    the extent is in the region, so the parametrization is unit and the length
     comes from integrating over it. Both are right, and it is worth
     knowing which convention is in play.
     """
@@ -433,7 +433,7 @@ def test_a_region_states_its_outward_normals_with_no_convention(rectangle, brick
 def test_opposite_faces_are_indistinguishable_to_the_normal(gdim):
     """The outward normal is not a function of what UnitNormal is given.
 
-    A face's chart is an inclusion whose offset holds one coordinate
+    A face's parametrization is an inclusion whose offset holds one coordinate
     fixed. A Jacobian does not see an offset, so the lower and upper
     faces of one axis have the same Jacobian at every point -- while
     their outward normals are opposite. No function of the Jacobian can
@@ -446,7 +446,7 @@ def test_opposite_faces_are_indistinguishable_to_the_normal(gdim):
     ordering is also in play.
 
     What it needs is for the domain to say, as BoxFace.outward_normal
-    does, or for the chart to be oriented so that the cross product
+    does, or for the parametrization to be oriented so that the cross product
     comes out the wanted way. Either way the information belongs to the
     domain and not to the Jacobian.
     """
@@ -508,10 +508,10 @@ def test_a_faces_projector_is_the_identity_less_its_normal(brick):
     assert projector == pytest.approx(expected)
 
 
-def test_r_d_is_charted_by_itself(rectangle):
+def test_r_d_is_parametrized_by_itself(rectangle):
     """R^d is a domain a measure can be put on, and the simplest one.
 
-    Its points are coordinate tuples already, so its chart is the
+    Its points are coordinate tuples already, so its parametrization is the
     identity and its density is one: the measure of R^d is the Lebesgue
     measure. It is the only coordinate domain with no boundary, which is
     the difference between it and a box.
@@ -519,18 +519,18 @@ def test_r_d_is_charted_by_itself(rectangle):
     space = RD(2)
     point = point_in(space, 0.5, 1.5)
 
-    assert space.chart_sources == (space,)
-    assert space.chart(space).is_identity
+    assert space.parameter_regions == (space,)
+    assert space.parametrization_out_of(space).is_identity
     assert VolumeElement(space, point).expand_geometry().as_float() == pytest.approx(1.0)
     assert entries_of(MetricTensor(space, point), 2, 2) == pytest.approx([1.0, 0.0, 0.0, 1.0])
 
-    with pytest.raises(ValueError, match="is charted by itself"):
-        space.chart(rectangle)
+    with pytest.raises(ValueError, match="is parametrized by itself"):
+        space.parametrization_out_of(rectangle)
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_a_measure_on_r_d_is_the_lebesgue_one(dim):
-    """A measure needs a chart and not a cell, and R^d has one."""
+    """A measure needs a parametrization and not a cell, and R^d has one."""
     point = point_in(RD(dim), *[0.5] * dim)
     measure = dx(RD(dim))
 
@@ -572,11 +572,11 @@ def test_a_measure_on_a_regions_boundary_is_an_exterior_facet_measure(rectangle)
 
 
 @pytest.mark.parametrize("domain_of", ["plane", "region", "face"])
-def test_a_charted_domain_that_is_not_cellular_cannot_be_pulled_back(rectangle, domain_of):
+def test_a_parametrized_domain_that_is_not_cellular_cannot_be_pulled_back(rectangle, domain_of):
     """Pulling back is still entity shaped, and says so rather than failing oddly.
 
-    Change of variables onto a chart's parameter region is meaningful for
-    any charted domain -- for R^d and for a region it is the identity, and
+    Change of variables onto a parametrization's parameter region is meaningful for
+    any parametrized domain -- for R^d and for a region it is the identity, and
     for a face it is the inclusion -- but the variable it would hand the
     integrand is a cell's, so this is guarded rather than generalised.
     """

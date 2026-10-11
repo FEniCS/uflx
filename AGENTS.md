@@ -78,16 +78,16 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   graph rewrites. Which map a field needs follows from the degree of the form it
   represents — identity for a 0-form, `J⁻ᵀ` for a 1-form, `J / det J` for an (n-1)-form
   — and the module docstring pairs each with the `geometry.py` quantity it is. Applying
-  a chart to a *point* is a different operation, named `ImagePoint` and `PreimagePoint`
-  in `geometry.py`.
+  a parametrization to a *point* is a different operation, named `ImagePoint` and
+  `PreimagePoint` in `geometry.py`.
 - `domains.py` — `AbstractDomain`: a set you can integrate over. A coordinate domain's
   points are tuples of numbers (`RD`, `EntityDomain`); a parametrized domain is the
   image of a map out of one. `AbstractParametrization` is that map, evaluated by `value`
   and differentiated by `jacobian`; `IdentityParametrization` is an entity domain's and
-  `RD`'s own. `AbstractChartedDomain` is what geometry and a measure ask for: a map out
-  of a parameter region, a reference cell being one kind of region and a region of `RD`
-  another, so being integrable over does not imply being made of cells. The actual mesh
-  stays external to UFLx.
+  `RD`'s own. `AbstractParametrizedDomain` is what geometry and a measure ask for: a map
+  out of a parameter region, a reference cell being one kind of region and a region of
+  `RD` another, so being integrable over does not imply being made of cells. The actual
+  mesh stays external to UFLx.
 - `function_spaces.py` — `AbstractFunctionSpace`: standard FE spaces (domain + element),
   constant spaces (shape + scalar type), or non-FE spaces (domain + shape, no element).
   Do not construct `Argument`/`Coefficient` directly from an element — they must come

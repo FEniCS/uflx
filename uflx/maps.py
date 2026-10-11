@@ -18,13 +18,13 @@ quantities `uflx.geometry` names:
   This is the H(div) conforming case, Raviart-Thomas and its relatives. The determinant
   here is the signed one, :class:`uflx.geometry.JacobianDeterminant`, not the density
   :class:`uflx.geometry.VolumeElement`, which is why this map and not the others needs to
-  know whether a chart inverts.
+  know whether a parametrization inverts.
 
 UFLx names the direction and leaves the expression to the element, so the maps here are
 abstract and a consumer supplies the Piola it needs.
 
-Applying a chart to a point is a different operation, being an image rather than a push
-forward; `uflx.geometry`'s :class:`uflx.geometry.ImagePoint` and
+Applying a parametrization to a point is a different operation, being an image rather
+than a push forward; `uflx.geometry`'s :class:`uflx.geometry.ImagePoint` and
 :class:`uflx.geometry.PreimagePoint` are named for that.
 """
 

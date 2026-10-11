@@ -372,12 +372,12 @@ def test_a_facets_normal_follows_the_cofactor_rule(facets, on_the_facet, stretch
 def test_reparametrizing_a_facet_keeps_its_measure_and_flips_its_normal(facets, on_the_facet):
     """The hypotenuse covered backwards is the same facet, measured the same way.
 
-    Two charts of one facet differ by a reparametrization of the
+    Two parametrizations of one facet differ by a reparametrization of the
     reference interval, and that reparametrization is an isometry of it,
     so the density they induce agrees. The normal does not: the
-    generalised cross product follows the chart. This is what an
+    generalised cross product follows the parametrization. This is what an
     interior facet integral will have to reckon with, where the two
-    charts are the two cells' own.
+    parametrizations are the two cells' own.
     """
     backwards = composed_domain(
         entity_domain(Interval()),

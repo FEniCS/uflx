@@ -13,7 +13,7 @@ from itertools import count
 from typing import Any, cast
 
 from uflx.algorithms import replace
-from uflx.domains import AbstractCellularDomain, AbstractChartedDomain, EntityDomain
+from uflx.domains import AbstractCellularDomain, AbstractParametrizedDomain, EntityDomain
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
 from uflx.functions import (
@@ -34,9 +34,10 @@ class AbstractMeasure(ABC):
     form, so integrating one needs a density, and a density is a density
     of something.
 
-    The domain is a charted one, since a chart is where the density comes
-    from. It need not be made of cells: the Lebesgue measure of R^d is a
-    measure of this kind, and so is one on a region or on its boundary.
+    The domain is a parametrized one, since the map is where the density
+    comes from. It need not be made of cells: the Lebesgue measure of R^d
+    is a measure of this kind, and so is one on a region or on its
+    boundary.
     """
 
     def __rmul__(self, other: AbstractExpression) -> Integral:
@@ -47,7 +48,7 @@ class AbstractMeasure(ABC):
 
     @property
     @abstractmethod
-    def domain(self) -> AbstractChartedDomain:
+    def domain(self) -> AbstractParametrizedDomain:
         """The domain this measure integrates over."""
 
     @property
@@ -60,7 +61,7 @@ class AbstractMeasure(ABC):
         """
 
     @abstractmethod
-    def with_domain(self, domain: AbstractChartedDomain) -> AbstractMeasure:
+    def with_domain(self, domain: AbstractParametrizedDomain) -> AbstractMeasure:
         """Get this measure over another domain.
 
         Retargeting is what a pull back does to a measure, and what
@@ -231,7 +232,7 @@ class Integral(AbstractIntegral):
         return self._integrand, self._measure, self._variable
 
     @property
-    def domain(self) -> AbstractChartedDomain:
+    def domain(self) -> AbstractParametrizedDomain:
         """The domain this integral is over, which its measure names."""
         return self._measure.domain
 
@@ -240,7 +241,7 @@ class Integral(AbstractIntegral):
         """The domain this integral is over, which must be made of cells.
 
         What the cell type fan out and the pull back both need, neither
-        of them having anything to say about a domain charted some other
+        of them having anything to say about a domain parametrized some other
         way. Both want the cells and the map out of each, which is what a
         parametrized domain is.
 
@@ -388,14 +389,14 @@ class Measure(AbstractMeasure):
     """Integration against the density a domain's own parametrization induces.
 
     The density is ``sqrt(det g)``, so that lengths and volumes measured
-    in a chart's coordinates agree with the ambient ones. Where the chart
-    is the identity, as it is on R^d or on a region of it, that is one
-    and the measure is the Lebesgue one. A measure that weighs its domain
+    in a parameter region's coordinates agree with the ambient ones. Where
+    the map is the identity, as it is on R^d or on a region of it, that is
+    one and the measure is the Lebesgue one. A measure that weighs its domain
     some other way is a class of its own rather than an argument
     defaulted here.
     """
 
-    def __init__(self, domain: AbstractChartedDomain):
+    def __init__(self, domain: AbstractParametrizedDomain):
         """Initialise.
 
         Args:
@@ -404,7 +405,7 @@ class Measure(AbstractMeasure):
         self._domain = domain
 
     @property
-    def domain(self) -> AbstractChartedDomain:
+    def domain(self) -> AbstractParametrizedDomain:
         """The domain this measure integrates over."""
         return self._domain
 
@@ -413,7 +414,7 @@ class Measure(AbstractMeasure):
         """The volume element of this measure's domain."""
         return VolumeElement(self._domain)
 
-    def with_domain(self, domain: AbstractChartedDomain) -> Measure:
+    def with_domain(self, domain: AbstractParametrizedDomain) -> Measure:
         """Get the measure of another domain."""
         return Measure(domain)
 
@@ -427,7 +428,7 @@ class Measure(AbstractMeasure):
         return f"{self.__class__.__name__}({self._domain!r})"
 
 
-def dx(domain: AbstractChartedDomain) -> Measure:
+def dx(domain: AbstractParametrizedDomain) -> Measure:
     """Create the measure a domain's own parametrization induces.
 
     Args:

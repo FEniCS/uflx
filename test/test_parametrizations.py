@@ -487,7 +487,7 @@ def test_an_element_map_still_exposes_its_element(lagrange_element):
 
 
 def test_restricting_a_composed_domain_keeps_its_map(mesh_on_a_parabola, parabola):
-    """Restriction reaches the mesh underneath; the chart is unchanged by it."""
+    """Restriction reaches the mesh underneath; the parametrization is unchanged by it."""
     (cell,) = mesh_on_a_parabola.cell_types
 
     restricted = mesh_on_a_parabola.on_cell_type(cell)
