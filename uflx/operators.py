@@ -100,7 +100,7 @@ class Grad(UnaryOperator):
 
     def __init__(self, argument: GraphNode):
         """Initialise."""
-        assert isinstance(argument, AbstractFunction) and not argument.in_entity_coordinates
+        assert isinstance(argument, AbstractFunction) and not argument.is_on_an_entity
         self._physical_argument = argument
         super().__init__(argument)
 
@@ -136,7 +136,7 @@ class EntityGrad(UnaryOperator):
 
     def __init__(self, argument: GraphNode):
         """Initialise."""
-        assert isinstance(argument, AbstractFunction) and argument.in_entity_coordinates
+        assert isinstance(argument, AbstractFunction) and argument.is_on_an_entity
         self._entity_argument = argument
         super().__init__(argument)
 
@@ -185,7 +185,7 @@ class EntityGrad(UnaryOperator):
 
 def grad(a: AbstractExpression) -> AbstractExpression:
     """The gradient of an expression."""
-    if isinstance(a, AbstractFunction) and not a.in_entity_coordinates and a.is_cellwise_constant:
+    if isinstance(a, AbstractFunction) and not a.is_on_an_entity and a.is_cellwise_constant:
         # The Grad of a cellwise constant physical function is zero.
         gdim = a.function_space.domain.geometric_dimension
         return zero((*a.value_shape, gdim))

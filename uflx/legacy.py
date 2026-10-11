@@ -102,7 +102,7 @@ def _inferred_domain(integrand: AbstractExpression) -> AbstractParametrizedDomai
     domains = [
         node.function_space.domain
         for node in as_graph(integrand).ordered_nodes()
-        if isinstance(node, AbstractFunction) and not node.in_entity_coordinates
+        if isinstance(node, AbstractFunction) and not node.is_on_an_entity
     ]
     distinct = list(dict.fromkeys(domains))
     if len(distinct) == 0:

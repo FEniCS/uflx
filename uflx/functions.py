@@ -70,8 +70,8 @@ class AbstractVariable(AbstractExpression):
         """Hash."""
 
     @property
-    def in_entity_coordinates(self) -> bool:
-        """Check if this variable's components are in an entity's coordinates."""
+    def is_on_an_entity(self) -> bool:
+        """Whether this variable is a point of an entity's coordinate domain."""
         return isinstance(self.domain, EntityDomain)
 
     def to_entity_coordinates(self, cell: AbstractEntity) -> AbstractVariable:
@@ -196,15 +196,21 @@ class AbstractFunction(AbstractExpression):
         """Get the variable that is this function's input."""
 
     @property
-    def in_entity_coordinates(self) -> bool:
-        """Check if this function's components are in an entity's coordinates.
+    def is_on_an_entity(self) -> bool:
+        """Whether this function is on an entity's own coordinate domain.
+
+        Which is to say whether it has been pulled back: a function on a
+        mesh is not, and the same function on a cell is. Not the question
+        of which coordinates its points are named in, which a domain's
+        `coordinate_domain` answers, and which is a cell's for a facet of
+        one without the function having been pulled back onto it.
 
         The variable answers when there is one, since a basis function
         keeps its mesh space and is told which coordinates by the point
         it is evaluated at. Otherwise the space's domain says.
         """
         if self.variable is not None:
-            return self.variable.in_entity_coordinates
+            return self.variable.is_on_an_entity
         return isinstance(self.function_space.domain, EntityDomain)
 
     def on_cell_type(self, cell: AbstractEntity) -> AbstractFunction:
@@ -255,7 +261,7 @@ class AbstractFunction(AbstractExpression):
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        if self.in_entity_coordinates:
+        if self.is_on_an_entity:
             assert isinstance(self.function_space, AbstractMappedFunctionSpace)
             return self.function_space.elements[0].entity_value_shape
         else:
@@ -275,7 +281,7 @@ class AbstractFunction(AbstractExpression):
         elements = self.function_space.elements
         if any(e.lagrange_superdegree != 0 for e in elements):
             return False
-        if self.in_entity_coordinates:
+        if self.is_on_an_entity:
             return True
         return all(e.value_map.preserves_constant_values for e in elements)
 
@@ -318,10 +324,10 @@ def _pulled_back_to_entity(function: AbstractFunction) -> GraphNode:
         That function in the entity's coordinates, pushed forward
 
     Raises:
-        ValueError: If the function is in an entity's coordinates already
+        ValueError: If the function is on an entity already
     """
-    if function.in_entity_coordinates:
-        raise ValueError("Cannot pull back a function already in the entity's coordinates")
+    if function.is_on_an_entity:
+        raise ValueError("This function is on an entity already.")
     space = function.function_space
     assert isinstance(space, AbstractMappedFunctionSpace)
     element = space.elements[0]
@@ -597,7 +603,7 @@ def extract_domain(expression: GraphNode) -> AbstractDomain:
     """
     domain: AbstractDomain | None = None
     for node in as_graph(expression).descendants(expression):
-        if isinstance(node, AbstractFunction) and not node.in_entity_coordinates:
+        if isinstance(node, AbstractFunction) and not node.is_on_an_entity:
             if domain is None:
                 domain = node.function_space.domain
             else:

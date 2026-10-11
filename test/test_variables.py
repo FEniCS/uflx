@@ -11,6 +11,6 @@ def test_finite_element_variable_round_trip(lagrange_element):
 
     (cell,) = domain.cell_types
     entity = variable.to_entity_coordinates(cell)
-    assert entity.in_entity_coordinates
-    assert not entity.to_domain_coordinates(domain).in_entity_coordinates
+    assert entity.is_on_an_entity
+    assert not entity.to_domain_coordinates(domain).is_on_an_entity
     assert entity.to_domain_coordinates(domain) == variable

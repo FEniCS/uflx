@@ -236,7 +236,7 @@ def test_a_point_of_a_facet_is_included_in_the_cells_coordinates(facets, on_the_
     image = ImagePoint(on_the_facet, facets[k])
 
     assert image.domain == EntityDomain(PlacedTriangle())
-    assert image.in_entity_coordinates
+    assert image.is_on_an_entity
     expanded = image.expand_geometry()
     assert [expanded.component(i).as_float() for i in range(2)] == pytest.approx(expected)
 
@@ -543,7 +543,7 @@ def test_a_restricted_fields_basis_is_read_at_the_included_point(space, facet):
     )
     assert variable is not None
     assert variable.domain == EntityDomain(PlacedTriangle())
-    assert function.in_entity_coordinates
+    assert function.is_on_an_entity
 
 
 def test_a_gradient_inside_a_restriction_is_the_cells_gradient(space, facet, mesh):

@@ -118,7 +118,7 @@ def test_pushed_forward_point_expands_to_ambient_coordinates(cell, gdim, lagrang
     expanded = pushed.expand_geometry()
     assert isinstance(expanded, Point)
     assert expanded.domain == RD(gdim)
-    assert not expanded.in_entity_coordinates
+    assert not expanded.is_on_an_entity
 
 
 def test_pulled_back_point_lands_in_entity_coordinates(lagrange_element):
@@ -130,7 +130,7 @@ def test_pulled_back_point_lands_in_entity_coordinates(lagrange_element):
     pulled = PreimagePoint(Point([RealScalar(1.0)] * 3, RD(3)), parametrization)
 
     assert pulled.domain == EntityDomain(entity)
-    assert pulled.in_entity_coordinates
+    assert pulled.is_on_an_entity
     assert pulled.parametrization == parametrization
 
 
@@ -226,7 +226,7 @@ def test_geometry_refuses_a_variable_in_the_wrong_coordinates(lagrange_element):
     (other_cell,) = parametrized_domain(lagrange_element("interval", 1, (1,))).cell_types
 
     ambient = create_variable(domain)
-    assert not ambient.in_entity_coordinates
+    assert not ambient.is_on_an_entity
     assert Jacobian(domain).reconstruct_with_variable(ambient).variable is None
 
     foreign = (

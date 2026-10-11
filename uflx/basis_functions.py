@@ -145,7 +145,7 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         if self._component is None:
-            if self.in_entity_coordinates:
+            if self.is_on_an_entity:
                 assert isinstance(self.element, AbstractMappedFiniteElement)
                 return self.element.entity_value_shape
             else:
@@ -158,7 +158,7 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
         repr = (
             "EvaluatedBasisFunction("
             f"{self._space!r}, {self._basis_index}, {self._variable!r}, "
-            f"{self.in_entity_coordinates}"
+            f"{self.is_on_an_entity}"
         )
         if self._element_index is not None:
             repr += f", {self._element_index}"
