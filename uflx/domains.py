@@ -123,21 +123,16 @@ class AbstractParametrizedDomain(AbstractDomain):
 
     @property
     @abstractmethod
-    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """The parameter regions this domain is parametrized out of."""
+    def parametrizations(self) -> tuple[AbstractParametrization, ...]:
+        """The maps this domain is parametrized by, each knowing its own region.
 
-    @abstractmethod
-    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
-        """Get the map out of the given parameter region.
-
-        Args:
-            source: One of this domain's parameter regions
-
-        Returns:
-            The map out of that region
-
-        Raises:
-            ValueError: If this domain has no map out of that region
+        Not keyed by that region. Several parametrizations may start from one of
+        them -- every facet of a triangle is parametrized from the reference
+        interval -- so the region does not name the parametrization, and a domain
+        is not asked to choose between them. Where exactly one parametrization is
+        needed, as when a geometric quantity is evaluated at a point of
+        some region, that is a question about the quantity rather than
+        about the domain, and `uflx.geometry` asks it.
         """
 
 
@@ -159,19 +154,9 @@ class RD(AbstractCoordinateDomain, AbstractParametrizedDomain):
         return self._dim
 
     @property
-    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """R^d is parametrized by itself."""
-        return (self,)
-
-    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
-        """R^d's own parametrization is the identity.
-
-        Raises:
-            ValueError: If the region is not this R^d
-        """
-        if source != self:
-            raise ValueError(f"{self!r} is parametrized by itself, not by {source!r}.")
-        return IdentityParametrization(self)
+    def parametrizations(self) -> tuple[AbstractParametrization, ...]:
+        """R^d is parametrized by itself, through the identity."""
+        return (IdentityParametrization(self),)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -390,41 +375,16 @@ class UnionDomain(AbstractParametrizedDomain):
         return None
 
     @property
-    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """The parameter regions the pieces are parametrized by, each once."""
-        return tuple(
-            dict.fromkeys(source for piece in self._pieces for source in piece.parameter_regions)
-        )
+    def parametrizations(self) -> tuple[AbstractParametrization, ...]:
+        """Every piece's parametrizations, in order.
 
-    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
-        """Get the map out of the given parameter region.
-
-        Only where one piece is parametrized by it. Several pieces of one
-        region is the whole reason a union exists, and choosing between
-        them is not this domain's to do: an integral over it is split into
-        one per piece first.
-
-        Args:
-            source: One of this domain's parametrization sources
-
-        Returns:
-            The map that piece is parametrized by
-
-        Raises:
-            ValueError: If no piece is parametrized by that region, or more than
-                one is
+        Several of them may start from one region, which is the whole
+        reason a union exists rather than a domain with a parametrization per cell
+        type.
         """
-        parametrized = [piece for piece in self._pieces if source in piece.parameter_regions]
-        if len(parametrized) == 0:
-            raise ValueError(f"No piece of {self!r} is parametrized by {source!r}.")
-        if len(parametrized) > 1:
-            raise ValueError(
-                f"{len(parametrized)} pieces of {self!r} are parametrized by {source!r}, so there "
-                f"is no one map out of it. Split an integral over this domain into one "
-                f"per piece first."
-            )
-        (piece,) = parametrized
-        return piece.parametrization_out_of(source)
+        return tuple(
+            parametrization for piece in self._pieces for parametrization in piece.parametrizations
+        )
 
     def __repr__(self) -> str:
         """Representation."""
@@ -487,28 +447,9 @@ class AbstractCellularDomain(AbstractDomain):
         """
 
     @property
-    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """The coordinate domains of this domain's cell types."""
-        return tuple(EntityDomain(cell) for cell in self.cell_types)
-
-    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
-        """Get the map out of the given cell's coordinate domain.
-
-        Args:
-            source: The coordinate domain of one of this domain's cell types
-
-        Returns:
-            That cell type's parametrization
-
-        Raises:
-            ValueError: If the region is not a cell of this domain
-        """
-        if not isinstance(source, EntityDomain):
-            raise ValueError(
-                f"{self!r} is parametrized by its cells' coordinate domains, not by {source!r}."
-            )
-        (cell,) = source.cell_types
-        return self.parametrization(cell)
+    def parametrizations(self) -> tuple[AbstractParametrization, ...]:
+        """One parametrization per cell type, being that cell type's parametrization."""
+        return tuple(self.parametrization(cell) for cell in self.cell_types)
 
     @abstractmethod
     def parametrization(self, cell: AbstractEntity) -> AbstractParametrization:

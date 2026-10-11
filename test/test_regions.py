@@ -161,19 +161,9 @@ class Box(AbstractParametrizedDomain, AbstractCoordinateDomain):
         return len(self._bounds)
 
     @property
-    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """A box is parametrized by itself."""
-        return (self,)
-
-    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
-        """A box's own parametrization is the identity.
-
-        Raises:
-            ValueError: If the region is not this box
-        """
-        if source != self:
-            raise ValueError(f"{self!r} is parametrized by itself, not by {source!r}.")
-        return IdentityParametrization(self)
+    def parametrizations(self) -> tuple[AbstractParametrization, ...]:
+        """A box is parametrized by itself, through the identity."""
+        return (IdentityParametrization(self),)
 
     def face(self, axis: int, upper: bool) -> BoxFace:
         """Get the face where one coordinate is held at an end of its range.
@@ -279,20 +269,10 @@ class BoxFace(AbstractParametrizedDomain):
         return Box(tuple(b for i, b in enumerate(bounds) if i != self._axis))
 
     @property
-    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """A face is parametrized by the box with the held coordinate dropped."""
-        return (self.parameter_region,)
-
-    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
-        """The inclusion that puts the held coordinate back.
-
-        Raises:
-            ValueError: If the region is not this face's parameter region
-        """
+    def parametrizations(self) -> tuple[AbstractParametrization, ...]:
+        """The inclusion that puts the held coordinate back."""
         region = self.parameter_region
-        if source != region:
-            raise ValueError(f"{self!r} is parametrized by {region!r}, not by {source!r}.")
-        return FaceInclusion(region, self._axis, self.held_at, self.geometric_dimension)
+        return (FaceInclusion(region, self._axis, self.held_at, self.geometric_dimension),)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -349,7 +329,7 @@ def test_a_region_is_a_domain_with_no_cells_in_it(rectangle):
 
     assert rectangle.geometric_dimension == 2
     assert rectangle.topological_dimension == 2
-    assert rectangle.parameter_regions == (rectangle,)
+    assert [parametrization.source for parametrization in rectangle.parametrizations] == [rectangle]
 
 
 def test_a_regions_own_parametrization_is_the_identity(rectangle):
@@ -362,14 +342,15 @@ def test_a_regions_own_parametrization_is_the_identity(rectangle):
     """
     point = point_in(rectangle, 0.5, 1.5)
 
-    assert rectangle.parametrization_out_of(rectangle).is_identity
+    (parametrization,) = rectangle.parametrizations
+    assert parametrization.is_identity
     assert VolumeElement(rectangle, point).expand_geometry().as_float() == pytest.approx(1.0)
     assert entries_of(MetricTensor(rectangle, point), 2, 2) == pytest.approx([1.0, 0.0, 0.0, 1.0])
 
 
-def test_a_region_refuses_a_parametrization_it_does_not_have(rectangle):
-    """Geometry at a point of the wrong region is not this domain's to give."""
-    with pytest.raises(ValueError, match="is parametrized by itself"):
+def test_a_quantity_at_a_point_of_the_wrong_region_has_no_map_to_read(rectangle):
+    """Geometry at a point of a region this domain has no parametrization out of."""
+    with pytest.raises(ValueError, match="has no parametrization out of"):
         VolumeElement(rectangle, point_in(RD(2), 0.5, 1.5)).expand_geometry()
 
 
@@ -378,7 +359,9 @@ def test_a_face_is_a_domain_of_codimension_one(rectangle):
     for face in rectangle.faces:
         assert face.geometric_dimension == 2
         assert face.topological_dimension == 1
-        assert face.parameter_regions == (face.parameter_region,)
+        assert [parametrization.source for parametrization in face.parametrizations] == [
+            face.parameter_region
+        ]
         assert face.parameter_region.geometric_dimension == 1
 
 
@@ -519,13 +502,14 @@ def test_r_d_is_parametrized_by_itself(rectangle):
     space = RD(2)
     point = point_in(space, 0.5, 1.5)
 
-    assert space.parameter_regions == (space,)
-    assert space.parametrization_out_of(space).is_identity
+    assert [parametrization.source for parametrization in space.parametrizations] == [space]
+    (parametrization,) = space.parametrizations
+    assert parametrization.is_identity
     assert VolumeElement(space, point).expand_geometry().as_float() == pytest.approx(1.0)
     assert entries_of(MetricTensor(space, point), 2, 2) == pytest.approx([1.0, 0.0, 0.0, 1.0])
 
-    with pytest.raises(ValueError, match="is parametrized by itself"):
-        space.parametrization_out_of(rectangle)
+    with pytest.raises(ValueError, match="has no parametrization out of"):
+        VolumeElement(space, point_in(rectangle, 0.5, 1.5)).expand_geometry()
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3])

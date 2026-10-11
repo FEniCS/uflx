@@ -23,7 +23,10 @@ from uflx.domains import (
     entity_domain,
     union_domain,
 )
+from uflx.expressions import RealScalar
+from uflx.geometry import VolumeElement
 from uflx.parametrizations import AffineParametrization
+from uflx.points import Point
 
 
 def test_has_affine_parametrization_true_for_degree_one_simplex(lagrange_element):
@@ -196,19 +199,23 @@ def test_a_unions_label_tells_it_from_another_of_the_same_pieces():
     assert len({union_domain(pieces), union_domain(pieces, 1), union_domain(pieces, 1)}) == 2
 
 
-def test_a_union_hands_out_a_chart_only_where_one_piece_has_it():
-    """Several pieces over one region is why a union exists, so it will not choose."""
+def test_a_union_holds_every_pieces_chart():
+    """Several parametrizations out of one region is why a union exists.
+
+    It is not asked to choose between them. Needing exactly one parametrization is
+    a question about evaluating a quantity, which geometry asks of the
+    point it is read at.
+    """
     pieces = [
         in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)),
         in_the_plane(((0.0,), (1.0,)), (0.0, 0.0)),
     ]
     interval = entity_domain(Interval())
 
-    assert union_domain(pieces[:1]).parametrization_out_of(interval) == pieces[
-        0
-    ].parametrization_out_of(interval)
+    parametrizations = union_domain(pieces).parametrizations
 
-    with pytest.raises(ValueError, match="2 pieces of"):
-        union_domain(pieces).parametrization_out_of(interval)
-    with pytest.raises(ValueError, match="No piece of"):
-        union_domain(pieces).parametrization_out_of(RD(2))
+    assert parametrizations == pieces[0].parametrizations + pieces[1].parametrizations
+    assert [parametrization.source for parametrization in parametrizations] == [interval, interval]
+
+    with pytest.raises(ValueError, match="2 parametrizations out of"):
+        VolumeElement(union_domain(pieces), Point([RealScalar(0.5)], interval)).expand_geometry()

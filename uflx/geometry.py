@@ -28,6 +28,22 @@ class ExpandableGeometry(Protocol):
         """Expand geometry."""
 
 
+def _parametrizations_out_of(
+    domain: AbstractParametrizedDomain, source: AbstractCoordinateDomain
+) -> tuple[AbstractParametrization, ...]:
+    """The domain's parametrizations that start from the given region.
+
+    A domain holds its parametrizations rather than keying them by their region,
+    since several may share one. Needing exactly one is what evaluating a
+    quantity at a point asks for, so it is asked here.
+    """
+    return tuple(
+        parametrization
+        for parametrization in domain.parametrizations
+        if parametrization.source == source
+    )
+
+
 def _as_dense_matrix(jacobian: AbstractExpression) -> Matrix:
     """Write a Jacobian out entry by entry, so it can be inverted or reduced.
 
@@ -310,7 +326,17 @@ class AbstractGeometricQuantity(AbstractExpression):
             raise ValueError(
                 f"This quantity is evaluated at a point of a coordinate domain, not of {source!r}."
             )
-        return self.domain.parametrization_out_of(source)
+        parametrizations = _parametrizations_out_of(self.domain, source)
+        if len(parametrizations) == 0:
+            raise ValueError(f"{self.domain!r} has no parametrization out of {source!r}.")
+        if len(parametrizations) > 1:
+            raise ValueError(
+                f"{self.domain!r} has {len(parametrizations)} parametrizations out of {source!r}, so a point "
+                f"there does not name the map this quantity differentiates. Split an "
+                f"integral over this domain into one per piece first."
+            )
+        (parametrization,) = parametrizations
+        return parametrization
 
     @property
     def _jacobian(self) -> Jacobian:
@@ -409,7 +435,7 @@ class AbstractGeometricQuantity(AbstractExpression):
         source = variable.domain
         if not isinstance(source, AbstractCoordinateDomain):
             return self
-        if source not in self._domain.parameter_regions:
+        if len(_parametrizations_out_of(self._domain, source)) == 0:
             return self
         return self._at_point(variable)
 
