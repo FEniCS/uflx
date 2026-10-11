@@ -95,22 +95,55 @@ is real and necessary, and it belongs to domain construction — see §3.
 `dx`, `ds` and `dS` are one measure over three different domains [3].
 
 - `dx` is the induced density on `Ω`.
-- `ds` is the induced density on `∂Ω`, a codimension-one domain in its own right. Its
-  parametrization per facet type is the reference facet's inclusion into the cell
+- `ds` is the induced density on a codimension-one domain of facets, in its own right.
+  Its parametrization per facet is the reference facet's inclusion into the cell
   followed by the cell's own map, which is a `ComposedParametrization`.
 - `dS` is the induced density on an interface, a codimension-one domain again [4].
 
 The `+`/`-` of UFL is not part of the measure either. It is a *restriction of a field*,
 which is a pullback along one side's inclusion map, and it lives in the integrand.
 
-So a codimension and a boundary flag become operators on domains — `boundary_of(omega)`,
-`interface_of(omega_plus, omega_minus)` — returning domains that then need only the one
-measure. That is the home for a mesh-relative query, and it makes the derived domain an
-object carrying a parametrization, a metric, a normal and a measure like any other.
+So a codimension and a boundary flag become operators on domains —
+`sub_entities_of(omega, codim)`, and an `interface_of(omega_plus, omega_minus)` still to
+come — returning domains that then need only the one measure. That is the home for a
+mesh-relative query, and it makes the derived domain an object carrying a
+parametrization, a metric, a normal and a measure like any other.
+
+The derived domain is named for the sub-entities it is parametrized by and not for a
+boundary. Which facets it has — those with one adjacent cell, those with two, those a
+consumer has marked — is a question about a cell complex UFLx does not own, so
+membership is external, as a mesh's cells are. `sub_entities_of` says only how such a
+domain is parametrized.
+
+A marked selection of them is a domain and not an id on a measure, which is what UFL
+encodes as a subdomain id. `LabelledDomain` is a domain and an opaque label a consumer
+selects it by, changing no cell, no parametrization and no coordinate, so changing no
+density and no kernel either — only identity, which is the point. It labels each *piece*
+rather than the union of them, because splitting an integral retargets it onto one piece
+at a time: a label on the union alone would be gone by the time there were kernels to
+assign to it, where a label on the pieces rides into the kernel the way the facet's own
+geometry does, through the quantities that name the piece. The same mechanism serves
+marked cells, so `dx` of a subdomain needs no special case. A label says which entities
+a consumer means and nothing about the fields on them, so an integral takes a label off
+before asking whether a function belongs to the domain it is over.
+
+The local index of a sub-entity is not a label of this kind. It is part of a
+parametrization's identity, picking which inclusion and so which kernel, where a tag
+picks which entities a kernel runs on. The inclusion an entity supplies says which
+sub-entity it is (`IncludesASubEntity`), so the index is read off a pulled back integral
+rather than recovered by matching the inclusion's matrix.
+
+Several facets are parametrized from one reference facet, so the parameter region no
+longer identifies the parametrization, and the domain is held as a union of parametrized
+pieces. A union is not an atlas: its pieces carry no claim of a relation to each other.
+Integrating over one is the sum over its pieces, which generalises the fan out over cell
+types, and a piece names one parametrization and so one cell type too.
 
 A region of `R^d` shows this with no cells involved: a box carries a measure, and so
 does each of its faces, which is an exterior facet measure rather than a second kind of
-measure.
+measure. Its faces are written out by hand in `test/test_regions.py`, since
+`sub_entities_of` reaches a cell's sub-entities through its entity and a region has no
+cells; §6 says what asking a domain for its own boundary pieces would take.
 
 ## 4. Orientation
 
@@ -195,23 +228,59 @@ is pushed forward by `Γ`'s own parametrization and pulled back through each sid
 Read in that order, UFL's `+`/`-` is the special case in which `φ₊⁻¹ ∘ ψ_Γ` is known
 combinatorially and so costs nothing.
 
-## 6. What is not built
+## 6. What is built, and what is not
 
-1. **The derived domains**, `boundary_of` and `interface_of`. This needs reference
-   geometry UFLx cannot supply: `AbstractEntity` knows a facet's vertices but not where
-   they are, so the facet inclusion `s ↦ (1 − s, s)` comes from outside, as an abstract
-   hook, a consumer-supplied parametrization, or an unexpandable terminal as in UFL.
-   That fork is the real decision and it is not a measure question.
-1. **A map per side**, generalising `parametrization(cell)`, plus restriction as a
-   pullback along a named map. This is `dS` in both cases of §5, and it subsumes
-   `+`/`-`.
+Built, as `ds`:
+
+1. **The derived domain of facets.** `AbstractEntity.sub_entity_inclusion(dim, index)`
+   is the reference geometry UFLx cannot supply, so the entity's definer supplies it and
+   the default raises; `sub_entity_domain(cell, dim, index)` is a sub-entity of a cell
+   as a domain, being that inclusion composed onto the sub-entity's own coordinate
+   domain; `UnionDomain` holds several parametrized pieces; and
+   `sub_entities_of(omega, codim)` is the union of the pieces, each a `ComposedDomain`
+   of the inclusion and the cell's own map. A parametrization says which coordinate
+   domain it lands in, which is how a facet's points are known to be named in the cell's
+   coordinates. Any codimension, not a facet's: `sub_entities_of(omega, codim)` is the
+   general form, and what fails to generalise above codimension one is a claim rather
+   than a construction, a normal being a single direction only there.
+1. **Restriction as a pullback along a named parametrization.** `restrict(u, domain)` is
+   `ι*u`, the field read at the point the domain's parametrization gives. It lives in
+   the integrand, and a gradient shows why: inside a restriction the entity gradient is
+   still carried by the *cell's* inverse Jacobian, read at the included point, where the
+   facet's own would be the tangential gradient.
+1. **The fan out over pieces.** `Integral.split_by_piece` gives one integral per piece,
+   carrying the measure, the restrictions and the geometric quantities onto it, and runs
+   before the cell type split. Pulling back then multiplies the piece's volume element
+   into the integrand, which is the factor an exterior facet integral picks up.
+
+Not built:
+
+1. **A parametrization per side**, generalising `parametrization(cell)`. This is `dS` in
+   both cases of §5, and it subsumes `+`/`-`. The restriction it needs is the one above,
+   told which side.
 1. **Orientation carried on a restriction**, giving a signed normal and a statable
-   divergence theorem.
+   divergence theorem. Without it the facet normal is a direction with no outwardness,
+   as `test_a_facets_normal_is_normal_but_not_outward` records.
 1. **Pull back off a cell.** Change of variables onto a parametrization's parameter
    region is meaningful for any parametrized domain — the identity for `R^d` and for a
    region, the inclusion for a face — but the variable it hands the integrand is a
    cell's, so `on_cell_type` and `pull_back_to_entity` require a cellular domain and
    say so.
+1. **A measure over a domain of topological dimension zero**, which is the counting
+   measure a sub-entity domain of full codimension would give. The empty Gram
+   determinant is one, but the empty matrix its Jacobian needs cannot be built, as
+   `test_the_measure_of_a_point_is_the_counting_measure` records.
+1. **A domain asked for its own boundary pieces.** `sub_entities_of` reaches a cell's
+   sub-entities through its entity's combinatorics, so it serves a mesh and refuses a
+   region, while §3 presents a box's faces as the same idea -- and they are, by hand. A
+   domain that answered "the pieces of my boundary" however it liked, a cell type from
+   its entity and a box from its bounds, would make that one construction rather than
+   two. What this is *not* is a domain knowing it is a subset of another: the extent of
+   a reference cell is the element library's, as its vertices are, and nothing here
+   reads it. It is also not what the composition check wants, which is the declared
+   intent of a map and not containment -- the reference triangle sits inside the
+   reference square, so containment would accept a map written for the square being
+   applied to the triangle.
 1. **Atomic measures**, for a point evaluation and for a quadrature rule as a sum of
    Diracs. A sibling of `Measure` rather than a weighting of one.
 
@@ -233,13 +302,30 @@ Acceptance criteria, as tests rather than prose to agree with.
 - **An axisymmetric measure is the volume element of a cylindrical parametrization.**
   Needs trigonometric functions in the expression language, of which `Sqrt` is currently
   the only neighbour.
+- **A marked part of a domain is a domain, as far as a kernel.** `ds(3)` and `ds(4)`
+  pull back to kernels that still say which selection they are for, and which
+  sub-entity. `test_a_marked_tag_is_still_there_in_the_kernels` and
+  `test_a_kernel_says_which_sub_entity_it_is_for`.
+- **An exterior facet integral is the one measure over a domain of facets.** Pulling
+  `inner(restrict(grad(u), facets), UnitNormal(facets)) * dx(facets)` back gives one
+  integral per facet over the reference facet, carrying that facet's volume element and
+  normal and the cell's inverse Jacobian at the included point.
+  `test_pulling_back_an_integral_over_the_facets_gives_one_kernel_per_facet`.
+- **A facet measure on a curved domain is arc length.** A triangle laid on the
+  paraboloid `z = u^2 + v^2` has facets that are curves in space, and the density UFLx
+  gives on one, integrated, is the length of the lifted curve rather than of the flat
+  one. `test_the_measure_of_a_curved_facet_integrates_to_its_arc_length`.
+- **The facet geometry is the cell's geometry, asked for.** The inclusion an entity
+  supplies gives the same facet lengths as the one `test_boundaries.py` writes by hand.
+  `test_the_measure_of_a_facet_is_its_length` in `test_facet_domains.py`.
 - **One integral, two domains.** `inner(ι₊* u₊ − ι₋* u₋, v) * dx(interface)` builds, and
   the two restrictions are distinguishable in the graph.
 - **The jump is side-symmetric in the measure.** Pulling the interface integral back
   through either side's parametrization gives the same density factor.
 - **The divergence theorem is statable.** `∫ div(u) dx(omega)` and
-  `∫ inner(u, n) dx(boundary_of(omega))` are both expressible, with `n`'s sign fixed by
-  the boundary's inclusion rather than by a consumer's convention.
+  `∫ inner(restrict(u, facets), n) dx(facets)` are both expressible, with `n`'s sign
+  fixed by the facet's inclusion rather than by a consumer's convention. Both sides
+  build and pull back; the sign is what is still open.
 
 ## Notes
 

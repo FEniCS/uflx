@@ -9,7 +9,7 @@ from uflx.complex import conj
 from uflx.domains import AbstractCellularDomain
 from uflx.expressions import AbstractExpression, BinaryOperator, Sqrt, UnaryOperator
 from uflx.functions import AbstractFunction, extract_domain
-from uflx.geometry import JacobianInverse
+from uflx.geometry import Jacobian, JacobianInverse, SpatialCoordinate
 from uflx.graphs import GraphNode
 from uflx.maps import PushedForward
 from uflx.tensors import Identity, Tensor, Vector, zero
@@ -96,35 +96,82 @@ class Tr(UnaryOperator):
 
 
 class Grad(UnaryOperator):
-    """Gradient operator."""
+    """Gradient operator.
+
+    Of a field, or of the spatial coordinate. Both are terminals that say
+    which domain they are read on, and both have an entity gradient: a
+    field's is its basis differentiated, and the spatial coordinate's is
+    the Jacobian, the map's derivative being the answer rather than
+    something to compute from one.
+
+    Not of an expression. The gradient of a product needs a product rule,
+    which is the symbolic differentiation LANGUAGE.md section 4 describes
+    and is not this.
+    """
 
     def __init__(self, argument: GraphNode):
-        """Initialise."""
-        assert isinstance(argument, AbstractFunction) and not argument.in_entity_coordinates
-        self._physical_argument = argument
+        """Initialise.
+
+        Args:
+            argument: The field or spatial coordinate to differentiate
+
+        Raises:
+            ValueError: If the argument is neither, or is a field already
+                pulled back onto a cell
+        """
+        if isinstance(argument, AbstractFunction):
+            if argument.is_on_an_entity:
+                raise ValueError(
+                    f"{argument!r} is already in a cell's coordinates, so its gradient "
+                    f"there is an EntityGrad rather than a Grad."
+                )
+        elif not isinstance(argument, SpatialCoordinate):
+            raise ValueError(
+                f"Cannot take the gradient of {argument!r}. A field and the spatial "
+                f"coordinate have an entity gradient; an expression of them needs a "
+                f"rule for differentiating it, which is not built."
+            )
         super().__init__(argument)
+
+    @property
+    def _differentiated(self) -> AbstractFunction | SpatialCoordinate:
+        """What is being differentiated, which __init__ checked this is."""
+        argument = self.argument
+        assert isinstance(argument, AbstractFunction | SpatialCoordinate)
+        return argument
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        gdim = self._physical_argument.function_space.domain.geometric_dimension
-        return (*self._physical_argument.value_shape, gdim)
+        gdim = extract_domain(self._differentiated).geometric_dimension
+        return (*self._differentiated.value_shape, gdim)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise NotImplementedError("Cannot get a 'component' of a Grad")
 
     def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
-        """Pull the node back to the entity's coordinates."""
-        if self._physical_argument.is_cellwise_constant:
+        """Pull the node back to the entity's coordinates.
+
+        Raises:
+            NotImplementedError: If the field was not pulled back to
+                something whose entity gradient is known
+        """
+        domain = extract_domain(self._differentiated)
+        assert isinstance(domain, AbstractCellularDomain)
+
+        if isinstance(self._differentiated, SpatialCoordinate):
+            # The entity gradient of the coordinates a map lands on is that
+            # map's derivative, so this is J K: the identity where the map
+            # is square, and the tangential projector on a manifold, which
+            # is what simplifying the product gives.
+            return Jacobian(domain) @ JacobianInverse(domain)
+
+        if self._differentiated.is_cellwise_constant:
             # The gradient of a cellwise constant is exactly zero.
             return zero(self.value_shape)
 
-        # assert isinstance(self.argument, EvaluatedPhysicalBasisFunction)
         argument = node_map.get(self.argument, self.argument)
-
-        domain = extract_domain(self)
-        assert isinstance(domain, AbstractCellularDomain)
         if isinstance(argument, PushedForward):
             # The last index of the entity gradient is the derivative direction.
             return EntityGrad(argument.function) @ JacobianInverse(domain)
@@ -136,14 +183,20 @@ class EntityGrad(UnaryOperator):
 
     def __init__(self, argument: GraphNode):
         """Initialise."""
-        assert isinstance(argument, AbstractFunction) and argument.in_entity_coordinates
-        self._entity_argument = argument
+        assert isinstance(argument, AbstractFunction) and argument.is_on_an_entity
         super().__init__(argument)
+
+    @property
+    def _differentiated(self) -> AbstractFunction:
+        """The field being differentiated, which __init__ asserted this is."""
+        argument = self.argument
+        assert isinstance(argument, AbstractFunction)
+        return argument
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        return (*self._entity_argument.value_shape, self._entity_argument.domain_size)
+        return (*self._differentiated.value_shape, self._differentiated.domain_size)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -153,7 +206,7 @@ class EntityGrad(UnaryOperator):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        argument = self._entity_argument
+        argument = self._differentiated
         d = argument.domain_size
         if argument.is_cellwise_constant:
             return zero((*argument.value_shape, d))
@@ -185,8 +238,8 @@ class EntityGrad(UnaryOperator):
 
 def grad(a: AbstractExpression) -> AbstractExpression:
     """The gradient of an expression."""
-    if isinstance(a, AbstractFunction) and not a.in_entity_coordinates and a.is_cellwise_constant:
-        # The Grad of a cellwise constant physical function is zero.
+    if isinstance(a, AbstractFunction) and not a.is_on_an_entity and a.is_cellwise_constant:
+        # The Grad of a cellwise constant field is zero.
         gdim = a.function_space.domain.geometric_dimension
         return zero((*a.value_shape, gdim))
     return Grad(a)

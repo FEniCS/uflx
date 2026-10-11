@@ -15,6 +15,14 @@ class PullBackToEntity(Protocol):
 
 
 @runtime_checkable
+class SplitByPiece(Protocol):
+    """Split a node into one term per piece of its domain."""
+
+    def split_by_piece(self) -> GraphNode | None:
+        """Split the node, or give None when its domain is not several pieces."""
+
+
+@runtime_checkable
 class SplitByCellType(Protocol):
     """Split a node into one term per cell type of its domain."""
 
@@ -27,13 +35,23 @@ def pull_back_to_entity(
 ) -> GraphNode:
     """Pull terms in integrals back to the entity's coordinates.
 
-    An integral over a domain of several cell types is split first, into
-    one integral per cell type. Each cell type has its own coordinate
-    domain, so pulling back without splitting would have to pick one of
-    them. The split has to come first because this walk is leaves first:
-    the functions in an integrand are pulled back, onto the element of
-    the cell they are on, before the integral itself is reached.
+    An integral over a domain of several pieces, or of several cell
+    types, is split first, into one integral per piece or cell type. Each
+    has its own coordinate domain, so pulling back without splitting
+    would have to pick one of them. The split has to come first because
+    this walk is leaves first: the functions in an integrand are pulled
+    back, onto the element of the cell they are on, before the integral
+    itself is reached.
+
+    Pieces are split off before cell types. A piece names one parametrization, so
+    it names a cell type too, which leaves the cell type split nothing to
+    do.
     """
+    if isinstance(expression, SplitByPiece):
+        split = expression.split_by_piece()
+        if split is not None:
+            return pull_back_to_entity(split)
+
     if isinstance(expression, SplitByCellType):
         split = expression.split_by_cell_type()
         if split is not None:

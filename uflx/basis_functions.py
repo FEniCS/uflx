@@ -13,10 +13,11 @@ from typing import Any, Self
 from uflx.expressions import AbstractExpression, Im, Re
 from uflx.finite_elements import AbstractFiniteElement, AbstractMappedFiniteElement
 from uflx.function_spaces import AbstractFunctionSpace, AbstractMappedFunctionSpace
-from uflx.functions import AbstractFunction, AbstractVariable
+from uflx.functions import AbstractFunction
 from uflx.graphs import GraphNode
 from uflx.tensors import zero
 from uflx.utils import flatten
+from uflx.variables import AbstractVariable
 
 
 class AbstractEvaluatedBasisFunction(AbstractFunction):
@@ -145,7 +146,7 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         if self._component is None:
-            if self.in_entity_coordinates:
+            if self.is_on_an_entity:
                 assert isinstance(self.element, AbstractMappedFiniteElement)
                 return self.element.entity_value_shape
             else:
@@ -158,7 +159,7 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
         repr = (
             "EvaluatedBasisFunction("
             f"{self._space!r}, {self._basis_index}, {self._variable!r}, "
-            f"{self.in_entity_coordinates}"
+            f"{self.is_on_an_entity}"
         )
         if self._element_index is not None:
             repr += f", {self._element_index}"

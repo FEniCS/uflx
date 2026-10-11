@@ -14,7 +14,7 @@ from abc import abstractmethod
 from itertools import count
 from typing import Any, Self, cast
 
-from uflx.domains import AbstractCellularDomain, AbstractDomain, EntityDomain
+from uflx.domains import AbstractDomain, EntityDomain, ReadOnADomain
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression, Im, Re
 from uflx.function_spaces import (
@@ -22,148 +22,10 @@ from uflx.function_spaces import (
     AbstractMappedFunctionSpace,
     function_space,
 )
-from uflx.graphs import GraphNode, as_graph
+from uflx.graphs import GraphNode
 from uflx.maps import PushedForward
 from uflx.tensors import zero
-
-
-class AbstractVariable(AbstractExpression):
-    """Base class for a variable that is the input to a function."""
-
-    @property
-    def value_shape(self) -> tuple[int, ...]:
-        """The value shape of the expression."""
-        return (self.domain.geometric_dimension,)
-
-    @property
-    @abstractmethod
-    def domain(self) -> AbstractDomain:
-        """The domain that this variable is in."""
-
-    @abstractmethod
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-
-    @abstractmethod
-    def __hash__(self) -> int:
-        """Hash."""
-
-    @property
-    def in_entity_coordinates(self) -> bool:
-        """Check if this variable's components are in an entity's coordinates."""
-        return isinstance(self.domain, EntityDomain)
-
-    def to_entity_coordinates(self, cell: AbstractEntity) -> AbstractVariable:
-        """Make a version of this variable in the given cell's coordinates."""
-        raise ValueError("Cannot pull this variable back to a cell's coordinates.")
-
-
-class Variable(AbstractVariable):
-    """A variable that is the input to a function.
-
-    One in a cellular domain can be moved between that domain's own
-    coordinates and one of its cells', which is what pulling an integral
-    back does to its dummy variable. One in any other domain has nowhere
-    to be moved to and refuses.
-    """
-
-    _n = count(0)
-
-    def __init__(self, domain: AbstractDomain, label: str | None = None):
-        """Initialise."""
-        if label is None:
-            self._label = f"variable-{next(self._n)}"
-        else:
-            self._label = label
-        self._domain = domain
-
-    @property
-    def label(self) -> str:
-        """The label of this variable."""
-        return self._label
-
-    @property
-    def domain(self) -> AbstractDomain:
-        """The domain that this variable is in."""
-        return self._domain
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._domain, self._label)
-
-    @property
-    def _cell_types(self) -> tuple[AbstractEntity, ...]:
-        """The cell types of this variable's domain.
-
-        Raises:
-            ValueError: If the domain is not made of cells
-        """
-        if not isinstance(self._domain, AbstractCellularDomain):
-            raise ValueError(
-                f"{self._domain!r} is not made of cells, so a point of it is in no "
-                f"cell's coordinates."
-            )
-        return self._domain.cell_types
-
-    def to_domain_coordinates(self, domain: AbstractCellularDomain) -> Variable:
-        """Make a version of this variable in a domain's own coordinates.
-
-        Args:
-            domain: The domain to push the variable onto. A variable in a
-                cell's coordinates does not know which domain it came
-                from, and those coordinates belong to no domain in
-                particular, so the target is named rather than recalled.
-        """
-        return Variable(domain, self._label)
-
-    def to_entity_coordinates(self, cell: AbstractEntity) -> Variable:
-        """Make a version of this variable in the given cell's coordinates.
-
-        Args:
-            cell: A cell type of this variable's domain. A sub-entity of
-                one is not a cell of the domain, and a point in its
-                coordinates reaches a cell element only through an
-                inclusion, not through this.
-
-        Raises:
-            ValueError: If the cell is not a cell type of this variable's
-                domain
-        """
-        if cell not in self._cell_types:
-            raise ValueError(
-                f"Cannot pull back to {cell}, which is not a cell type of this variable's domain."
-            )
-        return Variable(EntityDomain(cell), self._label)
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        raise NotImplementedError()
-
-    def __eq__(self, other) -> bool:
-        """Check for equality.
-
-        The domain counts: pulling a variable back keeps its label and
-        changes only where it lives.
-        """
-        return (
-            isinstance(other, Variable)
-            and other.label == self.label
-            and other.domain == self.domain
-        )
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"Variable({self._label}, {self._domain!r})"
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.Variable", self._label, self._domain))
+from uflx.variables import AbstractVariable
 
 
 class AbstractFunction(AbstractExpression):
@@ -175,15 +37,33 @@ class AbstractFunction(AbstractExpression):
         """Get the variable that is this function's input."""
 
     @property
-    def in_entity_coordinates(self) -> bool:
-        """Check if this function's components are in an entity's coordinates.
+    def reads_on(self) -> AbstractDomain | None:
+        """The domain this function is read on, until it is pulled back.
+
+        A function on a cell's own coordinates has been pulled back and
+        no longer says which domain it came from, which is what
+        `is_on_an_entity` asks.
+        """
+        if self.is_on_an_entity:
+            return None
+        return self.function_space.domain
+
+    @property
+    def is_on_an_entity(self) -> bool:
+        """Whether this function is on an entity's own coordinate domain.
+
+        Which is to say whether it has been pulled back: a function on a
+        mesh is not, and the same function on a cell is. Not the question
+        of which coordinates its points are named in, which a domain's
+        `coordinate_domain` answers, and which is a cell's for a facet of
+        one without the function having been pulled back onto it.
 
         The variable answers when there is one, since a basis function
         keeps its mesh space and is told which coordinates by the point
         it is evaluated at. Otherwise the space's domain says.
         """
         if self.variable is not None:
-            return self.variable.in_entity_coordinates
+            return self.variable.is_on_an_entity
         return isinstance(self.function_space.domain, EntityDomain)
 
     def on_cell_type(self, cell: AbstractEntity) -> AbstractFunction:
@@ -234,7 +114,7 @@ class AbstractFunction(AbstractExpression):
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
-        if self.in_entity_coordinates:
+        if self.is_on_an_entity:
             assert isinstance(self.function_space, AbstractMappedFunctionSpace)
             return self.function_space.elements[0].entity_value_shape
         else:
@@ -254,7 +134,7 @@ class AbstractFunction(AbstractExpression):
         elements = self.function_space.elements
         if any(e.lagrange_superdegree != 0 for e in elements):
             return False
-        if self.in_entity_coordinates:
+        if self.is_on_an_entity:
             return True
         return all(e.value_map.preserves_constant_values for e in elements)
 
@@ -297,10 +177,10 @@ def _pulled_back_to_entity(function: AbstractFunction) -> GraphNode:
         That function in the entity's coordinates, pushed forward
 
     Raises:
-        ValueError: If the function is in an entity's coordinates already
+        ValueError: If the function is on an entity already
     """
-    if function.in_entity_coordinates:
-        raise ValueError("Cannot pull back a function already in the entity's coordinates")
+    if function.is_on_an_entity:
+        raise ValueError("This function is on an entity already.")
     space = function.function_space
     assert isinstance(space, AbstractMappedFunctionSpace)
     element = space.elements[0]
@@ -561,30 +441,56 @@ class TrialFunction(Argument):
         raise NotImplementedError()
 
 
-def extract_domain(expression: GraphNode) -> AbstractDomain:
-    """Get the domain the functions in an expression are defined on.
+def _domains_read_on(node: GraphNode) -> list[AbstractDomain]:
+    """The domains the parts of an expression say they are read on.
 
-    Only functions whose components are in ambient coordinates are read: one
-    already in a cell's coordinates has been pulled back, and no longer says
-    which domain it came from. They must all agree.
+    A node that says is not looked inside: a restriction says the domain
+    it restricts to, and the field under it is read through a map, which
+    is the restriction's business and not this one's.
+    """
+    if isinstance(node, ReadOnADomain):
+        reads_on = node.reads_on
+        if reads_on is not None:
+            return [reads_on]
+    found: list[AbstractDomain] = []
+    for successor in node.successors:
+        for domain in _domains_read_on(successor):
+            if domain not in found:
+                found.append(domain)
+    return found
+
+
+def extract_domain(expression: GraphNode) -> AbstractDomain:
+    """Get the domain an expression is read on.
+
+    Read off the parts of it that say: a function from its space, a
+    geometric quantity from the domain it differentiates, a restriction
+    from the domain it restricts to. A part that has been positioned
+    already says nothing -- a function pulled back onto a cell, a
+    quantity told where it is read -- and arithmetic and tensors have no
+    domain of their own, so they are asked of their successors.
 
     Args:
         expression: The expression to read
 
     Returns:
-        The domain its functions share
+        The domain its parts agree on
+
+    Raises:
+        ValueError: If no part of it says which domain, or they disagree
     """
-    domain: AbstractDomain | None = None
-    for node in as_graph(expression).descendants(expression):
-        if isinstance(node, AbstractFunction) and not node.in_entity_coordinates:
-            if domain is None:
-                domain = node.function_space.domain
-            else:
-                assert domain == node.function_space.domain
-    assert domain is not None
+    found = _domains_read_on(expression)
+    if len(found) == 0:
+        raise ValueError(
+            f"No part of {expression!r} says which domain it is read on. A domain is "
+            f"read off the functions, geometric quantities and restrictions in an "
+            f"expression, and this has none of them."
+        )
+    if len(found) > 1:
+        raise ValueError(
+            f"{expression!r} is read on {len(found)} domains, {found!r}. An expression "
+            f"spanning two of them reaches the second through a map, which is what a "
+            f"restriction is."
+        )
+    (domain,) = found
     return domain
-
-
-def create_variable(domain: AbstractDomain) -> Variable:
-    """Create a new variable in a domain."""
-    return Variable(domain)

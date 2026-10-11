@@ -41,14 +41,15 @@ quadrilaterals, or even a mixture of (eq) tetrahedra and intervals.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from uflx.entities import AbstractEntity
 from uflx.tensors import Identity, Vector
 
 if TYPE_CHECKING:
     from uflx.expressions import AbstractExpression
-    from uflx.functions import AbstractVariable
+    from uflx.variables import AbstractVariable
 
 
 class AbstractDomain(ABC):
@@ -68,6 +69,18 @@ class AbstractDomain(ABC):
         of topological dimensions.
         """
 
+    @property
+    def coordinate_domain(self) -> AbstractCoordinateDomain:
+        """The coordinate domain this domain's points are named in.
+
+        How many coordinates name a point is the geometric dimension;
+        which coordinates those are is this. They are the ambient ones
+        unless a domain says otherwise, and a facet of a reference cell
+        is where the difference shows: its points are named in the cell's
+        coordinates and not in R^d.
+        """
+        return RD(self.geometric_dimension)
+
 
 class AbstractCoordinateDomain(AbstractDomain):
     """Base class for a domain whose points are coordinate tuples.
@@ -85,6 +98,11 @@ class AbstractCoordinateDomain(AbstractDomain):
         The geometry is the identity, so this is the geometric dimension.
         """
         return self.geometric_dimension
+
+    @property
+    def coordinate_domain(self) -> AbstractCoordinateDomain:
+        """A coordinate domain's points are named in its own coordinates."""
+        return self
 
 
 class AbstractParametrizedDomain(AbstractDomain):
@@ -104,22 +122,35 @@ class AbstractParametrizedDomain(AbstractDomain):
     """
 
     @property
-    @abstractmethod
-    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """The parameter regions this domain is parametrized out of."""
+    def coordinate_domain(self) -> AbstractCoordinateDomain:
+        """The coordinate domain this domain's points are named in.
 
-    @abstractmethod
-    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
-        """Get the map out of the given parameter region.
-
-        Args:
-            source: One of this domain's parameter regions
-
-        Returns:
-            The map out of that region
+        Where its parametrizations land. They must agree, a domain's points being
+        named one way.
 
         Raises:
-            ValueError: If this domain has no map out of that region
+            ValueError: If its parametrizations land in different coordinates
+        """
+        targets = {parametrization.target for parametrization in self.parametrizations}
+        if len(targets) != 1:
+            raise ValueError(
+                f"The parametrizations of {self!r} land in {len(targets)} coordinates."
+            )
+        (target,) = targets
+        return target
+
+    @property
+    @abstractmethod
+    def parametrizations(self) -> tuple[AbstractParametrization, ...]:
+        """The maps this domain is parametrized by, each knowing its own region.
+
+        Not keyed by that region. Several parametrizations may start from one of
+        them -- every facet of a triangle is parametrized from the reference
+        interval -- so the region does not name the parametrization, and a domain
+        is not asked to choose between them. Where exactly one parametrization is
+        needed, as when a geometric quantity is evaluated at a point of
+        some region, that is a question about the quantity rather than
+        about the domain, and `uflx.geometry` asks it.
         """
 
 
@@ -141,19 +172,9 @@ class RD(AbstractCoordinateDomain, AbstractParametrizedDomain):
         return self._dim
 
     @property
-    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """R^d is parametrized by itself."""
-        return (self,)
-
-    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
-        """R^d's own parametrization is the identity.
-
-        Raises:
-            ValueError: If the region is not this R^d
-        """
-        if source != self:
-            raise ValueError(f"{self!r} is parametrized by itself, not by {source!r}.")
-        return IdentityParametrization(self)
+    def parametrizations(self) -> tuple[AbstractParametrization, ...]:
+        """R^d is parametrized by itself, through the identity."""
+        return (IdentityParametrization(self),)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -192,8 +213,20 @@ class AbstractParametrization(ABC):
 
     @property
     @abstractmethod
+    def target(self) -> AbstractCoordinateDomain:
+        """The coordinate domain this map lands in.
+
+        Where a map lands, and not only how many coordinates it lands in:
+        the inclusion of a facet into a cell lands in the cell's
+        coordinates, where a mesh's own map lands in the ambient ones.
+        That is what tells a domain built from a map which coordinates
+        name its points.
+        """
+
+    @property
     def target_dimension(self) -> int:
         """The number of coordinates this map lands in."""
+        return self.target.geometric_dimension
 
     @abstractmethod
     def value(self, point: AbstractVariable) -> AbstractExpression:
@@ -250,6 +283,73 @@ class AbstractParametrization(ABC):
         """Representation."""
 
 
+@runtime_checkable
+class ReadOnADomain(Protocol):
+    """An expression that says which domain it is read on.
+
+    Which domain an expression is on is read off the parts of it that
+    know: a function knows from its space, a geometric quantity from the
+    domain it differentiates, and a restriction from the domain it
+    restricts to. :func:`uflx.functions.extract_domain` asks, and a node
+    that does not implement this is asked of its successors instead --
+    arithmetic and tensors have no domain of their own.
+
+    A node that has already been positioned claims nothing. A function
+    pulled back onto a cell no longer says which domain it came from, and
+    a quantity told where it is read was put there by whatever knew the
+    point. Both answer None, so the question is about an expression as it
+    is written rather than one mid-transformation.
+    """
+
+    @property
+    def reads_on(self) -> AbstractDomain | None:
+        """The domain this is read on, or None where it does not say."""
+
+
+@runtime_checkable
+class IncludesASubEntity(Protocol):
+    """A map that says which sub-entity of a cell it includes.
+
+    The inclusion an entity supplies is what identifies a kernel along
+    with the cell type: one kernel per sub-entity, since each has its own
+    map. A consumer that generates code needs the index rather than the
+    matrix, so an inclusion that knows which sub-entity it is says so,
+    and the index survives into a pulled back integral in the quantities
+    that name the domain it parametrizations.
+
+    Not required of an inclusion, so a map that does not know is still a
+    parametrization like any other. :class:`uflx.parametrizations.SubEntityInclusion`
+    is the affine implementation.
+    """
+
+    @property
+    def sub_entity(self) -> tuple[int, int]:
+        """The dimension of the sub-entity included, and which one it is."""
+
+
+@runtime_checkable
+class ComposesADomain(Protocol):
+    """A domain presented as another domain with a map applied to it.
+
+    What a composite is a composite *of*, which is how a restriction asks
+    a facet of a mesh which sub-entity of which cell it is, and how the
+    sub-entity a parametrization includes is read back off it.
+    :class:`uflx.parametrizations.ComposedDomain` is the implementation.
+
+    A label is not one of these. A labelled domain is the domain it
+    labels in everything geometric, so whatever asks this question asks
+    it of :func:`unlabelled` first rather than of the label.
+    """
+
+    @property
+    def inner_domain(self) -> AbstractCellularDomain:
+        """The domain being mapped on."""
+
+    @property
+    def outer_map(self) -> AbstractParametrization:
+        """The map applied to that domain's own coordinates."""
+
+
 class IdentityParametrization(AbstractParametrization):
     """The map that leaves a coordinate domain's points where they are."""
 
@@ -267,9 +367,9 @@ class IdentityParametrization(AbstractParametrization):
         return self._domain
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """This map lands where it starts."""
-        return self._domain.geometric_dimension
+        return self._domain
 
     def value(self, point: AbstractVariable) -> AbstractExpression:
         """Give back the coordinates of the point."""
@@ -300,6 +400,92 @@ class IdentityParametrization(AbstractParametrization):
     def __hash__(self) -> int:
         """Hash."""
         return hash(("uflx.IdentityParametrization", self._domain))
+
+
+class UnionDomain(AbstractParametrizedDomain):
+    """A domain presented as several parametrized pieces.
+
+    Every other parametrized domain here has one parametrization per cell type, keyed by
+    the parameter region it starts from. The facets of a triangle are not
+    like that: all three are parametrized from the reference interval, so they
+    cannot be told apart by their region. A union holds them as pieces
+    instead, each a parametrized domain in its own right, and integration over
+    the union is the sum of the integrals over the pieces.
+
+    Not an atlas. An atlas's parametrizations cover one set and are related by
+    transition maps; these are separate pieces with no claim of a relation
+    between them. Whether they meet, and which of them a mesh actually
+    has, is external, as the cells of a mesh are.
+
+    Which selection of them is meant is carried by the pieces, each a
+    :class:`LabelledDomain` where a consumer has marked one, and not by
+    the union: a union of differently labelled pieces is already a
+    different domain, and a label on the union alone would be dropped the
+    moment an integral over it were split onto one piece.
+    """
+
+    def __init__(self, pieces: tuple[AbstractParametrizedDomain, ...]):
+        """Initialise.
+
+        Args:
+            pieces: The parametrized domains being united, in order
+
+        Raises:
+            ValueError: If there are no pieces, or they are not in the same
+                coordinates
+        """
+        if len(pieces) == 0:
+            raise ValueError("A union of no pieces is not a domain.")
+        dimensions = {piece.geometric_dimension for piece in pieces}
+        if len(dimensions) != 1:
+            raise ValueError(
+                f"A union's pieces must be in the same coordinates, not {sorted(dimensions)}."
+            )
+        self._pieces = pieces
+
+    @property
+    def pieces(self) -> tuple[AbstractParametrizedDomain, ...]:
+        """The parametrized domains being united."""
+        return self._pieces
+
+    @property
+    def geometric_dimension(self) -> int:
+        """The coordinates every piece is named in."""
+        return self._pieces[0].geometric_dimension
+
+    @property
+    def topological_dimension(self) -> int | None:
+        """The pieces' common topological dimension, or None when they differ."""
+        dimensions = {piece.topological_dimension for piece in self._pieces}
+        if len(dimensions) == 1:
+            (dimension,) = dimensions
+            return dimension
+        return None
+
+    @property
+    def parametrizations(self) -> tuple[AbstractParametrization, ...]:
+        """Every piece's parametrizations, in order.
+
+        Several of them may start from one region, which is the whole
+        reason a union exists rather than a domain with a parametrization per cell
+        type.
+        """
+        return tuple(
+            parametrization for piece in self._pieces for parametrization in piece.parametrizations
+        )
+
+    def __repr__(self) -> str:
+        """Representation."""
+        pieces = ", ".join(repr(piece) for piece in self._pieces)
+        return f"UnionDomain(({pieces}))"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return isinstance(other, UnionDomain) and self._pieces == other._pieces
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.UnionDomain", self._pieces))
 
 
 class AbstractCellularDomain(AbstractParametrizedDomain):
@@ -343,28 +529,9 @@ class AbstractCellularDomain(AbstractParametrizedDomain):
         """
 
     @property
-    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
-        """The coordinate domains of this domain's cell types."""
-        return tuple(EntityDomain(cell) for cell in self.cell_types)
-
-    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
-        """Get the map out of the given cell's coordinate domain.
-
-        Args:
-            source: The coordinate domain of one of this domain's cell types
-
-        Returns:
-            That cell type's parametrization
-
-        Raises:
-            ValueError: If the region is not a cell of this domain
-        """
-        if not isinstance(source, EntityDomain):
-            raise ValueError(
-                f"{self!r} is parametrized by its cells' coordinate domains, not by {source!r}."
-            )
-        (cell,) = source.cell_types
-        return self.parametrization(cell)
+    def parametrizations(self) -> tuple[AbstractParametrization, ...]:
+        """One parametrization per cell type, being that cell type's parametrization."""
+        return tuple(self.parametrization(cell) for cell in self.cell_types)
 
     @abstractmethod
     def parametrization(self, cell: AbstractEntity) -> AbstractParametrization:
@@ -434,6 +601,90 @@ class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
         return hash(("uflx.EntityDomain", self._entity))
 
 
+class LabelledDomain(AbstractCellularDomain):
+    """A domain and the label a consumer selects it by.
+
+    Everything geometric is the domain's: the same cells, the same parametrizations
+    and the same coordinates, so no quantity, no density and no kernel
+    changes. What changes is identity, which is the point: a marked part
+    of a domain is a domain, as INTEGRATION.md note 3 says, and two
+    selections are two domains rather than one measure carrying a
+    subdomain id.
+
+    The label is opaque and hashable. Which entities a consumer has
+    marked is external, as a mesh's cells are; this records only that a
+    selection was meant and which one.
+
+    It labels a piece rather than a union of them, so that splitting an
+    integral keeps it: the pull back leaves quantities naming the piece in
+    the integrand, so a kernel says which selection it is for.
+    """
+
+    def __init__(self, domain: AbstractCellularDomain, label: Any):
+        """Initialise.
+
+        Args:
+            domain: The domain being selected
+            label: Anything hashable the consumer selects it by
+        """
+        self._domain = domain
+        self._label = label
+
+    @property
+    def domain(self) -> AbstractCellularDomain:
+        """The domain being selected."""
+        return self._domain
+
+    @property
+    def label(self) -> Any:
+        """What the consumer selects it by."""
+        return self._label
+
+    @property
+    def geometric_dimension(self) -> int:
+        """A label changes no geometry."""
+        return self._domain.geometric_dimension
+
+    @property
+    def topological_dimension(self) -> int | None:
+        """A label changes no topology."""
+        return self._domain.topological_dimension
+
+    @property
+    def coordinate_domain(self) -> AbstractCoordinateDomain:
+        """A label changes no coordinates."""
+        return self._domain.coordinate_domain
+
+    @property
+    def cell_types(self) -> tuple[AbstractEntity, ...]:
+        """The cells are the domain's."""
+        return self._domain.cell_types
+
+    def parametrization(self, cell: AbstractEntity) -> AbstractParametrization:
+        """The parametrization is the domain's."""
+        return self._domain.parametrization(cell)
+
+    def on_cell_type(self, cell: AbstractEntity) -> LabelledDomain:
+        """Restricting keeps the label, a cell type being no part of it."""
+        return LabelledDomain(self._domain.on_cell_type(cell), self._label)
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"LabelledDomain({self._domain!r}, {self._label!r})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, LabelledDomain)
+            and self._domain == other._domain
+            and self._label == other._label
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.LabelledDomain", self._domain, self._label))
+
+
 def entity_domain(entity: AbstractEntity) -> EntityDomain:
     """Create the coordinate domain of an entity.
 
@@ -444,3 +695,46 @@ def entity_domain(entity: AbstractEntity) -> EntityDomain:
         The entity's coordinate domain
     """
     return EntityDomain(entity)
+
+
+def union_domain(pieces: Sequence[AbstractParametrizedDomain]) -> UnionDomain:
+    """Create the domain several parametrized pieces make up.
+
+    Args:
+        pieces: The parametrized domains being united, in order
+
+    Returns:
+        The union of those pieces
+    """
+    return UnionDomain(tuple(pieces))
+
+
+def labelled_domain(domain: AbstractCellularDomain, label: Any) -> LabelledDomain:
+    """Create the domain a consumer has selected under a label.
+
+    Args:
+        domain: The domain being selected
+        label: Anything hashable the consumer selects it by
+
+    Returns:
+        The same domain, told apart by that label
+    """
+    return LabelledDomain(domain, label)
+
+
+def unlabelled(domain: AbstractDomain) -> AbstractDomain:
+    """The domain a selection selects from, or the domain itself.
+
+    A label says which entities a consumer means and nothing about the
+    fields on them, so a function on a domain is a function on any
+    selection of it. This is how to ask what it is a selection of.
+
+    Args:
+        domain: A domain, labelled or not
+
+    Returns:
+        The domain with any labels taken off
+    """
+    while isinstance(domain, LabelledDomain):
+        domain = domain.domain
+    return domain

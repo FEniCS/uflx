@@ -9,21 +9,29 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from itertools import count
 from typing import Any, cast
 
 from uflx.algorithms import replace
-from uflx.domains import AbstractCellularDomain, AbstractParametrizedDomain, EntityDomain
+from uflx.domains import (
+    AbstractCellularDomain,
+    AbstractParametrizedDomain,
+    EntityDomain,
+    UnionDomain,
+    unlabelled,
+)
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
-from uflx.functions import (
-    AbstractFunction,
+from uflx.functions import AbstractFunction
+from uflx.geometry import AbstractGeometricQuantity, VolumeElement
+from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
+from uflx.restrictions import Restriction, evaluate_at
+from uflx.variables import (
     AbstractVariable,
     Variable,
     create_variable,
 )
-from uflx.geometry import AbstractGeometricQuantity, VolumeElement
-from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
 
 
 class AbstractMeasure(ABC):
@@ -120,6 +128,11 @@ class AbstractIntegral(ABC):
         """The integral measure."""
 
     @property
+    def domain(self) -> AbstractParametrizedDomain:
+        """The domain this integral is over, which its measure names."""
+        return self.measure.domain
+
+    @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return {self.integrand, self.measure}
@@ -143,6 +156,22 @@ class AbstractIntegral(ABC):
     @abstractmethod
     def variable(self) -> AbstractVariable:
         """The dummy variable of this integral."""
+
+    def split_by_piece(self) -> IntegralSum | None:
+        """Split this integral into one over each piece of its domain.
+
+        None unless there are pieces to split by, which an integral over
+        a union of them overrides to say.
+        """
+        return None
+
+    def split_by_cell_type(self) -> IntegralSum | None:
+        """Split this integral into one over each cell type of its domain.
+
+        None unless there is more than one cell type, which an integral
+        over a domain of several overrides to say.
+        """
+        return None
 
     def __add__(self, other: Any) -> IntegralSum:
         """Add to another integral, or to a sum of them."""
@@ -175,35 +204,61 @@ class Integral(AbstractIntegral):
 
         Raises:
             ValueError: If a function in the integrand is not on the
-                domain being integrated over
+                domain being integrated over, or a geometric quantity in
+                it cannot be read there
         """
         self._measure = measure
         domain = measure.domain
         self._variable = create_variable(domain) if variable is None else variable
 
-        replacements: dict[GraphNode, GraphNode] = {}
-        for node in as_graph(integrand):
+        # A restriction says where the field under it is read, so this
+        # integral's variable is none of that subtree's business, and a
+        # field on another domain is no error there either: reaching
+        # another domain through a map is exactly what a restriction is.
+        graph = as_graph(integrand)
+        restricted = frozenset(
+            descendant
+            for node in graph
+            if isinstance(node, Restriction)
+            for descendant in graph.descendants(node) - {node}
+        )
+
+        for node in graph:
+            if node in restricted:
+                continue
             if isinstance(node, AbstractFunction) and node.variable is None:
-                if node.function_space.domain != domain:
+                # Labels are taken off first: a label says which entities a
+                # consumer means and nothing about the fields on them, so a
+                # function on a domain is a function on any selection of it.
+                if unlabelled(node.function_space.domain) != unlabelled(domain):
                     raise ValueError(
                         f"Cannot integrate a function on {node.function_space.domain!r} "
                         f"over {domain!r}. A function reaches another domain only "
                         f"through a map, not by being integrated there."
                     )
-                replacements[node] = node.reconstruct_with_variable(self._variable)
 
-        # A Jacobian built during a pull back does not know where it is
-        # evaluated. This integral's variable is that point.
-        for node in as_graph(integrand):
-            if isinstance(node, AbstractGeometricQuantity) and node.point is None:
-                evaluated = node.reconstruct_with_variable(self._variable)
-                if evaluated is not node:
-                    replacements[node] = evaluated
+        # A function or a Jacobian built during a pull back does not know
+        # where it is evaluated. This integral's variable is that point.
+        evaluated = evaluate_at(integrand, self._variable, restricted)
+        assert isinstance(evaluated, AbstractExpression)
 
-        if len(replacements) == 0:
-            self._integrand = integrand
-        else:
-            self._integrand = replace(integrand, replacements)
+        # The same question of a geometric quantity, which until now was
+        # asked of functions alone: a quantity of another domain in this
+        # integrand built and pulled back and only failed on being
+        # expanded. One that already carries its own point is a quantity a
+        # pull back or a restriction put here, and says where it is read
+        # itself.
+        for node in as_graph(evaluated):
+            if node in restricted or not isinstance(node, AbstractGeometricQuantity):
+                continue
+            if node.variable is None and unlabelled(node.domain) != unlabelled(domain):
+                raise ValueError(
+                    f"Cannot read a quantity of {node.domain!r} over {domain!r}. A "
+                    f"quantity of another domain reaches this one through a map, as a "
+                    f"function does."
+                )
+
+        self._integrand = evaluated
         self._graph = generate_graph(self)
 
     @property
@@ -230,11 +285,6 @@ class Integral(AbstractIntegral):
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
         return self._integrand, self._measure, self._variable
-
-    @property
-    def domain(self) -> AbstractParametrizedDomain:
-        """The domain this integral is over, which its measure names."""
-        return self._measure.domain
 
     @property
     def cellular_domain(self) -> AbstractCellularDomain:
@@ -280,6 +330,48 @@ class Integral(AbstractIntegral):
         if isinstance(variable, Variable):
             variable = variable.to_domain_coordinates(domain)
         return Integral(integrand, self._measure.with_domain(domain), variable)
+
+    def on_piece(self, piece: AbstractParametrizedDomain) -> Integral:
+        """Get this integral over one piece of its domain.
+
+        The measure moves onto the piece, and so does everything in the
+        integrand that was written against the whole union: a restriction
+        is read through that piece's parametrization, and a geometric
+        quantity is read off that piece's geometry.
+
+        Args:
+            piece: One piece of this integral's domain
+
+        Returns:
+            The same integrand over that piece alone
+        """
+        domain = self.domain
+        replacements: dict[GraphNode, GraphNode] = {}
+        for node in as_graph(self._integrand):
+            if isinstance(node, Restriction) and node.domain == domain:
+                replacements[node] = node.on_piece(piece)
+            elif isinstance(node, AbstractGeometricQuantity) and node.domain == domain:
+                replacements[node] = node.on_domain(piece)
+        integrand = replace(self._integrand, replacements) if replacements else self._integrand
+        assert isinstance(integrand, AbstractExpression)
+        return Integral(integrand, self._measure.with_domain(piece))
+
+    def split_by_piece(self) -> IntegralSum | None:
+        """Split this integral into one over each piece of its domain.
+
+        Returns:
+            A sum of integrals, one per piece, or None when the domain is
+            not made of pieces
+
+        Note:
+            A union of one piece is still split. The union is a different
+            domain from the piece, and it is the piece that names the
+            parametrization a restriction reads a field through.
+        """
+        domain = self.domain
+        if not isinstance(domain, UnionDomain):
+            return None
+        return IntegralSum(tuple(self.on_piece(p) for p in domain.pieces))
 
     def split_by_cell_type(self) -> IntegralSum | None:
         """Split this integral into one over each cell type of its domain.
@@ -367,6 +459,47 @@ class IntegralSum:
         if isinstance(other, AbstractIntegral):
             return IntegralSum((*self._terms, other))
         return NotImplemented
+
+    def _split_terms(
+        self, split: Callable[[AbstractIntegral], GraphNode | None]
+    ) -> IntegralSum | None:
+        """Replace each term by its own split, where it has one.
+
+        A sum is where a fan out reaches the terms. Pulling a sum back
+        walks it leaves first and so reaches each integral already, with
+        no chance to split it on the way, and an integral over several
+        pieces or several cell types cannot be pulled back whole.
+
+        Args:
+            split: What to ask of a term, giving None when it does not split
+
+        Returns:
+            The sum with each term split, or None when no term split
+        """
+        terms: list[AbstractIntegral] = []
+        split_any = False
+        for term in self._terms:
+            result = split(term)
+            if result is None:
+                terms.append(term)
+            elif isinstance(result, IntegralSum):
+                terms.extend(result.terms)
+                split_any = True
+            else:
+                assert isinstance(result, AbstractIntegral)
+                terms.append(result)
+                split_any = True
+        if not split_any:
+            return None
+        return IntegralSum(tuple(terms))
+
+    def split_by_piece(self) -> IntegralSum | None:
+        """Split each term over a union of pieces into one integral per piece."""
+        return self._split_terms(lambda term: term.split_by_piece())
+
+    def split_by_cell_type(self) -> IntegralSum | None:
+        """Split each term over several cell types into one integral per cell type."""
+        return self._split_terms(lambda term: term.split_by_cell_type())
 
     def __eq__(self, other) -> bool:
         """Check for equality.

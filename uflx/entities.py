@@ -18,6 +18,10 @@ facets, ridges and peaks (respectively).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from uflx.domains import AbstractParametrization
 
 
 class AbstractEntity(ABC):
@@ -58,6 +62,31 @@ class AbstractEntity(ABC):
         Returns:
             A list of lists of vertices of sub-entities of the given dimension.
         """
+
+    def sub_entity_inclusion(self, dim: int, index: int) -> AbstractParametrization:
+        """Get the map that carries a sub-entity's coordinates into this entity's.
+
+        Reference geometry, which this class otherwise does not hold:
+        sub_entity_vertices says which vertices a sub-entity has and not
+        where they are, so the inclusion of facet 0 of a triangle as
+        ``s -> (1 - s, s)`` cannot be read off the combinatorics. It is
+        supplied by whoever defines the entity, as the coordinates of an
+        entity domain's points are.
+
+        Args:
+            dim: Dimension of the sub-entity.
+            index: Which sub-entity of that dimension.
+
+        Returns:
+            The map from the sub-entity's coordinate domain into this one's.
+
+        Raises:
+            NotImplementedError: If this entity does not say where its
+                sub-entities are.
+        """
+        raise NotImplementedError(
+            f"{self!r} does not say where its sub-entities are. That is the definer's to supply."
+        )
 
     def sub_entity_count(self, dim: int) -> int:
         """Get the number of sub-entities of a given dimension.

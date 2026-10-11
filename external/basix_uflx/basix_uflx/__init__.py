@@ -76,6 +76,61 @@ class BasixCell(uflx.entities.AbstractEntity):
         """
         return [c[0] for c in basix.cell.sub_entity_connectivity(self._basix_cell)[dim]]
 
+    def sub_entity_inclusion(self, dim: int, index: int) -> uflx.domains.AbstractParametrization:
+        """Get the map that carries a sub-entity's coordinates into this cell's.
+
+        Basix holds the reference coordinates UFLx does not, so the
+        inclusion is read off them: it takes the sub-entity's reference
+        vertices to where those vertices sit in this cell. Affine,
+        because a reference cell's sub-entities are flat.
+
+        Args:
+            dim: Dimension of the sub-entity.
+            index: Which sub-entity of that dimension.
+
+        Returns:
+            The map from the sub-entity's coordinate domain into this one's,
+            which says which sub-entity it includes.
+
+        Raises:
+            ValueError: If no affine map takes the sub-entity's vertices there.
+        """
+        vertices = basix.cell.geometry(self._basix_cell)
+        included = basix.cell.sub_entity_connectivity(self._basix_cell)[dim][index][0]
+        target = np.asarray([vertices[v] for v in included], dtype=np.float64)
+        gdim = target.shape[1]
+        sub_type = basix.cell.subentity_types(self._basix_cell)[dim][index]
+        sub_entity = BasixCell(sub_type)
+        source = uflx.domains.EntityDomain(sub_entity)
+        # The inclusion lands in this cell's own coordinates, which is what
+        # tells a domain built from it that its points are named there.
+        lands_in = uflx.domains.EntityDomain(self)
+
+        if dim == 0:
+            # A point has no coordinates to map, so the inclusion is where it sits.
+            return uflx.parametrizations.SubEntityInclusion(
+                source, lands_in, [[] for _ in range(gdim)], target[0], dim, index
+            )
+
+        # Vertex 0 of a reference cell is the origin and vertices 1 to dim
+        # span it, so the matrix is the edges from vertex 0 and the offset is
+        # vertex 0 itself.
+        reference = np.asarray(basix.cell.geometry(sub_type), dtype=np.float64)
+        if not np.allclose(reference[0], 0.0) or not np.allclose(
+            reference[1 : dim + 1], np.eye(dim)
+        ):
+            raise ValueError(f"{sub_entity!r} is not spanned by the edges from its first vertex.")
+        matrix = (target[1 : dim + 1] - target[0]).T
+        offset = target[0]
+        if not np.allclose(reference @ matrix.T + offset, target):
+            raise ValueError(
+                f"No affine map takes the vertices of {sub_entity!r} onto sub-entity "
+                f"{index} of dimension {dim} of {self!r}."
+            )
+        return uflx.parametrizations.SubEntityInclusion(
+            source, lands_in, matrix, offset, dim, index
+        )
+
     def __hash__(self):
         return hash(("basix.uflx", f"{self!r}"))
 

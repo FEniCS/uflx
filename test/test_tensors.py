@@ -5,8 +5,8 @@ from itertools import product
 import numpy as np
 import pytest
 
-from uflx.expressions import RealScalar
-from uflx.tensors import FlattenedTensorMap, Matrix
+from uflx.expressions import Integer, RealScalar
+from uflx.tensors import FlattenedTensorMap, Matrix, Tensor, Vector
 
 
 def _to_matrix(values: np.ndarray) -> Matrix:
@@ -113,3 +113,49 @@ def test_flattened_tensor_map_equality():
     assert hash(entry) == hash(FlattenedTensorMap((1, 2), (3,)))
     assert entry != FlattenedTensorMap((2, 1), (3,))
     assert entry != FlattenedTensorMap((1, 2), (4,))
+
+
+def test_an_empty_sequence_is_an_axis_of_length_zero():
+    """A row with no entries, which a map out of no coordinates has."""
+    assert Vector([]).value_shape == (0,)
+    assert Matrix([[]]).value_shape == (1, 0)
+    assert Matrix([[], []]).value_shape == (2, 0)
+    assert Tensor([[[]]]).value_shape == (1, 1, 0)
+
+
+def test_a_matrix_with_no_rows_is_given_its_shape():
+    """Nothing in its entries says how many columns it has."""
+    assert Matrix([], shape=(0, 2)).value_shape == (0, 2)
+    assert Matrix([[], []]).transpose().value_shape == (0, 2)
+
+    with pytest.raises(ValueError, match="must be given its shape"):
+        Matrix([])
+    with pytest.raises(ValueError, match="not"):
+        Matrix([[Integer(1)]], shape=(0, 1))
+
+
+def test_the_empty_gram_determinant_is_one():
+    """A map out of no coordinates scales no volume.
+
+    So the density of a domain of topological dimension zero is one,
+    which is the counting measure, and a vertex can be integrated over.
+    """
+    assert Matrix([[], []]).compute_determinant().as_float() == 1.0
+    assert Matrix([[]]).compute_determinant().as_float() == 1.0
+    assert Matrix([], shape=(0, 0)).compute_determinant().as_float() == 1.0
+    assert Matrix([], shape=(0, 3)).compute_determinant().as_float() == 1.0
+
+
+def test_a_matrix_too_big_to_take_the_determinant_of_says_so():
+    """Rather than failing while unpacking the rows it expected three of.
+
+    Four coordinates is a domain like any other -- R^4 is parametrized by
+    itself, so its measure is the Lebesgue one -- and this is what stops
+    it short, as inverting already said of itself.
+    """
+    rows = [[RealScalar(float(i == j)) for j in range(4)] for i in range(4)]
+
+    with pytest.raises(NotImplementedError, match="determinant of 4x4"):
+        Matrix(rows).compute_determinant()
+    with pytest.raises(NotImplementedError, match="Inverting of 4x4"):
+        Matrix(rows).compute_inverse()

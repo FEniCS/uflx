@@ -21,3 +21,17 @@ choose.
 chosen: a label that has not been minted, a variable an expression is not yet bound to,
 a point a geometric quantity has not been told. There the field is absent and its type
 says so, and requiring every caller to write `None` would say nothing extra.
+
+## Derived domains
+
+A domain derived from another is constructed by one function per construction and not
+one per case of it. `sub_entities_of(domain, codim)` is the sub-entities of a domain at
+any codimension, and there is no `facets_of`, `ridges_of` or `peaks_of`: the codimension
+names which sub-entities are meant, so a function per codimension would be a second
+spelling rather than a second construction. `facets_of` existed and was removed for that
+reason.
+
+The pull of such a name is that an exterior facet integral has one in the literature and
+in every other library, `ds`. That belongs where the rest of the inherited vocabulary
+is, in `uflx.legacy`, which spells it `ds` and builds `sub_entities_of(mesh, 1)`
+underneath.

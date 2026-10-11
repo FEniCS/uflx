@@ -18,21 +18,14 @@ What is missing is in :func:`test_a_facets_normal_is_normal_but_not_outward`.
 """
 
 import math
-from collections.abc import Sequence
 
 import pytest
 from conftest import Interval, Triangle
 from conftest import Point as PointEntity
 
 from uflx import composed_domain
-from uflx.domains import (
-    RD,
-    AbstractCoordinateDomain,
-    AbstractParametrization,
-    entity_domain,
-)
-from uflx.expressions import AbstractExpression, RealScalar, expression_sum
-from uflx.functions import AbstractVariable
+from uflx.domains import RD, entity_domain
+from uflx.expressions import RealScalar
 from uflx.geometry import (
     Jacobian,
     MetricTensor,
@@ -42,97 +35,8 @@ from uflx.geometry import (
     VolumeElement,
     _as_dense_matrix,
 )
+from uflx.parametrizations import AffineParametrization
 from uflx.points import Point
-from uflx.tensors import Matrix, Vector
-
-
-class AffineMap(AbstractParametrization):
-    """A closed form affine map, given by its matrix and its offset.
-
-    Enough to describe the inclusion of a reference facet into a cell, or
-    a linear map of the coordinates a domain lives in, without a finite
-    element anywhere near it.
-    """
-
-    def __init__(
-        self,
-        source: AbstractCoordinateDomain,
-        matrix: Sequence[Sequence[float]],
-        offset: Sequence[float],
-    ):
-        """Initialise.
-
-        Args:
-            source: The region this map starts from
-            matrix: The rows of the matrix of the map
-            offset: Where the source's origin lands
-        """
-        self._source = source
-        self._matrix = tuple(tuple(row) for row in matrix)
-        self._offset = tuple(offset)
-        if len({len(row) for row in self._matrix}) != 1:
-            raise ValueError("Every row of the matrix must be the same length.")
-        if len(self._offset) != len(self._matrix):
-            raise ValueError("The offset must have one entry per row of the matrix.")
-        if len(self._matrix[0]) != source.geometric_dimension:
-            raise ValueError("The matrix must have one column per coordinate of the source.")
-
-    @property
-    def source(self) -> AbstractCoordinateDomain:
-        """The region this map starts from."""
-        return self._source
-
-    @property
-    def target_dimension(self) -> int:
-        """This map lands in as many coordinates as the matrix has rows."""
-        return len(self._matrix)
-
-    def apply(self, coordinates: Sequence[float]) -> list[float]:
-        """Apply the map to ordinary numbers, to say what is expected of it."""
-        return [
-            sum(a * x for a, x in zip(row, coordinates, strict=True)) + b
-            for row, b in zip(self._matrix, self._offset, strict=True)
-        ]
-
-    def value(self, point: AbstractVariable) -> AbstractExpression:
-        """Multiply the matrix by the point and add the offset."""
-        return Vector(
-            [
-                expression_sum(
-                    (RealScalar(a) * point.component(j) for j, a in enumerate(row)),
-                    default=RealScalar(0.0),
-                )
-                + RealScalar(b)
-                for row, b in zip(self._matrix, self._offset, strict=True)
-            ]
-        )
-
-    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
-        """An affine map's derivative is its matrix."""
-        return Matrix([[RealScalar(a) for a in row] for row in self._matrix])
-
-    @property
-    def is_affine(self) -> bool:
-        """An affine map is affine."""
-        return True
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"AffineMap({self._source!r}, {self._matrix}, {self._offset})"
-
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return (
-            isinstance(other, AffineMap)
-            and other._source == self._source
-            and other._matrix == self._matrix
-            and other._offset == self._offset
-        )
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.test.AffineMap", self._source, self._matrix, self._offset))
-
 
 # The reference triangle's vertices. AbstractEntity says which vertices a
 # facet has and not where they are, so these coordinates come from outside,
@@ -145,7 +49,7 @@ facet_lengths = (1.0, 1.0, math.sqrt(2.0))
 outward_normals = ((0.0, -1.0), (-1.0, 0.0), (1.0 / math.sqrt(2.0), 1.0 / math.sqrt(2.0)))
 
 
-def facet_inclusion(facet: int) -> AffineMap:
+def facet_inclusion(facet: int) -> AffineParametrization:
     """The inclusion of the reference interval into facet ``facet`` of a triangle.
 
     Affine, taking 0 to the facet's first vertex and 1 to its second, so
@@ -153,8 +57,11 @@ def facet_inclusion(facet: int) -> AffineMap:
     """
     first, second = Triangle().sub_entity_vertices(1)[facet]
     start, end = reference_vertices[first], reference_vertices[second]
-    return AffineMap(
-        entity_domain(Interval()), tuple((end[i] - start[i],) for i in range(2)), start
+    return AffineParametrization(
+        entity_domain(Interval()),
+        entity_domain(Triangle()),
+        tuple((end[i] - start[i],) for i in range(2)),
+        start,
     )
 
 
@@ -182,16 +89,19 @@ def in_the_cell():
     return Point([RealScalar(0.2), RealScalar(0.3)], entity_domain(Triangle()))
 
 
+stretch_matrix = ((2.0, 0.0), (0.0, 1.0))
+
+
 @pytest.fixture
 def stretch():
     """A map of the plane that scales the two axes differently."""
-    return AffineMap(RD(2), ((2.0, 0.0), (0.0, 1.0)), (0.0, 0.0))
+    return AffineParametrization(RD(2), RD(2), stretch_matrix, (0.0, 0.0))
 
 
 @pytest.fixture
 def scaling():
     """A uniform scaling of the plane by three."""
-    return AffineMap(RD(2), ((3.0, 0.0), (0.0, 3.0)), (0.0, 0.0))
+    return AffineParametrization(RD(2), RD(2), ((3.0, 0.0), (0.0, 3.0)), (0.0, 0.0))
 
 
 def tangent_of(domain, point) -> list[float]:
@@ -358,7 +268,7 @@ def test_a_facets_normal_follows_the_cofactor_rule(facets, on_the_facet, stretch
     moved = composed_domain(facet, stretch)
     normal = normal_of(facet, on_the_facet)
 
-    carried = stretch.apply(normal)
+    carried = [sum(a * c for a, c in zip(row, normal)) for row in stretch_matrix]
     inverse_transpose = [normal[0] / 2.0, normal[1] / 1.0]
     length = math.sqrt(sum(c * c for c in inverse_transpose))
     expected = [c / length for c in inverse_transpose]
@@ -381,7 +291,9 @@ def test_reparametrizing_a_facet_keeps_its_measure_and_flips_its_normal(facets, 
     """
     backwards = composed_domain(
         entity_domain(Interval()),
-        AffineMap(entity_domain(Interval()), ((1.0,), (-1.0,)), (0.0, 1.0)),
+        AffineParametrization(
+            entity_domain(Interval()), entity_domain(Triangle()), ((1.0,), (-1.0,)), (0.0, 1.0)
+        ),
     )
 
     assert measure_of(backwards, on_the_facet) == pytest.approx(facet_lengths[2])
@@ -397,7 +309,10 @@ def test_the_boundary_of_an_interval_is_two_points_with_no_normal():
     something to compute, so the quantity says so rather than guessing.
     """
     end = composed_domain(
-        entity_domain(PointEntity()), AffineMap(entity_domain(PointEntity()), ((),), (1.0,))
+        entity_domain(PointEntity()),
+        AffineParametrization(
+            entity_domain(PointEntity()), entity_domain(Interval()), ((),), (1.0,)
+        ),
     )
     origin = Point([], entity_domain(PointEntity()))
 
@@ -408,18 +323,19 @@ def test_the_boundary_of_an_interval_is_two_points_with_no_normal():
         UnitNormal(end, origin).value_shape
 
 
-@pytest.mark.xfail(raises=AssertionError, strict=True, reason="Matrix([[]]) cannot be built")
 def test_the_measure_of_a_point_is_the_counting_measure():
     """A zero dimensional domain has nothing to measure, so its density is one.
 
-    The volume element of a point should be 1, the empty Gram
-    determinant being 1. Instead the empty matrix its Jacobian needs
-    cannot be built, and tensors.py's shape inference asserts. Harmless
-    until a measure over a point domain is wanted, which is what a point
-    evaluation is.
+    Its Jacobian is a map out of no coordinates, which is an empty
+    matrix, and the empty Gram determinant is one. So the measure of a
+    point is the counting measure, which is what a point evaluation
+    integrates against.
     """
     end = composed_domain(
-        entity_domain(PointEntity()), AffineMap(entity_domain(PointEntity()), ((),), (1.0,))
+        entity_domain(PointEntity()),
+        AffineParametrization(
+            entity_domain(PointEntity()), entity_domain(Interval()), ((),), (1.0,)
+        ),
     )
     origin = Point([], entity_domain(PointEntity()))
 

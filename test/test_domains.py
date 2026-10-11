@@ -6,16 +6,28 @@
 """Test domains."""
 
 import pytest
-from conftest import BlockedIdentityMappedElement, NonIdentityMappedElement
+from conftest import (
+    BlockedIdentityMappedElement,
+    Interval,
+    NonIdentityMappedElement,
+    Tetrahedron,
+    Triangle,
+)
 
-from uflx import parametrized_domain
+from uflx import composed_domain, parametrized_domain
 from uflx.domains import (
     RD,
     AbstractCellularDomain,
     AbstractCoordinateDomain,
     EntityDomain,
     entity_domain,
+    labelled_domain,
+    union_domain,
 )
+from uflx.expressions import RealScalar
+from uflx.geometry import VolumeElement
+from uflx.parametrizations import AffineParametrization
+from uflx.points import Point
 
 
 def test_has_affine_parametrization_true_for_degree_one_simplex(lagrange_element):
@@ -138,3 +150,99 @@ def test_parametrization_may_block_an_identity_map(lagrange_element):
 
     assert domain.geometric_dimension == 2
     assert domain.topological_dimension == 2
+
+
+def in_the_plane(matrix, offset):
+    """A domain of the plane, being the reference interval mapped into it."""
+    source = entity_domain(Interval())
+    return composed_domain(source, AffineParametrization(source, RD(2), matrix, offset))
+
+
+def test_a_union_takes_the_dimensions_of_its_pieces():
+    """Named in the pieces' coordinates, of the pieces' topological dimension."""
+    pieces = [
+        in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)),
+        in_the_plane(((0.0,), (1.0,)), (0.0, 0.0)),
+    ]
+
+    union = union_domain(pieces)
+
+    assert union.geometric_dimension == 2
+    assert union.topological_dimension == 1
+    assert union.pieces == tuple(pieces)
+
+
+def test_a_union_of_pieces_of_different_dimension_has_no_topological_dimension():
+    """As a domain of mixed cell types has none: there is no one answer."""
+    union = union_domain([in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)), entity_domain(Triangle())])
+
+    assert union.topological_dimension is None
+    assert union.geometric_dimension == 2
+
+
+def test_a_union_needs_pieces_in_the_same_coordinates():
+    """A piece of the plane and a piece of space are not one domain."""
+    with pytest.raises(ValueError, match="same coordinates"):
+        union_domain([entity_domain(Triangle()), entity_domain(Tetrahedron())])
+
+    with pytest.raises(ValueError, match="union of no pieces"):
+        union_domain([])
+
+
+def test_a_union_is_told_apart_by_its_pieces():
+    """It carries no label of its own: a selection is marked on the pieces.
+
+    A label on the union alone would be dropped the moment an integral
+    over it were split onto one piece, which is where a consumer needs
+    it, so the pieces carry it instead.
+    """
+    pieces = [in_the_plane(((1.0,), (0.0,)), (0.0, 0.0))]
+    marked = [labelled_domain(piece, 3) for piece in pieces]
+
+    assert union_domain(pieces) == union_domain(pieces)
+    assert hash(union_domain(pieces)) == hash(union_domain(pieces))
+    assert union_domain(marked) != union_domain(pieces)
+    assert union_domain(marked) == union_domain([labelled_domain(p, 3) for p in pieces])
+    assert len({union_domain(pieces), union_domain(marked), union_domain(marked)}) == 2
+
+
+def test_a_labelled_domain_differs_only_in_identity():
+    """Same cells, same parametrizations, same coordinates, told apart by the label."""
+    domain = in_the_plane(((1.0,), (0.0,)), (0.0, 0.0))
+
+    marked = labelled_domain(domain, "inflow")
+
+    assert marked.domain == domain
+    assert marked.label == "inflow"
+    assert marked.cell_types == domain.cell_types
+    assert marked.parametrizations == domain.parametrizations
+    assert marked.coordinate_domain == domain.coordinate_domain
+    assert marked.geometric_dimension == domain.geometric_dimension
+    assert marked.topological_dimension == domain.topological_dimension
+    assert marked != domain
+    assert marked != labelled_domain(domain, "outflow")
+    assert marked.on_cell_type(Interval()) == labelled_domain(
+        domain.on_cell_type(Interval()), "inflow"
+    )
+
+
+def test_a_union_holds_every_pieces_parametrization():
+    """Several parametrizations out of one region is why a union exists.
+
+    It is not asked to choose between them. Needing exactly one parametrization is
+    a question about evaluating a quantity, which geometry asks of the
+    point it is read at.
+    """
+    pieces = [
+        in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)),
+        in_the_plane(((0.0,), (1.0,)), (0.0, 0.0)),
+    ]
+    interval = entity_domain(Interval())
+
+    parametrizations = union_domain(pieces).parametrizations
+
+    assert parametrizations == pieces[0].parametrizations + pieces[1].parametrizations
+    assert [parametrization.source for parametrization in parametrizations] == [interval, interval]
+
+    with pytest.raises(ValueError, match="2 parametrizations out of"):
+        VolumeElement(union_domain(pieces), Point([RealScalar(0.5)], interval)).expand_geometry()

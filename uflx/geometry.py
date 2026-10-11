@@ -7,7 +7,6 @@ from typing import Any, Protocol, Self, runtime_checkable
 
 from uflx.algorithms import replace
 from uflx.domains import (
-    RD,
     AbstractCellularDomain,
     AbstractCoordinateDomain,
     AbstractParametrization,
@@ -15,10 +14,10 @@ from uflx.domains import (
     EntityDomain,
 )
 from uflx.expressions import AbstractExpression, Sqrt, expression_sum
-from uflx.functions import AbstractVariable
 from uflx.graphs import GraphNode, as_graph
 from uflx.points import AbstractPoint, Point
 from uflx.tensors import Identity, Matrix, Vector
+from uflx.variables import AbstractVariable
 
 
 @runtime_checkable
@@ -27,6 +26,22 @@ class ExpandableGeometry(Protocol):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
+
+
+def _parametrizations_out_of(
+    domain: AbstractParametrizedDomain, source: AbstractCoordinateDomain
+) -> tuple[AbstractParametrization, ...]:
+    """The domain's parametrizations that start from the given region.
+
+    A domain holds its parametrizations rather than keying them by their region,
+    since several may share one. Needing exactly one is what evaluating a
+    quantity at a point asks for, so it is asked here.
+    """
+    return tuple(
+        parametrization
+        for parametrization in domain.parametrizations
+        if parametrization.source == source
+    )
 
 
 def _as_dense_matrix(jacobian: AbstractExpression) -> Matrix:
@@ -57,9 +72,14 @@ class ImagePoint(AbstractPoint):
     It takes the domain rather than the map because the point it starts
     from already lies in a cell's coordinate domain, and so names the
     cell whose map carries it. Contrast :class:`PreimagePoint`.
+
+    Where it lands is the domain's coordinate domain, which is the
+    ambient one for a mesh and the cell's own for a sub-entity of a
+    reference cell. That is what lets a cell's basis be read at a point
+    of one of its facets.
     """
 
-    def __init__(self, point: AbstractPoint, domain: AbstractCellularDomain):
+    def __init__(self, point: AbstractVariable, domain: AbstractCellularDomain):
         """Initialise.
 
         Args:
@@ -77,7 +97,7 @@ class ImagePoint(AbstractPoint):
         self._parametrized_domain = domain
 
     @property
-    def entity_point(self) -> AbstractPoint:
+    def entity_point(self) -> AbstractVariable:
         """The point in the entity's coordinates."""
         return self._point
 
@@ -99,12 +119,13 @@ class ImagePoint(AbstractPoint):
         return self._parametrized_domain.parametrization(cell)
 
     @property
-    def domain(self) -> RD:
+    def domain(self) -> AbstractCoordinateDomain:
         """The domain.
 
-        A pushed forward point lies in the coordinates the map lands in.
+        An image lies in the coordinates the map lands in, which the
+        domain being mapped onto names.
         """
-        return RD(self._parametrized_domain.geometric_dimension)
+        return self._parametrized_domain.coordinate_domain
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -150,7 +171,14 @@ class ImagePoint(AbstractPoint):
 
     @property
     def index(self) -> int | str:
-        """The point's index in the set of points."""
+        """The point's index in the set of points.
+
+        Raises:
+            NotImplementedError: If the point mapped is a variable
+                standing for a point rather than one of a set
+        """
+        if not isinstance(self._point, AbstractPoint):
+            raise NotImplementedError(f"{self._point!r} is not a point of a set of them.")
         return self._point.index
 
 
@@ -259,15 +287,17 @@ class AbstractGeometricQuantity(AbstractExpression):
     dummy variable stands for the point.
     """
 
-    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractVariable | None = None):
+    def __init__(
+        self, domain: AbstractParametrizedDomain, variable: AbstractVariable | None = None
+    ):
         """Initialise.
 
         Args:
             domain: The domain whose geometry is being differentiated
-            point: Where to differentiate it, if that is known yet
+            variable: The point to differentiate it at, if that is known yet
         """
         self._domain = domain
-        self._point = point
+        self._variable = variable
 
     @property
     def domain(self) -> AbstractParametrizedDomain:
@@ -275,9 +305,21 @@ class AbstractGeometricQuantity(AbstractExpression):
         return self._domain
 
     @property
-    def point(self) -> AbstractVariable | None:
+    def variable(self) -> AbstractVariable | None:
         """Where it is differentiated, if it has been told yet."""
-        return self._point
+        return self._variable
+
+    @property
+    def reads_on(self) -> AbstractParametrizedDomain | None:
+        """The domain this quantity is read on, until it is told its point.
+
+        One already told was put there by whatever knew the point -- a
+        pull back, or a restriction -- so it says nothing about the
+        domain the expression around it is on.
+        """
+        if self._variable is not None:
+            return None
+        return self._domain
 
     @property
     def parametrization(self) -> AbstractParametrization:
@@ -288,22 +330,32 @@ class AbstractGeometricQuantity(AbstractExpression):
         quantity is generic over the domain's parametrizations, which is
         what lets it be built during a pull back.
         """
-        if self.point is None:
+        if self.variable is None:
             raise ValueError(
                 "This quantity has not been told where it is evaluated, so the map "
                 "it differentiates is not known."
             )
-        source = self.point.domain
+        source = self.variable.domain
         if not isinstance(source, AbstractCoordinateDomain):
             raise ValueError(
                 f"This quantity is evaluated at a point of a coordinate domain, not of {source!r}."
             )
-        return self.domain.parametrization_out_of(source)
+        parametrizations = _parametrizations_out_of(self.domain, source)
+        if len(parametrizations) == 0:
+            raise ValueError(f"{self.domain!r} has no parametrization out of {source!r}.")
+        if len(parametrizations) > 1:
+            raise ValueError(
+                f"{self.domain!r} has {len(parametrizations)} parametrizations out "
+                f"of {source!r}, so a point there names no one map. Split the integral "
+                f"by piece first."
+            )
+        (parametrization,) = parametrizations
+        return parametrization
 
     @property
     def _jacobian(self) -> Jacobian:
         """The Jacobian this quantity is built from."""
-        return Jacobian(self.domain, self.point)
+        return Jacobian(self.domain, self.variable)
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -313,11 +365,11 @@ class AbstractGeometricQuantity(AbstractExpression):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._domain, self._point
+        return self._domain, self._variable
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"{self.__class__.__name__}({self._domain!r}, {self._point!r})"
+        return f"{self.__class__.__name__}({self._domain!r}, {self._variable!r})"
 
     @abstractmethod
     def expand_geometry(self) -> AbstractExpression:
@@ -347,7 +399,7 @@ class AbstractGeometricQuantity(AbstractExpression):
         return (
             isinstance(other, partner)
             and self._domain == other.domain
-            and self._point == other.point
+            and self._variable == other.variable
         )
 
     def _onto_the_tangent_space(self) -> GraphNode:
@@ -360,14 +412,34 @@ class AbstractGeometricQuantity(AbstractExpression):
         gdim, tdim = self._jacobian.value_shape
         if gdim == tdim:
             return Identity(gdim)
-        return TangentialProjector(self._domain, self._point)
+        return TangentialProjector(self._domain, self._variable)
 
-    def _at_point(self, point: AbstractVariable) -> Self:
-        """This quantity at a point, rebuilt.
+    def _rebuilt(
+        self, domain: AbstractParametrizedDomain, variable: AbstractVariable | None
+    ) -> Self:
+        """This quantity on a domain, read at a variable.
 
-        A subclass carrying more than a domain and a point overrides this.
+        The one place a quantity is rebuilt, so a subclass carrying more
+        than a domain and a point overrides this alone and neither of the
+        two callers has to know what else it carries.
         """
-        return self.__class__(self._domain, point)
+        return self.__class__(domain, variable)
+
+    def on_domain(self, domain: AbstractParametrizedDomain) -> Self:
+        """This quantity on another domain, not yet told where it is read.
+
+        What splitting an integral over a union of pieces does to the
+        quantities in it: the normal of a domain of facets is the normal
+        of the piece the integral is split onto, read at that piece's own
+        point rather than at the union's.
+
+        Args:
+            domain: The domain to read this quantity off instead
+
+        Returns:
+            The same kind of quantity there
+        """
+        return self._rebuilt(domain, None)
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Evaluate this quantity at the given variable.
@@ -379,9 +451,9 @@ class AbstractGeometricQuantity(AbstractExpression):
         source = variable.domain
         if not isinstance(source, AbstractCoordinateDomain):
             return self
-        if source not in self._domain.parameter_regions:
+        if len(_parametrizations_out_of(self._domain, source)) == 0:
             return self
-        return self._at_point(variable)
+        return self._rebuilt(self._domain, variable)
 
 
 class SpatialCoordinate(AbstractGeometricQuantity):
@@ -400,8 +472,8 @@ class SpatialCoordinate(AbstractGeometricQuantity):
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
         parametrization = self.parametrization
-        assert self._point is not None
-        return parametrization.value(self._point)
+        assert self._variable is not None
+        return parametrization.value(self._variable)
 
     def __getitem__(self, component: int) -> SingleSpatialCoordinate:
         """Get one coordinate."""
@@ -413,7 +485,7 @@ class SpatialCoordinate(AbstractGeometricQuantity):
         (dimension,) = self.value_shape
         if i < 0 or i >= dimension:
             raise IndexError("coordinate index out of range")
-        return SingleSpatialCoordinate(self._domain, i, self._point)
+        return SingleSpatialCoordinate(self._domain, i, self._variable)
 
 
 class SingleSpatialCoordinate(AbstractGeometricQuantity):
@@ -427,16 +499,16 @@ class SingleSpatialCoordinate(AbstractGeometricQuantity):
         self,
         domain: AbstractParametrizedDomain,
         component: int,
-        point: AbstractVariable | None = None,
+        variable: AbstractVariable | None = None,
     ):
         """Initialise.
 
         Args:
             domain: The domain whose coordinates these are
             component: Which coordinate, in ``range(geometric_dimension)``
-            point: Where to evaluate it, if that is known yet
+            variable: The point to evaluate it at, if that is known yet
         """
-        super().__init__(domain, point)
+        super().__init__(domain, variable)
         self._component = component
 
     @property
@@ -447,23 +519,25 @@ class SingleSpatialCoordinate(AbstractGeometricQuantity):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self._domain, self._component, self._point
+        return self._domain, self._component, self._variable
 
-    def _at_point(self, point: AbstractVariable) -> Self:
-        """This coordinate at a point, rebuilt."""
-        return self.__class__(self._domain, self._component, point)
+    def _rebuilt(
+        self, domain: AbstractParametrizedDomain, variable: AbstractVariable | None
+    ) -> Self:
+        """This coordinate, rebuilt, carrying which coordinate it is."""
+        return self.__class__(domain, self._component, variable)
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
         return (
-            SpatialCoordinate(self._domain, self._point)
+            SpatialCoordinate(self._domain, self._variable)
             .expand_geometry()
             .component(self._component)
         )
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"SingleSpatialCoordinate({self._domain!r}, {self._component}, {self._point!r})"
+        return f"SingleSpatialCoordinate({self._domain!r}, {self._component}, {self._variable!r})"
 
 
 class Jacobian(AbstractGeometricQuantity):
@@ -488,8 +562,8 @@ class Jacobian(AbstractGeometricQuantity):
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
         parametrization = self.parametrization
-        assert self.point is not None
-        return parametrization.jacobian(self.point)
+        assert self.variable is not None
+        return parametrization.jacobian(self.variable)
 
     def simplified_matrix_product(self, other: GraphNode) -> GraphNode | None:
         """Return a single expression representing the simplified matrix product.

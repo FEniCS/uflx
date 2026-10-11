@@ -6,8 +6,8 @@ from typing import Any
 
 from uflx.domains import AbstractCoordinateDomain, AbstractDomain
 from uflx.expressions import AbstractExpression
-from uflx.functions import AbstractVariable
 from uflx.graphs import GraphNode
+from uflx.variables import AbstractVariable, PointComponent
 
 
 class AbstractSetOfPoints(AbstractDomain):
@@ -94,45 +94,3 @@ class Point(AbstractPoint):
     def __hash__(self) -> int:
         """Hash."""
         return hash(("uflx.Point", self._domain, *self._components))
-
-
-class PointComponent(AbstractExpression):
-    """A component of a point."""
-
-    def __init__(self, point: AbstractPoint, component: int | str):
-        """Initialise."""
-        self._point = point
-        self._component = component
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        raise ValueError("Cannot get a component of a scalar expression")
-
-    @property
-    def component_index(self) -> int | str:
-        """Get the component of the point."""
-        return self._component
-
-    @property
-    def point(self) -> AbstractPoint:
-        """Get the point."""
-        return self._point
-
-    def __repr__(self):
-        """Representation."""
-        return f"PointComponent({self._point}, {self._component})"
-
-    @property
-    def value_shape(self) -> tuple[int, ...]:
-        """The value shape of the expression."""
-        return ()
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return {self._point}
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._point, self._component

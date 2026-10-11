@@ -23,7 +23,7 @@ def test_point(dim):
 
     assert p.domain.geometric_dimension == dim
     assert p.domain == RD(dim)
-    assert not p.in_entity_coordinates
+    assert not p.is_on_an_entity
 
 
 def test_points_of_different_dimensions_differ():
@@ -43,8 +43,8 @@ def test_entity_and_ambient_points_differ(lagrange_element):
     entity = Point([a], EntityDomain(domain.cell_types[0]))
     ambient = Point([a], RD(1))
 
-    assert entity.in_entity_coordinates
-    assert not ambient.in_entity_coordinates
+    assert entity.is_on_an_entity
+    assert not ambient.is_on_an_entity
     assert entity != ambient
     assert len({entity, ambient}) == 2
 
@@ -59,7 +59,7 @@ def test_domain_survives_a_rewrite(lagrange_element):
 
     assert isinstance(rewritten, Point)
     assert rewritten.domain == entity.domain
-    assert rewritten.in_entity_coordinates
+    assert rewritten.is_on_an_entity
 
 
 def test_point_components_must_match_its_domain(lagrange_element):

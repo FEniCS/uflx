@@ -73,7 +73,7 @@ def test_elasticity_bilinear_form_pulls_back_to_reference(lagrange_element, cell
     # the real pipeline every Grad must have been replaced by a reference-cell
     # equivalent, and every Argument must be reference-valued.
     assert not any(isinstance(n, Grad) for n in nodes)
-    assert not any(isinstance(n, Argument) and not n.in_entity_coordinates for n in nodes)
+    assert not any(isinstance(n, Argument) and not n.is_on_an_entity for n in nodes)
 
     # The tensor-op nodes themselves must have survived the round trip -- not
     # been silently dropped or left wrapping a stale (physical) Grad.

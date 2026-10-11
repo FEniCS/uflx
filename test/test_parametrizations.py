@@ -3,7 +3,7 @@
 import math
 
 import pytest
-from conftest import Interval, Triangle
+from conftest import Interval, Quadrilateral, Triangle
 
 from uflx import (
     Coefficient,
@@ -29,9 +29,9 @@ from uflx.expressions import (
     Integer,
     MatrixProduct,
     RealScalar,
+    Sqrt,
     expression_sum,
 )
-from uflx.functions import AbstractVariable
 from uflx.geometry import (
     AbstractGeometricQuantity,
     ImagePoint,
@@ -51,6 +51,7 @@ from uflx.integrals import Integral
 from uflx.parametrizations import ComposedParametrization, FiniteElementParametrization
 from uflx.points import Point
 from uflx.tensors import Matrix, Vector
+from uflx.variables import AbstractVariable
 
 
 class Parabolic(AbstractParametrization):
@@ -66,9 +67,9 @@ class Parabolic(AbstractParametrization):
         return RD(1)
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """This map lands in the plane."""
-        return 2
+        return RD(2)
 
     def value(self, point: AbstractVariable) -> AbstractExpression:
         """Square the coordinate to get the second component."""
@@ -110,9 +111,9 @@ class Paraboloidal(AbstractParametrization):
         return RD(2)
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """This map lands in space."""
-        return 3
+        return RD(3)
 
     def value(self, point: AbstractVariable) -> AbstractExpression:
         """Sum the squares of the coordinates to get the third component."""
@@ -143,6 +144,85 @@ class Paraboloidal(AbstractParametrization):
         return hash("uflx.test.Paraboloidal")
 
 
+class Hemispherical(AbstractParametrization):
+    """The map (u, v) -> (u, v, sqrt(1 - u^2 - v^2)), the unit hemisphere.
+
+    A parametrization that is not a polynomial, where :class:`Paraboloidal` is. A
+    graph again, so its area element is ``sqrt(1 + |grad f|^2)`` and its
+    normal is ``(-grad f, 1)`` over the same, but with ``f`` a square root
+    both come out as closed forms with the square root still in them --
+    which is the point. Nothing in the geometry asks a parametrization to be
+    polynomial, and the measure a curved parametrization induces is what the
+    axisymmetric case will want once there are trigonometric functions to
+    write its parametrization with.
+    """
+
+    @property
+    def source(self) -> AbstractCoordinateDomain:
+        """This map starts in the plane."""
+        return RD(2)
+
+    @property
+    def target(self) -> AbstractCoordinateDomain:
+        """This map lands in space."""
+        return RD(3)
+
+    def _height(self, point: AbstractVariable) -> AbstractExpression:
+        """The height of the hemisphere over the point."""
+        u, v = point.component(0), point.component(1)
+        return Sqrt(RealScalar(1.0) - u * u - v * v)
+
+    def value(self, point: AbstractVariable) -> AbstractExpression:
+        """Put the height above the coordinates it is over."""
+        return Vector([point.component(0), point.component(1), self._height(point)])
+
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
+        """Differentiate the square root by hand."""
+        u, v = point.component(0), point.component(1)
+        height = self._height(point)
+        return Matrix(
+            [
+                [Integer(1), Integer(0)],
+                [Integer(0), Integer(1)],
+                [-u / height, -v / height],
+            ]
+        )
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return "Hemispherical()"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return isinstance(other, Hemispherical)
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash("uflx.test.Hemispherical")
+
+
+def test_a_hemisphere_is_parametrized_by_a_square_root():
+    """A parametrization need not be a polynomial, and its geometry does not care.
+
+    The area element of the unit hemisphere over ``(u, v)`` is
+    ``1 / sqrt(1 - u^2 - v^2)``, which is ``1 / z``, and its normal is the
+    radial direction, the point itself. Both come out of ``sqrt(det g)``
+    and the cofactor rule as they stand, with the square root carried
+    through.
+    """
+    u, v = 0.3, 0.2
+    height = math.sqrt(1.0 - u * u - v * v)
+    patch = composed_domain(entity_domain(Triangle()), Hemispherical())
+    point = Point([RealScalar(u), RealScalar(v)], entity_domain(Triangle()))
+
+    assert patch.topological_dimension == 2
+    assert patch.geometric_dimension == 3
+    assert VolumeElement(patch, point).expand_geometry().as_float() == pytest.approx(1.0 / height)
+
+    normal = UnitNormal(patch, point).expand_geometry()
+    assert [normal.component(i).as_float() for i in range(3)] == pytest.approx([u, v, height])
+
+
 class LinearMap(AbstractParametrization):
     """A linear map of the coordinates it starts in, given by its matrix.
 
@@ -170,9 +250,9 @@ class LinearMap(AbstractParametrization):
         return RD(len(self._entries))
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """This map lands where it starts."""
-        return len(self._entries)
+        return RD(len(self._entries))
 
     @property
     def determinant(self) -> float:
@@ -381,6 +461,7 @@ def test_an_element_map_knows_its_source_and_target(line_map):
 
     assert isinstance(parametrization, FiniteElementParametrization)
     assert parametrization.source == entity_domain(Interval())
+    assert parametrization.target == RD(1)
     assert parametrization.target_dimension == 1
     assert parametrization.is_affine
 
@@ -404,8 +485,37 @@ def test_composing_incompatible_maps_is_rejected(line, line_map):
     with pytest.raises(ValueError, match="Cannot compose"):
         ComposedParametrization(line_map, FromThePlane())
 
-    with pytest.raises(ValueError, match="Cannot map a domain"):
+    with pytest.raises(ValueError, match="is not mapped by a map out of"):
         composed_domain(line, FromThePlane())
+
+
+def test_composing_a_map_written_for_other_coordinates_is_rejected():
+    """As many coordinates is not the same coordinates.
+
+    Two coordinate domains of one dimension are not each other, so a map
+    written for another cell's coordinates must not be composed on and
+    evaluated here, which a check on the dimension alone would allow. A
+    map out of R^d is the exception, being d coordinates generically,
+    which is what lets one map of the plane be composed onto any cell.
+    """
+    triangle = entity_domain(Triangle())
+    stretch = LinearMap(((2.0, 0.0), (0.0, 1.0)))
+
+    class FromAQuadrilateral(LinearMap):
+        @property
+        def source(self):
+            """Start from a cell's coordinates that are not this domain's."""
+            return entity_domain(Quadrilateral())
+
+    assert FromAQuadrilateral(((2.0, 0.0), (0.0, 1.0))).source.geometric_dimension == (
+        triangle.geometric_dimension
+    )
+
+    with pytest.raises(ValueError, match="is not mapped by a map out of"):
+        composed_domain(triangle, FromAQuadrilateral(((2.0, 0.0), (0.0, 1.0))))
+
+    # A map of the plane takes any two coordinates, so the cell's own are fine.
+    assert composed_domain(triangle, stretch).geometric_dimension == 2
 
 
 def test_a_composed_push_forward_squares_the_inner_map(mesh_on_a_parabola, entity_point):
@@ -447,7 +557,7 @@ def test_composing_with_the_identity_changes_nothing(parabola, entity_point):
     composed = ComposedParametrization(IdentityParametrization(RD(1)), parabola)
     point = Point([entity_point.component(0)], RD(1))
 
-    assert composed.target_dimension == parabola.target_dimension
+    assert composed.target == parabola.target
     assert composed.source == RD(1)
     assert composed.value(point) == parabola.value(point)
     assert simplify(composed.jacobian(point)) == simplify(parabola.jacobian(point))

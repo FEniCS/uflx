@@ -206,3 +206,38 @@ def test_pulling_a_mixed_integral_back_directly_is_rejected(mixed_form):
     """There is no one set of coordinates to pull several cell types back to."""
     with pytest.raises(ValueError, match="Split it by cell type"):
         mixed_form.pull_back_to_entity({})
+
+
+def test_a_sum_splits_the_terms_that_split(mixed_form, mixed_mesh, lagrange_element):
+    """A sum is where the fan out has to reach the terms.
+
+    Pulling a sum back walks it leaves first, so it reaches each integral
+    with no chance to split it on the way, and an integral over several
+    cell types cannot be pulled back whole. So the sum splits its terms.
+    """
+    domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
+    space = function_space(domain, lagrange_element("triangle", 1))
+    single = inner(Coefficient(space), TestFunction(space)) * dx(domain)
+    assert isinstance(single, Integral)
+
+    split = (mixed_form + mixed_form).split_by_cell_type()
+
+    assert isinstance(split, IntegralSum)
+    assert len(split.terms) == 2 * len(mixed_mesh.cell_types)
+    assert [term.domain for term in split.terms] == [
+        mixed_mesh.on_cell_type(cell) for cell in mixed_mesh.cell_types
+    ] * 2
+
+    # Nothing to split: every term is over one cell type already.
+    assert (single + single).split_by_cell_type() is None
+    assert split.split_by_cell_type() is None
+
+
+def test_a_sum_of_a_mixed_form_and_a_simple_one_pulls_back(mixed_form, mixed_mesh):
+    """Which a - L is: the shape every linear problem is written in."""
+    pulled = pull_back_to_entity(mixed_form + mixed_form.on_cell_type(mixed_mesh.cell_types[0]))
+
+    assert isinstance(pulled, IntegralSum)
+    assert len(pulled.terms) == len(mixed_mesh.cell_types) + 1
+    for term in pulled.terms:
+        assert isinstance(term.domain, EntityDomain)

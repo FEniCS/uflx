@@ -27,9 +27,9 @@ def test_ambient_basis_function(lagrange_element):
     d1 = phys_f.diff(1)
     d11 = phys_f.diff(1).diff(1)
     d101 = phys_f.diff(1).diff(0).diff(1)
-    assert isinstance(d1, AbstractEvaluatedBasisFunction) and not d1.in_entity_coordinates
-    assert isinstance(d11, AbstractEvaluatedBasisFunction) and not d11.in_entity_coordinates
-    assert isinstance(d101, AbstractEvaluatedBasisFunction) and not d101.in_entity_coordinates
+    assert isinstance(d1, AbstractEvaluatedBasisFunction) and not d1.is_on_an_entity
+    assert isinstance(d11, AbstractEvaluatedBasisFunction) and not d11.is_on_an_entity
+    assert isinstance(d101, AbstractEvaluatedBasisFunction) and not d101.is_on_an_entity
     assert d1.derivative == (0, 1)
     assert d11.derivative == (0, 2)
     assert d101.derivative == (1, 2)
@@ -52,9 +52,9 @@ def test_entity_basis_function(lagrange_element):
     d1 = ref_f.diff(1)
     d11 = ref_f.diff(1).diff(1)
     d101 = ref_f.diff(1).diff(0).diff(1)
-    assert isinstance(d1, AbstractEvaluatedBasisFunction) and d1.in_entity_coordinates
-    assert isinstance(d11, AbstractEvaluatedBasisFunction) and d11.in_entity_coordinates
-    assert isinstance(d101, AbstractEvaluatedBasisFunction) and d101.in_entity_coordinates
+    assert isinstance(d1, AbstractEvaluatedBasisFunction) and d1.is_on_an_entity
+    assert isinstance(d11, AbstractEvaluatedBasisFunction) and d11.is_on_an_entity
+    assert isinstance(d101, AbstractEvaluatedBasisFunction) and d101.is_on_an_entity
     assert d1.derivative == (0, 1)
     assert d11.derivative == (0, 2)
     assert d101.derivative == (1, 2)

@@ -21,21 +21,30 @@ interpolated through the nodes of a higher degree coordinate element.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import (
+    RD,
     AbstractCellularDomain,
     AbstractCoordinateDomain,
+    AbstractDomain,
     AbstractParametrization,
+    AbstractParametrizedDomain,
+    ComposesADomain,
     EntityDomain,
+    IncludesASubEntity,
+    LabelledDomain,
+    UnionDomain,
+    unlabelled,
 )
 from uflx.entities import AbstractEntity
-from uflx.expressions import AbstractExpression, MatrixProduct, expression_sum
+from uflx.expressions import AbstractExpression, MatrixProduct, RealScalar, expression_sum
 from uflx.finite_elements import AbstractMappedFiniteElement
 from uflx.function_spaces import function_space
-from uflx.functions import AbstractVariable
 from uflx.points import Point
 from uflx.tensors import FlattenedTensorMap, Matrix, Vector
+from uflx.variables import AbstractVariable
 
 
 class FiniteElementParametrization(AbstractParametrization):
@@ -64,9 +73,9 @@ class FiniteElementParametrization(AbstractParametrization):
         return EntityDomain(self._element.cell)
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """The map's values are a point of the ambient coordinates."""
-        return self._target_dimension
+        return RD(self._target_dimension)
 
     @property
     def element(self) -> AbstractMappedFiniteElement:
@@ -156,9 +165,19 @@ class ComposedParametrization(AbstractParametrization):
         return self._inner.source
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """Composition lands where the second map lands."""
-        return self._outer.target_dimension
+        return self._outer.target
+
+    @property
+    def inner(self) -> AbstractParametrization:
+        """The map applied first."""
+        return self._inner
+
+    @property
+    def outer(self) -> AbstractParametrization:
+        """The map applied to the result of the first."""
+        return self._outer
 
     def _intermediate_point(self, point: AbstractVariable) -> Point:
         """The point the first map gives the second."""
@@ -206,6 +225,189 @@ class ComposedParametrization(AbstractParametrization):
     def __hash__(self) -> int:
         """Hash."""
         return hash(("uflx.ComposedParametrization", self._inner, self._outer))
+
+
+class AffineParametrization(AbstractParametrization):
+    """A map given in closed form by its matrix and its offset, ``X -> A X + b``.
+
+    Enough to describe the inclusion of a reference sub-entity into its
+    cell, or a linear change of the coordinates a domain lives in, with no
+    finite element involved. The numbers are the caller's: an inclusion's
+    matrix and offset come from the reference coordinates of the cell,
+    which belong to whoever defines the elements on it.
+    """
+
+    def __init__(
+        self,
+        source: AbstractCoordinateDomain,
+        target: AbstractCoordinateDomain,
+        matrix: Sequence[Sequence[float]],
+        offset: Sequence[float],
+    ):
+        """Initialise.
+
+        Args:
+            source: The coordinate domain this map starts from
+            target: The coordinate domain it lands in
+            matrix: The rows of the matrix of the map
+            offset: Where the source's origin lands
+
+        Raises:
+            ValueError: If the matrix and the offset do not describe a map
+                from the source to the target
+        """
+        self._source = source
+        self._target = target
+        self._matrix = tuple(tuple(float(a) for a in row) for row in matrix)
+        self._offset = tuple(float(b) for b in offset)
+        if len({len(row) for row in self._matrix}) > 1:
+            raise ValueError("Every row of the matrix must be the same length.")
+        if len(self._offset) != len(self._matrix):
+            raise ValueError("The offset must have one entry per row of the matrix.")
+        if len(self._matrix) != target.geometric_dimension:
+            raise ValueError(f"A map into {target!r} needs that many rows in its matrix.")
+        if len(self._matrix[0]) != source.geometric_dimension:
+            raise ValueError(f"A map out of {source!r} needs that many columns in its matrix.")
+
+    @property
+    def source(self) -> AbstractCoordinateDomain:
+        """The coordinate domain this map starts from."""
+        return self._source
+
+    @property
+    def target(self) -> AbstractCoordinateDomain:
+        """The coordinate domain this map lands in."""
+        return self._target
+
+    @property
+    def matrix(self) -> tuple[tuple[float, ...], ...]:
+        """The rows of the matrix of this map."""
+        return self._matrix
+
+    @property
+    def offset(self) -> tuple[float, ...]:
+        """Where the source's origin lands."""
+        return self._offset
+
+    def value(self, point: AbstractVariable) -> AbstractExpression:
+        """Multiply the matrix by the point and add the offset."""
+        return Vector(
+            [
+                expression_sum(
+                    (RealScalar(a) * point.component(j) for j, a in enumerate(row)),
+                    default=RealScalar(0.0),
+                )
+                + RealScalar(b)
+                for row, b in zip(self._matrix, self._offset, strict=True)
+            ]
+        )
+
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
+        """An affine map's derivative is its matrix."""
+        return Matrix([[RealScalar(a) for a in row] for row in self._matrix])
+
+    @property
+    def is_affine(self) -> bool:
+        """An affine map is affine."""
+        return True
+
+    @property
+    def is_identity(self) -> bool:
+        """Whether this map leaves the coordinates it is given untouched."""
+        identity = tuple(
+            tuple(float(i == j) for j in range(len(self._matrix))) for i in range(len(self._matrix))
+        )
+        return self._matrix == identity and not any(self._offset)
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return (
+            f"AffineParametrization({self._source!r}, {self._target!r}, "
+            f"{self._matrix}, {self._offset})"
+        )
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, AffineParametrization)
+            and other._source == self._source
+            and other._target == self._target
+            and other._matrix == self._matrix
+            and other._offset == self._offset
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(
+            (
+                "uflx.AffineParametrization",
+                self._source,
+                self._target,
+                self._matrix,
+                self._offset,
+            )
+        )
+
+
+class SubEntityInclusion(AffineParametrization):
+    """The affine inclusion of a sub-entity into its cell, which says which one.
+
+    An entity's own reference geometry, as the affine map taking the
+    sub-entity's coordinates to the ones it has in the cell, plus the
+    dimension and index it includes. Saying which it is costs the entity
+    nothing, since it was asked for that sub-entity, and it is what lets a
+    consumer read the local index off a kernel rather than match the
+    matrix against each of the cell's inclusions.
+
+    Implements :class:`uflx.domains.IncludesASubEntity`.
+    """
+
+    def __init__(
+        self,
+        source: AbstractCoordinateDomain,
+        target: AbstractCoordinateDomain,
+        matrix: Sequence[Sequence[float]],
+        offset: Sequence[float],
+        dim: int,
+        index: int,
+    ):
+        """Initialise.
+
+        Args:
+            source: The sub-entity's coordinate domain
+            target: The cell's coordinate domain, which it lands in
+            matrix: The rows of the matrix of the map
+            offset: Where the sub-entity's origin lands
+            dim: The dimension of the sub-entity included
+            index: Which sub-entity of that dimension
+        """
+        super().__init__(source, target, matrix, offset)
+        self._dim = dim
+        self._index = index
+
+    @property
+    def sub_entity(self) -> tuple[int, int]:
+        """The dimension of the sub-entity included, and which one it is."""
+        return self._dim, self._index
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return (
+            f"SubEntityInclusion({self.source!r}, {self.target!r}, {self.matrix}, "
+            f"{self.offset}, {self._dim}, {self._index})"
+        )
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, SubEntityInclusion)
+            and super().__eq__(other)
+            and other.sub_entity == self.sub_entity
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.SubEntityInclusion", super().__hash__(), self._dim, self._index))
 
 
 class ParametrizedDomain(AbstractCellularDomain):
@@ -310,13 +512,36 @@ class ComposedDomain(AbstractCellularDomain):
             domain: The domain whose cells are being mapped on
             outer_map: The map applied to the domain's own coordinates
         """
-        if outer_map.source.geometric_dimension != domain.geometric_dimension:
+        # The map has to accept the coordinates the domain's points are named
+        # in, and not merely as many of them: two coordinate domains of one
+        # dimension are not each other, so a map written for another cell's
+        # coordinates would otherwise be composed on and evaluated here.
+        # RD(d) is the exception, being d coordinates generically: a map of
+        # the plane applies to a cell's coordinates, those being a plane's.
+        here = domain.coordinate_domain
+        generic = RD(domain.geometric_dimension)
+        if outer_map.source != here and outer_map.source != generic:
             raise ValueError(
-                f"Cannot map a domain in {domain.geometric_dimension} coordinates "
-                f"with a map starting from {outer_map.source!r}."
+                f"A domain named in {here!r} is not mapped by a map out of "
+                f"{outer_map.source!r}. "
+                f"A map out of {generic!r} takes any of them."
             )
         self._domain = domain
         self._outer_map = outer_map
+
+    @property
+    def inner_domain(self) -> AbstractCellularDomain:
+        """The domain being mapped on.
+
+        What a composite is a composite *of*, which is how a restriction
+        asks a facet of a mesh which sub-entity of which cell it is.
+        """
+        return self._domain
+
+    @property
+    def outer_map(self) -> AbstractParametrization:
+        """The map applied to that domain's own coordinates."""
+        return self._outer_map
 
     @property
     def geometric_dimension(self) -> int:
@@ -333,9 +558,9 @@ class ComposedDomain(AbstractCellularDomain):
         """The cells are those of the domain being mapped on."""
         return self._domain.cell_types
 
-    def parametrization(self, cell: AbstractEntity) -> ComposedParametrization:
+    def parametrization(self, cell: AbstractEntity) -> AbstractParametrization:
         """Get the inner map for this cell, followed by the outer map."""
-        return ComposedParametrization(self._domain.parametrization(cell), self._outer_map)
+        return composed_parametrization(self._domain.parametrization(cell), self._outer_map)
 
     def on_cell_type(self, cell: AbstractEntity) -> ComposedDomain:
         """Restrict the domain being mapped on, and keep mapping it the same way."""
@@ -358,6 +583,121 @@ class ComposedDomain(AbstractCellularDomain):
         return hash(("uflx.ComposedDomain", self._domain, self._outer_map))
 
 
+def composed_parametrization(
+    inner: AbstractParametrization, outer: AbstractParametrization
+) -> AbstractParametrization:
+    """Create the map that applies one map and then another.
+
+    Composing with an identity gives the other map back rather than a
+    composition of it, so that a parametrization built by composing reads, and
+    differentiates, as the map it is.
+
+    Only where the identity is the identity of the same coordinate
+    domain. An identity on a cell's coordinates composed with a map out
+    of R^d is not a unit: it relabels which domain the composite starts
+    from, and dropping it would leave a parametrization that no point of the cell
+    is in.
+
+    Args:
+        inner: The map applied first
+        outer: The map applied to the result of the first
+
+    Returns:
+        The composition, or whichever map does the work when the other is
+        a unit for it
+    """
+    if inner.is_identity and inner.source == outer.source:
+        return outer
+    if outer.is_identity and outer.source == inner.target:
+        return inner
+    return ComposedParametrization(inner, outer)
+
+
+def _inclusions_in(parametrization: AbstractParametrization) -> list[tuple[int, int]]:
+    """Every sub-entity a map includes, in the order it applies them.
+
+    A composition is looked into, since a facet of a mesh is an inclusion
+    composed with the cell's own map and the inclusion is the inner half
+    of it.
+    """
+    if isinstance(parametrization, ComposedParametrization):
+        return _inclusions_in(parametrization.inner) + _inclusions_in(parametrization.outer)
+    if isinstance(parametrization, IncludesASubEntity):
+        return [parametrization.sub_entity]
+    return []
+
+
+def included_sub_entity(domain: AbstractParametrizedDomain) -> tuple[int, int] | None:
+    """Which sub-entity of a cell a domain includes, where its parametrization says.
+
+    What identifies a kernel along with the cell type. A facet of a mesh
+    is the inclusion of a sub-entity followed by the cell's own map, so
+    the question is asked of the domain's parametrizations, and through a label as
+    well, a selection being no part of the geometry.
+
+    Args:
+        domain: The domain to ask, typically a piece a facet integral was
+            split onto
+
+    Returns:
+        The dimension and index of the sub-entity, or None where no parametrization
+        says
+
+    Raises:
+        ValueError: If a parametrization includes a sub-entity of a sub-entity, whose
+            index in the cell these do not give
+    """
+    found: list[tuple[int, int]] = []
+    seen: AbstractDomain = unlabelled(domain)
+    while isinstance(seen, ComposesADomain):
+        found = _inclusions_in(seen.outer_map) + found
+        seen = unlabelled(seen.inner_domain)
+    if len(found) == 0:
+        return None
+    if len(found) > 1:
+        # An edge of a face of a cell is included twice: once into the face
+        # and once into the cell. The index of the first is the face's own
+        # numbering, and nothing here turns the pair into the cell's, so
+        # saying either alone would name a sub-entity this is not.
+        raise ValueError(
+            f"This domain includes {found}, a sub-entity of a sub-entity, so no one "
+            f"index of a cell says which it is. Take it of the cell directly, with "
+            f"sub_entities_of, where the codimension is the cell's."
+        )
+    (sub_entity,) = found
+    return sub_entity
+
+
+def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> AbstractCellularDomain:
+    """Create the domain one sub-entity of an entity is.
+
+    The sub-entity's own coordinate domain carried into the cell's
+    coordinates by the inclusion the cell supplies, which is a
+    composition like any other. Facet 0 of a triangle is a domain of
+    topological dimension one whose points are named by the triangle's
+    two coordinates.
+
+    Args:
+        cell: The entity the sub-entity sits in
+        dim: The dimension of the sub-entity
+        index: Which sub-entity of that dimension
+
+    Returns:
+        That sub-entity, as a domain in the cell's coordinates. A cell is
+        its own sub-entity of full dimension, whose inclusion is the
+        identity, so that one is the cell's coordinate domain itself.
+
+    Raises:
+        ValueError: If the cell has no such sub-entity
+    """
+    if dim < 0 or dim > cell.topological_dimension:
+        raise ValueError(f"{cell} has no sub-entities of dimension {dim}.")
+    if index < 0 or index >= cell.sub_entity_count(dim):
+        raise ValueError(f"{cell} has no sub-entity {index} of dimension {dim}.")
+    sub_entity = cell.sub_entities(dim)[index]
+    return composed_domain(EntityDomain(sub_entity), cell.sub_entity_inclusion(dim, index))
+
+
 def parametrized_domain(
     elements: Sequence[AbstractMappedFiniteElement] | AbstractMappedFiniteElement,
 ) -> ParametrizedDomain:
@@ -376,14 +716,123 @@ def parametrized_domain(
 
 def composed_domain(
     domain: AbstractCellularDomain, outer_map: AbstractParametrization
-) -> ComposedDomain:
+) -> AbstractCellularDomain:
     """Create a domain by mapping another domain onward.
+
+    Mapping a domain on by the identity gives that domain back rather
+    than a composite of it, as :func:`composed_parametrization` does for
+    the maps, and for the same reason: a domain's identity is structural,
+    so two spellings of one set would otherwise be two domains. It is
+    what makes a facet of a reference cell the same object however it is
+    reached.
+
+    Only where the identity is the identity of the coordinates the
+    domain's points are named in. An identity on a cell's coordinates is
+    no unit for a domain named in another cell's.
 
     Args:
         domain: The domain whose cells are being mapped on
         outer_map: The map applied to the domain's own coordinates
 
     Returns:
-        A domain whose geometry is the domain's followed by the map
+        A domain whose geometry is the domain's followed by the map, or
+        the domain itself where the map does nothing to it
     """
+    if outer_map.is_identity and outer_map.source == domain.coordinate_domain:
+        return domain
     return ComposedDomain(domain, outer_map)
+
+
+def affine_parametrization(
+    source: AbstractCoordinateDomain,
+    target: AbstractCoordinateDomain,
+    matrix: Sequence[Sequence[float]],
+    offset: Sequence[float],
+) -> AffineParametrization:
+    """Create a map given by its matrix and its offset.
+
+    Args:
+        source: The coordinate domain the map starts from
+        target: The coordinate domain it lands in
+        matrix: The rows of the matrix of the map
+        offset: Where the source's origin lands
+
+    Returns:
+        That affine map
+    """
+    return AffineParametrization(source, target, matrix, offset)
+
+
+def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = None) -> UnionDomain:
+    """Create the domain the sub-entities of a given codimension make up.
+
+    A piece per cell type and sub-entity of that type, each the inclusion
+    of the sub-entity into its cell followed by the cell's own map. For
+    codimension one and a mesh, that is the domain an exterior facet
+    integral is over: one measure over another domain rather than a
+    measure of its own.
+
+    The only way to say it, at every codimension. There is no facets_of,
+    and no ridges_of or peaks_of to come: a codimension names the derived
+    domain already, and a second spelling of one of them would be a
+    second spelling and not a second construction. Codimension zero
+    degenerates accordingly, a cell's own inclusion being the identity,
+    so that the sub-entities of a domain at codimension zero are the
+    domain.
+
+    The codimension is relative to each cell type, so in a domain of
+    mixed topological dimension codimension one is the triangles' edges
+    and the tetrahedra's faces at once, and the union reports no
+    topological dimension of its own.
+
+    Which sub-entities a mesh actually has, and how many cells each is
+    shared by, is external, as its cells are. This says only how such a
+    domain is parametrized.
+
+    A label marks each piece rather than the union of them, so that
+    splitting an integral keeps it and a kernel says which selection it is
+    for. The label is the sub-entities', so a domain that is itself a
+    selection of cells is refused rather than having its own label
+    dropped: which facets a marked region has is a question about a cell
+    complex, where which facets a consumer marked is a label.
+
+    Args:
+        domain: The domain whose cells' sub-entities are taken
+        codim: Their codimension in each cell
+        label: Anything hashable the consumer selects these sub-entities
+            by, or None for no selection
+
+    Returns:
+        The union of those sub-entities, mapped on by the domain
+
+    Raises:
+        ValueError: If the domain is not made of cells, or a cell type has
+            no sub-entities of that codimension
+    """
+    if not isinstance(domain, AbstractCellularDomain):
+        raise ValueError(
+            f"{domain!r} is not made of cells, so it has no sub-entities to enumerate. "
+            f"A domain parametrized some other way is not yet asked for its boundary pieces."
+        )
+    if unlabelled(domain) is not domain:
+        # A label on the cells changes no parametrization, so a piece built from this
+        # domain's parametrization is the unlabelled domain's piece exactly,
+        # and the selection would be dropped here without a word.
+        raise ValueError(
+            f"{domain!r} is a selection of cells, which does not say which of their "
+            f"sub-entities is meant. Mark the sub-entities instead, by passing a label "
+            f"here; the boundary of a marked region is not yet a domain of its own."
+        )
+    pieces: list[AbstractParametrizedDomain] = []
+    for cell in domain.cell_types:
+        dim = cell.topological_dimension - codim
+        if dim < 0:
+            raise ValueError(
+                f"{cell} has topological dimension {cell.topological_dimension}, so it "
+                f"has no sub-entities of codimension {codim}."
+            )
+        parametrization = domain.parametrization(cell)
+        for index in range(cell.sub_entity_count(dim)):
+            piece = composed_domain(sub_entity_domain(cell, dim, index), parametrization)
+            pieces.append(piece if label is None else LabelledDomain(piece, label))
+    return UnionDomain(tuple(pieces))

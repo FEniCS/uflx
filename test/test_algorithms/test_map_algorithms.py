@@ -8,10 +8,10 @@ from uflx.domains import EntityDomain
 from uflx.functions import (
     AbstractFunction,
     Coefficient,
-    Variable,
 )
 from uflx.graphs import as_graph
 from uflx.integrals import Integral
+from uflx.variables import Variable
 
 
 def test_mass_matrix(lagrange_element):
@@ -36,9 +36,9 @@ def test_mass_matrix(lagrange_element):
     assert len(pulled_functions) == 2
 
     for f in functions:
-        assert isinstance(f, AbstractFunction) and not f.in_entity_coordinates
+        assert isinstance(f, AbstractFunction) and not f.is_on_an_entity
     for f in pulled_functions:
-        assert isinstance(f, AbstractFunction) and f.in_entity_coordinates
+        assert isinstance(f, AbstractFunction) and f.is_on_an_entity
 
 
 def test_stuffness_matrix(lagrange_element):
@@ -63,9 +63,9 @@ def test_stuffness_matrix(lagrange_element):
     assert len(pulled_functions) == 2
 
     for f in functions:
-        assert isinstance(f, AbstractFunction) and not f.in_entity_coordinates
+        assert isinstance(f, AbstractFunction) and not f.is_on_an_entity
     for f in pulled_functions:
-        assert isinstance(f, AbstractFunction) and f.in_entity_coordinates
+        assert isinstance(f, AbstractFunction) and f.is_on_an_entity
 
 
 def test_linear_form(lagrange_element):
@@ -89,9 +89,9 @@ def test_linear_form(lagrange_element):
     assert len(pulled_functions) == 1
 
     for f in functions:
-        assert isinstance(f, AbstractFunction) and not f.in_entity_coordinates
+        assert isinstance(f, AbstractFunction) and not f.is_on_an_entity
     for f in pulled_functions:
-        assert isinstance(f, AbstractFunction) and f.in_entity_coordinates
+        assert isinstance(f, AbstractFunction) and f.is_on_an_entity
 
 
 def test_coefficient_mass_matrix_like_form(lagrange_element):
@@ -116,12 +116,12 @@ def test_coefficient_mass_matrix_like_form(lagrange_element):
     assert len(pulled_functions) == 2
 
     for f in functions:
-        assert isinstance(f, AbstractFunction) and not f.in_entity_coordinates
+        assert isinstance(f, AbstractFunction) and not f.is_on_an_entity
     for f in pulled_functions:
-        assert isinstance(f, AbstractFunction) and f.in_entity_coordinates
+        assert isinstance(f, AbstractFunction) and f.is_on_an_entity
 
     reference_coefficients = [
-        f for f in pulled_functions if isinstance(f, Coefficient) and f.in_entity_coordinates
+        f for f in pulled_functions if isinstance(f, Coefficient) and f.is_on_an_entity
     ]
     assert len(reference_coefficients) == 1
     assert reference_coefficients[0].label == w.label
@@ -144,7 +144,7 @@ def test_coefficient_gradient_pulls_back(lagrange_element):
         node for node in as_graph(pulled_form) if isinstance(node, AbstractFunction)
     ]
     reference_coefficients = [
-        f for f in pulled_functions if isinstance(f, Coefficient) and f.in_entity_coordinates
+        f for f in pulled_functions if isinstance(f, Coefficient) and f.is_on_an_entity
     ]
     assert len(reference_coefficients) == 1
     assert reference_coefficients[0].label == w.label
@@ -166,7 +166,7 @@ def test_distinct_coefficients_stay_distinguishable_after_pull_back(lagrange_ele
     reference_coefficients = [
         node
         for node in as_graph(pulled_form)
-        if isinstance(node, Coefficient) and node.in_entity_coordinates
+        if isinstance(node, Coefficient) and node.is_on_an_entity
     ]
     assert len(reference_coefficients) == 2
     assert {f.label for f in reference_coefficients} == {w1.label, w2.label}
@@ -186,7 +186,7 @@ def test_pull_back_rebases_the_space(lagrange_element):
     for f in functions:
         assert f.function_space.domain == EntityDomain(element.cell)
         # Nothing is stored: the domain is what makes this true.
-        assert f.in_entity_coordinates
+        assert f.is_on_an_entity
         assert f.variable is not None and f.variable.domain == EntityDomain(element.cell)
 
 
@@ -195,8 +195,8 @@ def test_a_function_on_an_entity_domain_needs_no_flag(lagrange_element):
     element = lagrange_element("triangle", 2)
     mesh = parametrized_domain(lagrange_element("triangle", 1, (3,)))
 
-    assert not Coefficient(function_space(mesh, element)).in_entity_coordinates
-    assert Coefficient(function_space(EntityDomain(element.cell), element)).in_entity_coordinates
+    assert not Coefficient(function_space(mesh, element)).is_on_an_entity
+    assert Coefficient(function_space(EntityDomain(element.cell), element)).is_on_an_entity
 
 
 def test_pulling_a_variable_back_changes_only_where_it_lives(lagrange_element):
