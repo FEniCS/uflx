@@ -80,12 +80,6 @@ class ExteriorFacets(NamedTuple):
     subdomain_id: Any = None
 
 
-class InteriorFacets(NamedTuple):
-    """What a legacy interior facet measure would mean, as a domain's label."""
-
-    subdomain_id: Any = None
-
-
 def _inferred_domain(integrand: AbstractExpression) -> AbstractCellularDomain:
     """Read the domain off the functions in an integrand.
 
