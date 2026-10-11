@@ -113,3 +113,18 @@ def test_flattened_tensor_map_equality():
     assert hash(entry) == hash(FlattenedTensorMap((1, 2), (3,)))
     assert entry != FlattenedTensorMap((2, 1), (3,))
     assert entry != FlattenedTensorMap((1, 2), (4,))
+
+
+def test_a_matrix_too_big_to_take_the_determinant_of_says_so():
+    """Rather than failing while unpacking the rows it expected three of.
+
+    Four coordinates is a domain like any other -- R^4 is parametrized by
+    itself, so its measure is the Lebesgue one -- and this is what stops
+    it short, as inverting already said of itself.
+    """
+    rows = [[RealScalar(float(i == j)) for j in range(4)] for i in range(4)]
+
+    with pytest.raises(NotImplementedError, match="determinant of 4x4"):
+        Matrix(rows).compute_determinant()
+    with pytest.raises(NotImplementedError, match="Inverting of 4x4"):
+        Matrix(rows).compute_inverse()

@@ -248,6 +248,9 @@ class Matrix(Tensor):
         For a non-square matrix A this is the pseudo-determinant sqrt(det(A^T A)) (tall A) or
         sqrt(det(A A^T)) (wide A), i.e. the volume scaling of the parametrization of a
         manifold cell.
+
+        Raises:
+            NotImplementedError: If the matrix is square and larger than 3x3
         """
         rows, cols = self._shape
         if rows > cols:
@@ -270,7 +273,7 @@ class Matrix(Tensor):
                     assert isinstance(c, AbstractExpression)
                     assert isinstance(d, AbstractExpression)
                     return a * d - b * c
-                case _:
+                case 3:
                     [[a, b, c], [d, e, f], [g, h, i]] = entries
                     assert isinstance(a, AbstractExpression)
                     assert isinstance(b, AbstractExpression)
@@ -282,6 +285,10 @@ class Matrix(Tensor):
                     assert isinstance(h, AbstractExpression)
                     assert isinstance(i, AbstractExpression)
                     return a * (e * i - f * h) + b * (f * g - d * i) + c * (d * h - e * g)
+                case _:
+                    raise NotImplementedError(
+                        f"The determinant of {rows}x{rows} is not implemented."
+                    )
 
 
 def zero(shape: tuple[int, ...]) -> RealScalar | Tensor:
