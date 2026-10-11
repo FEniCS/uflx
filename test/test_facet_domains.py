@@ -37,9 +37,9 @@ from uflx import (
     inner,
     parametrized_domain,
 )
-from uflx.algorithms import pull_back_to_entity
+from uflx.algorithms import pull_back_to_entity, replace, simplify
 from uflx.domains import RD, EntityDomain, LabelledDomain, entity_domain, union_domain
-from uflx.expressions import RealScalar
+from uflx.expressions import AbstractExpression, RealScalar
 from uflx.geometry import (
     AbstractGeometricQuantity,
     ImagePoint,
@@ -51,6 +51,7 @@ from uflx.geometry import (
     UnitNormal,
     VolumeElement,
     _as_dense_matrix,
+    expand_geometry,
 )
 from uflx.graphs import as_graph
 from uflx.integrals import Integral, IntegralSum
@@ -417,6 +418,70 @@ def test_a_facet_of_a_mapped_cell_measures_the_mapped_length(
     facets = facets_of(stretched_cell)
 
     assert measure_of(facets.pieces[k], on_the_facet) == pytest.approx(length)
+
+
+@pytest.mark.parametrize(("k", "length"), [(0, 2.0), (1, 1.0), (2, math.sqrt(5.0))])
+def test_a_pulled_back_facet_integral_expands_to_that_facets_density(
+    stretched_cell, on_the_facet, k, length
+):
+    """The measure an exterior facet integral picks up, as an expression and then a number.
+
+    Pulling back multiplies the piece's volume element into the
+    integrand, and expanding writes it out in the coordinates of the
+    variable the integral hands over: a facet's parametrization is the inclusion
+    followed by the cell's map, so the inclusion is asked for the point
+    it passes on. Substituting a quadrature point then gives the length
+    the facet is, which is what `measure_of` reads off the piece
+    directly.
+    """
+    facets = facets_of(stretched_cell)
+
+    pulled = pull_back_to_entity(RealScalar(1.0) * dx(facets))
+
+    assert isinstance(pulled, IntegralSum)
+    term = pulled.terms[k]
+    expanded = expand_geometry(term.integrand)
+    substituted = simplify(replace(expanded, {term.variable: on_the_facet}))
+
+    assert isinstance(substituted, AbstractExpression)
+    assert substituted.as_float() == pytest.approx(length)
+    assert measure_of(facets.pieces[k], on_the_facet) == pytest.approx(length)
+
+
+def test_an_integral_over_the_facets_measures_the_boundary(stretched_cell, on_the_facet):
+    """So the perimeter is the integral of one over the facets, end to end.
+
+    The density is constant on each facet here, the cell's map being
+    affine, so the sum of the terms is the boundary's measure with no
+    quadrature rule needed.
+    """
+    pulled = pull_back_to_entity(RealScalar(1.0) * dx(facets_of(stretched_cell)))
+
+    assert isinstance(pulled, IntegralSum)
+    densities = []
+    for term in pulled.terms:
+        substituted = simplify(
+            replace(expand_geometry(term.integrand), {term.variable: on_the_facet})
+        )
+        assert isinstance(substituted, AbstractExpression)
+        densities.append(substituted.as_float())
+
+    assert sum(densities) == pytest.approx(3.0 + math.sqrt(5.0))
+
+
+def test_the_variable_of_an_unsplit_facet_integral_names_no_coordinates(space, mesh):
+    """A point of a union is a point of one of its pieces, and which is not said.
+
+    So the coordinates a parametrization would be evaluated at are not there to be
+    had until the integral has been split, and the variable says so.
+    :mod:`test_variables` does the same for a point of a mesh.
+    """
+    facets = facets_of(mesh)
+    integral = restrict(TestFunction(space), facets) * dx(facets)
+
+    assert isinstance(integral, Integral)
+    with pytest.raises(ValueError, match="is not a coordinate tuple"):
+        integral.variable.component(0)
 
 
 def test_the_normal_of_a_facet_of_a_mapped_cell_is_not_the_mapped_normal(
