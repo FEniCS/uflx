@@ -23,6 +23,10 @@ import math
 import pytest
 from conftest import Entity, Interval, LagrangeElement, Tetrahedron, Triangle
 
+# The same analytic surface the surface measure tests use, rather than a
+# second copy of a map differentiated by hand, so the two stay in step.
+from test_parametrizations import Paraboloidal
+
 from uflx import (
     Coefficient,
     TestFunction,
@@ -653,3 +657,166 @@ def test_the_facets_of_a_mesh_of_two_cell_types_give_a_kernel_each(space):
     reference_facets = [term.domain for term in pulled.terms]
     assert reference_facets.count(EntityDomain(Interval())) == 3
     assert reference_facets.count(EntityDomain(Triangle())) == 4
+
+
+# A triangle laid on the paraboloid z = u^2 + v^2, as the worked example of
+# an exterior facet integral over a curved domain.
+#
+# Why the reference triangle is the thing laid on it, rather than a region
+# of the plane or a mesh:
+#
+# - Facets come from entities. facets_of asks each cell type for the
+#   inclusion of its sub-entities, and only an AbstractEntity knows it has
+#   three edges and which vertices each has. A region of the plane is a
+#   parametrized domain the paraboloid would compose with just as happily, and
+#   test_regions.py integrates over one, but it has no entities, so there
+#   is nothing for facets_of to enumerate.
+# - A reference cell's own parametrization is the identity, so composing it with the
+#   paraboloid gives a domain whose geometry is closed form end to end and
+#   every density below comes out as a number that can be checked. A mesh
+#   sums a basis against coordinate dofs that live outside UFLx, so the
+#   same code builds and pulls back to the same three kernels but leaves
+#   the arithmetic unevaluated.
+# - Its three facets differ: two legs of length one and a hypotenuse of
+#   root two, each with its own inclusion, so the fan out into one kernel
+#   per facet is visible rather than symmetric.
+#
+# What it is, then, is one curved triangular patch and not a mesh of them --
+# which is also all UFLx ever holds, one cell type and a map out of it.
+
+
+def paraboloid_area_element(u: float, v: float) -> float:
+    """sqrt(1 + |grad f|^2) for the graph of f(u, v) = u^2 + v^2."""
+    return math.sqrt(1.0 + 4.0 * (u * u + v * v))
+
+
+# The arc length density of facet k of the triangle, lifted onto the
+# paraboloid: the norm of d/ds of s -> phi(inclusion(s)). Facets 0 and 1 are
+# the legs from the origin and facet 2 is the hypotenuse.
+facet_densities = (
+    lambda s: math.sqrt(1.0 + 4.0 * s * s),
+    lambda s: math.sqrt(1.0 + 4.0 * s * s),
+    lambda s: math.sqrt(2.0 + (4.0 * s - 2.0) ** 2),
+)
+
+# The length of the lifted hypotenuse, from the closed form of
+# the integral of sqrt(2 + (4s - 2)^2) over the unit interval.
+lifted_hypotenuse_length = (
+    2.0 * math.sqrt(6.0) + math.log((2.0 + math.sqrt(6.0)) / (math.sqrt(6.0) - 2.0))
+) / 4.0
+
+
+@pytest.fixture
+def patch():
+    """The reference triangle laid on the paraboloid z = u^2 + v^2."""
+    return composed_domain(entity_domain(PlacedTriangle()), Paraboloidal())
+
+
+def test_a_triangle_laid_on_a_paraboloid_is_a_curved_patch(patch):
+    """Two dimensional in three coordinates, with the graph's own geometry.
+
+    Nothing here is paraboloid specific: the area element is sqrt(det g)
+    of the composed parametrization and the normal is the cross product of its
+    Jacobian's columns, which for a graph come out as the formulae a
+    textbook gives.
+    """
+    point = Point([RealScalar(0.2), RealScalar(0.3)], entity_domain(PlacedTriangle()))
+
+    assert patch.topological_dimension == 2
+    assert patch.geometric_dimension == 3
+    assert measure_of(patch, point) == pytest.approx(paraboloid_area_element(0.2, 0.3))
+
+    expected = [-0.4, -0.6, 1.0]
+    scale = paraboloid_area_element(0.2, 0.3)
+    assert normal_of(patch, point) == pytest.approx([c / scale for c in expected])
+
+
+@pytest.mark.parametrize("k", range(3))
+@pytest.mark.parametrize("s", [0.3, 0.75])
+def test_a_facet_of_a_curved_patch_is_a_curve_in_space(patch, k, s):
+    """Its measure is arc length, and it varies along a facet that curves.
+
+    The flat hypotenuse has length root two everywhere; lifted onto the
+    paraboloid its density is sqrt(2 + (4s - 2)^2), which is smallest in
+    the middle. That is the one measure over another domain, with no
+    arc length formula written anywhere.
+    """
+    facet = facets_of(patch).pieces[k]
+    point = Point([RealScalar(s)], entity_domain(Interval()))
+
+    assert facet.topological_dimension == 1
+    assert facet.geometric_dimension == 3
+    assert measure_of(facet, point) == pytest.approx(facet_densities[k](s))
+
+
+def test_a_curved_facet_in_space_has_no_single_normal(patch):
+    """A curve in space has a normal plane, not a normal.
+
+    What a surface form wants along such a facet is the conormal in the
+    surface, which needs the patch the facet is a facet of. The patch's
+    own normal is codimension one and is in the test above.
+    """
+    facet = facets_of(patch).pieces[2]
+    point = Point([RealScalar(0.3)], entity_domain(Interval()))
+
+    with pytest.raises(ValueError, match="single direction only where"):
+        UnitNormal(facet, point).value_shape
+
+
+def test_the_measure_of_a_curved_facet_integrates_to_its_arc_length(patch):
+    """The density UFLx gives, integrated, is the length of the lifted curve.
+
+    Simpson's rule on the reference facet, refined, which is what a
+    quadrature in a generated kernel would be doing. The convergence is
+    the point: a fixed rule is off by its own error and not by a geometry
+    mistake, the integrand being a square root rather than a polynomial.
+    """
+    facet = facets_of(patch).pieces[2]
+
+    def density(s: float) -> float:
+        return measure_of(facet, Point([RealScalar(s)], entity_domain(Interval())))
+
+    def simpson(intervals: int) -> float:
+        h = 1.0 / intervals
+        total = density(0.0) + density(1.0)
+        total += sum((4.0 if i % 2 else 2.0) * density(i * h) for i in range(1, intervals))
+        return total * h / 3.0
+
+    errors = [abs(simpson(n) - lifted_hypotenuse_length) for n in (4, 16, 64)]
+
+    assert errors[0] < 1.0e-3
+    assert errors[1] < errors[0] / 100.0
+    assert errors[2] < errors[1] / 100.0
+    assert simpson(64) == pytest.approx(lifted_hypotenuse_length, abs=1.0e-8)
+
+
+def test_a_form_on_the_facets_of_a_curved_patch_pulls_back_per_facet(patch):
+    """The whole example, as a form: three kernels over the reference facet.
+
+    Each carries the facet's arc length, read at the facet's own point,
+    and the patch's inverse Jacobian, read at the point the inclusion
+    gives inside the triangle. The first is what the measure contributes
+    and the second is why a restriction belongs in the integrand: folded
+    into the measure, the gradient would have become the facet's
+    tangential one and the derivative across the facet would be gone.
+    """
+    space = function_space(patch, LagrangeElement(PlacedTriangle(), 1))
+    u, v = Coefficient(space), TestFunction(space)
+    facets = facets_of(patch)
+
+    pulled = pull_back_to_entity(
+        inner(restrict(grad(u), facets), restrict(grad(v), facets)) * dx(facets)
+    )
+
+    assert isinstance(pulled, IntegralSum)
+    assert len(pulled.terms) == 3
+    for piece, term in zip(facets.pieces, pulled.terms, strict=True):
+        assert isinstance(term, Integral)
+        assert isinstance(piece, ComposedDomain)
+        assert term.domain == EntityDomain(Interval())
+        quantities = quantities_in(term.integrand)
+        assert quantities["VolumeElement"] == VolumeElement(piece, term.variable)
+        assert quantities["JacobianInverse"] == JacobianInverse(
+            patch,
+            ImagePoint(term.variable.to_entity_coordinates(Interval()), piece.inner_domain),
+        )

@@ -276,6 +276,10 @@ Acceptance criteria, as tests rather than prose to agree with.
   integral per facet over the reference facet, carrying that facet's volume element and
   normal and the cell's inverse Jacobian at the included point.
   `test_pulling_back_an_integral_over_the_facets_gives_one_kernel_per_facet`.
+- **A facet measure on a curved domain is arc length.** A triangle laid on the
+  paraboloid `z = u^2 + v^2` has facets that are curves in space, and the density UFLx
+  gives on one, integrated, is the length of the lifted curve rather than of the flat
+  one. `test_the_measure_of_a_curved_facet_integrates_to_its_arc_length`.
 - **The facet geometry is the cell's geometry, asked for.** The inclusion an entity
   supplies gives the same facet lengths as the one `test_boundaries.py` writes by hand.
   `test_the_measure_of_a_facet_is_its_length` in `test_facet_domains.py`.
