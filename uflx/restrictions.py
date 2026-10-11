@@ -23,6 +23,20 @@ the measure.
 Only the value is left alone. A restriction here is the pullback of a
 function and not of a form, so it does not carry a value map; what the
 restriction of a 1-form field should be is `uflx.maps`'s question.
+
+One map, and so never nested. Pulling back twice is pulling back along
+the composition, ``iota_2^*(iota_1^* u) = (iota_1 . iota_2)^* u``, so
+iterating buys no expressiveness and costs identity: the edges of a
+tetrahedron's faces are twelve parametrizations for six ridges, and none of them
+says which ridge it is, where ``sub_entities_of(mesh, 2)`` gives each one
+once in the cell's own numbering. So a field is restricted to a
+sub-entity of its own cells, and a sub-entity of one of those is reached
+by asking the cell for the codimension rather than by restricting again.
+
+What that leaves out is not a nested restriction. A field living on a
+facet -- a multiplier on one -- restricted to that facet's own boundary
+is a single map out of the domain it lives on, like any other, since the
+facet is where the field is.
 """
 
 from __future__ import annotations
@@ -109,10 +123,16 @@ class Restriction(AbstractExpression):
             raise ValueError(f"{field_domain!r} has no cells to include a sub-entity into.")
         for piece in _pieces_of(domain):
             _, cell, cell_map = _inclusion_of(piece)
-            if cell not in field_domain.cell_types:
-                raise ValueError(f"{cell} is not a cell type of {field_domain!r}.")
-            if cell_map != field_domain.parametrization(cell):
-                raise ValueError(f"{piece!r} is not a piece of {field_domain!r}.")
+            if cell not in field_domain.cell_types or cell_map != field_domain.parametrization(
+                cell
+            ):
+                raise ValueError(
+                    f"{piece!r} is not a sub-entity of a cell of {field_domain!r}, mapped "
+                    f"on by that cell's own map. A field is read through one map, so a "
+                    f"sub-entity of a sub-entity is reached by taking it of the cell: "
+                    f"sub_entities_of(domain, codim), at the codimension the cell counts "
+                    f"in."
+                )
         self._field = field
         self._domain = domain
         self._variable = variable

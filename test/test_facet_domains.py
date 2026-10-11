@@ -631,8 +631,59 @@ def test_a_field_is_restricted_only_to_pieces_of_its_own_domain(space, facet):
     elsewhere = parametrized_domain(LagrangeElement(PlacedTriangle(), 2, (2,)))
     u = Coefficient(space)
 
-    with pytest.raises(ValueError, match="is not a piece of"):
+    with pytest.raises(ValueError, match="is not a sub-entity of a cell of"):
         restrict(u, facets_of(elsewhere).pieces[0])
+
+
+def test_a_field_is_read_through_one_map_and_so_is_never_restricted_twice():
+    """Restricting along a composition is what a second restriction would be.
+
+    ``iota_2^*(iota_1^* u) = (iota_1 . iota_2)^* u``, so iterating adds no
+    expressiveness, and it costs identity: these twelve parametrizations are the six
+    edges of the tetrahedron, and none of them says which edge it is,
+    where taking the codimension of the cell gives each once in the cell's
+    own numbering. So the mesh's field is refused here and the message
+    says what to write.
+    """
+    cell = NestedTetrahedron()
+    mesh = parametrized_domain(LagrangeElement(cell, 1, (3,)))
+    u = Coefficient(function_space(mesh, LagrangeElement(cell, 1)))
+    face = facets_of(mesh).pieces[1]
+    assert isinstance(face, ComposedDomain)
+    edge = facets_of(face).pieces[0]
+
+    with pytest.raises(ValueError, match="sub_entities_of"):
+        restrict(u, edge)
+    with pytest.raises(ValueError, match="sub_entities_of"):
+        restrict(restrict(u, face), edge)
+
+    ridges = sub_entities_of(mesh, 2)
+    assert len(ridges.pieces) == 6
+    assert isinstance(restrict(u, ridges), Restriction)
+
+
+def test_a_field_living_on_a_facet_is_restricted_to_that_facets_boundary():
+    """Which is one map out of the domain the field is on, and not an iteration.
+
+    A multiplier on a facet is a field whose domain is that facet, so its
+    own boundary is a sub-entity of its own cells like any other. This is
+    what the rule above leaves available, and it is the case that wanted
+    it.
+    """
+    cell = NestedTetrahedron()
+    mesh = parametrized_domain(LagrangeElement(cell, 1, (3,)))
+    face = facets_of(mesh).pieces[1]
+    assert isinstance(face, ComposedDomain)
+    (face_cell,) = face.cell_types
+    lam = Coefficient(function_space(face, LagrangeElement(face_cell, 1)))
+    edge = facets_of(face).pieces[0]
+
+    integral = restrict(lam, edge) * dx(edge)
+
+    assert isinstance(integral, Integral)
+    pulled = pull_back_to_entity(integral)
+    assert isinstance(pulled, Integral)
+    assert isinstance(expand_geometry(pulled.integrand), AbstractExpression)
 
 
 def test_a_field_is_restricted_along_an_inclusion_and_not_along_any_map(space, mesh):
