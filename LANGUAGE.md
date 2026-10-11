@@ -205,12 +205,13 @@ a measure.
 name its domain and so has to encode it; here an exterior-facet integral is this same
 measure over a domain of facets, and an interior-facet integral is it over an interface.
 
-The first of those is constructible. `facets_of(mesh)` is the domain a mesh's facets
-make up, and an exterior-facet integral is the one measure over it, with the fields in
-the integrand read there through its parametrization:
+The first of those is constructible. `sub_entities_of(mesh, 1)` is the domain a mesh's
+facets make up -- a derived domain at a codimension, with no name of its own, since the
+integral over it is the one measure like any other -- and an exterior-facet integral is
+that measure over it, with the fields in the integrand read there through its parametrization:
 
 ```python
-facets = facets_of(mesh)
+facets = sub_entities_of(mesh, 1)
 inner(restrict(grad(u), facets), UnitNormal(facets)) * dx(facets)
 ```
 
@@ -234,7 +235,7 @@ Examples:
 ```python
 v * f * dx(mesh)
 inner(grad(v), grad(u)) * dx(mesh)
-restrict(v, facets_of(mesh)) * g * dx(facets_of(mesh))  # an exterior facet integral
+restrict(v, facets) * g * dx(facets)  # an exterior facet integral, facets as above
 jump(v) * dS  # once an interface domain exists
 ```
 
@@ -279,8 +280,8 @@ The language is small, but it is typed.
 - Tensor contractions such as `dot` and `inner` require compatible tensor shapes.
 - Spatial derivatives require a spatial domain.
 - Facet quantities such as a normal are read off the domain they are a normal to, so a
-  facet's normal is `UnitNormal(facets_of(mesh))`, and a normal is only defined in
-  codimension one.
+  facet's normal is `UnitNormal(sub_entities_of(mesh, 1))`, and a normal is only defined
+  in codimension one.
 - A field on one domain is read on another through a restriction, `restrict(u, facets)`,
   which is the pullback of the field along that domain's parametrization.
 - Interior-facet expressions may use side restrictions:

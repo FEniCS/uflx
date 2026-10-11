@@ -14,7 +14,6 @@ from uflx.integrals import dx
 from uflx.operators import dev, grad, inner, skew, sqrt, sym, tr, transpose
 from uflx.parametrizations import (
     composed_domain,
-    facets_of,
     parametrized_domain,
     sub_entities_of,
 )

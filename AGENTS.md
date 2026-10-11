@@ -114,15 +114,15 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   rule, and `AffineParametrization`, a closed form map a consumer can state.
   `sub_entity_domain(cell, dim, index)` is one sub-entity of a cell as a domain: the
   sub-entity's coordinate domain carried into the cell's by the inclusion the cell
-  supplies, a composition like any other. `facets_of` (and `sub_entities_of` for any
-  codimension) builds the union whose pieces are a sub-entity's inclusion followed by
-  the cell's own map, which is the domain an exterior facet integral is over; a label
-  marks each piece, so it survives the split onto one. `SubEntityInclusion` is the
-  affine inclusion that says which sub-entity it is, and `included_sub_entity` reads
-  that back off a piece or a pulled back integral's geometry, which is what identifies a
-  kernel along with the cell type. Evaluating an element map is an interpolation sum, so
-  this sits above `function_spaces`/`basis_functions` rather than in `domains`, which
-  must not know how a parametrization is described.
+  supplies, a composition like any other. `sub_entities_of(domain, codim)` builds the
+  union whose pieces are a sub-entity's inclusion followed by the cell's own map, which
+  at codimension one is the domain an exterior facet integral is over; a label marks
+  each piece, so it survives the split onto one. `SubEntityInclusion` is the affine
+  inclusion that says which sub-entity it is, and `included_sub_entity` reads that back
+  off a piece or a pulled back integral's geometry, which is what identifies a kernel
+  along with the cell type. Evaluating an element map is an interpolation sum, so this
+  sits above `function_spaces`/`basis_functions` rather than in `domains`, which must
+  not know how a parametrization is described.
 - `expressions.py` — `AbstractExpression`: the base of every symbolic node
   (`BinaryOperator`, `UnaryOperator`, terminals). Carries value shape, free indices,
   domain, scalar type as static, extensible attributes (unlike legacy UFL's fixed
@@ -152,9 +152,10 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   pieces of a union, run first since a piece names one parametrization and so one cell type.
   `IntegralSum` splits its own terms both ways, since the pull back walks a sum leaves
   first and so reaches each integral with no chance to split it on the way. There is no
-  `ds` or `dS`: an exterior facet integral is this measure over `facets_of(mesh)` with
-  the fields restricted, which [INTEGRATION.md](INTEGRATION.md) §3 argues for, and an
-  interior one waits on a parametrization per side, which §6 lists.
+  `ds` or `dS`: an exterior facet integral is this measure over
+  `sub_entities_of(mesh, 1)` with the fields restricted, which
+  [INTEGRATION.md](INTEGRATION.md) §3 argues for, and an interior one waits on a parametrization
+  per side, which §6 lists.
 
 Symbolic (Gateaux) differentiation and expression/integral transformation between domain
 configurations are the two core transformation procedures UFLx provides on top of this

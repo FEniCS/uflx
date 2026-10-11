@@ -15,7 +15,6 @@ from test_facet_domains import PlacedTriangle
 from uflx import (
     Coefficient,
     TestFunction,
-    facets_of,
     function_space,
     grad,
     inner,
@@ -27,6 +26,7 @@ from uflx.geometry import AbstractGeometricQuantity, UnitNormal
 from uflx.graphs import as_graph
 from uflx.integrals import Integral, IntegralSum
 from uflx.legacy import Cells, ExteriorFacets, dS, ds, dx, facet_normal
+from uflx.parametrizations import sub_entities_of
 from uflx.restrictions import Restriction
 
 
@@ -68,7 +68,7 @@ def test_an_exterior_facet_measure_integrates_over_the_facets(mesh, space):
     form = u * v * ds
 
     assert isinstance(form, Integral)
-    assert form.domain == facets_of(mesh, ExteriorFacets())
+    assert form.domain == sub_entities_of(mesh, 1, ExteriorFacets())
     assert [term.domain for term in kernels(form)] == [EntityDomain(Interval())] * 3
 
 
@@ -83,7 +83,7 @@ def test_a_field_in_a_facet_integral_is_restricted_for_you(mesh, space):
         n for n in as_graph(form.integrand).ordered_nodes() if isinstance(n, Restriction)
     ]
     assert len(restrictions) == 1
-    assert restrictions[0].domain == facets_of(mesh, ExteriorFacets())
+    assert restrictions[0].domain == sub_entities_of(mesh, 1, ExteriorFacets())
 
 
 def test_a_gradient_in_a_facet_integral_is_restricted_whole(mesh, space):
@@ -94,7 +94,7 @@ def test_a_gradient_in_a_facet_integral_is_restricted_whole(mesh, space):
     derivative across the facet, and nothing would complain.
     """
     u, v = Coefficient(space), TestFunction(space)
-    n = UnitNormal(facets_of(mesh, ExteriorFacets()))
+    n = UnitNormal(sub_entities_of(mesh, 1, ExteriorFacets()))
 
     form = inner(grad(u), n) * v * ds
     assert isinstance(form, Integral)
@@ -131,7 +131,7 @@ def test_a_marked_part_of_the_facets_is_another_domain(mesh, space):
     assert isinstance(unmarked, Integral)
     assert isinstance(other, Integral)
 
-    assert marked.domain == facets_of(mesh, ExteriorFacets(3))
+    assert marked.domain == sub_entities_of(mesh, 1, ExteriorFacets(3))
     assert marked.domain != unmarked.domain
     assert marked.domain != other.domain
     assert len(kernels(marked)) == 3
@@ -177,13 +177,15 @@ def test_a_named_domain_is_used_rather_than_inferred(mesh, space):
 
     form = u * v * ds(domain=mesh)
     assert isinstance(form, Integral)
-    assert form.domain == facets_of(mesh, ExteriorFacets())
+    assert form.domain == sub_entities_of(mesh, 1, ExteriorFacets())
 
 
 def test_an_integrand_that_does_not_say_which_domain_is_refused(space):
     """Inference can be wrong, so it refuses rather than guesses."""
     with pytest.raises(ValueError, match="says which domain"):
-        UnitNormal(facets_of(parametrized_domain(LagrangeElement(PlacedTriangle(), 1, (2,))))) * ds
+        UnitNormal(
+            sub_entities_of(parametrized_domain(LagrangeElement(PlacedTriangle(), 1, (2,))), 1)
+        ) * ds
 
     other = parametrized_domain(LagrangeElement(PlacedTriangle(), 2, (2,)))
     elsewhere = function_space(other, LagrangeElement(PlacedTriangle(), 1))

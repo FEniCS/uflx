@@ -770,6 +770,14 @@ def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = Non
     integral is over: one measure over another domain rather than a
     measure of its own.
 
+    The only way to say it, at every codimension. There is no facets_of,
+    and no ridges_of or peaks_of to come: a codimension names the derived
+    domain already, and a second spelling of one of them would be a
+    second spelling and not a second construction. Codimension zero
+    degenerates accordingly, a cell's own inclusion being the identity,
+    so that the sub-entities of a domain at codimension zero are the
+    domain.
+
     The codimension is relative to each cell type, so in a domain of
     mixed topological dimension codimension one is the triangles' edges
     and the tetrahedra's faces at once, and the union reports no
@@ -826,19 +834,3 @@ def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = Non
             piece = composed_domain(sub_entity_domain(cell, dim, index), parametrization)
             pieces.append(piece if label is None else LabelledDomain(piece, label))
     return UnionDomain(tuple(pieces))
-
-
-def facets_of(domain: AbstractCellularDomain, label: Any = None) -> UnionDomain:
-    """Create the domain a domain's facets make up.
-
-    The codimension one case of :func:`sub_entities_of`, facet being the
-    name of a sub-entity of that codimension.
-
-    Args:
-        domain: The domain whose cells' facets are taken
-        label: Anything hashable the consumer selects these facets by
-
-    Returns:
-        The union of those facets, mapped on by the domain
-    """
-    return sub_entities_of(domain, 1, label)

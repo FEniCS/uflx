@@ -103,17 +103,17 @@ is real and necessary, and it belongs to domain construction — see §3.
 The `+`/`-` of UFL is not part of the measure either. It is a *restriction of a field*,
 which is a pullback along one side's inclusion map, and it lives in the integrand.
 
-So a codimension and a boundary flag become operators on domains — `facets_of(omega)`,
-and an `interface_of(omega_plus, omega_minus)` still to come — returning domains that
-then need only the one measure. That is the home for a mesh-relative query, and it makes
-the derived domain an object carrying a parametrization, a metric, a normal and a measure like any
-other.
+So a codimension and a boundary flag become operators on domains —
+`sub_entities_of(omega, codim)`, and an `interface_of(omega_plus, omega_minus)` still to
+come — returning domains that then need only the one measure. That is the home for a
+mesh-relative query, and it makes the derived domain an object carrying a parametrization, a
+metric, a normal and a measure like any other.
 
 The derived domain is named for the sub-entities it is parametrized by and not for a
 boundary. Which facets it has — those with one adjacent cell, those with two, those a
 consumer has marked — is a question about a cell complex UFLx does not own, so
-membership is external, as a mesh's cells are. `facets_of` says only how such a domain
-is parametrized.
+membership is external, as a mesh's cells are. `sub_entities_of` says only how such a
+domain is parametrized.
 
 A marked selection of them is a domain and not an id on a measure, which is what UFL
 encodes as a subdomain id. `LabelledDomain` is a domain and an opaque label a consumer
@@ -141,9 +141,9 @@ piece names one parametrization and so one cell type too.
 
 A region of `R^d` shows this with no cells involved: a box carries a measure, and so
 does each of its faces, which is an exterior facet measure rather than a second kind of
-measure. Its faces are written out by hand in `test/test_regions.py`, since `facets_of`
-reaches a cell's sub-entities through its entity and a region has no cells; §6 says what
-asking a domain for its own boundary pieces would take.
+measure. Its faces are written out by hand in `test/test_regions.py`, since
+`sub_entities_of` reaches a cell's sub-entities through its entity and a region has no
+cells; §6 says what asking a domain for its own boundary pieces would take.
 
 ## 4. Orientation
 
@@ -236,13 +236,13 @@ Built, as `ds`:
    is the reference geometry UFLx cannot supply, so the entity's definer supplies it and
    the default raises; `sub_entity_domain(cell, dim, index)` is a sub-entity of a cell
    as a domain, being that inclusion composed onto the sub-entity's own coordinate
-   domain; `UnionDomain` holds several parametrized pieces; and `facets_of(omega)` is the
-   union of the pieces, each a `ComposedDomain` of the inclusion and the cell's own map.
-   A parametrization says which coordinate domain it lands in, which is how a facet's
-   points are known to be named in the cell's coordinates. Any codimension, not a
-   facet's: `sub_entities_of(omega, codim)` is the general form, and what fails to
-   generalise above codimension one is a claim rather than a construction, a normal
-   being a single direction only there.
+   domain; `UnionDomain` holds several parametrized pieces; and
+   `sub_entities_of(omega, codim)` is the union of the pieces, each a `ComposedDomain`
+   of the inclusion and the cell's own map. A parametrization says which coordinate
+   domain it lands in, which is how a facet's points are known to be named in the cell's
+   coordinates. Any codimension, not a facet's: `sub_entities_of(omega, codim)` is the
+   general form, and what fails to generalise above codimension one is a claim rather
+   than a construction, a normal being a single direction only there.
 1. **Restriction as a pullback along a named parametrization.** `restrict(u, domain)` is `ι*u`,
    the field read at the point the domain's parametrization gives. It lives in the integrand, and
    a gradient shows why: inside a restriction the entity gradient is still carried by
@@ -269,7 +269,7 @@ Not built:
    measure a sub-entity domain of full codimension would give. The empty Gram
    determinant is one, but the empty matrix its Jacobian needs cannot be built, as
    `test_the_measure_of_a_point_is_the_counting_measure` records.
-1. **A domain asked for its own boundary pieces.** `facets_of` reaches a cell's
+1. **A domain asked for its own boundary pieces.** `sub_entities_of` reaches a cell's
    sub-entities through its entity's combinatorics, so it serves a mesh and refuses a
    region, while §3 presents a box's faces as the same idea -- and they are, by hand. A
    domain that answered "the pieces of my boundary" however it liked, a cell type from

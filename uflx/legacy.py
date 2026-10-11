@@ -14,7 +14,7 @@ integrand, and writes a field on a mesh directly in a facet integral:
 UFLx writes the same form by naming the domain and reading the field
 there through its parametrization:
 
-    facets = facets_of(mesh)
+    facets = sub_entities_of(mesh, 1)
     a = inner(restrict(grad(u), facets), n) * restrict(v, facets) * dx(facets)
 
 The second is what this module builds from the first, so old code runs
@@ -57,7 +57,7 @@ from uflx.geometry import AbstractGeometricQuantity
 from uflx.graphs import GraphNode, NodeOrder, as_graph
 from uflx.integrals import Integral
 from uflx.integrals import dx as measure_of
-from uflx.parametrizations import facets_of
+from uflx.parametrizations import sub_entities_of
 from uflx.restrictions import restrict
 
 
@@ -234,7 +234,7 @@ class CellMeasure:
 class ExteriorFacetMeasure(CellMeasure):
     """`ds` as UFL writes it: an exterior facet measure over the facets it infers.
 
-    The integral it builds is the one measure over `facets_of(domain)`,
+    The integral it builds is the one measure over `sub_entities_of(domain, 1)`,
     with every field on the domain read there through its parametrization. Call it
     to mark a subdomain, as `ds(3)`, which labels that domain.
     """
@@ -249,7 +249,7 @@ class ExteriorFacetMeasure(CellMeasure):
 
     def facets_for(self, integrand: AbstractExpression) -> UnionDomain:
         """The domain of facets an integrand of this measure is over."""
-        return facets_of(self.domain_of(integrand), ExteriorFacets(self._subdomain_id))
+        return sub_entities_of(self.domain_of(integrand), 1, ExteriorFacets(self._subdomain_id))
 
     def __rmul__(self, integrand: AbstractExpression) -> Integral:
         """Right multiply by an expression to form an integral over the facets."""
@@ -317,5 +317,5 @@ def facet_normal(domain: AbstractParametrizedDomain) -> AbstractGeometricQuantit
     """
     raise NotImplementedError(
         "An outward normal needs an orientation, which nothing carries yet. "
-        "UnitNormal(facets_of(domain)) is the normal without a sign."
+        "UnitNormal(sub_entities_of(domain, 1)) is the normal without a sign."
     )

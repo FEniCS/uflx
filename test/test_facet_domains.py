@@ -69,7 +69,6 @@ from uflx.parametrizations import (
     ComposedDomain,
     ComposedParametrization,
     SubEntityInclusion,
-    facets_of,
     included_sub_entity,
     sub_entities_of,
     sub_entity_domain,
@@ -205,7 +204,7 @@ def test_a_facet_of_a_reference_cell_is_one_domain_however_it_is_reached():
     """
     cell = PlacedTriangle()
 
-    facets = facets_of(entity_domain(cell))
+    facets = sub_entities_of(entity_domain(cell), 1)
 
     for k, piece in enumerate(facets.pieces):
         assert piece == sub_entity_domain(cell, 1, k)
@@ -365,7 +364,7 @@ def test_the_facets_of_a_mesh_are_its_cells_facets_mapped_on(mesh):
     """
     cell = PlacedTriangle()
 
-    facets = facets_of(mesh)
+    facets = sub_entities_of(mesh, 1)
 
     assert len(facets.pieces) == 3
     assert facets.geometric_dimension == 2
@@ -389,7 +388,7 @@ def test_the_facets_of_a_mesh_of_two_cell_types_are_both_cells_facets(mesh):
     )
     mixed = parametrized_domain(elements)
 
-    facets = facets_of(mixed)
+    facets = sub_entities_of(mixed, 1)
 
     assert len(facets.pieces) == 3 + 4
     # A triangle's facets are one dimensional and a tetrahedron's are two.
@@ -406,7 +405,7 @@ def test_the_meshs_own_coordinate_in_a_facet_integral_is_rejected(mesh, space):
     something tried to expand it. The facets' own coordinate is a
     different expression, and is read on them.
     """
-    facets = facets_of(mesh)
+    facets = sub_entities_of(mesh, 1)
     v = TestFunction(space)
     x = SpatialCoordinate(mesh)
 
@@ -426,14 +425,14 @@ def test_a_label_marks_each_piece_so_a_kernel_keeps_it(mesh, space):
     quantities it reads, and the label is there to be read off.
     """
     v = TestFunction(space)
-    marked = facets_of(mesh, "inflow")
+    marked = sub_entities_of(mesh, 1, "inflow")
 
-    assert marked != facets_of(mesh)
-    assert marked != facets_of(mesh, "outflow")
+    assert marked != sub_entities_of(mesh, 1)
+    assert marked != sub_entities_of(mesh, 1, "outflow")
     assert all(
         isinstance(piece, LabelledDomain) and piece.label == "inflow" for piece in marked.pieces
     )
-    assert all(not isinstance(piece, LabelledDomain) for piece in facets_of(mesh).pieces)
+    assert all(not isinstance(piece, LabelledDomain) for piece in sub_entities_of(mesh, 1).pieces)
 
     pulled = pull_back_to_entity(restrict(v, marked) * dx(marked))
     assert isinstance(pulled, IntegralSum)
@@ -458,7 +457,7 @@ def test_the_sub_entities_of_a_marked_domain_are_refused(mesh):
     assert marked.parametrization(PlacedTriangle()) == mesh.parametrization(PlacedTriangle())
 
     with pytest.raises(ValueError, match="selection of cells"):
-        facets_of(marked)
+        sub_entities_of(marked, 1)
     with pytest.raises(ValueError, match="selection of cells"):
         sub_entities_of(marked, 1, "boundary")
 
@@ -475,7 +474,7 @@ def test_a_sub_entity_of_a_sub_entity_names_no_index_of_the_cell():
     """
     cell = NestedTetrahedron()
     mesh = parametrized_domain(LagrangeElement(cell, 1, (3,)))
-    face = facets_of(mesh).pieces[1]
+    face = sub_entities_of(mesh, 1).pieces[1]
     assert isinstance(face, ComposedDomain)
 
     assert included_sub_entity(face) == (2, 1)
@@ -483,7 +482,7 @@ def test_a_sub_entity_of_a_sub_entity_names_no_index_of_the_cell():
         (1, k) for k in range(6)
     ]
 
-    for edge in facets_of(face).pieces:
+    for edge in sub_entities_of(face, 1).pieces:
         with pytest.raises(ValueError, match="sub-entity of a sub-entity"):
             included_sub_entity(edge)
 
@@ -496,7 +495,7 @@ def test_a_kernel_says_which_sub_entity_it_is_for(mesh, space):
     matching the inclusion's matrix against each of the cell's.
     """
     v = TestFunction(space)
-    facets = facets_of(mesh)
+    facets = sub_entities_of(mesh, 1)
 
     assert [included_sub_entity(piece) for piece in facets.pieces] == [(1, 0), (1, 1), (1, 2)]
 
@@ -526,7 +525,7 @@ def test_the_codimension_two_sub_entities_of_a_tetrahedral_mesh_are_its_edges():
     assert len(edges.pieces) == 6
     assert edges.topological_dimension == 1
     assert edges.geometric_dimension == 3
-    assert facets_of(mesh).topological_dimension == 2
+    assert sub_entities_of(mesh, 1).topological_dimension == 2
 
 
 @pytest.mark.parametrize(("k", "length"), [(0, 2.0), (1, 1.0), (2, math.sqrt(5.0))])
@@ -539,7 +538,7 @@ def test_a_facet_of_a_mapped_cell_measures_the_mapped_length(
     unchanged, and the hypotenuse becomes the diagonal of a 2 by 1 box.
     The measure is the one measure: nothing about it is a facet measure.
     """
-    facets = facets_of(stretched_cell)
+    facets = sub_entities_of(stretched_cell, 1)
 
     assert measure_of(facets.pieces[k], on_the_facet) == pytest.approx(length)
 
@@ -558,7 +557,7 @@ def test_a_pulled_back_facet_integral_expands_to_that_facets_density(
     the facet is, which is what `measure_of` reads off the piece
     directly.
     """
-    facets = facets_of(stretched_cell)
+    facets = sub_entities_of(stretched_cell, 1)
 
     pulled = pull_back_to_entity(RealScalar(1.0) * dx(facets))
 
@@ -579,7 +578,7 @@ def test_an_integral_over_the_facets_measures_the_boundary(stretched_cell, on_th
     affine, so the sum of the terms is the boundary's measure with no
     quadrature rule needed.
     """
-    pulled = pull_back_to_entity(RealScalar(1.0) * dx(facets_of(stretched_cell)))
+    pulled = pull_back_to_entity(RealScalar(1.0) * dx(sub_entities_of(stretched_cell, 1)))
 
     assert isinstance(pulled, IntegralSum)
     densities = []
@@ -600,7 +599,7 @@ def test_the_variable_of_an_unsplit_facet_integral_names_no_coordinates(space, m
     had until the integral has been split, and the variable says so.
     :mod:`test_variables` does the same for a point of a mesh.
     """
-    facets = facets_of(mesh)
+    facets = sub_entities_of(mesh, 1)
     integral = restrict(TestFunction(space), facets) * dx(facets)
 
     assert isinstance(integral, Integral)
@@ -612,7 +611,7 @@ def test_the_normal_of_a_facet_of_a_mapped_cell_is_not_the_mapped_normal(
     stretched_cell, on_the_facet
 ):
     """A normal is carried by the cofactor rule, not by the map, as test_boundaries says."""
-    hypotenuse = facets_of(stretched_cell).pieces[2]
+    hypotenuse = sub_entities_of(stretched_cell, 1).pieces[2]
 
     normal = normal_of(hypotenuse, on_the_facet)
 
@@ -630,7 +629,7 @@ def space(mesh):
 @pytest.fixture
 def facet(mesh):
     """One facet of that mesh, a piece of the domain its facets make up."""
-    piece = facets_of(mesh).pieces[0]
+    piece = sub_entities_of(mesh, 1).pieces[0]
     assert isinstance(piece, ComposedDomain)
     return piece
 
@@ -665,7 +664,7 @@ def test_a_field_is_restricted_only_to_pieces_of_its_own_domain(space, facet):
     u = Coefficient(space)
 
     with pytest.raises(ValueError, match="is not a sub-entity of a cell of"):
-        restrict(u, facets_of(elsewhere).pieces[0])
+        restrict(u, sub_entities_of(elsewhere, 1).pieces[0])
 
 
 def test_a_field_is_read_through_one_map_and_so_is_never_restricted_twice():
@@ -681,9 +680,9 @@ def test_a_field_is_read_through_one_map_and_so_is_never_restricted_twice():
     cell = NestedTetrahedron()
     mesh = parametrized_domain(LagrangeElement(cell, 1, (3,)))
     u = Coefficient(function_space(mesh, LagrangeElement(cell, 1)))
-    face = facets_of(mesh).pieces[1]
+    face = sub_entities_of(mesh, 1).pieces[1]
     assert isinstance(face, ComposedDomain)
-    edge = facets_of(face).pieces[0]
+    edge = sub_entities_of(face, 1).pieces[0]
 
     with pytest.raises(ValueError, match="sub_entities_of"):
         restrict(u, edge)
@@ -705,11 +704,11 @@ def test_a_field_living_on_a_facet_is_restricted_to_that_facets_boundary():
     """
     cell = NestedTetrahedron()
     mesh = parametrized_domain(LagrangeElement(cell, 1, (3,)))
-    face = facets_of(mesh).pieces[1]
+    face = sub_entities_of(mesh, 1).pieces[1]
     assert isinstance(face, ComposedDomain)
     (face_cell,) = face.cell_types
     lam = Coefficient(function_space(face, LagrangeElement(face_cell, 1)))
-    edge = facets_of(face).pieces[0]
+    edge = sub_entities_of(face, 1).pieces[0]
 
     integral = restrict(lam, edge) * dx(edge)
 
@@ -810,7 +809,7 @@ def test_a_gradient_inside_a_restriction_is_the_cells_gradient(space, facet, mes
 def test_a_restriction_to_a_union_has_no_one_inclusion_to_read_through(space, mesh):
     """Several pieces, several inclusions, so the point is not known until the split."""
     v = TestFunction(space)
-    facets = facets_of(mesh)
+    facets = sub_entities_of(mesh, 1)
 
     integral = restrict(v, facets) * dx(facets)
     assert isinstance(integral, Integral)
@@ -828,7 +827,7 @@ def test_a_restriction_to_a_union_has_no_one_inclusion_to_read_through(space, me
 def test_an_integral_over_the_facets_splits_into_one_per_facet(space, mesh):
     """The second fan out: a piece names a parametrization, as a cell type does for a mesh."""
     v = TestFunction(space)
-    facets = facets_of(mesh)
+    facets = sub_entities_of(mesh, 1)
 
     integral = restrict(v, facets) * dx(facets)
     assert isinstance(integral, Integral)
@@ -845,7 +844,7 @@ def test_an_integral_over_the_facets_splits_into_one_per_facet(space, mesh):
 def test_a_union_of_one_piece_is_still_split(space, mesh):
     """The union is not the piece, and only a piece names the parametrization to read through."""
     v = TestFunction(space)
-    one = union_domain(facets_of(mesh).pieces[:1])
+    one = union_domain(sub_entities_of(mesh, 1).pieces[:1])
 
     integral = restrict(v, one) * dx(one)
     assert isinstance(integral, Integral)
@@ -876,7 +875,7 @@ def test_splitting_reads_a_quantity_off_the_piece_it_lands_on(space, mesh):
     retargeting carries a quantity's other arguments.
     """
     v = TestFunction(space)
-    facets = facets_of(mesh)
+    facets = sub_entities_of(mesh, 1)
 
     integral = (
         inner(SpatialCoordinate(facets), UnitNormal(facets))
@@ -908,7 +907,7 @@ def test_pulling_back_an_integral_over_the_facets_gives_one_kernel_per_facet(spa
     """
     v = TestFunction(space)
     u = Coefficient(space)
-    facets = facets_of(mesh)
+    facets = sub_entities_of(mesh, 1)
 
     pulled = pull_back_to_entity(
         inner(restrict(grad(u), facets), UnitNormal(facets)) * restrict(v, facets) * dx(facets)
@@ -942,7 +941,7 @@ def test_the_facets_of_a_one_dimensional_mesh_are_its_end_points():
     )
     at_the_end = Point([], entity_domain(PointEntity()))
 
-    ends = facets_of(stretched)
+    ends = sub_entities_of(stretched, 1)
 
     assert len(ends.pieces) == 2
     assert ends.topological_dimension == 0
@@ -972,7 +971,7 @@ def test_the_facets_of_a_mesh_of_two_cell_types_give_a_kernel_each(space):
         mixed, (LagrangeElement(PlacedTriangle(), 1), LagrangeElement(PlacedTetrahedron(), 1))
     )
     v = TestFunction(mixed_space)
-    facets = facets_of(mixed)
+    facets = sub_entities_of(mixed, 1)
 
     pulled = pull_back_to_entity(restrict(v, facets) * dx(facets))
 
@@ -989,12 +988,12 @@ def test_the_facets_of_a_mesh_of_two_cell_types_give_a_kernel_each(space):
 # Why the reference triangle is the thing laid on it, rather than a region
 # of the plane or a mesh:
 #
-# - Facets come from entities. facets_of asks each cell type for the
+# - Facets come from entities. sub_entities_of asks each cell type for the
 #   inclusion of its sub-entities, and only an AbstractEntity knows it has
 #   three edges and which vertices each has. A region of the plane is a
 #   parametrized domain the paraboloid would compose with just as happily, and
 #   test_regions.py integrates over one, but it has no entities, so there
-#   is nothing for facets_of to enumerate.
+#   is nothing for sub_entities_of to enumerate.
 # - A reference cell's own parametrization is the identity, so composing it with the
 #   paraboloid gives a domain whose geometry is closed form end to end and
 #   every density below comes out as a number that can be checked. A mesh
@@ -1065,7 +1064,7 @@ def test_a_facet_of_a_curved_patch_is_a_curve_in_space(patch, k, s):
     the middle. That is the one measure over another domain, with no
     arc length formula written anywhere.
     """
-    facet = facets_of(patch).pieces[k]
+    facet = sub_entities_of(patch, 1).pieces[k]
     point = Point([RealScalar(s)], entity_domain(Interval()))
 
     assert facet.topological_dimension == 1
@@ -1080,7 +1079,7 @@ def test_a_curved_facet_in_space_has_no_single_normal(patch):
     surface, which needs the patch the facet is a facet of. The patch's
     own normal is codimension one and is in the test above.
     """
-    facet = facets_of(patch).pieces[2]
+    facet = sub_entities_of(patch, 1).pieces[2]
     point = Point([RealScalar(0.3)], entity_domain(Interval()))
 
     with pytest.raises(ValueError, match="single direction only where"):
@@ -1095,7 +1094,7 @@ def test_the_measure_of_a_curved_facet_integrates_to_its_arc_length(patch):
     the point: a fixed rule is off by its own error and not by a geometry
     mistake, the integrand being a square root rather than a polynomial.
     """
-    facet = facets_of(patch).pieces[2]
+    facet = sub_entities_of(patch, 1).pieces[2]
 
     def density(s: float) -> float:
         return measure_of(facet, Point([RealScalar(s)], entity_domain(Interval())))
@@ -1126,7 +1125,7 @@ def test_a_form_on_the_facets_of_a_curved_patch_pulls_back_per_facet(patch):
     """
     space = function_space(patch, LagrangeElement(PlacedTriangle(), 1))
     u, v = Coefficient(space), TestFunction(space)
-    facets = facets_of(patch)
+    facets = sub_entities_of(patch, 1)
 
     pulled = pull_back_to_entity(
         inner(restrict(grad(u), facets), restrict(grad(v), facets)) * dx(facets)
@@ -1155,7 +1154,7 @@ def test_a_sum_of_a_cell_integral_and_a_facet_one_pulls_back(mesh, space):
     reference interval.
     """
     u, v = Coefficient(space), TestFunction(space)
-    facets = facets_of(mesh)
+    facets = sub_entities_of(mesh, 1)
 
     form = inner(u, v) * dx(mesh) + inner(restrict(u, facets), restrict(v, facets)) * dx(facets)
 
