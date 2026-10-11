@@ -6,9 +6,10 @@
 """UFLx: Unified Form Language."""
 
 from uflx import algorithms, graphs
-from uflx.domains import entity_domain, parametrized_domain
+from uflx.domains import entity_domain
 from uflx.function_spaces import function_space
 from uflx.functions import Coefficient, TestFunction, TrialFunction
 from uflx.geometry import SpatialCoordinate
 from uflx.integrals import dx
 from uflx.operators import dev, grad, inner, skew, sqrt, sym, tr, transpose
+from uflx.parametrizations import composed_domain, parametrized_domain

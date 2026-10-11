@@ -12,14 +12,14 @@ from itertools import count
 from typing import Any, cast
 
 from uflx.algorithms import replace
-from uflx.domains import AbstractParametrizedDomain
+from uflx.domains import AbstractCellularDomain
 from uflx.expressions import AbstractExpression
 from uflx.functions import (
     AbstractFunction,
     AbstractVariable,
     create_variable,
 )
-from uflx.geometry import JacobianDeterminant
+from uflx.geometry import AbstractJacobian, JacobianDeterminant
 from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
 
 
@@ -110,6 +110,14 @@ class Integral(AbstractIntegral):
         else:
             self._variable = variable
 
+        # A Jacobian built during a pull back does not know where it is
+        # evaluated. This integral's variable is that point.
+        for node in as_graph(integrand):
+            if isinstance(node, AbstractJacobian) and node.point is None:
+                evaluated = node.reconstruct_with_variable(self._variable)
+                if evaluated is not node:
+                    replacements[node] = evaluated
+
         if len(replacements) == 0:
             self._integrand = integrand
         else:
@@ -152,9 +160,15 @@ class Integral(AbstractIntegral):
                 else:
                     assert domain == node.function_space.domain
         assert domain is not None
-        assert isinstance(domain, AbstractParametrizedDomain)
+        assert isinstance(domain, AbstractCellularDomain)
         if len(domain.cell_types) != 1:
-            raise NotImplementedError("Only domains with exactly one cell type supported for now.")
+            # Each cell type has its own map, hence its own measure, so this
+            # wants one integral per cell type and a sum of integrals to
+            # hold them.
+            raise NotImplementedError(
+                "Pulling an integral back over a domain with several cell types is "
+                "not supported yet."
+            )
         (cell,) = domain.cell_types
         det = abs(JacobianDeterminant(domain))
 

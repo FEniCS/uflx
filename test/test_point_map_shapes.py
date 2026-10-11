@@ -26,7 +26,8 @@ def test_reference_to_physical_shape(cell, gdim, lagrange_element):
     tdim = domain.cell_types[0].topological_dimension
 
     point = PushedForwardPoint(
-        Point([RealScalar(0.1)] * tdim, EntityDomain(domain.cell_types[0])), domain
+        Point([RealScalar(0.1)] * tdim, EntityDomain(domain.cell_types[0])),
+        domain,
     )
     assert point.value_shape == (gdim,)
     assert point.dim == gdim
@@ -39,6 +40,9 @@ def test_physical_to_reference_shape(cell, gdim, lagrange_element):
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cell_types[0].topological_dimension
 
-    point = PulledBackPoint(Point([RealScalar(0.1)] * gdim, RD(gdim)), domain)
+    (cell_type,) = domain.cell_types
+    point = PulledBackPoint(
+        Point([RealScalar(0.1)] * gdim, RD(gdim)), domain.parametrization(cell_type)
+    )
     assert point.value_shape == (tdim,)
     assert point.dim == tdim

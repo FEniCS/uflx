@@ -8,7 +8,7 @@
 import pytest
 
 from uflx import function_space, parametrized_domain
-from uflx.domains import AbstractParametrizedDomain
+from uflx.domains import AbstractCellularDomain
 from uflx.functions import Coefficient, TestFunction
 
 
@@ -26,7 +26,7 @@ def test_function_space(cell_name, gdim, lagrange_element):
     """Test function space with single cell."""
     domain = parametrized_domain(lagrange_element(cell_name, 1, (3,)))
     space = function_space(domain, lagrange_element(cell_name, 1))
-    assert isinstance(space.domain, AbstractParametrizedDomain)
+    assert isinstance(space.domain, AbstractCellularDomain)
     assert len(space.elements) == len(space.domain.cell_types) == 1
 
 
@@ -43,7 +43,7 @@ def test_function_space_multiple_cells(gdim, lagrange_element):
         domain,
         [lagrange_element("triangle", 2), lagrange_element("quadrilateral", 2)],
     )
-    assert isinstance(space.domain, AbstractParametrizedDomain)
+    assert isinstance(space.domain, AbstractCellularDomain)
     assert len(space.elements) == len(space.domain.cell_types) == 2
 
 
