@@ -25,11 +25,10 @@ from typing import Any
 
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import (
-    AbstractCellularDomain,
+    RD,
     AbstractCoordinateDomain,
     AbstractParametrization,
     EntityDomain,
-    SubEntityDomain,
     UnionDomain,
 )
 from uflx.entities import AbstractEntity
@@ -67,9 +66,9 @@ class FiniteElementParametrization(AbstractParametrization):
         return EntityDomain(self._element.cell)
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """The map's values are a point of the ambient coordinates."""
-        return self._target_dimension
+        return RD(self._target_dimension)
 
     @property
     def element(self) -> AbstractMappedFiniteElement:
@@ -159,9 +158,9 @@ class ComposedParametrization(AbstractParametrization):
         return self._inner.source
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """Composition lands where the second map lands."""
-        return self._outer.target_dimension
+        return self._outer.target
 
     def _intermediate_point(self, point: AbstractVariable) -> Point:
         """The point the first map gives the second."""
@@ -224,6 +223,7 @@ class AffineParametrization(AbstractParametrization):
     def __init__(
         self,
         source: AbstractCoordinateDomain,
+        target: AbstractCoordinateDomain,
         matrix: Sequence[Sequence[float]],
         offset: Sequence[float],
     ):
@@ -231,22 +231,27 @@ class AffineParametrization(AbstractParametrization):
 
         Args:
             source: The coordinate domain this map starts from
+            target: The coordinate domain it lands in
             matrix: The rows of the matrix of the map
             offset: Where the source's origin lands
 
         Raises:
             ValueError: If the matrix and the offset do not describe a map
-                out of the source
+                from the source to the target
         """
         self._source = source
+        self._target = target
         self._matrix = tuple(tuple(float(a) for a in row) for row in matrix)
         self._offset = tuple(float(b) for b in offset)
         if len({len(row) for row in self._matrix}) > 1:
             raise ValueError("Every row of the matrix must be the same length.")
         if len(self._offset) != len(self._matrix):
             raise ValueError("The offset must have one entry per row of the matrix.")
-        if len(self._matrix) == 0:
-            raise ValueError("A map must land in at least one coordinate.")
+        if len(self._matrix) != target.geometric_dimension:
+            raise ValueError(
+                f"A map into {target!r} lands in {target.geometric_dimension} coordinates, "
+                f"so its matrix must have that many rows."
+            )
         if len(self._matrix[0]) != source.geometric_dimension:
             raise ValueError(
                 f"A map out of {source!r} takes {source.geometric_dimension} coordinates, "
@@ -259,9 +264,9 @@ class AffineParametrization(AbstractParametrization):
         return self._source
 
     @property
-    def target_dimension(self) -> int:
-        """This map lands in as many coordinates as the matrix has rows."""
-        return len(self._matrix)
+    def target(self) -> AbstractCoordinateDomain:
+        """The coordinate domain this map lands in."""
+        return self._target
 
     @property
     def matrix(self) -> tuple[tuple[float, ...], ...]:
@@ -305,20 +310,32 @@ class AffineParametrization(AbstractParametrization):
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"AffineParametrization({self._source!r}, {self._matrix}, {self._offset})"
+        return (
+            f"AffineParametrization({self._source!r}, {self._target!r}, "
+            f"{self._matrix}, {self._offset})"
+        )
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
             isinstance(other, AffineParametrization)
             and other._source == self._source
+            and other._target == self._target
             and other._matrix == self._matrix
             and other._offset == self._offset
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.AffineParametrization", self._source, self._matrix, self._offset))
+        return hash(
+            (
+                "uflx.AffineParametrization",
+                self._source,
+                self._target,
+                self._matrix,
+                self._offset,
+            )
+        )
 
 
 class ParametrizedDomain(AbstractCellularDomain):
@@ -460,9 +477,9 @@ class ComposedDomain(AbstractCellularDomain):
         """The cells are those of the domain being mapped on."""
         return self._domain.cell_types
 
-    def parametrization(self, cell: AbstractEntity) -> ComposedParametrization:
+    def parametrization(self, cell: AbstractEntity) -> AbstractParametrization:
         """Get the inner map for this cell, followed by the outer map."""
-        return ComposedParametrization(self._domain.parametrization(cell), self._outer_map)
+        return composed_parametrization(self._domain.parametrization(cell), self._map)
 
     def on_cell_type(self, cell: AbstractEntity) -> ComposedDomain:
         """Restrict the domain being mapped on, and keep mapping it the same way."""
@@ -483,6 +500,64 @@ class ComposedDomain(AbstractCellularDomain):
     def __hash__(self) -> int:
         """Hash."""
         return hash(("uflx.ComposedDomain", self._domain, self._outer_map))
+
+
+def composed_parametrization(
+    inner: AbstractParametrization, outer: AbstractParametrization
+) -> AbstractParametrization:
+    """Create the map that applies one map and then another.
+
+    Composing with an identity gives the other map back rather than a
+    composition of it, so that a parametrization built by composing reads, and
+    differentiates, as the map it is.
+
+    Only where the identity is the identity of the same coordinate
+    domain. An identity on a cell's coordinates composed with a map out
+    of R^d is not a unit: it relabels which domain the composite starts
+    from, and dropping it would leave a parametrization that no point of the cell
+    is in.
+
+    Args:
+        inner: The map applied first
+        outer: The map applied to the result of the first
+
+    Returns:
+        The composition, or whichever map does the work when the other is
+        a unit for it
+    """
+    if inner.is_identity and inner.source == outer.source:
+        return outer
+    if outer.is_identity and outer.source == inner.target:
+        return inner
+    return ComposedParametrization(inner, outer)
+
+
+def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> ComposedDomain:
+    """Create the domain one sub-entity of an entity is.
+
+    The sub-entity's own coordinate domain carried into the cell's
+    coordinates by the inclusion the cell supplies, which is a
+    composition like any other. Facet 0 of a triangle is a domain of
+    topological dimension one whose points are named by the triangle's
+    two coordinates.
+
+    Args:
+        cell: The entity the sub-entity sits in
+        dim: The dimension of the sub-entity
+        index: Which sub-entity of that dimension
+
+    Returns:
+        That sub-entity, as a domain in the cell's coordinates
+
+    Raises:
+        ValueError: If the cell has no such sub-entity
+    """
+    if dim < 0 or dim > cell.topological_dimension:
+        raise ValueError(f"{cell} has no sub-entities of dimension {dim}.")
+    if index < 0 or index >= cell.sub_entity_count(dim):
+        raise ValueError(f"{cell} has no sub-entity {index} of dimension {dim}.")
+    sub_entity = cell.sub_entities(dim)[index]
+    return ComposedDomain(EntityDomain(sub_entity), cell.sub_entity_inclusion(dim, index))
 
 
 def parametrized_domain(
@@ -518,6 +593,7 @@ def composed_domain(
 
 def affine_parametrization(
     source: AbstractCoordinateDomain,
+    target: AbstractCoordinateDomain,
     matrix: Sequence[Sequence[float]],
     offset: Sequence[float],
 ) -> AffineParametrization:
@@ -525,13 +601,14 @@ def affine_parametrization(
 
     Args:
         source: The coordinate domain the map starts from
+        target: The coordinate domain it lands in
         matrix: The rows of the matrix of the map
         offset: Where the source's origin lands
 
     Returns:
         That affine map
     """
-    return AffineParametrization(source, matrix, offset)
+    return AffineParametrization(source, target, matrix, offset)
 
 
 def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = None) -> UnionDomain:
@@ -574,7 +651,7 @@ def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = Non
             )
         parametrization = domain.parametrization(cell)
         pieces.extend(
-            ComposedDomain(SubEntityDomain(cell, dim, index), parametrization)
+            ComposedDomain(sub_entity_domain(cell, dim, index), parametrization)
             for index in range(cell.sub_entity_count(dim))
         )
     return UnionDomain(tuple(pieces), label)

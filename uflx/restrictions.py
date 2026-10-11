@@ -34,9 +34,10 @@ from uflx.domains import (
     AbstractParametrizedDomain,
     AbstractParametrization,
     AbstractParametrizedDomain,
-    SubEntityDomain,
+    EntityDomain,
     UnionDomain,
 )
+from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
 from uflx.functions import AbstractFunction, AbstractVariable, extract_domain
 from uflx.geometry import AbstractGeometricQuantity, ImagePoint
@@ -110,13 +111,13 @@ class Restriction(AbstractExpression):
                 f"sub-entity into one of them."
             )
         for piece in _pieces_of(domain):
-            inner, cell_map = _inclusion_of(piece)
-            if inner.cell not in field_domain.cell_types:
+            _, cell, cell_map = _inclusion_of(piece)
+            if cell not in field_domain.cell_types:
                 raise ValueError(
-                    f"{inner.cell} is not a cell type of {field_domain!r}, so a field "
+                    f"{cell} is not a cell type of {field_domain!r}, so a field "
                     f"there is not read on its sub-entities."
                 )
-            if cell_map != field_domain.parametrization(inner.cell):
+            if cell_map != field_domain.parametrization(cell):
                 raise ValueError(
                     f"{piece!r} is not a piece of {field_domain!r}, so a field on that "
                     f"domain is not read through this piece's parametrization."
@@ -203,8 +204,9 @@ class Restriction(AbstractExpression):
                 f"{self._domain!r} has a parametrization per piece, so there is no one inclusion to "
                 f"read a field through. Split an integral over it into one per piece first."
             )
-        inclusion, _ = _inclusion_of(self._domain)
-        return ImagePoint(self._variable.to_entity_coordinates(inclusion.sub_entity), inclusion)
+        inclusion, _, _ = _inclusion_of(self._domain)
+        (sub_entity,) = inclusion.cell_types
+        return ImagePoint(self._variable.to_entity_coordinates(sub_entity), inclusion)
 
     def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
         """Read the pulled back field at the included point.
@@ -231,26 +233,38 @@ def _pieces_of(domain: AbstractParametrizedDomain) -> tuple[AbstractParametrized
 
 def _inclusion_of(
     domain: AbstractParametrizedDomain,
-) -> tuple[SubEntityDomain, AbstractParametrization]:
-    """Read a piece as a sub-entity of a cell, mapped on by the cell's own map.
+) -> tuple[AbstractCellularDomain, AbstractEntity, AbstractParametrization]:
+    """Read a piece as a sub-entity sitting in a cell, mapped on by the cell's own map.
+
+    A sub-entity sitting in a cell is a domain whose points are named in
+    that cell's coordinates, which is what its coordinate domain says.
 
     Args:
         domain: One piece of the domain a field is restricted to
 
     Returns:
-        The sub-entity domain it is parametrized from, and the map applied to it
+        The domain it is parametrized from, the cell its points are named in,
+        and the map applied to it
 
     Raises:
         ValueError: If the piece is not a sub-entity of a cell mapped on
     """
     inner = getattr(domain, "inner_domain", None)
     cell_map = getattr(domain, "map", None)
-    if not isinstance(inner, SubEntityDomain) or cell_map is None:
+    sits_in = inner.coordinate_domain if isinstance(inner, AbstractCellularDomain) else None
+    if not isinstance(inner, AbstractCellularDomain) or cell_map is None:
         raise ValueError(
             f"A field is restricted along the inclusion of a sub-entity into its cell, "
             f"and {domain!r} is not one mapped on by a domain's parametrization."
         )
-    return inner, cell_map
+    if not isinstance(sits_in, EntityDomain):
+        raise ValueError(
+            f"A field is restricted along the inclusion of a sub-entity into its cell, "
+            f"and the points of {inner!r} are named in {sits_in!r} rather than in a "
+            f"cell's coordinates."
+        )
+    (cell,) = sits_in.cell_types
+    return inner, cell, cell_map
 
 
 def restrict(field: AbstractExpression, domain: AbstractParametrizedDomain) -> Restriction:

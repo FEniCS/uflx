@@ -55,19 +55,20 @@ class FaceInclusion(AbstractParametrization):
     the region's coordinates around it, which is a face's parametrization.
     """
 
-    def __init__(self, region: AbstractCoordinateDomain, axis: int, held_at: float, dim: int):
+    def __init__(self, region: AbstractCoordinateDomain, axis: int, held_at: float, box: Box):
         """Initialise.
 
         Args:
             region: The box with the held coordinate dropped
             axis: Which coordinate is held
             held_at: The value the held coordinate takes
-            dim: How many coordinates the box has
+            box: The box whose coordinates it lands in
         """
         self._region = region
         self._axis = axis
         self._held_at = held_at
-        self._dim = dim
+        self._box = box
+        self._dim = box.geometric_dimension
 
     @property
     def source(self) -> AbstractCoordinateDomain:
@@ -75,9 +76,9 @@ class FaceInclusion(AbstractParametrization):
         return self._region
 
     @property
-    def target_dimension(self) -> int:
-        """It lands in the box's coordinates."""
-        return self._dim
+    def target(self) -> AbstractCoordinateDomain:
+        """It lands in the box's own coordinates, a box being a coordinate domain."""
+        return self._box
 
     @property
     def _kept(self) -> list[int]:
@@ -114,7 +115,7 @@ class FaceInclusion(AbstractParametrization):
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"FaceInclusion({self._region!r}, {self._axis}, {self._held_at}, {self._dim})"
+        return f"FaceInclusion({self._region!r}, {self._axis}, {self._held_at}, {self._box!r})"
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
@@ -123,12 +124,12 @@ class FaceInclusion(AbstractParametrization):
             and other._region == self._region
             and other._axis == self._axis
             and other._held_at == self._held_at
-            and other._dim == self._dim
+            and other._box == self._box
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("FaceInclusion", self._region, self._axis, self._held_at, self._dim))
+        return hash(("FaceInclusion", self._region, self._axis, self._held_at, self._box))
 
 
 class Box(AbstractParametrizedDomain, AbstractCoordinateDomain):
@@ -272,7 +273,7 @@ class BoxFace(AbstractParametrizedDomain):
     def parametrizations(self) -> tuple[AbstractParametrization, ...]:
         """The inclusion that puts the held coordinate back."""
         region = self.parameter_region
-        return (FaceInclusion(region, self._axis, self.held_at, self.geometric_dimension),)
+        return (FaceInclusion(region, self._axis, self.held_at, self._box),)
 
     def __repr__(self) -> str:
         """Representation."""

@@ -66,9 +66,9 @@ class Parabolic(AbstractParametrization):
         return RD(1)
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """This map lands in the plane."""
-        return 2
+        return RD(2)
 
     def value(self, point: AbstractVariable) -> AbstractExpression:
         """Square the coordinate to get the second component."""
@@ -110,9 +110,9 @@ class Paraboloidal(AbstractParametrization):
         return RD(2)
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """This map lands in space."""
-        return 3
+        return RD(3)
 
     def value(self, point: AbstractVariable) -> AbstractExpression:
         """Sum the squares of the coordinates to get the third component."""
@@ -170,9 +170,9 @@ class LinearMap(AbstractParametrization):
         return RD(len(self._entries))
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """This map lands where it starts."""
-        return len(self._entries)
+        return RD(len(self._entries))
 
     @property
     def determinant(self) -> float:
@@ -381,6 +381,7 @@ def test_an_element_map_knows_its_source_and_target(line_map):
 
     assert isinstance(parametrization, FiniteElementParametrization)
     assert parametrization.source == entity_domain(Interval())
+    assert parametrization.target == RD(1)
     assert parametrization.target_dimension == 1
     assert parametrization.is_affine
 
@@ -447,7 +448,7 @@ def test_composing_with_the_identity_changes_nothing(parabola, entity_point):
     composed = ComposedParametrization(IdentityParametrization(RD(1)), parabola)
     point = Point([entity_point.component(0)], RD(1))
 
-    assert composed.target_dimension == parabola.target_dimension
+    assert composed.target == parabola.target
     assert composed.source == RD(1)
     assert composed.value(point) == parabola.value(point)
     assert simplify(composed.jacobian(point)) == simplify(parabola.jacobian(point))

@@ -215,12 +215,15 @@ Built, as `ds`:
 
 1. **The derived domain of facets.** `AbstractEntity.sub_entity_inclusion(dim, index)`
    is the reference geometry UFLx cannot supply, so the entity's definer supplies it and
-   the default raises; `SubEntityDomain` is a sub-entity of a cell as a domain;
-   `UnionDomain` holds several parametrized pieces; and `facets_of(omega)` is the union of
-   the pieces, each a `ComposedDomain` of the inclusion and the cell's own map. Any
-   codimension, not a facet's: `sub_entities_of(omega, codim)` is the general form, and
-   what fails to generalise above codimension one is a claim rather than a construction,
-   a normal being a single direction only there.
+   the default raises; `sub_entity_domain(cell, dim, index)` is a sub-entity of a cell
+   as a domain, being that inclusion composed onto the sub-entity's own coordinate
+   domain; `UnionDomain` holds several parametrized pieces; and `facets_of(omega)` is the
+   union of the pieces, each a `ComposedDomain` of the inclusion and the cell's own map.
+   A parametrization says which coordinate domain it lands in, which is how a facet's
+   points are known to be named in the cell's coordinates. Any codimension, not a
+   facet's: `sub_entities_of(omega, codim)` is the general form, and what fails to
+   generalise above codimension one is a claim rather than a construction, a normal
+   being a single direction only there.
 1. **Restriction as a pullback along a named parametrization.** `restrict(u, domain)` is `ι*u`,
    the field read at the point the domain's parametrization gives. It lives in the integrand, and
    a gradient shows why: inside a restriction the entity gradient is still carried by

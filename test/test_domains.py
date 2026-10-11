@@ -154,7 +154,7 @@ def test_parametrization_may_block_an_identity_map(lagrange_element):
 def in_the_plane(matrix, offset):
     """A domain of the plane, being the reference interval mapped into it."""
     source = entity_domain(Interval())
-    return composed_domain(source, AffineParametrization(source, matrix, offset))
+    return composed_domain(source, AffineParametrization(source, RD(2), matrix, offset))
 
 
 def test_a_union_takes_the_dimensions_of_its_pieces():

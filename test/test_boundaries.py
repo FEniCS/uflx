@@ -58,7 +58,10 @@ def facet_inclusion(facet: int) -> AffineParametrization:
     first, second = Triangle().sub_entity_vertices(1)[facet]
     start, end = reference_vertices[first], reference_vertices[second]
     return AffineParametrization(
-        entity_domain(Interval()), tuple((end[i] - start[i],) for i in range(2)), start
+        entity_domain(Interval()),
+        entity_domain(Triangle()),
+        tuple((end[i] - start[i],) for i in range(2)),
+        start,
     )
 
 
@@ -92,13 +95,13 @@ stretch_matrix = ((2.0, 0.0), (0.0, 1.0))
 @pytest.fixture
 def stretch():
     """A map of the plane that scales the two axes differently."""
-    return AffineParametrization(RD(2), stretch_matrix, (0.0, 0.0))
+    return AffineParametrization(RD(2), RD(2), stretch_matrix, (0.0, 0.0))
 
 
 @pytest.fixture
 def scaling():
     """A uniform scaling of the plane by three."""
-    return AffineParametrization(RD(2), ((3.0, 0.0), (0.0, 3.0)), (0.0, 0.0))
+    return AffineParametrization(RD(2), RD(2), ((3.0, 0.0), (0.0, 3.0)), (0.0, 0.0))
 
 
 def tangent_of(domain, point) -> list[float]:
@@ -288,7 +291,9 @@ def test_reparametrizing_a_facet_keeps_its_measure_and_flips_its_normal(facets, 
     """
     backwards = composed_domain(
         entity_domain(Interval()),
-        AffineParametrization(entity_domain(Interval()), ((1.0,), (-1.0,)), (0.0, 1.0)),
+        AffineParametrization(
+            entity_domain(Interval()), entity_domain(Triangle()), ((1.0,), (-1.0,)), (0.0, 1.0)
+        ),
     )
 
     assert measure_of(backwards, on_the_facet) == pytest.approx(facet_lengths[2])
@@ -305,7 +310,9 @@ def test_the_boundary_of_an_interval_is_two_points_with_no_normal():
     """
     end = composed_domain(
         entity_domain(PointEntity()),
-        AffineParametrization(entity_domain(PointEntity()), ((),), (1.0,)),
+        AffineParametrization(
+            entity_domain(PointEntity()), entity_domain(Interval()), ((),), (1.0,)
+        ),
     )
     origin = Point([], entity_domain(PointEntity()))
 
@@ -328,7 +335,9 @@ def test_the_measure_of_a_point_is_the_counting_measure():
     """
     end = composed_domain(
         entity_domain(PointEntity()),
-        AffineParametrization(entity_domain(PointEntity()), ((),), (1.0,)),
+        AffineParametrization(
+            entity_domain(PointEntity()), entity_domain(Interval()), ((),), (1.0,)
+        ),
     )
     origin = Point([], entity_domain(PointEntity()))
 

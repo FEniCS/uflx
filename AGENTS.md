@@ -91,11 +91,14 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   `RD`'s own. `AbstractParametrizedDomain` is what geometry and a measure ask for: a map out
   of a parameter region, a reference cell being one kind of region and a region of `RD`
   another, so being integrable over does not imply being made of cells. The actual mesh
-  stays external to UFLx. `SubEntityDomain` is one sub-entity of a cell as a domain, in
-  the cell's coordinates, and `coordinate_domain` is what says those are the cell's and
-  not the ambient ones. `UnionDomain` is a domain presented as several parametrized pieces,
-  which is what the facets of a mesh are, the parameter region no longer identifying the
-  parametrization; it refuses to hand out a parametrization several pieces share.
+  stays external to UFLx. A parametrization says where it lands (`target`) and not only
+  in how many coordinates, which is what lets a domain built from one report its
+  `coordinate_domain`: the inclusion of a facet lands in the cell's coordinates where a
+  mesh's own map lands in the ambient ones. `UnionDomain` is a domain presented as
+  several parametrized pieces, which is what the facets of a mesh are. A domain holds its
+  `parametrizations` rather than keying them by parameter region, since several parametrizations may share
+  one; needing exactly one is a question `geometry.py` asks of the point a quantity is
+  read at.
 - `function_spaces.py` — `AbstractFunctionSpace`: standard FE spaces (domain + element),
   constant spaces (shape + scalar type), or non-FE spaces (domain + shape, no element).
   Do not construct `Argument`/`Coefficient` directly from an element — they must come
@@ -105,12 +108,15 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
 - `parametrizations.py` — `FiniteElementParametrization` and `ParametrizedDomain`, where
   a map is described by a finite element per cell, plus
   `ComposedParametrization`/`ComposedDomain`, which apply two maps in turn via the chain
-  rule, and `AffineParametrization`, a closed form map a consumer can state. `facets_of`
-  (and `sub_entities_of` for any codimension) builds the union whose pieces are a
-  sub-entity's inclusion followed by the cell's own map, which is the domain an exterior
-  facet integral is over. Evaluating an element map is an interpolation sum, so this
-  sits above `function_spaces`/`basis_functions` rather than in `domains`, which must
-  not know how a parametrization is described.
+  rule, and `AffineParametrization`, a closed form map a consumer can state.
+  `sub_entity_domain(cell, dim, index)` is one sub-entity of a cell as a domain: the
+  sub-entity's coordinate domain carried into the cell's by the inclusion the cell
+  supplies, a composition like any other. `facets_of` (and `sub_entities_of` for any
+  codimension) builds the union whose pieces are a sub-entity's inclusion followed by
+  the cell's own map, which is the domain an exterior facet integral is over. Evaluating
+  an element map is an interpolation sum, so this sits above
+  `function_spaces`/`basis_functions` rather than in `domains`, which must not know how
+  a parametrization is described.
 - `expressions.py` — `AbstractExpression`: the base of every symbolic node
   (`BinaryOperator`, `UnaryOperator`, terminals). Carries value shape, free indices,
   domain, scalar type as static, extensible attributes (unlike legacy UFL's fixed

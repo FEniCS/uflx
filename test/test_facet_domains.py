@@ -34,14 +34,7 @@ from uflx import (
     parametrized_domain,
 )
 from uflx.algorithms import pull_back_to_entity
-from uflx.domains import (
-    RD,
-    EntityDomain,
-    SubEntityDomain,
-    entity_domain,
-    sub_entity_domain,
-    union_domain,
-)
+from uflx.domains import RD, EntityDomain, entity_domain, union_domain
 from uflx.expressions import RealScalar
 from uflx.geometry import (
     AbstractGeometricQuantity,
@@ -63,6 +56,7 @@ from uflx.parametrizations import (
     ComposedParametrization,
     facets_of,
     sub_entities_of,
+    sub_entity_domain,
 )
 from uflx.points import Point
 from uflx.restrictions import Restriction, restrict
@@ -93,7 +87,7 @@ class Placed(Entity):
             raise ValueError(f"{sub_entity} is not a simplex, so its vertices do not place it.")
         origin = points[0]
         matrix = [[points[j + 1][i] - origin[i] for j in range(dim)] for i in range(len(origin))]
-        return AffineParametrization(entity_domain(sub_entity), matrix, origin)
+        return AffineParametrization(entity_domain(sub_entity), entity_domain(self), matrix, origin)
 
 
 class PlacedTriangle(Placed, Triangle):
@@ -148,6 +142,7 @@ def test_a_sub_entity_of_a_cell_is_a_domain_in_the_cells_coordinates(facets):
         assert facet.geometric_dimension == 2
         assert facet.cell_types == (Interval(),)
         assert facet.coordinate_domain == EntityDomain(PlacedTriangle())
+        assert facet.inner_domain == EntityDomain(Interval())
 
 
 def test_a_sub_entity_domain_compares_and_hashes_by_value():
@@ -174,13 +169,15 @@ def test_an_entity_that_does_not_place_its_vertices_says_so():
     """Reference geometry is the consumer's, so an entity without it refuses.
 
     The combinatorics are still there: an unplaced triangle knows facet 0
-    has vertices 1 and 2, and only where those are is missing.
+    has vertices 1 and 2, and only where those are is missing. The domain
+    is the inclusion carrying a sub-entity into the cell, so there is no
+    such domain at all until the inclusion is supplied.
     """
-    unplaced = sub_entity_domain(Triangle(), 1, 0)
+    assert Triangle().sub_entities(1)[0] == Interval()
+    assert Triangle().sub_entity_vertices(1)[0] == [0, 1]
 
-    assert unplaced.sub_entity == Interval()
     with pytest.raises(NotImplementedError, match="does not say where its sub-entities are"):
-        unplaced.parametrization(Interval())
+        sub_entity_domain(Triangle(), 1, 0)
 
 
 @pytest.mark.parametrize("k", range(3))
@@ -199,7 +196,8 @@ def test_a_facet_of_a_triangle_has_a_unit_normal_across_it(facets, on_the_facet,
     """Codimension one fixes the normal up to a sign, which nothing here fixes."""
     facet = facets[k]
     normal = normal_of(facet, on_the_facet)
-    jacobian = _as_dense_matrix(facet.parametrization(Interval()).jacobian(on_the_facet))
+    (parametrization,) = facet.parametrizations
+    jacobian = _as_dense_matrix(parametrization.jacobian(on_the_facet))
     tangent = [jacobian.component(i, 0).as_float() for i in range(2)]
 
     assert sum(c * c for c in normal) == pytest.approx(1.0)
@@ -258,7 +256,7 @@ def test_an_edge_in_space_has_no_single_normal():
 
 def test_a_facet_of_a_tetrahedron_is_a_triangle_with_a_normal():
     """Codimension one in three dimensions, to check the geometry is not planar only."""
-    facet = SubEntityDomain(PlacedTetrahedron(), 2, 3)
+    facet = sub_entity_domain(PlacedTetrahedron(), 2, 3)
     point = Point([RealScalar(0.2), RealScalar(0.3)], entity_domain(Triangle()))
 
     # Facet 3 is the one between the three unit vectors, of area sqrt(3)/2
@@ -283,7 +281,7 @@ def stretched_cell():
     """
     return composed_domain(
         entity_domain(PlacedTriangle()),
-        AffineParametrization(RD(2), ((2.0, 0.0), (0.0, 1.0)), (0.0, 0.0)),
+        AffineParametrization(RD(2), RD(2), ((2.0, 0.0), (0.0, 1.0)), (0.0, 0.0)),
     )
 
 
@@ -304,6 +302,7 @@ def test_the_facets_of_a_mesh_are_its_cells_facets_mapped_on(mesh):
     for k, piece in enumerate(facets.pieces):
         assert isinstance(piece, ComposedDomain)
         assert piece.inner_domain == sub_entity_domain(cell, 1, k)
+        assert piece.inner_domain.coordinate_domain == EntityDomain(cell)
         assert piece.map == mesh.parametrization(cell)
         assert piece.cell_types == (Interval(),)
         assert piece.parametrizations == (

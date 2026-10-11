@@ -101,11 +101,14 @@ class BasixCell(uflx.entities.AbstractEntity):
         sub_type = basix.cell.subentity_types(self._basix_cell)[dim][index]
         sub_entity = BasixCell(sub_type)
         source = uflx.domains.EntityDomain(sub_entity)
+        # The inclusion lands in this cell's own coordinates, which is what
+        # tells a domain built from it that its points are named there.
+        lands_in = uflx.domains.EntityDomain(self)
 
         if dim == 0:
             # A point has no coordinates to map, so the inclusion is where it sits.
             return uflx.parametrizations.AffineParametrization(
-                source, [[] for _ in range(gdim)], target[0]
+                source, lands_in, [[] for _ in range(gdim)], target[0]
             )
 
         # Vertex 0 of a reference cell is the origin and vertices 1 to dim
@@ -123,7 +126,7 @@ class BasixCell(uflx.entities.AbstractEntity):
                 f"No affine map takes the vertices of {sub_entity!r} onto sub-entity "
                 f"{index} of dimension {dim} of {self!r}."
             )
-        return uflx.parametrizations.AffineParametrization(source, matrix, offset)
+        return uflx.parametrizations.AffineParametrization(source, lands_in, matrix, offset)
 
     def __hash__(self):
         return hash(("basix.uflx", f"{self!r}"))

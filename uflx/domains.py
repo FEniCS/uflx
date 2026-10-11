@@ -122,6 +122,25 @@ class AbstractParametrizedDomain(AbstractDomain):
     """
 
     @property
+    def coordinate_domain(self) -> AbstractCoordinateDomain:
+        """The coordinate domain this domain's points are named in.
+
+        Where its parametrizations land. They must agree, a domain's points being
+        named one way.
+
+        Raises:
+            ValueError: If its parametrizations land in different coordinates
+        """
+        targets = {parametrization.target for parametrization in self.parametrizations}
+        if len(targets) != 1:
+            raise ValueError(
+                f"The parametrizations of {self!r} land in {len(targets)} different coordinate "
+                f"domains, so its points are not named one way."
+            )
+        (target,) = targets
+        return target
+
+    @property
     @abstractmethod
     def parametrizations(self) -> tuple[AbstractParametrization, ...]:
         """The maps this domain is parametrized by, each knowing its own region.
@@ -195,8 +214,20 @@ class AbstractParametrization(ABC):
 
     @property
     @abstractmethod
+    def target(self) -> AbstractCoordinateDomain:
+        """The coordinate domain this map lands in.
+
+        Where a map lands, and not only how many coordinates it lands in:
+        the inclusion of a facet into a cell lands in the cell's
+        coordinates, where a mesh's own map lands in the ambient ones.
+        That is what tells a domain built from a map which coordinates
+        name its points.
+        """
+
+    @property
     def target_dimension(self) -> int:
         """The number of coordinates this map lands in."""
+        return self.target.geometric_dimension
 
     @abstractmethod
     def value(self, point: AbstractVariable) -> AbstractExpression:
@@ -270,9 +301,9 @@ class IdentityParametrization(AbstractParametrization):
         return self._domain
 
     @property
-    def target_dimension(self) -> int:
+    def target(self) -> AbstractCoordinateDomain:
         """This map lands where it starts."""
-        return self._domain.geometric_dimension
+        return self._domain
 
     def value(self, point: AbstractVariable) -> AbstractExpression:
         """Give back the coordinates of the point."""
@@ -519,115 +550,6 @@ class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
         return hash(("uflx.EntityDomain", self._entity))
 
 
-class SubEntityDomain(AbstractCellularDomain):
-    """One sub-entity of an entity, as a domain in the entity's coordinates.
-
-    Facet 0 of a triangle is a domain of topological dimension one whose
-    points are named by two coordinates, those of the triangle, and whose
-    parametrization is the inclusion the entity supplies. It is of codimension one
-    in the cell without being a boundary: which facets of a mesh lie on
-    one is a question about a cell complex, and this is only the geometry
-    of a sub-entity sitting in its cell.
-
-    The dimension is any, not only a facet's. The machinery is the same
-    either way, an edge of a tetrahedron being a domain of this kind too,
-    and what does not generalise is a claim rather than a construction: a
-    normal is a single direction only in codimension one.
-    """
-
-    def __init__(self, cell: AbstractEntity, dim: int, index: int):
-        """Initialise.
-
-        Args:
-            cell: The entity the sub-entity sits in
-            dim: The dimension of the sub-entity
-            index: Which sub-entity of that dimension
-
-        Raises:
-            ValueError: If the cell has no such sub-entity
-        """
-        if dim < 0 or dim > cell.topological_dimension:
-            raise ValueError(f"{cell} has no sub-entities of dimension {dim}.")
-        if index < 0 or index >= cell.sub_entity_count(dim):
-            raise ValueError(f"{cell} has no sub-entity {index} of dimension {dim}.")
-        self._cell = cell
-        self._dim = dim
-        self._index = index
-
-    @property
-    def cell(self) -> AbstractEntity:
-        """The entity the sub-entity sits in."""
-        return self._cell
-
-    @property
-    def dim(self) -> int:
-        """The dimension of the sub-entity."""
-        return self._dim
-
-    @property
-    def index(self) -> int:
-        """Which sub-entity of that dimension."""
-        return self._index
-
-    @property
-    def sub_entity(self) -> AbstractEntity:
-        """The sub-entity itself."""
-        return self._cell.sub_entities(self._dim)[self._index]
-
-    @property
-    def geometric_dimension(self) -> int:
-        """A sub-entity is named in the coordinates of the cell it sits in."""
-        return self._cell.topological_dimension
-
-    @property
-    def topological_dimension(self) -> int:
-        """The dimension of the sub-entity."""
-        return self._dim
-
-    @property
-    def coordinate_domain(self) -> AbstractCoordinateDomain:
-        """Those coordinates are the cell's."""
-        return EntityDomain(self._cell)
-
-    @property
-    def cell_types(self) -> tuple[AbstractEntity, ...]:
-        """The one cell type is the sub-entity."""
-        return (self.sub_entity,)
-
-    def parametrization(self, cell: AbstractEntity) -> AbstractParametrization:
-        """Get the inclusion of the sub-entity into its cell.
-
-        Raises:
-            ValueError: If the cell is not this domain's sub-entity
-        """
-        if cell != self.sub_entity:
-            raise ValueError(f"{cell} is not the sub-entity of this domain.")
-        return self._cell.sub_entity_inclusion(self._dim, self._index)
-
-    def on_cell_type(self, cell: AbstractEntity) -> SubEntityDomain:
-        """A sub-entity domain has one cell type already, which is the sub-entity."""
-        if cell != self.sub_entity:
-            raise ValueError(f"{cell} is not the sub-entity of this domain.")
-        return self
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"SubEntityDomain({self._cell!r}, {self._dim}, {self._index})"
-
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return (
-            isinstance(other, SubEntityDomain)
-            and self._cell == other._cell
-            and self._dim == other._dim
-            and self._index == other._index
-        )
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.SubEntityDomain", self._cell, self._dim, self._index))
-
-
 def entity_domain(entity: AbstractEntity) -> EntityDomain:
     """Create the coordinate domain of an entity.
 
@@ -638,20 +560,6 @@ def entity_domain(entity: AbstractEntity) -> EntityDomain:
         The entity's coordinate domain
     """
     return EntityDomain(entity)
-
-
-def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> SubEntityDomain:
-    """Create the domain one sub-entity of an entity is.
-
-    Args:
-        cell: The entity the sub-entity sits in
-        dim: The dimension of the sub-entity
-        index: Which sub-entity of that dimension
-
-    Returns:
-        That sub-entity, as a domain in the cell's coordinates
-    """
-    return SubEntityDomain(cell, dim, index)
 
 
 def union_domain(pieces: Sequence[AbstractParametrizedDomain], label: Any = None) -> UnionDomain:
