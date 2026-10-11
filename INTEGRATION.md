@@ -113,8 +113,25 @@ The derived domain is named for the sub-entities it is parametrized by and not f
 boundary. Which facets it has — those with one adjacent cell, those with two, those a
 consumer has marked — is a question about a cell complex UFLx does not own, so
 membership is external, as a mesh's cells are. `facets_of` says only how such a domain
-is parametrized, and it carries an opaque label for a consumer to tell one selection from
-another, which is what UFL encodes as a subdomain id on the measure.
+is parametrized.
+
+A marked selection of them is a domain and not an id on a measure, which is what UFL
+encodes as a subdomain id. `LabelledDomain` is a domain and an opaque label a consumer
+selects it by, changing no cell, no parametrization and no coordinate, so changing no density and
+no kernel either — only identity, which is the point. It labels each *piece* rather than
+the union of them, because splitting an integral retargets it onto one piece at a time:
+a label on the union alone would be gone by the time there were kernels to assign to it,
+where a label on the pieces rides into the kernel the way the facet's own geometry does,
+through the quantities that name the piece. The same mechanism serves marked cells, so
+`dx` of a subdomain needs no special case. A label says which entities a consumer means
+and nothing about the fields on them, so an integral takes a label off before asking
+whether a function belongs to the domain it is over.
+
+The local index of a sub-entity is not a label of this kind. It is part of a parametrization's
+identity, picking which inclusion and so which kernel, where a tag picks which entities
+a kernel runs on. The inclusion an entity supplies says which sub-entity it is
+(`IncludesASubEntity`), so the index is read off a pulled back integral rather than
+recovered by matching the inclusion's matrix.
 
 Several facets are parametrized from one reference facet, so the parameter region no longer
 identifies the parametrization, and the domain is held as a union of parametrized pieces. A union is
@@ -250,15 +267,6 @@ Not built:
    measure a sub-entity domain of full codimension would give. The empty Gram
    determinant is one, but the empty matrix its Jacobian needs cannot be built, as
    `test_the_measure_of_a_point_is_the_counting_measure` records.
-1. **A tag carried as far as a kernel.** A marked part of a domain is a domain, as note
-   3 says, and `UnionDomain`'s label records which selection was meant. It does not
-   reach a kernel: splitting an integral retargets it onto one piece at a time and a
-   piece carries no label, so two differently marked facet integrals pull back to
-   kernels that cannot be told apart. What the label wants is to be on a domain at every
-   level -- a thin labelled domain, delegating its parametrizations, applied per piece -- after
-   which it rides into the kernel the way a facet's own geometry already does, through
-   the quantities that name the piece. That mechanism serves marked cells as much as
-   marked facets, and it would let the union's own label go.
 1. **Atomic measures**, for a point evaluation and for a quadrature rule as a sum of
    Diracs. A sibling of `Measure` rather than a weighting of one.
 
@@ -280,6 +288,10 @@ Acceptance criteria, as tests rather than prose to agree with.
 - **An axisymmetric measure is the volume element of a cylindrical parametrization.** Needs
   trigonometric functions in the expression language, of which `Sqrt` is currently the
   only neighbour.
+- **A marked part of a domain is a domain, as far as a kernel.** `ds(3)` and `ds(4)`
+  pull back to kernels that still say which selection they are for, and which
+  sub-entity. `test_a_marked_tag_is_still_there_in_the_kernels` and
+  `test_a_kernel_says_which_sub_entity_it_is_for`.
 - **An exterior facet integral is the one measure over a domain of facets.** Pulling
   `inner(restrict(grad(u), facets), UnitNormal(facets)) * dx(facets)` back gives one
   integral per facet over the reference facet, carrying that facet's volume element and

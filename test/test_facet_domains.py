@@ -38,7 +38,7 @@ from uflx import (
     parametrized_domain,
 )
 from uflx.algorithms import pull_back_to_entity
-from uflx.domains import RD, EntityDomain, entity_domain, union_domain
+from uflx.domains import RD, EntityDomain, LabelledDomain, entity_domain, union_domain
 from uflx.expressions import RealScalar
 from uflx.geometry import (
     AbstractGeometricQuantity,
@@ -58,7 +58,9 @@ from uflx.parametrizations import (
     AffineParametrization,
     ComposedDomain,
     ComposedParametrization,
+    SubEntityInclusion,
     facets_of,
+    included_sub_entity,
     sub_entities_of,
     sub_entity_domain,
 )
@@ -77,8 +79,12 @@ class Placed(Entity):
 
     vertices: tuple[tuple[float, ...], ...]
 
-    def sub_entity_inclusion(self, dim: int, index: int) -> AffineParametrization:
+    def sub_entity_inclusion(self, dim: int, index: int) -> SubEntityInclusion:
         """Get the affine map onto the vertices this cell gives the sub-entity.
+
+        It says which sub-entity it includes, which the cell knows because
+        it was asked for that one, and which is what identifies a kernel
+        along with the cell type.
 
         Raises:
             ValueError: If the sub-entity is not a simplex, which needs its
@@ -91,7 +97,9 @@ class Placed(Entity):
             raise ValueError(f"{sub_entity} is not a simplex, so its vertices do not place it.")
         origin = points[0]
         matrix = [[points[j + 1][i] - origin[i] for j in range(dim)] for i in range(len(origin))]
-        return AffineParametrization(entity_domain(sub_entity), entity_domain(self), matrix, origin)
+        return SubEntityInclusion(
+            entity_domain(sub_entity), entity_domain(self), matrix, origin, dim, index
+        )
 
 
 class PlacedTriangle(Placed, Triangle):
@@ -330,12 +338,52 @@ def test_the_facets_of_a_mesh_of_two_cell_types_are_both_cells_facets(mesh):
     assert facets.geometric_dimension == 3
 
 
-def test_a_label_tells_one_part_of_a_boundary_from_another(mesh):
-    """The consumer says which facets it means; the measure never carries an id."""
-    assert facets_of(mesh) == facets_of(mesh)
-    assert facets_of(mesh, 1) != facets_of(mesh, 2)
-    assert facets_of(mesh, 1).label == 1
-    assert facets_of(mesh).label is None
+def test_a_label_marks_each_piece_so_a_kernel_keeps_it(mesh, space):
+    """The consumer says which facets it means, and a kernel still says it.
+
+    The label is on the pieces and not on the union, so splitting the
+    integral keeps it: the pull back leaves the piece named in the
+    quantities it reads, and the label is there to be read off.
+    """
+    v = TestFunction(space)
+    marked = facets_of(mesh, "inflow")
+
+    assert marked != facets_of(mesh)
+    assert marked != facets_of(mesh, "outflow")
+    assert all(
+        isinstance(piece, LabelledDomain) and piece.label == "inflow" for piece in marked.pieces
+    )
+    assert all(not isinstance(piece, LabelledDomain) for piece in facets_of(mesh).pieces)
+
+    pulled = pull_back_to_entity(restrict(v, marked) * dx(marked))
+    assert isinstance(pulled, IntegralSum)
+    for term in pulled.terms:
+        read_on = quantities_in(term.integrand)["VolumeElement"].domain
+        assert isinstance(read_on, LabelledDomain)
+        assert read_on.label == "inflow"
+
+
+def test_a_kernel_says_which_sub_entity_it_is_for(mesh, space):
+    """The local index, which identifies a kernel along with the cell type.
+
+    The inclusion an entity supplies says which sub-entity it is, so the
+    index can be read off a pulled back integral rather than recovered by
+    matching the inclusion's matrix against each of the cell's.
+    """
+    v = TestFunction(space)
+    facets = facets_of(mesh)
+
+    assert [included_sub_entity(piece) for piece in facets.pieces] == [(1, 0), (1, 1), (1, 2)]
+
+    pulled = pull_back_to_entity(restrict(v, facets) * dx(facets))
+    assert isinstance(pulled, IntegralSum)
+    indices = [
+        included_sub_entity(quantities_in(term.integrand)["VolumeElement"].domain)
+        for term in pulled.terms
+    ]
+    assert indices == [(1, 0), (1, 1), (1, 2)]
+
+    assert included_sub_entity(mesh) is None
 
 
 def test_sub_entities_of_a_codimension_a_cell_does_not_have_are_refused(mesh):

@@ -98,7 +98,10 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   several parametrized pieces, which is what the facets of a mesh are. A domain holds its
   `parametrizations` rather than keying them by parameter region, since several parametrizations may share
   one; needing exactly one is a question `geometry.py` asks of the point a quantity is
-  read at.
+  read at. `LabelledDomain` is a domain and an opaque label a consumer selects it by — a
+  marked subdomain being a domain and not an id on a measure — delegating everything
+  geometric, and `unlabelled` takes the labels off, which an integral does before asking
+  whether a function belongs to the domain it is over.
 - `function_spaces.py` — `AbstractFunctionSpace`: standard FE spaces (domain + element),
   constant spaces (shape + scalar type), or non-FE spaces (domain + shape, no element).
   Do not construct `Argument`/`Coefficient` directly from an element — they must come
@@ -113,10 +116,13 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   sub-entity's coordinate domain carried into the cell's by the inclusion the cell
   supplies, a composition like any other. `facets_of` (and `sub_entities_of` for any
   codimension) builds the union whose pieces are a sub-entity's inclusion followed by
-  the cell's own map, which is the domain an exterior facet integral is over. Evaluating
-  an element map is an interpolation sum, so this sits above
-  `function_spaces`/`basis_functions` rather than in `domains`, which must not know how
-  a parametrization is described.
+  the cell's own map, which is the domain an exterior facet integral is over; a label
+  marks each piece, so it survives the split onto one. `SubEntityInclusion` is the
+  affine inclusion that says which sub-entity it is, and `included_sub_entity` reads
+  that back off a piece or a pulled back integral's geometry, which is what identifies a
+  kernel along with the cell type. Evaluating an element map is an interpolation sum, so
+  this sits above `function_spaces`/`basis_functions` rather than in `domains`, which
+  must not know how a parametrization is described.
 - `expressions.py` — `AbstractExpression`: the base of every symbolic node
   (`BinaryOperator`, `UnaryOperator`, terminals). Carries value shape, free indices,
   domain, scalar type as static, extensible attributes (unlike legacy UFL's fixed
@@ -133,7 +139,7 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   tangential one. `evaluate_at` is the shared pass that tells an expression where it is
   read, over the `ReadAtAVariable` nodes (`functions.py`) -- a function, a geometric
   quantity or a restriction, each built before there is a point and told later.
-- `legacy.py` — the legacy UFL spellings (`ds`, `ds(3)`, `dx`, and `dS` and
+- `legacy.py` — the legacy UFL spellings (`ds`, `ds(3)`, `dx`, `dx(2)`, and `dS` and
   `facet_normal` saying why they cannot be built), which infer the domain and insert the
   restrictions to build the native form. Opt in by importing it; nothing in `uflx`
   imports it, since inference is what INTEGRATION.md note 2 argues against.

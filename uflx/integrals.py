@@ -20,6 +20,7 @@ from uflx.domains import (
     AbstractCellularDomain,
     EntityDomain,
     UnionDomain,
+    unlabelled,
 )
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
@@ -210,7 +211,10 @@ class Integral(AbstractIntegral):
             if node in restricted:
                 continue
             if isinstance(node, AbstractFunction) and node.variable is None:
-                if node.function_space.domain != domain:
+                # Labels are taken off first: a label says which entities a
+                # consumer means and nothing about the fields on them, so a
+                # function on a domain is a function on any selection of it.
+                if unlabelled(node.function_space.domain) != unlabelled(domain):
                     raise ValueError(
                         f"Cannot integrate a function on {node.function_space.domain!r} "
                         f"over {domain!r}. A function reaches another domain only "

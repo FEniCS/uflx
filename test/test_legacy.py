@@ -22,11 +22,11 @@ from uflx import (
     parametrized_domain,
 )
 from uflx.algorithms import pull_back_to_entity
-from uflx.domains import EntityDomain
-from uflx.geometry import UnitNormal
+from uflx.domains import EntityDomain, LabelledDomain, labelled_domain
+from uflx.geometry import AbstractGeometricQuantity, UnitNormal
 from uflx.graphs import as_graph
 from uflx.integrals import Integral, IntegralSum
-from uflx.legacy import ExteriorFacets, dS, ds, dx, facet_normal
+from uflx.legacy import Cells, ExteriorFacets, dS, ds, dx, facet_normal
 from uflx.restrictions import Restriction
 
 
@@ -120,20 +120,55 @@ def test_a_cell_integral_and_a_facet_one_add(mesh, space):
     assert domains.count(EntityDomain(Interval())) == 3
 
 
-def test_a_marked_part_of_the_facets_is_refused_rather_than_dropped(space):
-    """``ds(3)``: a subdomain is a domain, and a label does not reach a kernel.
+def test_a_marked_part_of_the_facets_is_another_domain(mesh, space):
+    """``ds(3)``: a subdomain is a domain, labelled, and not an id on a measure."""
+    u, v = Coefficient(space), TestFunction(space)
 
-    The tag survives on the domain of facets and is then lost by the
-    split, since a piece carries no label, which is exactly where a
-    consumer would need it. So it refuses rather than building a form
-    whose tag has quietly gone.
+    marked = u * v * ds(3)
+    unmarked = u * v * ds
+    other = u * v * ds(4)
+    assert isinstance(marked, Integral)
+    assert isinstance(unmarked, Integral)
+    assert isinstance(other, Integral)
+
+    assert marked.domain == facets_of(mesh, ExteriorFacets(3))
+    assert marked.domain != unmarked.domain
+    assert marked.domain != other.domain
+    assert len(kernels(marked)) == 3
+
+
+def test_a_marked_tag_is_still_there_in_the_kernels(mesh, space):
+    """What a label is for: a consumer can tell which facets a kernel is for.
+
+    The label is on each piece, so splitting and pulling back keep it,
+    where a label on the domain of facets alone would have been dropped
+    at the split.
     """
     u, v = Coefficient(space), TestFunction(space)
 
-    with pytest.raises(NotImplementedError, match="facets marked 3"):
-        u * v * ds(3)
-    with pytest.raises(NotImplementedError, match="subdomain"):
-        u * v * dx(3)
+    for term in kernels(u * v * ds(3)):
+        read_on = [
+            node.domain
+            for node in as_graph(term.integrand).ordered_nodes()
+            if isinstance(node, AbstractGeometricQuantity)
+        ]
+        assert all(isinstance(domain, LabelledDomain) for domain in read_on)
+        labels = {domain.label for domain in read_on if isinstance(domain, LabelledDomain)}
+        assert labels == {ExteriorFacets(3)}
+
+
+def test_a_marked_part_of_the_cells_is_another_domain_too(mesh, space):
+    """``dx(2)``: the same mechanism, so marked cells need no special case."""
+    u, v = Coefficient(space), TestFunction(space)
+
+    marked = u * v * dx(2)
+    unmarked = u * v * dx
+    assert isinstance(marked, Integral)
+    assert isinstance(unmarked, Integral)
+
+    assert marked.domain == labelled_domain(mesh, Cells(2))
+    assert marked.domain != unmarked.domain
+    assert len(kernels(marked)) == 1
 
 
 def test_a_named_domain_is_used_rather_than_inferred(mesh, space):

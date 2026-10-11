@@ -26,9 +26,12 @@ from typing import Any
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import (
     RD,
+    AbstractParametrizedDomain,
     AbstractCoordinateDomain,
     AbstractParametrization,
     EntityDomain,
+    IncludesASubEntity,
+    LabelledDomain,
     UnionDomain,
 )
 from uflx.entities import AbstractEntity
@@ -338,6 +341,67 @@ class AffineParametrization(AbstractParametrization):
         )
 
 
+class SubEntityInclusion(AffineParametrization):
+    """The affine inclusion of a sub-entity into its cell, which says which one.
+
+    An entity's own reference geometry, as the affine map taking the
+    sub-entity's coordinates to the ones it has in the cell, plus the
+    dimension and index it includes. Saying which it is costs the entity
+    nothing, since it was asked for that sub-entity, and it is what lets a
+    consumer read the local index off a kernel rather than match the
+    matrix against each of the cell's inclusions.
+
+    Implements :class:`uflx.domains.IncludesASubEntity`.
+    """
+
+    def __init__(
+        self,
+        source: AbstractCoordinateDomain,
+        target: AbstractCoordinateDomain,
+        matrix: Sequence[Sequence[float]],
+        offset: Sequence[float],
+        dim: int,
+        index: int,
+    ):
+        """Initialise.
+
+        Args:
+            source: The sub-entity's coordinate domain
+            target: The cell's coordinate domain, which it lands in
+            matrix: The rows of the matrix of the map
+            offset: Where the sub-entity's origin lands
+            dim: The dimension of the sub-entity included
+            index: Which sub-entity of that dimension
+        """
+        super().__init__(source, target, matrix, offset)
+        self._dim = dim
+        self._index = index
+
+    @property
+    def sub_entity(self) -> tuple[int, int]:
+        """The dimension of the sub-entity included, and which one it is."""
+        return self._dim, self._index
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return (
+            f"SubEntityInclusion({self.source!r}, {self.target!r}, {self.matrix}, "
+            f"{self.offset}, {self._dim}, {self._index})"
+        )
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, SubEntityInclusion)
+            and super().__eq__(other)
+            and other.sub_entity == self.sub_entity
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.SubEntityInclusion", super().__hash__(), self._dim, self._index))
+
+
 class ParametrizedDomain(AbstractCellularDomain):
     """A domain whose parametrization is described by a finite element per cell."""
 
@@ -532,6 +596,31 @@ def composed_parametrization(
     return ComposedParametrization(inner, outer)
 
 
+def included_sub_entity(domain: AbstractParametrizedDomain) -> tuple[int, int] | None:
+    """Which sub-entity of a cell a domain includes, where its parametrization says.
+
+    What identifies a kernel along with the cell type. A facet of a mesh
+    is the inclusion of a sub-entity followed by the cell's own map, so
+    the question is asked of the inner domain's parametrization, and through a
+    label as well, a selection being no part of the geometry.
+
+    Args:
+        domain: The domain to ask, typically a piece a facet integral was
+            split onto
+
+    Returns:
+        The dimension and index of the sub-entity, or None where the parametrization
+        does not say
+    """
+    seen: AbstractParametrizedDomain | None = domain
+    while seen is not None:
+        parametrization = getattr(seen, "map", None)
+        if isinstance(parametrization, IncludesASubEntity):
+            return parametrization.sub_entity
+        seen = getattr(seen, "inner_domain", None)
+    return None
+
+
 def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> ComposedDomain:
     """Create the domain one sub-entity of an entity is.
 
@@ -629,11 +718,15 @@ def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = Non
     shared by, is external, as its cells are. This says only how such a
     domain is parametrized.
 
+    A label marks each piece rather than the union of them, so that
+    splitting an integral keeps it and a kernel says which selection it is
+    for.
+
     Args:
         domain: The domain whose cells' sub-entities are taken
         codim: Their codimension in each cell
-        label: Anything hashable telling this domain from another of the
-            same sub-entities
+        label: Anything hashable the consumer selects these sub-entities
+            by, or None for no selection
 
     Returns:
         The union of those sub-entities, mapped on by the domain
@@ -641,7 +734,7 @@ def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = Non
     Raises:
         ValueError: If a cell type has no sub-entities of that codimension
     """
-    pieces = []
+    pieces: list[AbstractParametrizedDomain] = []
     for cell in domain.cell_types:
         dim = cell.topological_dimension - codim
         if dim < 0:
@@ -650,11 +743,10 @@ def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = Non
                 f"has no sub-entities of codimension {codim}."
             )
         parametrization = domain.parametrization(cell)
-        pieces.extend(
-            ComposedDomain(sub_entity_domain(cell, dim, index), parametrization)
-            for index in range(cell.sub_entity_count(dim))
-        )
-    return UnionDomain(tuple(pieces), label)
+        for index in range(cell.sub_entity_count(dim)):
+            piece = ComposedDomain(sub_entity_domain(cell, dim, index), parametrization)
+            pieces.append(piece if label is None else LabelledDomain(piece, label))
+    return UnionDomain(tuple(pieces))
 
 
 def facets_of(domain: AbstractCellularDomain, label: Any = None) -> UnionDomain:
@@ -665,8 +757,7 @@ def facets_of(domain: AbstractCellularDomain, label: Any = None) -> UnionDomain:
 
     Args:
         domain: The domain whose cells' facets are taken
-        label: Anything hashable telling this domain from another of the
-            same facets
+        label: Anything hashable the consumer selects these facets by
 
     Returns:
         The union of those facets, mapped on by the domain

@@ -42,7 +42,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from uflx.entities import AbstractEntity
 from uflx.tensors import Identity, Vector
@@ -284,6 +284,27 @@ class AbstractParametrization(ABC):
         """Representation."""
 
 
+@runtime_checkable
+class IncludesASubEntity(Protocol):
+    """A map that says which sub-entity of a cell it includes.
+
+    The inclusion an entity supplies is what identifies a kernel along
+    with the cell type: one kernel per sub-entity, since each has its own
+    map. A consumer that generates code needs the index rather than the
+    matrix, so an inclusion that knows which sub-entity it is says so,
+    and the index survives into a pulled back integral in the quantities
+    that name the domain it parametrizations.
+
+    Not required of an inclusion, so a map that does not know is still a
+    parametrization like any other. :class:`uflx.parametrizations.SubEntityInclusion`
+    is the affine implementation.
+    """
+
+    @property
+    def sub_entity(self) -> tuple[int, int]:
+        """The dimension of the sub-entity included, and which one it is."""
+
+
 class IdentityParametrization(AbstractParametrization):
     """The map that leaves a coordinate domain's points where they are."""
 
@@ -351,20 +372,18 @@ class UnionDomain(AbstractParametrizedDomain):
     between them. Whether they meet, and which of them a mesh actually
     has, is external, as the cells of a mesh are.
 
-    A label rides along, opaque: two unions of the same pieces and
-    different labels are different domains. It is what lets a consumer
-    name a part of a boundary without the measure acquiring a subdomain
-    id, since a subdomain is a domain.
+    Which selection of them is meant is carried by the pieces, each a
+    :class:`LabelledDomain` where a consumer has marked one, and not by
+    the union: a union of differently labelled pieces is already a
+    different domain, and a label on the union alone would be dropped the
+    moment an integral over it were split onto one piece.
     """
 
-    def __init__(self, pieces: tuple[AbstractParametrizedDomain, ...], label: Any = None):
+    def __init__(self, pieces: tuple[AbstractParametrizedDomain, ...]):
         """Initialise.
 
         Args:
             pieces: The parametrized domains being united, in order
-            label: Anything hashable the consumer uses to tell this union
-                from another of the same pieces, compared by value and
-                never interpreted
 
         Raises:
             ValueError: If there are no pieces, or they are not in the same
@@ -379,17 +398,11 @@ class UnionDomain(AbstractParametrizedDomain):
                 f"these are in {sorted(dimensions)}."
             )
         self._pieces = pieces
-        self._label = label
 
     @property
     def pieces(self) -> tuple[AbstractParametrizedDomain, ...]:
         """The parametrized domains being united."""
         return self._pieces
-
-    @property
-    def label(self) -> Any:
-        """What tells this union from another of the same pieces."""
-        return self._label
 
     @property
     def geometric_dimension(self) -> int:
@@ -420,21 +433,15 @@ class UnionDomain(AbstractParametrizedDomain):
     def __repr__(self) -> str:
         """Representation."""
         pieces = ", ".join(repr(piece) for piece in self._pieces)
-        if self._label is None:
-            return f"UnionDomain(({pieces}))"
-        return f"UnionDomain(({pieces}), {self._label!r})"
+        return f"UnionDomain(({pieces}))"
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
-        return (
-            isinstance(other, UnionDomain)
-            and self._pieces == other._pieces
-            and self._label == other._label
-        )
+        return isinstance(other, UnionDomain) and self._pieces == other._pieces
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.UnionDomain", self._pieces, self._label))
+        return hash(("uflx.UnionDomain", self._pieces))
 
 
 class AbstractCellularDomain(AbstractDomain):
@@ -550,6 +557,112 @@ class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
         return hash(("uflx.EntityDomain", self._entity))
 
 
+class LabelledDomain(AbstractCellularDomain):
+    """A domain and the label a consumer selects it by.
+
+    Everything geometric is the domain's: the same cells, the same parametrizations
+    and the same coordinates, so no quantity, no density and no kernel
+    changes. What changes is identity, which is the point: a marked part
+    of a domain is a domain, as INTEGRATION.md note 3 says, and two
+    selections are two domains rather than one measure carrying a
+    subdomain id.
+
+    The label is opaque and hashable. Which entities a consumer has
+    marked is external, as a mesh's cells are; this records only that a
+    selection was meant and which one.
+
+    It labels a piece rather than a union of them, so that splitting an
+    integral keeps it: the pull back leaves quantities naming the piece in
+    the integrand, so a kernel says which selection it is for.
+    """
+
+    def __init__(self, domain: AbstractCellularDomain, label: Any):
+        """Initialise.
+
+        Args:
+            domain: The domain being selected
+            label: Anything hashable the consumer selects it by
+        """
+        self._domain = domain
+        self._label = label
+
+    @property
+    def domain(self) -> AbstractCellularDomain:
+        """The domain being selected."""
+        return self._domain
+
+    @property
+    def label(self) -> Any:
+        """What the consumer selects it by."""
+        return self._label
+
+    @property
+    def geometric_dimension(self) -> int:
+        """A label changes no geometry."""
+        return self._domain.geometric_dimension
+
+    @property
+    def topological_dimension(self) -> int | None:
+        """A label changes no topology."""
+        return self._domain.topological_dimension
+
+    @property
+    def coordinate_domain(self) -> AbstractCoordinateDomain:
+        """A label changes no coordinates."""
+        return self._domain.coordinate_domain
+
+    @property
+    def cell_types(self) -> tuple[AbstractEntity, ...]:
+        """The cells are the domain's."""
+        return self._domain.cell_types
+
+    def parametrization(self, cell: AbstractEntity) -> AbstractParametrization:
+        """The parametrization is the domain's."""
+        return self._domain.parametrization(cell)
+
+    def restricted_to(self, cell: AbstractEntity) -> LabelledDomain:
+        """Restricting keeps the label, a cell type being no part of it."""
+        return LabelledDomain(self._domain.restricted_to(cell), self._label)
+
+    @property
+    def inner_domain(self) -> AbstractCellularDomain:
+        """What the labelled domain is a composite of, if it is one.
+
+        Delegated so that a restriction can still read the inclusion a
+        field is restricted along. This is the one place a label is not
+        transparent, so it is the one delegation worth naming.
+
+        Raises:
+            AttributeError: If the domain labelled is not a composite
+        """
+        return self._domain.inner_domain  # pyrefly: ignore[missing-attribute]
+
+    @property
+    def map(self) -> AbstractParametrization:
+        """The map applied to that inner domain, likewise delegated.
+
+        Raises:
+            AttributeError: If the domain labelled is not a composite
+        """
+        return self._domain.map  # pyrefly: ignore[missing-attribute]
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"LabelledDomain({self._domain!r}, {self._label!r})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, LabelledDomain)
+            and self._domain == other._domain
+            and self._label == other._label
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.LabelledDomain", self._domain, self._label))
+
+
 def entity_domain(entity: AbstractEntity) -> EntityDomain:
     """Create the coordinate domain of an entity.
 
@@ -562,15 +675,44 @@ def entity_domain(entity: AbstractEntity) -> EntityDomain:
     return EntityDomain(entity)
 
 
-def union_domain(pieces: Sequence[AbstractParametrizedDomain], label: Any = None) -> UnionDomain:
+def union_domain(pieces: Sequence[AbstractParametrizedDomain]) -> UnionDomain:
     """Create the domain several parametrized pieces make up.
 
     Args:
         pieces: The parametrized domains being united, in order
-        label: Anything hashable telling this union from another of the
-            same pieces
 
     Returns:
         The union of those pieces
     """
-    return UnionDomain(tuple(pieces), label)
+    return UnionDomain(tuple(pieces))
+
+
+def labelled_domain(domain: AbstractCellularDomain, label: Any) -> LabelledDomain:
+    """Create the domain a consumer has selected under a label.
+
+    Args:
+        domain: The domain being selected
+        label: Anything hashable the consumer selects it by
+
+    Returns:
+        The same domain, told apart by that label
+    """
+    return LabelledDomain(domain, label)
+
+
+def unlabelled(domain: AbstractDomain) -> AbstractDomain:
+    """The domain a selection selects from, or the domain itself.
+
+    A label says which entities a consumer means and nothing about the
+    fields on them, so a function on a domain is a function on any
+    selection of it. This is how to ask what it is a selection of.
+
+    Args:
+        domain: A domain, labelled or not
+
+    Returns:
+        The domain with any labels taken off
+    """
+    while isinstance(domain, LabelledDomain):
+        domain = domain.domain
+    return domain

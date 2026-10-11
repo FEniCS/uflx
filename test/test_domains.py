@@ -21,6 +21,7 @@ from uflx.domains import (
     AbstractCoordinateDomain,
     EntityDomain,
     entity_domain,
+    labelled_domain,
     union_domain,
 )
 from uflx.expressions import RealScalar
@@ -188,15 +189,41 @@ def test_a_union_needs_pieces_in_the_same_coordinates():
         union_domain([])
 
 
-def test_a_unions_label_tells_it_from_another_of_the_same_pieces():
-    """Which is what names a part of a boundary without the measure carrying an id."""
+def test_a_union_is_told_apart_by_its_pieces():
+    """It carries no label of its own: a selection is marked on the pieces.
+
+    A label on the union alone would be dropped the moment an integral
+    over it were split onto one piece, which is where a consumer needs
+    it, so the pieces carry it instead.
+    """
     pieces = [in_the_plane(((1.0,), (0.0,)), (0.0, 0.0))]
+    marked = [labelled_domain(piece, 3) for piece in pieces]
 
     assert union_domain(pieces) == union_domain(pieces)
     assert hash(union_domain(pieces)) == hash(union_domain(pieces))
-    assert union_domain(pieces, 1) != union_domain(pieces, 2)
-    assert union_domain(pieces, 1) != union_domain(pieces)
-    assert len({union_domain(pieces), union_domain(pieces, 1), union_domain(pieces, 1)}) == 2
+    assert union_domain(marked) != union_domain(pieces)
+    assert union_domain(marked) == union_domain([labelled_domain(p, 3) for p in pieces])
+    assert len({union_domain(pieces), union_domain(marked), union_domain(marked)}) == 2
+
+
+def test_a_labelled_domain_differs_only_in_identity():
+    """Same cells, same parametrizations, same coordinates, told apart by the label."""
+    domain = in_the_plane(((1.0,), (0.0,)), (0.0, 0.0))
+
+    marked = labelled_domain(domain, "inflow")
+
+    assert marked.domain == domain
+    assert marked.label == "inflow"
+    assert marked.cell_types == domain.cell_types
+    assert marked.parametrizations == domain.parametrizations
+    assert marked.coordinate_domain == domain.coordinate_domain
+    assert marked.geometric_dimension == domain.geometric_dimension
+    assert marked.topological_dimension == domain.topological_dimension
+    assert marked != domain
+    assert marked != labelled_domain(domain, "outflow")
+    assert marked.restricted_to(Interval()) == labelled_domain(
+        domain.restricted_to(Interval()), "inflow"
+    )
 
 
 def test_a_union_holds_every_pieces_chart():

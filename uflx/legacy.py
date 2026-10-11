@@ -32,13 +32,12 @@ The module is named for what it is rather than for a plural of what it
 contains, bending the convention in DESIGN_CHOICES.md, since what it
 contains is a vocabulary and not a kind of object.
 
-A subdomain id is refused rather than dropped. `ds(3)` means the facets a
-consumer marked with 3, which is a selection of mesh entities and so a
-domain of its own, as INTEGRATION.md note 3 says. A label on the domain
-of facets does not reach that far: splitting the integral retargets it
-onto one piece at a time, and a piece carries no label, so the tag would
-be gone by the time there were kernels to assign to it. Carrying a tag
-needs it on a domain at every level, which is not built.
+A subdomain id is a domain and not an id on a measure, as INTEGRATION.md
+note 3 says, so `ds(3)` integrates over the facets labelled 3 --
+`LabelledDomain` per piece -- and the label is still there to be read off
+a kernel afterwards. Which entities a consumer marked 3 is the
+consumer's, as its cells are; UFLx records only that a selection was
+meant and which one.
 """
 
 from __future__ import annotations
@@ -46,7 +45,12 @@ from __future__ import annotations
 from typing import Any, NamedTuple
 
 from uflx.algorithms import replace
-from uflx.domains import AbstractParametrizedDomain, AbstractParametrizedDomain, UnionDomain
+from uflx.domains import (
+    AbstractParametrizedDomain,
+    AbstractCellularDomain,
+    UnionDomain,
+    labelled_domain,
+)
 from uflx.expressions import AbstractExpression
 from uflx.functions import AbstractFunction
 from uflx.geometry import AbstractGeometricQuantity
@@ -55,6 +59,12 @@ from uflx.integrals import Integral
 from uflx.integrals import dx as measure_of
 from uflx.parametrizations import facets_of
 from uflx.restrictions import restrict
+
+
+class Cells(NamedTuple):
+    """What a legacy cell measure means, as a domain's label."""
+
+    subdomain_id: Any = None
 
 
 class ExteriorFacets(NamedTuple):
@@ -169,10 +179,10 @@ def _restrict_fields(
 class CellMeasure:
     """`dx` as UFL writes it: a cell measure that reads its domain off the integrand.
 
-    Call it to mark a subdomain, as `dx(1)`, or to name the domain, as
-    `dx(domain=mesh)`. `uflx.dx` is the native measure and takes the
-    domain itself; importing this one shadows it, which is the point of
-    importing it.
+    Call it to mark a subdomain, as `dx(1)`, which labels the domain, or
+    to name the domain, as `dx(domain=mesh)`. `uflx.dx` is the native
+    measure and takes the domain itself; importing this one shadows it,
+    which is the point of importing it.
     """
 
     def __init__(self, subdomain_id: Any = None, domain: AbstractParametrizedDomain | None = None):
@@ -215,13 +225,10 @@ class CellMeasure:
         """Right multiply by an expression to form an integral."""
         if not isinstance(integrand, AbstractExpression):
             return NotImplemented
+        domain: AbstractCellularDomain = self.domain_of(integrand)
         if self._subdomain_id is not None:
-            raise NotImplementedError(
-                "A marked part of a domain is a domain, and selecting one is the "
-                "consumer's. Nothing yet builds it, so dx of a subdomain id cannot be "
-                "turned into a measure over it."
-            )
-        integral = integrand * measure_of(self.domain_of(integrand))
+            domain = labelled_domain(domain, Cells(self._subdomain_id))
+        integral = integrand * measure_of(domain)
         assert isinstance(integral, Integral)
         return integral
 
@@ -250,22 +257,8 @@ class ExteriorFacetMeasure(CellMeasure):
         return ExteriorFacetMeasure(subdomain_id, domain or self._domain)
 
     def facets_for(self, integrand: AbstractExpression) -> UnionDomain:
-        """The domain of facets an integrand of this measure is over.
-
-        Raises:
-            NotImplementedError: If a subdomain was marked, which a domain
-                cannot yet carry as far as its kernels
-        """
-        if self._subdomain_id is not None:
-            raise NotImplementedError(
-                f"The facets marked {self._subdomain_id!r} are a selection of mesh "
-                f"entities and so a domain of their own, not an id on a measure. A "
-                f"label on the domain of facets does not reach a kernel: splitting the "
-                f"integral retargets it onto one piece at a time and a piece carries no "
-                f"label, so the tag would be dropped where a consumer needs it. Carrying "
-                f"a tag needs it on a domain at every level, which is not built."
-            )
-        return facets_of(self.domain_of(integrand), ExteriorFacets())
+        """The domain of facets an integrand of this measure is over."""
+        return facets_of(self.domain_of(integrand), ExteriorFacets(self._subdomain_id))
 
     def __rmul__(self, integrand: AbstractExpression) -> Integral:
         """Right multiply by an expression to form an integral over the facets."""
