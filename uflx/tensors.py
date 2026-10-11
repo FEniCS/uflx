@@ -223,7 +223,10 @@ class Matrix(Tensor):
             entries = cast(tuple[tuple[AbstractExpression, ...], ...], self._entries)
             match rows:
                 case 0:
-                    return Matrix([[]])
+                    # The inverse of the identity on the zero vector space is
+                    # itself, which is 0 by 0 and not the one row by no columns
+                    # that an empty sequence of rows reads as.
+                    return Matrix([], shape=(0, 0))
                 case 1:
                     [[a]] = entries
                     assert isinstance(a, AbstractExpression)

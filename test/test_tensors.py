@@ -144,3 +144,17 @@ def test_the_empty_gram_determinant_is_one():
     assert Matrix([[]]).compute_determinant().as_float() == 1.0
     assert Matrix([], shape=(0, 0)).compute_determinant().as_float() == 1.0
     assert Matrix([], shape=(0, 3)).compute_determinant().as_float() == 1.0
+
+
+def test_the_inverse_of_an_empty_matrix_is_empty():
+    """And 0 by 0, which is the shape its entries cannot say.
+
+    The 0 by 0 matrix is the identity on the zero vector space, so it is
+    its own inverse. Reading an empty sequence of rows gives one row by
+    no columns, which is a different shape, so this is the one place the
+    shape has to be stated.
+    """
+    inverse = Matrix([], shape=(0, 0)).compute_inverse()
+
+    assert inverse.value_shape == (0, 0)
+    assert inverse == Matrix([], shape=(0, 0))
