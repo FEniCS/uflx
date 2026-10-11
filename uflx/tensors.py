@@ -277,6 +277,16 @@ class Matrix(Tensor):
         For a non-square matrix A this is the pseudo-determinant sqrt(det(A^T A)) (tall A) or
         sqrt(det(A A^T)) (wide A), i.e. the volume scaling of the reference-to-physical map of a
         manifold cell.
+
+        An empty matrix gives one, which the Leibniz formula says with
+        nothing chosen: the only permutation of no indices is the empty
+        one, its sign is positive, and the product over no entries is the
+        empty product. Multiplicativity agrees, the 0 by 0 matrix being
+        the identity on the zero vector space and det(diag(A, I0)) having
+        to be det(A); so does the volume reading, the parallelepiped
+        spanned by no columns being the zero dimensional unit cube, whose
+        measure is the counting one. numpy answers one for det(eye(0)) and
+        for det(A^T A) with A of shape (m, 0).
         """
         rows, cols = self._shape
         if rows == 0 or cols == 0:
