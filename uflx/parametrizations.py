@@ -741,8 +741,16 @@ def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = Non
         The union of those sub-entities, mapped on by the domain
 
     Raises:
-        ValueError: If a cell type has no sub-entities of that codimension
+        ValueError: If the domain is not made of cells, or a cell type has
+            no sub-entities of that codimension
     """
+    if not isinstance(domain, AbstractCellularDomain):
+        raise ValueError(
+            f"{domain!r} is not made of cells, so its sub-entities are not here to "
+            f"enumerate: a cell's come from its entity's combinatorics. A domain parametrized "
+            f"some other way knows its own boundary pieces -- a box knows its faces from "
+            f"its bounds -- but nothing asks a domain for them yet."
+        )
     pieces: list[AbstractParametrizedDomain] = []
     for cell in domain.cell_types:
         dim = cell.topological_dimension - codim

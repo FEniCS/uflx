@@ -141,7 +141,9 @@ piece names one parametrization and so one cell type too.
 
 A region of `R^d` shows this with no cells involved: a box carries a measure, and so
 does each of its faces, which is an exterior facet measure rather than a second kind of
-measure.
+measure. Its faces are written out by hand in `test/test_regions.py`, since `facets_of`
+reaches a cell's sub-entities through its entity and a region has no cells; §6 says what
+asking a domain for its own boundary pieces would take.
 
 ## 4. Orientation
 
@@ -267,6 +269,17 @@ Not built:
    measure a sub-entity domain of full codimension would give. The empty Gram
    determinant is one, but the empty matrix its Jacobian needs cannot be built, as
    `test_the_measure_of_a_point_is_the_counting_measure` records.
+1. **A domain asked for its own boundary pieces.** `facets_of` reaches a cell's
+   sub-entities through its entity's combinatorics, so it serves a mesh and refuses a
+   region, while §3 presents a box's faces as the same idea -- and they are, by hand. A
+   domain that answered "the pieces of my boundary" however it liked, a cell type from
+   its entity and a box from its bounds, would make that one construction rather than
+   two. What this is *not* is a domain knowing it is a subset of another: the extent of
+   a reference cell is the element library's, as its vertices are, and nothing here
+   reads it. It is also not what the composition check wants, which is the declared
+   intent of a map and not containment -- the reference triangle sits inside the
+   reference square, so containment would accept a map written for the square being
+   applied to the triangle.
 1. **Atomic measures**, for a point evaluation and for a quadrature rule as a sum of
    Diracs. A sibling of `Measure` rather than a weighting of one.
 

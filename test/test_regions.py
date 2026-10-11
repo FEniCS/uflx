@@ -21,7 +21,7 @@ from collections.abc import Sequence
 
 import pytest
 
-from uflx import dx
+from uflx import dx, facets_of
 from uflx.algorithms import pull_back_to_entity
 from uflx.domains import (
     RD,
@@ -579,3 +579,18 @@ def test_a_parametrized_domain_that_is_not_cellular_cannot_be_pulled_back(rectan
         integral.cellular_domain
     with pytest.raises(ValueError, match="is not made of cells"):
         pull_back_to_entity(integral)
+
+
+def test_a_region_cannot_yet_be_asked_for_its_own_faces(rectangle):
+    """`facets_of` goes through a cell's entity, and a region has no cells.
+
+    A region does know its faces: `Box.faces` gives them and the tests
+    above integrate over one. What is missing is a domain being asked for
+    the pieces of its boundary, so that the construction serving a mesh
+    serves a region too. Until then it says so rather than failing from
+    the inside.
+    """
+    assert len(rectangle.faces) == 4
+
+    with pytest.raises(ValueError, match="not made of cells"):
+        facets_of(rectangle)
