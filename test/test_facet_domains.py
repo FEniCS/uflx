@@ -39,7 +39,14 @@ from uflx import (
     parametrized_domain,
 )
 from uflx.algorithms import pull_back_to_entity, replace, simplify
-from uflx.domains import RD, EntityDomain, LabelledDomain, entity_domain, union_domain
+from uflx.domains import (
+    RD,
+    EntityDomain,
+    IdentityParametrization,
+    LabelledDomain,
+    entity_domain,
+    union_domain,
+)
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression, RealScalar
 from uflx.geometry import (
@@ -181,6 +188,32 @@ def test_a_sub_entity_of_a_cell_is_a_domain_in_the_cells_coordinates(facets):
         assert facet.cell_types == (Interval(),)
         assert facet.coordinate_domain == EntityDomain(PlacedTriangle())
         assert facet.inner_domain == EntityDomain(Interval())
+
+
+def test_a_facet_of_a_reference_cell_is_one_domain_however_it_is_reached():
+    """Mapping a domain on by its own identity gives that domain back.
+
+    An entity domain's map is the identity, so the piece an enumeration
+    builds from it is the sub-entity domain itself and not a composite of
+    it with nothing. Domain identity is structural, and it is what a
+    restriction and the split onto a piece key on, so two spellings of
+    one set had better be one object.
+
+    Only where the identity is of the coordinates the domain's points are
+    named in: an identity of R^2 relabels which coordinates a facet of a
+    cell is named in, which is a change and stays a composite.
+    """
+    cell = PlacedTriangle()
+
+    facets = facets_of(entity_domain(cell))
+
+    for k, piece in enumerate(facets.pieces):
+        assert piece == sub_entity_domain(cell, 1, k)
+        assert hash(piece) == hash(sub_entity_domain(cell, 1, k))
+
+    relabelled = composed_domain(sub_entity_domain(cell, 1, 0), IdentityParametrization(RD(2)))
+    assert isinstance(relabelled, ComposedDomain)
+    assert relabelled.coordinate_domain == RD(2)
 
 
 def test_a_sub_entity_domain_compares_and_hashes_by_value():

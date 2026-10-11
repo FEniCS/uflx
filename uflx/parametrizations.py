@@ -666,7 +666,7 @@ def included_sub_entity(domain: AbstractParametrizedDomain) -> tuple[int, int] |
     return sub_entity
 
 
-def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> ComposedDomain:
+def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> AbstractCellularDomain:
     """Create the domain one sub-entity of an entity is.
 
     The sub-entity's own coordinate domain carried into the cell's
@@ -681,7 +681,9 @@ def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> ComposedDom
         index: Which sub-entity of that dimension
 
     Returns:
-        That sub-entity, as a domain in the cell's coordinates
+        That sub-entity, as a domain in the cell's coordinates. A cell is
+        its own sub-entity of full dimension, whose inclusion is the
+        identity, so that one is the cell's coordinate domain itself.
 
     Raises:
         ValueError: If the cell has no such sub-entity
@@ -691,7 +693,7 @@ def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> ComposedDom
     if index < 0 or index >= cell.sub_entity_count(dim):
         raise ValueError(f"{cell} has no sub-entity {index} of dimension {dim}.")
     sub_entity = cell.sub_entities(dim)[index]
-    return ComposedDomain(EntityDomain(sub_entity), cell.sub_entity_inclusion(dim, index))
+    return composed_domain(EntityDomain(sub_entity), cell.sub_entity_inclusion(dim, index))
 
 
 def parametrized_domain(
@@ -711,17 +713,31 @@ def parametrized_domain(
 
 
 def composed_domain(
-    domain: AbstractCellularDomain, outer_map: AbstractParametrization
-) -> ComposedDomain:
+    domain: AbstractCellularDomain, map: AbstractParametrization
+) -> AbstractCellularDomain:
     """Create a domain by mapping another domain onward.
+
+    Mapping a domain on by the identity gives that domain back rather
+    than a composite of it, as :func:`composed_parametrization` does for
+    the maps, and for the same reason: a domain's identity is structural,
+    so two spellings of one set would otherwise be two domains. It is
+    what makes a facet of a reference cell the same object however it is
+    reached.
+
+    Only where the identity is the identity of the coordinates the
+    domain's points are named in. An identity on a cell's coordinates is
+    no unit for a domain named in another cell's.
 
     Args:
         domain: The domain whose cells are being mapped on
         outer_map: The map applied to the domain's own coordinates
 
     Returns:
-        A domain whose geometry is the domain's followed by the map
+        A domain whose geometry is the domain's followed by the map, or
+        the domain itself where the map does nothing to it
     """
+    if map.is_identity and map.source == domain.coordinate_domain:
+        return domain
     return ComposedDomain(domain, map)
 
 
@@ -807,7 +823,7 @@ def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = Non
             )
         parametrization = domain.parametrization(cell)
         for index in range(cell.sub_entity_count(dim)):
-            piece = ComposedDomain(sub_entity_domain(cell, dim, index), parametrization)
+            piece = composed_domain(sub_entity_domain(cell, dim, index), parametrization)
             pieces.append(piece if label is None else LabelledDomain(piece, label))
     return UnionDomain(tuple(pieces))
 
