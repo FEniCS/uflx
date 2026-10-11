@@ -118,6 +118,16 @@ class Restriction(AbstractExpression):
             ValueError: If the domain is not made of sub-entities of the
                 field's own domain
         """
+        if isinstance(field, Restriction):
+            # Now that a restriction says which domain it is read on, this
+            # would typecheck: the composition is a map like any other. It
+            # is refused because one map is the rule and not because the
+            # check cannot see it, which is the module docstring's argument.
+            raise ValueError(
+                f"{field!r} is already read through a map, and a field is read through "
+                f"one. Restricting along the composition is what this would be: take "
+                f"the sub-entities of the cell, with sub_entities_of(domain, codim)."
+            )
         field_domain = extract_domain(field)
         if not isinstance(field_domain, AbstractParametrizedDomain):
             raise ValueError(f"{field_domain!r} has no cells to include a sub-entity into.")
@@ -151,6 +161,17 @@ class Restriction(AbstractExpression):
     def variable(self) -> AbstractVariable | None:
         """Where the restriction is read, if it has been told yet."""
         return self._variable
+
+    @property
+    def reads_on(self) -> AbstractParametrizedDomain:
+        """The domain this restriction is read on, which is what it restricts to.
+
+        Always, where a function or a quantity stops saying once it has
+        been positioned: a restriction is the map, so the field under it
+        being on another domain is the whole point rather than a
+        disagreement.
+        """
+        return self._domain
 
     @property
     def value_shape(self) -> tuple[int, ...]:

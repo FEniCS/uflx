@@ -310,6 +310,18 @@ class AbstractGeometricQuantity(AbstractExpression):
         return self._variable
 
     @property
+    def reads_on(self) -> AbstractParametrizedDomain | None:
+        """The domain this quantity is read on, until it is told its point.
+
+        One already told was put there by whatever knew the point -- a
+        pull back, or a restriction -- so it says nothing about the
+        domain the expression around it is on.
+        """
+        if self._variable is not None:
+            return None
+        return self._domain
+
+    @property
     def parametrization(self) -> AbstractParametrization:
         """The map this quantity differentiates, being the one its point lies in.
 

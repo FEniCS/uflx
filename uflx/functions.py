@@ -14,7 +14,7 @@ from abc import abstractmethod
 from itertools import count
 from typing import Any, Self, cast
 
-from uflx.domains import AbstractDomain, EntityDomain
+from uflx.domains import AbstractDomain, EntityDomain, ReadOnADomain
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression, Im, Re
 from uflx.function_spaces import (
@@ -22,7 +22,7 @@ from uflx.function_spaces import (
     AbstractMappedFunctionSpace,
     function_space,
 )
-from uflx.graphs import GraphNode, as_graph
+from uflx.graphs import GraphNode
 from uflx.maps import PushedForward
 from uflx.tensors import zero
 from uflx.variables import AbstractVariable
@@ -35,6 +35,18 @@ class AbstractFunction(AbstractExpression):
     @abstractmethod
     def variable(self) -> AbstractVariable | None:
         """Get the variable that is this function's input."""
+
+    @property
+    def reads_on(self) -> AbstractDomain | None:
+        """The domain this function is read on, until it is pulled back.
+
+        A function on a cell's own coordinates has been pulled back and
+        no longer says which domain it came from, which is what
+        `is_on_an_entity` asks.
+        """
+        if self.is_on_an_entity:
+            return None
+        return self.function_space.domain
 
     @property
     def is_on_an_entity(self) -> bool:
@@ -429,25 +441,56 @@ class TrialFunction(Argument):
         raise NotImplementedError()
 
 
-def extract_domain(expression: GraphNode) -> AbstractDomain:
-    """Get the domain the functions in an expression are defined on.
+def _domains_read_on(node: GraphNode) -> list[AbstractDomain]:
+    """The domains the parts of an expression say they are read on.
 
-    Only functions whose components are in ambient coordinates are read: one
-    already in a cell's coordinates has been pulled back, and no longer says
-    which domain it came from. They must all agree.
+    A node that says is not looked inside: a restriction says the domain
+    it restricts to, and the field under it is read through a map, which
+    is the restriction's business and not this one's.
+    """
+    if isinstance(node, ReadOnADomain):
+        reads_on = node.reads_on
+        if reads_on is not None:
+            return [reads_on]
+    found: list[AbstractDomain] = []
+    for successor in node.successors:
+        for domain in _domains_read_on(successor):
+            if domain not in found:
+                found.append(domain)
+    return found
+
+
+def extract_domain(expression: GraphNode) -> AbstractDomain:
+    """Get the domain an expression is read on.
+
+    Read off the parts of it that say: a function from its space, a
+    geometric quantity from the domain it differentiates, a restriction
+    from the domain it restricts to. A part that has been positioned
+    already says nothing -- a function pulled back onto a cell, a
+    quantity told where it is read -- and arithmetic and tensors have no
+    domain of their own, so they are asked of their successors.
 
     Args:
         expression: The expression to read
 
     Returns:
-        The domain its functions share
+        The domain its parts agree on
+
+    Raises:
+        ValueError: If no part of it says which domain, or they disagree
     """
-    domain: AbstractDomain | None = None
-    for node in as_graph(expression).descendants(expression):
-        if isinstance(node, AbstractFunction) and not node.is_on_an_entity:
-            if domain is None:
-                domain = node.function_space.domain
-            else:
-                assert domain == node.function_space.domain
-    assert domain is not None
+    found = _domains_read_on(expression)
+    if len(found) == 0:
+        raise ValueError(
+            f"No part of {expression!r} says which domain it is read on. A domain is "
+            f"read off the functions, geometric quantities and restrictions in an "
+            f"expression, and this has none of them."
+        )
+    if len(found) > 1:
+        raise ValueError(
+            f"{expression!r} is read on {len(found)} domains, {found!r}. An expression "
+            f"spanning two of them reaches the second through a map, which is what a "
+            f"restriction is."
+        )
+    (domain,) = found
     return domain

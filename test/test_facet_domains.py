@@ -840,6 +840,28 @@ def test_a_field_is_restricted_only_to_pieces_of_its_own_domain(space, facet):
         restrict(u, sub_entities_of(elsewhere, 1).pieces[0])
 
 
+def test_a_traction_in_the_spatial_coordinate_is_restricted_like_any_field(mesh, space):
+    """The ordinary Neumann term, which had no native spelling.
+
+    `x` here is the mesh's, so reading it on the facets is a map like any
+    other -- and the restriction asks which domain its field is on, which
+    used to be read off the functions alone. An integrand of pure
+    geometry has none, so this asserted.
+    """
+    facets = sub_entities_of(mesh, 1)
+    v = TestFunction(space)
+    x = SpatialCoordinate(mesh)
+
+    traction = inner(restrict(x, facets), restrict(x, facets)) * restrict(v, facets) * dx(facets)
+
+    assert isinstance(traction, Integral)
+    pulled = pull_back_to_entity(traction)
+    assert isinstance(pulled, IntegralSum)
+    assert len(pulled.terms) == 3
+    for term in pulled.terms:
+        assert isinstance(expand_geometry(term.integrand), AbstractExpression)
+
+
 def test_a_field_is_read_through_one_map_and_so_is_never_restricted_twice():
     """Restricting along a composition is what a second restriction would be.
 

@@ -284,6 +284,29 @@ class AbstractParametrization(ABC):
 
 
 @runtime_checkable
+class ReadOnADomain(Protocol):
+    """An expression that says which domain it is read on.
+
+    Which domain an expression is on is read off the parts of it that
+    know: a function knows from its space, a geometric quantity from the
+    domain it differentiates, and a restriction from the domain it
+    restricts to. :func:`uflx.functions.extract_domain` asks, and a node
+    that does not implement this is asked of its successors instead --
+    arithmetic and tensors have no domain of their own.
+
+    A node that has already been positioned claims nothing. A function
+    pulled back onto a cell no longer says which domain it came from, and
+    a quantity told where it is read was put there by whatever knew the
+    point. Both answer None, so the question is about an expression as it
+    is written rather than one mid-transformation.
+    """
+
+    @property
+    def reads_on(self) -> AbstractDomain | None:
+        """The domain this is read on, or None where it does not say."""
+
+
+@runtime_checkable
 class IncludesASubEntity(Protocol):
     """A map that says which sub-entity of a cell it includes.
 
