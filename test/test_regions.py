@@ -22,7 +22,7 @@ from collections.abc import Sequence
 import pytest
 
 from uflx import dx, facets_of
-from uflx.algorithms import pull_back_to_entity
+from uflx.algorithms import pull_back_to_entity, replace, simplify
 from uflx.domains import (
     RD,
     AbstractCellularDomain,
@@ -40,6 +40,7 @@ from uflx.geometry import (
     UnitNormal,
     VolumeElement,
     _as_dense_matrix,
+    expand_geometry,
 )
 from uflx.integrals import Integral
 from uflx.points import Point
@@ -594,3 +595,21 @@ def test_a_region_cannot_yet_be_asked_for_its_own_faces(rectangle):
 
     with pytest.raises(ValueError, match="not made of cells"):
         facets_of(rectangle)
+
+
+def test_a_regions_coordinate_can_be_read_at_an_integrals_variable():
+    """R^d is parametrized by the identity, so its coordinate is the variable's own.
+
+    An integral hands its integrand a variable standing for a point, and
+    that is where expanding the geometry of a parametrization written in closed
+    form bottoms out. Substituting a point then gives the number.
+    """
+    x = SpatialCoordinate(RD(2))
+    integral = (x.component(0) * x.component(0) + x.component(1) * x.component(1)) * dx(RD(2))
+    assert isinstance(integral, Integral)
+
+    expanded = expand_geometry(integral.integrand)
+    substituted = simplify(replace(expanded, {integral.variable: point_in(RD(2), 0.3, 0.4)}))
+
+    assert isinstance(substituted, AbstractExpression)
+    assert substituted.as_float() == pytest.approx(0.25)

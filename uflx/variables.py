@@ -25,7 +25,12 @@ from abc import abstractmethod
 from itertools import count
 from typing import Any, Protocol, runtime_checkable
 
-from uflx.domains import AbstractCellularDomain, AbstractDomain, EntityDomain
+from uflx.domains import (
+    AbstractCellularDomain,
+    AbstractCoordinateDomain,
+    AbstractDomain,
+    EntityDomain,
+)
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
 from uflx.graphs import GraphNode
@@ -81,6 +86,109 @@ class AbstractVariable(AbstractExpression):
     def to_entity_coordinates(self, cell: AbstractEntity) -> AbstractVariable:
         """Make a version of this variable in the given cell's coordinates."""
         raise ValueError("Cannot pull this variable back to a cell's coordinates.")
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get one coordinate of the point this variable stands for.
+
+        A coordinate domain's points are tuples of numbers, so each of
+        those numbers is a scalar expression. A domain whose points are
+        not tuples has no coordinates to name, which is why this asks
+        the variable's domain rather than only its dimension.
+
+        Args:
+            indices: Which coordinate
+
+        Returns:
+            That coordinate of this variable
+
+        Raises:
+            ValueError: If the points of this variable's domain are not
+                coordinate tuples, or there is no such coordinate
+        """
+        (index,) = indices
+        domain = self.domain
+        if not isinstance(domain, AbstractCoordinateDomain):
+            raise ValueError(
+                f"A point of {domain!r} is not a coordinate tuple, so it has no "
+                f"coordinates to name. Split the integral by piece, and pull it back "
+                f"onto a cell, first."
+            )
+        if not 0 <= index < domain.geometric_dimension:
+            raise ValueError(
+                f"A point of {domain!r} is named by {domain.geometric_dimension} "
+                f"coordinates, so it has no coordinate {index}."
+            )
+        return PointComponent(self, index)
+
+
+class PointComponent(AbstractExpression):
+    """One coordinate of the point a variable stands for.
+
+    A terminal, and the one every parametrization written in closed form bottoms
+    out in: such a parametrization does arithmetic on the coordinates it is handed,
+    where a finite element parametrization sums a basis against them and never
+    reads them. A point that is named gives its own entry instead, so
+    this stands for a coordinate nobody has written down yet.
+    """
+
+    def __init__(self, point: AbstractVariable, component: int | str):
+        """Initialise.
+
+        Args:
+            point: The variable whose coordinate this is
+            component: Which coordinate
+        """
+        self._point = point
+        self._component = component
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get a component of the expression.
+
+        Raises:
+            ValueError: Always, a coordinate being a scalar
+        """
+        raise ValueError("Cannot get a component of a scalar expression")
+
+    @property
+    def component_index(self) -> int | str:
+        """Get the component of the point."""
+        return self._component
+
+    @property
+    def point(self) -> AbstractVariable:
+        """Get the point."""
+        return self._point
+
+    def __repr__(self):
+        """Representation."""
+        return f"PointComponent({self._point}, {self._component})"
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        return ()
+
+    @property
+    def successors(self) -> set[GraphNode]:
+        """The successors of this node."""
+        return {self._point}
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return self._point, self._component
+
+    def get_replacement(self, replacements: dict[GraphNode, GraphNode]) -> GraphNode | None:
+        """Get the node to replace this node with, or None if no replacement can be made.
+
+        Substituting a point for a variable is what turns a parametrization's
+        arithmetic into numbers, so a coordinate of the variable becomes
+        that coordinate of the point rather than being rebuilt around it.
+        """
+        replaced = replacements.get(self._point)
+        if isinstance(replaced, AbstractVariable) and isinstance(self._component, int):
+            return replaced.component(self._component)
+        return None
 
 
 class Variable(AbstractVariable):
@@ -165,10 +273,6 @@ class Variable(AbstractVariable):
                 f"Cannot pull back to {cell}, which is not a cell type of this variable's domain."
             )
         return Variable(EntityDomain(cell), self._label)
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        raise NotImplementedError()
 
     def __eq__(self, other) -> bool:
         """Check for equality.
