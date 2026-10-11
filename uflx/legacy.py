@@ -142,7 +142,9 @@ def _is_on(node: GraphNode, graph, domain: AbstractParametrizedDomain) -> bool:
 
 
 def _restrict_fields(
-    integrand: AbstractExpression, domain: AbstractParametrizedDomain, onto: AbstractParametrizedDomain
+    integrand: AbstractExpression,
+    domain: AbstractParametrizedDomain,
+    onto: AbstractParametrizedDomain,
 ) -> AbstractExpression:
     """Read every field on the domain at a point of the domain it is restricted to.
 

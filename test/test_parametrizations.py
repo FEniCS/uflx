@@ -3,7 +3,7 @@
 import math
 
 import pytest
-from conftest import Interval, Triangle
+from conftest import Interval, Quadrilateral, Triangle
 
 from uflx import (
     Coefficient,
@@ -407,6 +407,35 @@ def test_composing_incompatible_maps_is_rejected(line, line_map):
 
     with pytest.raises(ValueError, match="Cannot map a domain"):
         composed_domain(line, FromThePlane())
+
+
+def test_composing_a_map_written_for_other_coordinates_is_rejected():
+    """As many coordinates is not the same coordinates.
+
+    Two coordinate domains of one dimension are not each other, so a map
+    written for another cell's coordinates must not be composed on and
+    evaluated here, which a check on the dimension alone would allow. A
+    map out of R^d is the exception, being d coordinates generically,
+    which is what lets one map of the plane be composed onto any cell.
+    """
+    triangle = entity_domain(Triangle())
+    stretch = LinearMap(((2.0, 0.0), (0.0, 1.0)))
+
+    class FromAQuadrilateral(LinearMap):
+        @property
+        def source(self):
+            """Start from a cell's coordinates that are not this domain's."""
+            return entity_domain(Quadrilateral())
+
+    assert FromAQuadrilateral(((2.0, 0.0), (0.0, 1.0))).source.geometric_dimension == (
+        triangle.geometric_dimension
+    )
+
+    with pytest.raises(ValueError, match="points are named in"):
+        composed_domain(triangle, FromAQuadrilateral(((2.0, 0.0), (0.0, 1.0))))
+
+    # A map of the plane takes any two coordinates, so the cell's own are fine.
+    assert composed_domain(triangle, stretch).geometric_dimension == 2
 
 
 def test_a_composed_push_forward_squares_the_inner_map(mesh_on_a_parabola, entity_point):

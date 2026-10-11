@@ -225,7 +225,7 @@ def test_a_sum_splits_the_terms_that_split(mixed_form, mixed_mesh, lagrange_elem
     assert isinstance(split, IntegralSum)
     assert len(split.terms) == 2 * len(mixed_mesh.cell_types)
     assert [term.domain for term in split.terms] == [
-        mixed_mesh.restricted_to(cell) for cell in mixed_mesh.cell_types
+        mixed_mesh.on_cell_type(cell) for cell in mixed_mesh.cell_types
     ] * 2
 
     # Nothing to split: every term is over one cell type already.
@@ -235,7 +235,7 @@ def test_a_sum_splits_the_terms_that_split(mixed_form, mixed_mesh, lagrange_elem
 
 def test_a_sum_of_a_mixed_form_and_a_simple_one_pulls_back(mixed_form, mixed_mesh):
     """Which a - L is: the shape every linear problem is written in."""
-    pulled = pull_back_to_entity(mixed_form + mixed_form.restricted_to(mixed_mesh.cell_types[0]))
+    pulled = pull_back_to_entity(mixed_form + mixed_form.on_cell_type(mixed_mesh.cell_types[0]))
 
     assert isinstance(pulled, IntegralSum)
     assert len(pulled.terms) == len(mixed_mesh.cell_types) + 1

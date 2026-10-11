@@ -620,9 +620,9 @@ class LabelledDomain(AbstractCellularDomain):
         """The parametrization is the domain's."""
         return self._domain.parametrization(cell)
 
-    def restricted_to(self, cell: AbstractEntity) -> LabelledDomain:
+    def on_cell_type(self, cell: AbstractEntity) -> LabelledDomain:
         """Restricting keeps the label, a cell type being no part of it."""
-        return LabelledDomain(self._domain.restricted_to(cell), self._label)
+        return LabelledDomain(self._domain.on_cell_type(cell), self._label)
 
     @property
     def inner_domain(self) -> AbstractCellularDomain:

@@ -504,10 +504,19 @@ class ComposedDomain(AbstractCellularDomain):
             domain: The domain whose cells are being mapped on
             outer_map: The map applied to the domain's own coordinates
         """
-        if outer_map.source.geometric_dimension != domain.geometric_dimension:
+        # The map has to accept the coordinates the domain's points are named
+        # in, and not merely as many of them: two coordinate domains of one
+        # dimension are not each other, so a map written for another cell's
+        # coordinates would otherwise be composed on and evaluated here.
+        # RD(d) is the exception, being d coordinates generically: a map of
+        # the plane applies to a cell's coordinates, those being a plane's.
+        here = domain.coordinate_domain
+        generic = RD(domain.geometric_dimension)
+        if map.source != here and map.source != generic:
             raise ValueError(
-                f"Cannot map a domain in {domain.geometric_dimension} coordinates "
-                f"with a map starting from {outer_map.source!r}."
+                f"Cannot map a domain whose points are named in {here!r} with a map "
+                f"starting from {map.source!r}. A map out of {generic!r} takes any "
+                f"{domain.geometric_dimension} coordinates and so would be accepted."
             )
         self._domain = domain
         self._outer_map = outer_map

@@ -221,8 +221,8 @@ def test_a_labelled_domain_differs_only_in_identity():
     assert marked.topological_dimension == domain.topological_dimension
     assert marked != domain
     assert marked != labelled_domain(domain, "outflow")
-    assert marked.restricted_to(Interval()) == labelled_domain(
-        domain.restricted_to(Interval()), "inflow"
+    assert marked.on_cell_type(Interval()) == labelled_domain(
+        domain.on_cell_type(Interval()), "inflow"
     )
 
 
