@@ -3,8 +3,16 @@
 import pytest
 from conftest import Interval
 
-from uflx import composed_domain, parametrized_domain
-from uflx.algorithms import simplify
+from uflx import (
+    Coefficient,
+    TestFunction,
+    composed_domain,
+    dx,
+    function_space,
+    inner,
+    parametrized_domain,
+)
+from uflx.algorithms import pull_back_to_entity, simplify
 from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.domains import (
     RD,
@@ -15,7 +23,18 @@ from uflx.domains import (
 )
 from uflx.expressions import AbstractExpression, Integer, MatrixProduct, RealScalar
 from uflx.functions import AbstractVariable
-from uflx.geometry import Jacobian, PushedForwardPoint
+from uflx.geometry import (
+    AbstractGeometricQuantity,
+    Jacobian,
+    JacobianDeterminant,
+    MetricTensor,
+    PushedForwardPoint,
+    SpatialCoordinate,
+    TangentialProjector,
+    UnitNormal,
+    _as_dense_matrix,
+    expand_geometry,
+)
 from uflx.graphs import as_graph
 from uflx.parametrizations import ComposedParametrization, FiniteElementParametrization
 from uflx.points import Point
@@ -224,3 +243,59 @@ def test_restricting_a_composed_domain_keeps_its_map(mesh_on_a_parabola, parabol
     assert restricted.geometric_dimension == 2
     assert restricted.topological_dimension == 1
     assert isinstance(restricted.parametrization(cell), ComposedParametrization)
+
+
+def test_a_composed_domain_has_a_measure(mesh_on_a_parabola, entity_point):
+    """A composed map's Jacobian is a matrix product, which still has to reduce.
+
+    The determinant, the metric and the projector all have to write the
+    Jacobian out before working on it, and a chain rule does not hand
+    them a Matrix.
+    """
+    for quantity in [JacobianDeterminant, MetricTensor, TangentialProjector]:
+        expanded = quantity(mesh_on_a_parabola, entity_point).expand_geometry()
+        assert expanded.value_shape == quantity(mesh_on_a_parabola, entity_point).value_shape
+
+    assert JacobianDeterminant(mesh_on_a_parabola, entity_point).value_shape == ()
+    assert MetricTensor(mesh_on_a_parabola, entity_point).value_shape == (1, 1)
+    assert TangentialProjector(mesh_on_a_parabola, entity_point).value_shape == (2, 2)
+
+
+def test_a_form_over_a_composed_domain_expands(mesh_on_a_parabola, lagrange_element):
+    """Pulling a form back onto a composed domain leaves no geometry behind."""
+    space = function_space(mesh_on_a_parabola, lagrange_element("interval", 1))
+    form = inner(Coefficient(space), TestFunction(space)) * dx
+
+    expanded = expand_geometry(pull_back_to_entity(form))
+
+    assert not any(isinstance(n, AbstractGeometricQuantity) for n in as_graph(expanded))
+
+
+def test_the_normal_of_a_curve_is_a_unit_vector_across_the_tangent(parabola, entity_point):
+    """Check the normal numerically, on a map whose Jacobian is concrete.
+
+    An element map's Jacobian sums over coordinate dofs, which no amount
+    of simplification turns into a number. A closed form map's does not,
+    so here the normal can be evaluated and checked rather than matched
+    against the expression it is expected to be.
+    """
+    curve = composed_domain(entity_domain(Interval()), parabola)
+
+    jacobian = _as_dense_matrix(Jacobian(curve, entity_point).expand_geometry())
+    tangent = [jacobian.component(i, 0).as_float() for i in range(2)]
+    normal = [UnitNormal(curve, entity_point).component(i).as_float() for i in range(2)]
+
+    # y = x^2 at x = 0.25, so the tangent is (1, 1/2).
+    assert tangent == pytest.approx([1.0, 0.5])
+    assert sum(c * c for c in normal) == pytest.approx(1.0)
+    assert sum(a * b for a, b in zip(tangent, normal, strict=True)) == pytest.approx(0.0)
+
+
+def test_the_spatial_coordinate_of_a_curve_is_the_point_on_it(parabola, entity_point):
+    """On y = x^2 at x = 1/4, x is (1/4, 1/16)."""
+    curve = composed_domain(entity_domain(Interval()), parabola)
+    coordinates = SpatialCoordinate(curve, entity_point)
+
+    assert coordinates.value_shape == (2,)
+    assert coordinates[0].expand_geometry().as_float() == pytest.approx(0.25)
+    assert coordinates[1].expand_geometry().as_float() == pytest.approx(0.0625)

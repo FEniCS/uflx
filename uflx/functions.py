@@ -22,7 +22,7 @@ from uflx.function_spaces import (
     AbstractMappedFunctionSpace,
     function_space,
 )
-from uflx.graphs import GraphNode
+from uflx.graphs import GraphNode, as_graph
 from uflx.maps import PushedForward
 from uflx.tensors import zero
 
@@ -559,6 +559,30 @@ class TrialFunction(Argument):
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""
         raise NotImplementedError()
+
+
+def extract_domain(expression: GraphNode) -> AbstractDomain:
+    """Get the domain the functions in an expression are defined on.
+
+    Only functions whose components are in ambient coordinates are read: one
+    already in a cell's coordinates has been pulled back, and no longer says
+    which domain it came from. They must all agree.
+
+    Args:
+        expression: The expression to read
+
+    Returns:
+        The domain its functions share
+    """
+    domain: AbstractDomain | None = None
+    for node in as_graph(expression).descendants(expression):
+        if isinstance(node, AbstractFunction) and not node.in_entity_coordinates:
+            if domain is None:
+                domain = node.function_space.domain
+            else:
+                assert domain == node.function_space.domain
+    assert domain is not None
+    return domain
 
 
 def create_variable(domain: AbstractDomain) -> Variable:
