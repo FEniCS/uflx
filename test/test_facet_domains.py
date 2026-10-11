@@ -22,6 +22,7 @@ import math
 
 import pytest
 from conftest import Entity, Interval, LagrangeElement, Tetrahedron, Triangle
+from conftest import Point as PointEntity
 
 # The same analytic surface the surface measure tests use, rather than a
 # second copy of a map differentiated by hand, so the two stay in step.
@@ -102,6 +103,12 @@ class Placed(Entity):
         return SubEntityInclusion(
             entity_domain(sub_entity), entity_domain(self), matrix, origin, dim, index
         )
+
+
+class PlacedInterval(Placed, Interval):
+    """The reference interval, whose facets are its two end points."""
+
+    vertices = ((0.0,), (1.0,))
 
 
 class PlacedTriangle(Placed, Triangle):
@@ -834,6 +841,42 @@ def test_pulling_back_an_integral_over_the_facets_gives_one_kernel_per_facet(spa
         assert quantities["VolumeElement"] == VolumeElement(piece, term.variable)
         assert quantities["UnitNormal"] == UnitNormal(piece, term.variable)
         assert quantities["JacobianInverse"] == JacobianInverse(mesh, included)
+
+
+def test_the_facets_of_a_one_dimensional_mesh_are_its_end_points():
+    """Ds in one dimension, which is the counting measure over two points.
+
+    A point has nothing to measure, so its Jacobian is a map out of no
+    coordinates and the empty Gram determinant is one. Stretching the
+    cell does not change that, where it would change a length: the
+    density of a zero dimensional domain is one however it is mapped,
+    which is what makes the measure a counting one.
+    """
+    stretched = composed_domain(
+        entity_domain(PlacedInterval()),
+        AffineParametrization(RD(1), RD(1), ((3.0,),), (0.0,)),
+    )
+    at_the_end = Point([], entity_domain(PointEntity()))
+
+    ends = facets_of(stretched)
+
+    assert len(ends.pieces) == 2
+    assert ends.topological_dimension == 0
+    assert all(measure_of(end, at_the_end) == pytest.approx(1.0) for end in ends.pieces)
+
+    pulled = pull_back_to_entity(RealScalar(1.0) * dx(ends))
+
+    assert isinstance(pulled, IntegralSum)
+    densities = []
+    for term in pulled.terms:
+        substituted = simplify(
+            replace(expand_geometry(term.integrand), {term.variable: at_the_end})
+        )
+        assert isinstance(substituted, AbstractExpression)
+        densities.append(substituted.as_float())
+
+    # Two end points, each counted once.
+    assert sum(densities) == pytest.approx(2.0)
 
 
 def test_the_facets_of_a_mesh_of_two_cell_types_give_a_kernel_each(space):

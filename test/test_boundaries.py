@@ -323,15 +323,13 @@ def test_the_boundary_of_an_interval_is_two_points_with_no_normal():
         UnitNormal(end, origin).value_shape
 
 
-@pytest.mark.xfail(raises=AssertionError, strict=True, reason="Matrix([[]]) cannot be built")
 def test_the_measure_of_a_point_is_the_counting_measure():
     """A zero dimensional domain has nothing to measure, so its density is one.
 
-    The volume element of a point should be 1, the empty Gram
-    determinant being 1. Instead the empty matrix its Jacobian needs
-    cannot be built, and tensors.py's shape inference asserts. Harmless
-    until a measure over a point domain is wanted, which is what a point
-    evaluation is.
+    Its Jacobian is a map out of no coordinates, which is an empty
+    matrix, and the empty Gram determinant is one. So the measure of a
+    point is the counting measure, which is what a point evaluation
+    integrates against.
     """
     end = composed_domain(
         entity_domain(PointEntity()),
