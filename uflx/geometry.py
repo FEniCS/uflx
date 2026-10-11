@@ -11,6 +11,7 @@ from uflx.domains import (
     AbstractCellularDomain,
     AbstractCoordinateDomain,
     AbstractParametrization,
+    AbstractParametrizedDomain,
     EntityDomain,
 )
 from uflx.expressions import AbstractExpression, Sqrt, expression_sum
@@ -42,10 +43,12 @@ def _as_dense_matrix(jacobian: AbstractExpression) -> Matrix:
     return Matrix([[jacobian.component(i, j) for j in range(cols)] for i in range(rows)])
 
 
-class PushedForwardPoint(AbstractPoint):
-    """A point in an entity's coordinates, mapped through a parametrization.
+class ImagePoint(AbstractPoint):
+    """Where a parametrization sends a point of the region it starts from.
 
-    The point level action of a map: the same thing
+    Applying a map to a point, which is an image and not a pushforward:
+    a pushforward and a pullback act on fields, and `uflx.maps` is where
+    those live. The same thing
     :class:`SpatialCoordinate` gives as an expression, but being a point
     it can be the variable a basis function is evaluated at. An element
     defined on the physical cell rather than on a reference one needs
@@ -53,7 +56,7 @@ class PushedForwardPoint(AbstractPoint):
 
     It takes the domain rather than the map because the point it starts
     from already lies in a cell's coordinate domain, and so names the
-    cell whose map carries it. Contrast :class:`PulledBackPoint`.
+    cell whose map carries it. Contrast :class:`PreimagePoint`.
     """
 
     def __init__(self, point: AbstractPoint, domain: AbstractCellularDomain):
@@ -136,14 +139,14 @@ class PushedForwardPoint(AbstractPoint):
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
-            isinstance(other, PushedForwardPoint)
+            isinstance(other, ImagePoint)
             and self._point == other._point
             and self._parametrized_domain == other._parametrized_domain
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.PushedForwardPoint", self._point, self._parametrized_domain))
+        return hash(("uflx.ImagePoint", self._point, self._parametrized_domain))
 
     @property
     def index(self) -> int | str:
@@ -151,18 +154,21 @@ class PushedForwardPoint(AbstractPoint):
         return self._point.index
 
 
-class PulledBackPoint(AbstractPoint):
-    """A point in ambient coordinates, mapped to an entity's coordinates.
+class PreimagePoint(AbstractPoint):
+    """The point of a parametrization's region that lands on a given ambient point.
+
+    The inverse image of a point, and not a pullback: a pullback acts on
+    fields, and `uflx.maps` is where those live.
 
     A terminal, deliberately: it has no expansion and will not get one.
-    A parametrization offers a value and a derivative and no inverse,
-    because inverting a finite element map is a Newton solve rather than
-    anything symbolic. So this names a point a consumer computes, the way
-    a coordinate dof names a number a mesh holds.
+    A parametrization offers a value and a derivative and no inverse, the
+    map back being an algorithm the surrounding library provides. So this
+    names a point that library computes, the way a coordinate dof names a
+    number a mesh holds.
 
     It takes the map rather than the domain because a point of the ambient
     coordinates does not say which cell it should land in; that is part of
-    the question being asked. Contrast :class:`PushedForwardPoint`.
+    the question being asked. Contrast :class:`ImagePoint`.
 
     What wants it is evaluation at a physical location: a reference basis
     read at ``phi^-1(x)``, which is what a point evaluation needs.
@@ -229,14 +235,14 @@ class PulledBackPoint(AbstractPoint):
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
-            isinstance(other, PulledBackPoint)
+            isinstance(other, PreimagePoint)
             and self._point == other._point
             and self._parametrization == other._parametrization
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.PulledBackPoint", self._point, self._parametrization))
+        return hash(("uflx.PreimagePoint", self._point, self._parametrization))
 
     @property
     def index(self) -> int | str:
@@ -253,7 +259,7 @@ class AbstractGeometricQuantity(AbstractExpression):
     dummy variable stands for the point.
     """
 
-    def __init__(self, domain: AbstractCellularDomain, point: AbstractVariable | None = None):
+    def __init__(self, domain: AbstractParametrizedDomain, point: AbstractVariable | None = None):
         """Initialise.
 
         Args:
@@ -264,7 +270,7 @@ class AbstractGeometricQuantity(AbstractExpression):
         self._point = point
 
     @property
-    def domain(self) -> AbstractCellularDomain:
+    def domain(self) -> AbstractParametrizedDomain:
         """The domain whose geometry this quantity differentiates."""
         return self._domain
 
@@ -275,25 +281,24 @@ class AbstractGeometricQuantity(AbstractExpression):
 
     @property
     def parametrization(self) -> AbstractParametrization:
-        """The map this quantity differentiates, for the cell its point lies in.
+        """The map this quantity differentiates, being the one its point lies in.
 
-        A point lies in a cell's coordinate domain, so it names the cell.
-        Until a point arrives this quantity is generic over the domain's
-        cell types, which is what lets it be built during a pull back.
+        A point lies in the parameter region of one of the domain's
+        parametrizations, so it names that map. Until a point arrives this
+        quantity is generic over the domain's parametrizations, which is
+        what lets it be built during a pull back.
         """
         if self.point is None:
             raise ValueError(
-                "This quantity has not been told where it is evaluated, so the cell "
-                "whose map it differentiates is not known."
+                "This quantity has not been told where it is evaluated, so the map "
+                "it differentiates is not known."
             )
         source = self.point.domain
-        if not isinstance(source, EntityDomain):
+        if not isinstance(source, AbstractCoordinateDomain):
             raise ValueError(
-                f"This quantity is evaluated at a point of a cell's coordinate domain, "
-                f"not of {source!r}."
+                f"This quantity is evaluated at a point of a coordinate domain, not of {source!r}."
             )
-        (cell,) = source.cell_types
-        return self.domain.parametrization(cell)
+        return self.domain.parametrization_out_of(source)
 
     @property
     def _jacobian(self) -> Jacobian:
@@ -367,14 +372,14 @@ class AbstractGeometricQuantity(AbstractExpression):
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Evaluate this quantity at the given variable.
 
-        The variable stands for a point of one of this domain's cells, so
-        one in any other coordinates is not this quantity's to take.
+        The variable stands for a point of one of this domain's parameter
+        regions, so one in any other coordinates is not this quantity's to
+        take.
         """
         source = variable.domain
-        if not isinstance(source, EntityDomain):
+        if not isinstance(source, AbstractCoordinateDomain):
             return self
-        (cell,) = source.cell_types
-        if cell not in self.domain.cell_types:
+        if source not in self._domain.parameter_regions:
             return self
         return self._at_point(variable)
 
@@ -420,7 +425,7 @@ class SingleSpatialCoordinate(AbstractGeometricQuantity):
 
     def __init__(
         self,
-        domain: AbstractCellularDomain,
+        domain: AbstractParametrizedDomain,
         component: int,
         point: AbstractVariable | None = None,
     ):
@@ -506,7 +511,7 @@ class MetricTensor(AbstractGeometricQuantity):
 
     Its determinant is the squared volume scaling, so ``sqrt(det g)`` is
     the factor an integral picks up on being pulled back, which is what
-    :class:`JacobianDeterminant` gives.
+    :class:`VolumeElement` gives.
     """
 
     @property
@@ -519,6 +524,35 @@ class MetricTensor(AbstractGeometricQuantity):
         """Expand geometry."""
         j = _as_dense_matrix(self._jacobian.expand_geometry())
         return j.transpose().matmat(j)
+
+
+class VolumeElement(AbstractGeometricQuantity):
+    """The density a parametrization induces, ``sqrt(det g)``.
+
+    The factor an integral picks up on being pulled back to a cell's
+    coordinates: the volume the map gives a unit volume of the cell. On a
+    manifold it is ``sqrt(det(J^T J))``, and where the map is square it
+    reduces to ``abs(det J)``, which is cheaper.
+
+    Never negative, being a density rather than a volume form. Integrating
+    a function needs only this. The sign a density discards is the
+    orientation the map gives the cell, which :class:`JacobianDeterminant`
+    keeps where the map is square.
+    """
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        return ()
+
+    def expand_geometry(self) -> AbstractExpression:
+        """Expand geometry."""
+        gdim, tdim = self._jacobian.value_shape
+        determinant = _as_dense_matrix(self._jacobian.expand_geometry()).compute_determinant()
+        if gdim == tdim:
+            return abs(determinant)
+        # A non-square map's pseudo-determinant is a square root already.
+        return determinant
 
 
 class TangentialProjector(AbstractGeometricQuantity):
@@ -613,17 +647,41 @@ class UnitNormal(AbstractGeometricQuantity):
 
 
 class JacobianDeterminant(AbstractGeometricQuantity):
-    """The determinant of the Jacobian."""
+    """The signed determinant of a square Jacobian.
+
+    Defined only where the map is square, a non-square matrix having no
+    determinant. The factor an integral picks up on being pulled back is
+    :class:`VolumeElement`, which is defined either way and is never
+    negative.
+
+    The sign is the orientation the map gives the cell. Nothing consumes
+    it yet, and it is named because it is what a density throws away.
+    """
+
+    def _check_square(self) -> None:
+        """Check that the map has a determinant at all.
+
+        Raises:
+            ValueError: If the map is not square
+        """
+        gdim, tdim = self._jacobian.value_shape
+        if gdim != tdim:
+            raise ValueError(
+                f"A map from {tdim} coordinates into {gdim} has no determinant. The "
+                f"factor an integral picks up on being pulled back is VolumeElement."
+            )
 
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
+        self._check_square()
         return ()
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
+        self._check_square()
         j = _as_dense_matrix(self._jacobian.expand_geometry())
-        return abs(j.compute_determinant())
+        return j.compute_determinant()
 
 
 class JacobianInverse(AbstractGeometricQuantity):

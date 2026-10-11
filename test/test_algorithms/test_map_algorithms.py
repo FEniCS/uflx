@@ -21,7 +21,7 @@ def test_mass_matrix(lagrange_element):
     space = function_space(domain, element)
     u = TrialFunction(space)
     v = TestFunction(space)
-    form = inner(u, v) * dx
+    form = inner(u, v) * dx(domain)
     assert isinstance(form, Integral)
 
     pulled_form = pull_back_to_entity(form)
@@ -48,7 +48,7 @@ def test_stuffness_matrix(lagrange_element):
     space = function_space(domain, element)
     u = TrialFunction(space)
     v = TestFunction(space)
-    form = inner(grad(u), grad(v)) * dx
+    form = inner(grad(u), grad(v)) * dx(domain)
     assert isinstance(form, Integral)
 
     pulled_form = pull_back_to_entity(form)
@@ -74,7 +74,7 @@ def test_linear_form(lagrange_element):
     domain = parametrized_domain(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     v = TestFunction(space)
-    form = v * dx
+    form = v * dx(domain)
     assert isinstance(form, Integral)
 
     pulled_form = pull_back_to_entity(form)
@@ -101,7 +101,7 @@ def test_coefficient_mass_matrix_like_form(lagrange_element):
     space = function_space(domain, element)
     w = Coefficient(space)
     v = TestFunction(space)
-    form = inner(w, v) * dx
+    form = inner(w, v) * dx(domain)
     assert isinstance(form, Integral)
 
     pulled_form = pull_back_to_entity(form)
@@ -134,7 +134,7 @@ def test_coefficient_gradient_pulls_back(lagrange_element):
     space = function_space(domain, element)
     w = Coefficient(space)
     v = TestFunction(space)
-    form = inner(grad(w), grad(v)) * dx
+    form = inner(grad(w), grad(v)) * dx(domain)
     assert isinstance(form, Integral)
 
     pulled_form = pull_back_to_entity(form)
@@ -160,7 +160,7 @@ def test_distinct_coefficients_stay_distinguishable_after_pull_back(lagrange_ele
     v = TestFunction(space)
     assert w1.label != w2.label
 
-    form = inner(w1 + w2, v) * dx
+    form = inner(w1 + w2, v) * dx(domain)
     pulled_form = pull_back_to_entity(form)
 
     reference_coefficients = [
@@ -177,7 +177,7 @@ def test_pull_back_rebases_the_space(lagrange_element):
     element = lagrange_element("triangle", 2)
     domain = parametrized_domain(lagrange_element("triangle", 1, (3,)))
     space = function_space(domain, element)
-    form = inner(TrialFunction(space), TestFunction(space)) * dx
+    form = inner(TrialFunction(space), TestFunction(space)) * dx(domain)
 
     pulled = pull_back_to_entity(form)
     functions = [node for node in as_graph(pulled) if isinstance(node, AbstractFunction)]

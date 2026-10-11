@@ -41,7 +41,7 @@ def test_elasticity_bilinear_form_composes(lagrange_element, cell, dim):
     sigma_u = _sigma(u, lambda_, mu)
     assert sigma_u.value_shape == (dim, dim)
 
-    form = inner(sigma_u, sym(grad(v))) * dx
+    form = inner(sigma_u, sym(grad(v))) * dx(domain)
     assert isinstance(form, Integral)
     assert form.integrand.value_shape == ()
 
@@ -56,7 +56,7 @@ def test_elasticity_bilinear_form_pulls_back_to_reference(lagrange_element, cell
     v = TestFunction(space)
     lambda_, mu = 1.7, 0.8
 
-    form = inner(_sigma(u, lambda_, mu), sym(grad(v))) * dx
+    form = inner(_sigma(u, lambda_, mu), sym(grad(v))) * dx(domain)
 
     pulled_back = pull_back_to_entity(form)
     assert isinstance(pulled_back, Integral)

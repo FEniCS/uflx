@@ -26,7 +26,7 @@ and the mesh. For a surface mesh of triangles in three dimensions::
 
     mesh = parametrized_domain(P1_vector)       # tdim 2, gdim 3
     X = Point([a, b], entity_domain(triangle))  # tdim == gdim == 2
-    x = PushedForwardPoint(X, mesh).expand_geometry()  # a point of RD(3)
+    x = ImagePoint(X, mesh).expand_geometry()  # a point of RD(3)
 
 The pair (a, b) names no point of the mesh: it has many triangles, and a
 point of the surface needs three ambient coordinates. It names a point of
@@ -87,8 +87,49 @@ class AbstractCoordinateDomain(AbstractDomain):
         return self.geometric_dimension
 
 
-class RD(AbstractCoordinateDomain):
-    """R^d, the ambient coordinate domain."""
+class AbstractParametrizedDomain(AbstractDomain):
+    """Base class for a domain presented through maps out of coordinate domains.
+
+    A parametrization is a map out of a parameter region: a set whose
+    points are coordinate tuples, carried by the map into this domain. The
+    region is what identifies the map, since naming a point of this domain
+    means naming a point of some region and composing.
+
+    A reference cell is one kind of parameter region and not the only
+    kind, so being parametrized does not imply being made of cells. A
+    region of R^d parametrized by itself is a domain of this kind with no
+    cells in it, and its boundary is another. What a geometric quantity needs of a
+    domain is a map out of the region its point lies in, which is why it
+    asks for one here rather than for a cell's.
+    """
+
+    @property
+    @abstractmethod
+    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """The parameter regions this domain is parametrized out of."""
+
+    @abstractmethod
+    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """Get the map out of the given parameter region.
+
+        Args:
+            source: One of this domain's parameter regions
+
+        Returns:
+            The map out of that region
+
+        Raises:
+            ValueError: If this domain has no map out of that region
+        """
+
+
+class RD(AbstractCoordinateDomain, AbstractParametrizedDomain):
+    """R^d, the ambient coordinate domain.
+
+    Parametrized by itself, through the identity: its points are coordinate
+    tuples already, so nothing has to carry them anywhere. The measure
+    that follows is the Lebesgue one, whose density is one.
+    """
 
     def __init__(self, dim: int):
         """Initialise."""
@@ -98,6 +139,21 @@ class RD(AbstractCoordinateDomain):
     def geometric_dimension(self) -> int:
         """The number of coordinates needed to name a point of this domain."""
         return self._dim
+
+    @property
+    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """R^d is parametrized by itself."""
+        return (self,)
+
+    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """R^d's own parametrization is the identity.
+
+        Raises:
+            ValueError: If the region is not this R^d
+        """
+        if source != self:
+            raise ValueError(f"{self!r} is parametrized by itself, not by {source!r}.")
+        return IdentityParametrization(self)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -246,7 +302,7 @@ class IdentityParametrization(AbstractParametrization):
         return hash(("uflx.IdentityParametrization", self._domain))
 
 
-class AbstractCellularDomain(AbstractDomain):
+class AbstractCellularDomain(AbstractParametrizedDomain):
     """Base class for a domain decomposed into cells.
 
     Being made of cells is what lets a finite element be attached per
@@ -258,7 +314,8 @@ class AbstractCellularDomain(AbstractDomain):
     Each cell type has a parametrization: a map out of that cell's
     coordinate domain into the coordinates this domain lives in. Being
     made of cells and being the image of a map per cell are one thing
-    here, since the cells are what the maps are out of.
+    here, since the cells are what the maps are out of, and a cell's
+    coordinate domain is the parameter region that parametrization starts from.
     """
 
     @property
@@ -284,6 +341,30 @@ class AbstractCellularDomain(AbstractDomain):
         Raises:
             ValueError: If the cell is not a cell type of this domain
         """
+
+    @property
+    def parameter_regions(self) -> tuple[AbstractCoordinateDomain, ...]:
+        """The coordinate domains of this domain's cell types."""
+        return tuple(EntityDomain(cell) for cell in self.cell_types)
+
+    def parametrization_out_of(self, source: AbstractCoordinateDomain) -> AbstractParametrization:
+        """Get the map out of the given cell's coordinate domain.
+
+        Args:
+            source: The coordinate domain of one of this domain's cell types
+
+        Returns:
+            That cell type's parametrization
+
+        Raises:
+            ValueError: If the region is not a cell of this domain
+        """
+        if not isinstance(source, EntityDomain):
+            raise ValueError(
+                f"{self!r} is parametrized by its cells' coordinate domains, not by {source!r}."
+            )
+        (cell,) = source.cell_types
+        return self.parametrization(cell)
 
     @abstractmethod
     def parametrization(self, cell: AbstractEntity) -> AbstractParametrization:

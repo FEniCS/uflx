@@ -12,8 +12,8 @@ of it that cell uses. Evaluating such a map is an interpolation sum, which
 is an expression, so this lives above the function space and basis
 function layers rather than in `uflx.domains`.
 
-Maps compose, so a mesh can be post-composed with a chart that is not a
-finite element map at all. A mesh of intervals in R^1 composed with
+Maps compose, so a mesh can be post-composed with a map that is not a
+finite element one at all. A mesh of intervals in R^1 composed with
 ``y -> (y, y^2)`` is a parabola represented exactly, rather than
 interpolated through the nodes of a higher degree coordinate element.
 """

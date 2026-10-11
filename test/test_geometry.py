@@ -10,18 +10,19 @@ from uflx.expressions import RealScalar, Sqrt
 from uflx.functions import create_variable
 from uflx.geometry import (
     AbstractGeometricQuantity,
+    ImagePoint,
     Jacobian,
     JacobianDeterminant,
     JacobianInverse,
     JacobianInverseTranspose,
     JacobianTranspose,
     MetricTensor,
-    PulledBackPoint,
-    PushedForwardPoint,
+    PreimagePoint,
     SingleSpatialCoordinate,
     SpatialCoordinate,
     TangentialProjector,
     UnitNormal,
+    VolumeElement,
     expand_geometry,
 )
 from uflx.graphs import as_graph
@@ -111,7 +112,7 @@ def test_pushed_forward_point_expands_to_ambient_coordinates(cell, gdim, lagrang
     tdim = entity.topological_dimension
 
     entity_point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
-    pushed = PushedForwardPoint(entity_point, domain)
+    pushed = ImagePoint(entity_point, domain)
     assert pushed.domain == RD(gdim)
 
     expanded = pushed.expand_geometry()
@@ -126,7 +127,7 @@ def test_pulled_back_point_lands_in_entity_coordinates(lagrange_element):
     (entity,) = domain.cell_types
 
     parametrization = domain.parametrization(entity)
-    pulled = PulledBackPoint(Point([RealScalar(1.0)] * 3, RD(3)), parametrization)
+    pulled = PreimagePoint(Point([RealScalar(1.0)] * 3, RD(3)), parametrization)
 
     assert pulled.domain == EntityDomain(entity)
     assert pulled.in_entity_coordinates
@@ -141,8 +142,8 @@ def test_the_two_mapped_points_do_not_collide(lagrange_element):
     entity_point = Point([RealScalar(0.25)], EntityDomain(entity))
     ambient_point = Point([RealScalar(0.25)], RD(1))
 
-    pushed = PushedForwardPoint(entity_point, domain)
-    pulled = PulledBackPoint(ambient_point, domain.parametrization(entity))
+    pushed = ImagePoint(entity_point, domain)
+    pulled = PreimagePoint(ambient_point, domain.parametrization(entity))
 
     assert pushed != pulled
     assert pulled != pushed
@@ -181,7 +182,7 @@ def test_jacobian_coordinate_dofs(cell, gdim, lagrange_element):
     tdim = domain.cell_types[0].topological_dimension
     point = Point([RealScalar(0.1)] * tdim, EntityDomain(domain.cell_types[0]))
 
-    x_dofs = coordinate_dof_entries(PushedForwardPoint(point, domain).expand_geometry())
+    x_dofs = coordinate_dof_entries(ImagePoint(point, domain).expand_geometry())
     assert len(x_dofs) > 0
     assert coordinate_dof_entries(Jacobian(domain, point).expand_geometry()) == x_dofs
 
@@ -190,7 +191,7 @@ def mass_form(cell, gdim, lagrange_element):
     """A form with geometry in it once pulled back, but no gradients."""
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
     space = function_space(domain, lagrange_element(cell, 1))
-    return inner(Coefficient(space), TestFunction(space)) * dx
+    return inner(Coefficient(space), TestFunction(space)) * dx(domain)
 
 
 def test_a_jacobian_is_told_where_it_is_evaluated(lagrange_element):
@@ -210,8 +211,8 @@ def test_a_jacobian_is_told_where_it_is_evaluated(lagrange_element):
 def test_a_pulled_back_integral_expands_its_geometry(cell, gdim, lagrange_element):
     """Expanding a pulled back form leaves no geometry behind.
 
-    A Jacobian built during a pull back used to keep point=None, so
-    expanding one asserted instead of giving an expression.
+    A Jacobian built during a pull back has no point of its own, so it
+    can only expand once the integral has told it where it is evaluated.
     """
     expanded = expand_geometry(pull_back_to_entity(mass_form(cell, gdim, lagrange_element)))
 
@@ -286,6 +287,7 @@ def test_a_jacobian_without_a_point_knows_no_cell(mixed_mesh):
 geometric_quantities = [
     Jacobian,
     JacobianDeterminant,
+    VolumeElement,
     MetricTensor,
     TangentialProjector,
     UnitNormal,
@@ -327,7 +329,7 @@ def test_pushing_forward_needs_a_point_in_a_cells_coordinates(lagrange_element):
     ambient = Point([RealScalar(0.25)] * 2, RD(2))
 
     with pytest.raises(ValueError, match="pushed forward from a cell's coordinates"):
-        PushedForwardPoint(ambient, domain)
+        ImagePoint(ambient, domain)
 
 
 def test_pulling_back_needs_a_point_in_ambient_coordinates(lagrange_element):
@@ -337,7 +339,7 @@ def test_pulling_back_needs_a_point_in_ambient_coordinates(lagrange_element):
     entity_point = Point([RealScalar(0.25)] * 2, EntityDomain(cell))
 
     with pytest.raises(ValueError, match="nothing to pull back"):
-        PulledBackPoint(entity_point, domain.parametrization(cell))
+        PreimagePoint(entity_point, domain.parametrization(cell))
 
 
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
@@ -368,10 +370,10 @@ def test_the_metric_is_symmetric(cell, gdim, lagrange_element):
 
 
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
-def test_the_volume_scaling_is_the_metrics_gram_determinant(cell, gdim, lagrange_element):
+def test_the_volume_element_is_the_metrics_gram_determinant(cell, gdim, lagrange_element):
     """On a manifold the factor an integral picks up is sqrt(det g).
 
-    For a square map the same identity holds, but JacobianDeterminant
+    For a square map the same identity holds, but the volume element
     takes the direct and much cheaper abs(det J) instead, so the two are
     equal as numbers without being equal as expressions.
     """
@@ -385,9 +387,42 @@ def test_the_volume_scaling_is_the_metrics_gram_determinant(cell, gdim, lagrange
     g = MetricTensor(domain, point).expand_geometry()
     assert isinstance(g, Matrix)
 
-    assert simplify(abs(Sqrt(g.compute_determinant()))) == simplify(
-        JacobianDeterminant(domain, point).expand_geometry()
+    assert simplify(Sqrt(g.compute_determinant())) == simplify(
+        VolumeElement(domain, point).expand_geometry()
     )
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_the_volume_element_is_the_determinants_magnitude_on_a_cell(cell, gdim, lagrange_element):
+    """Where the map is square the density is abs(det J), and the sign is kept."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    if gdim != tdim:
+        pytest.skip("A manifold, so the determinant does not exist.")
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    assert simplify(abs(JacobianDeterminant(domain, point).expand_geometry())) == simplify(
+        VolumeElement(domain, point).expand_geometry()
+    )
+
+
+@pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
+def test_a_manifold_map_has_no_determinant(cell, gdim, lagrange_element):
+    """A non-square matrix has none, and the density is what was wanted anyway."""
+    domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
+    (entity,) = domain.cell_types
+    tdim = entity.topological_dimension
+    if gdim == tdim:
+        pytest.skip("Not a manifold, so the determinant exists.")
+    point = Point([RealScalar(0.25)] * tdim, EntityDomain(entity))
+
+    with pytest.raises(ValueError, match="has no determinant"):
+        JacobianDeterminant(domain, point).value_shape
+    with pytest.raises(ValueError, match="has no determinant"):
+        JacobianDeterminant(domain, point).expand_geometry()
+
+    assert VolumeElement(domain, point).value_shape == ()
 
 
 @pytest.mark.parametrize(("cell", "gdim"), cells_and_gdims)
@@ -510,7 +545,7 @@ def test_a_pushed_forward_point_is_the_spatial_coordinate_as_a_point(lagrange_el
     (entity,) = domain.cell_types
     point = Point([RealScalar(0.25)] * 2, EntityDomain(entity))
 
-    pushed = PushedForwardPoint(point, domain).expand_geometry()
+    pushed = ImagePoint(point, domain).expand_geometry()
     coordinates = SpatialCoordinate(domain, point).expand_geometry()
 
     assert isinstance(pushed, Point)
