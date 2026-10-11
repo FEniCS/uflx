@@ -699,6 +699,58 @@ def test_the_conormal_of_a_facet_of_a_surface_is_the_same_transport(patch, on_th
         assert projected == pytest.approx(conormal)
 
 
+@pytest.mark.parametrize("k", range(3))
+def test_a_facets_density_is_nansons_formula(stretched_cell, on_the_facet, k):
+    """``ds = abs(det J) abs(J^-T nhat) dshat``, exactly and by construction.
+
+    The facet's volume element is never computed as a facet measure. It
+    is ``sqrt(det g)`` of the facet's own parametrization, which is the inclusion
+    followed by the cell's map -- and that comes out as the cell's volume
+    scaling times how much the cofactor rule stretches the reference
+    normal, which is what a continuum mechanics text calls Nanson's
+    formula.
+    """
+    cell = PlacedTriangle()
+    facet = sub_entities_of(stretched_cell, 1).pieces[k]
+    reference_facet = sub_entity_domain(cell, 1, k)
+    included = ImagePoint(on_the_facet, reference_facet).expand_geometry()
+    assert isinstance(included, Point)
+
+    nhat = normal_of(reference_facet, on_the_facet)
+    cofactor = entries_of(JacobianInverseTranspose(stretched_cell, included), 2, 2)
+    stretch = math.sqrt(sum(sum(row[j] * nhat[j] for j in range(2)) ** 2 for row in cofactor))
+
+    nanson = (
+        measure_of(stretched_cell, included) * stretch * measure_of(reference_facet, on_the_facet)
+    )
+
+    assert measure_of(facet, on_the_facet) == pytest.approx(nanson)
+
+
+@pytest.mark.parametrize("k", range(3))
+def test_a_facets_metric_is_the_cells_metric_pulled_back(stretched_cell, on_the_facet, k):
+    """``g_facet = Diota^T g_cell Diota``, which is what composing the parametrizations means.
+
+    A facet's parametrization is the cell's map after the inclusion, so its first
+    fundamental form is the cell's pulled back along the inclusion. Not a
+    second computation of a metric: the chain rule, read off the one the
+    composed parametrization already induces.
+    """
+    cell = PlacedTriangle()
+    facet = sub_entities_of(stretched_cell, 1).pieces[k]
+    reference_facet = sub_entity_domain(cell, 1, k)
+    included = ImagePoint(on_the_facet, reference_facet).expand_geometry()
+    assert isinstance(included, Point)
+
+    inclusion = entries_of(Jacobian(reference_facet, on_the_facet), 2, 1)
+    cell_metric = entries_of(MetricTensor(stretched_cell, included), 2, 2)
+    pulled_back = sum(
+        inclusion[i][0] * cell_metric[i][j] * inclusion[j][0] for i in range(2) for j in range(2)
+    )
+
+    assert entries_of(MetricTensor(facet, on_the_facet), 1, 1)[0][0] == pytest.approx(pulled_back)
+
+
 def test_the_normal_of_a_facet_of_a_mapped_cell_is_not_the_mapped_normal(
     stretched_cell, on_the_facet
 ):
