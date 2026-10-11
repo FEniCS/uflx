@@ -212,7 +212,7 @@ class Restriction(AbstractExpression):
             piece: One piece of this restriction's domain
 
         Returns:
-            The same field restricted to that piece
+            The same field read through that piece's own map
         """
         return Restriction(self._field, piece)
 

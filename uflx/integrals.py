@@ -321,8 +321,8 @@ class Integral(AbstractIntegral):
 
         The measure moves onto the piece, and so does everything in the
         integrand that was written against the whole union: a restriction
-        is read through that piece's parametrization, and a geometric quantity is
-        read off that piece's geometry.
+        is read through that piece's parametrization, and a geometric
+        quantity is read off that piece's geometry.
 
         Args:
             piece: One piece of this integral's domain
