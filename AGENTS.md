@@ -101,7 +101,9 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   read at. `LabelledDomain` is a domain and an opaque label a consumer selects it by — a
   marked subdomain being a domain and not an id on a measure — delegating everything
   geometric, and `unlabelled` takes the labels off, which an integral does before asking
-  whether a function belongs to the domain it is over.
+  whether a function belongs to the domain it is over, and which anything asking a
+  structural question of a domain does first: `ComposesADomain` is the protocol for a
+  domain presented as another with a map applied, and a label is not one.
 - `function_spaces.py` — `AbstractFunctionSpace`: standard FE spaces (domain + element),
   constant spaces (shape + scalar type), or non-FE spaces (domain + shape, no element).
   Do not construct `Argument`/`Coefficient` directly from an element — they must come

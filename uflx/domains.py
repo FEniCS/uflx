@@ -327,6 +327,29 @@ class IncludesASubEntity(Protocol):
         """The dimension of the sub-entity included, and which one it is."""
 
 
+@runtime_checkable
+class ComposesADomain(Protocol):
+    """A domain presented as another domain with a map applied to it.
+
+    What a composite is a composite *of*, which is how a restriction asks
+    a facet of a mesh which sub-entity of which cell it is, and how the
+    sub-entity a parametrization includes is read back off it.
+    :class:`uflx.parametrizations.ComposedDomain` is the implementation.
+
+    A label is not one of these. A labelled domain is the domain it
+    labels in everything geometric, so whatever asks this question asks
+    it of :func:`unlabelled` first rather than of the label.
+    """
+
+    @property
+    def inner_domain(self) -> AbstractCellularDomain:
+        """The domain being mapped on."""
+
+    @property
+    def map(self) -> AbstractParametrization:
+        """The map applied to that domain's own coordinates."""
+
+
 class IdentityParametrization(AbstractParametrization):
     """The map that leaves a coordinate domain's points where they are."""
 
@@ -644,28 +667,6 @@ class LabelledDomain(AbstractCellularDomain):
     def on_cell_type(self, cell: AbstractEntity) -> LabelledDomain:
         """Restricting keeps the label, a cell type being no part of it."""
         return LabelledDomain(self._domain.on_cell_type(cell), self._label)
-
-    @property
-    def inner_domain(self) -> AbstractCellularDomain:
-        """What the labelled domain is a composite of, if it is one.
-
-        Delegated so that a restriction can still read the inclusion a
-        field is restricted along. This is the one place a label is not
-        transparent, so it is the one delegation worth naming.
-
-        Raises:
-            AttributeError: If the domain labelled is not a composite
-        """
-        return self._domain.inner_domain  # pyrefly: ignore[missing-attribute]
-
-    @property
-    def map(self) -> AbstractParametrization:
-        """The map applied to that inner domain, likewise delegated.
-
-        Raises:
-            AttributeError: If the domain labelled is not a composite
-        """
-        return self._domain.map  # pyrefly: ignore[missing-attribute]
 
     def __repr__(self) -> str:
         """Representation."""

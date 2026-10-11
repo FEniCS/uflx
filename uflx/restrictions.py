@@ -48,8 +48,10 @@ from uflx.domains import (
     AbstractParametrizedDomain,
     AbstractParametrization,
     AbstractParametrizedDomain,
+    ComposesADomain,
     EntityDomain,
     UnionDomain,
+    unlabelled,
 )
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
@@ -277,11 +279,12 @@ def _inclusion_of(
     Raises:
         ValueError: If the piece is not a sub-entity of a cell mapped on
     """
-    inner = getattr(domain, "inner_domain", None)
-    cell_map = getattr(domain, "map", None)
-    sits_in = inner.coordinate_domain if isinstance(inner, AbstractCellularDomain) else None
-    if not isinstance(inner, AbstractCellularDomain) or cell_map is None:
+    composite = unlabelled(domain)
+    if not isinstance(composite, ComposesADomain):
         raise ValueError(f"{domain!r} is not a sub-entity of a cell, mapped on.")
+    inner = composite.inner_domain
+    cell_map = composite.map
+    sits_in = inner.coordinate_domain
     if not isinstance(sits_in, EntityDomain):
         raise ValueError(f"{inner!r} is named in {sits_in!r}, not in a cell's coordinates.")
     (cell,) = sits_in.cell_types

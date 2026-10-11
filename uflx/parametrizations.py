@@ -28,7 +28,10 @@ from uflx.domains import (
     RD,
     AbstractParametrizedDomain,
     AbstractCoordinateDomain,
+    AbstractDomain,
     AbstractParametrization,
+    AbstractCellularDomain,
+    ComposesADomain,
     EntityDomain,
     IncludesASubEntity,
     LabelledDomain,
@@ -644,12 +647,10 @@ def included_sub_entity(domain: AbstractParametrizedDomain) -> tuple[int, int] |
             index in the cell these do not give
     """
     found: list[tuple[int, int]] = []
-    seen: AbstractParametrizedDomain | None = domain
-    while seen is not None:
-        parametrization = getattr(seen, "map", None)
-        if isinstance(parametrization, AbstractParametrization):
-            found = _inclusions_in(parametrization) + found
-        seen = getattr(seen, "inner_domain", None)
+    seen: AbstractDomain = unlabelled(domain)
+    while isinstance(seen, ComposesADomain):
+        found = _inclusions_in(seen.map) + found
+        seen = unlabelled(seen.inner_domain)
     if len(found) == 0:
         return None
     if len(found) > 1:
