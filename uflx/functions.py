@@ -53,13 +53,19 @@ class AbstractVariable(AbstractExpression):
         """Check if this variable's components are in an entity's coordinates."""
         return isinstance(self.domain, EntityDomain)
 
-    def to_entity_coordinates(self, cell: AbstractEntity) -> FiniteElementVariable:
+    def to_entity_coordinates(self, cell: AbstractEntity) -> AbstractVariable:
         """Make a version of this variable in the given cell's coordinates."""
         raise ValueError("Cannot pull this variable back to a cell's coordinates.")
 
 
 class Variable(AbstractVariable):
-    """A variable that is the input to a function."""
+    """A variable that is the input to a function.
+
+    One in a cellular domain can be moved between that domain's own
+    coordinates and one of its cells', which is what pulling an integral
+    back does to its dummy variable. One in any other domain has nowhere
+    to be moved to and refuses.
+    """
 
     _n = count(0)
 
@@ -81,50 +87,6 @@ class Variable(AbstractVariable):
         """The domain that this variable is in."""
         return self._domain
 
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return isinstance(other, Variable) and other.label == self.label
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"Variable({self._label})"
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.Variable", self._label))
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._domain, self._label)
-
-    def component(self, *indices: int) -> AbstractExpression:
-        """Get a component of the expression."""
-        raise NotImplementedError()
-
-
-class FiniteElementVariable(AbstractVariable):
-    """A variable that is the input to a function."""
-
-    _n = count(0)
-
-    def __init__(
-        self,
-        domain: AbstractCellularDomain,
-        label: str | None = None,
-    ):
-        """Initialise."""
-        if label is None:
-            self._label = f"variable-{next(self._n)}"
-        else:
-            self._label = label
-        self._domain = domain
-
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
@@ -136,36 +98,20 @@ class FiniteElementVariable(AbstractVariable):
         return (self._domain, self._label)
 
     @property
-    def label(self) -> str:
-        """The label of this variable."""
-        return self._label
+    def _cell_types(self) -> tuple[AbstractEntity, ...]:
+        """The cell types of this variable's domain.
 
-    @property
-    def domain(self) -> AbstractDomain:
-        """The domain that this variable is in."""
-        return self._domain
-
-    def __eq__(self, other) -> bool:
-        """Check for equality.
-
-        The domain counts: pulling a variable back keeps its label and
-        changes only where it lives.
+        Raises:
+            ValueError: If the domain is not made of cells
         """
-        return (
-            isinstance(other, FiniteElementVariable)
-            and other.label == self.label
-            and other.domain == self.domain
-        )
+        if not isinstance(self._domain, AbstractCellularDomain):
+            raise ValueError(
+                f"{self._domain!r} is not made of cells, so a point of it is in no "
+                f"cell's coordinates."
+            )
+        return self._domain.cell_types
 
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"FiniteElementVariable({self._label}, {self._domain!r})"
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.FiniteElementVariable", self._label, self._domain))
-
-    def to_domain_coordinates(self, domain: AbstractCellularDomain) -> FiniteElementVariable:
+    def to_domain_coordinates(self, domain: AbstractCellularDomain) -> Variable:
         """Make a version of this variable in a domain's own coordinates.
 
         Args:
@@ -174,9 +120,9 @@ class FiniteElementVariable(AbstractVariable):
                 from, and those coordinates belong to no domain in
                 particular, so the target is named rather than recalled.
         """
-        return FiniteElementVariable(domain, self._label)
+        return Variable(domain, self._label)
 
-    def to_entity_coordinates(self, cell: AbstractEntity) -> FiniteElementVariable:
+    def to_entity_coordinates(self, cell: AbstractEntity) -> Variable:
         """Make a version of this variable in the given cell's coordinates.
 
         Args:
@@ -184,16 +130,40 @@ class FiniteElementVariable(AbstractVariable):
                 one is not a cell of the domain, and a point in its
                 coordinates reaches a cell element only through an
                 inclusion, not through this.
+
+        Raises:
+            ValueError: If the cell is not a cell type of this variable's
+                domain
         """
-        if cell not in self._domain.cell_types:
+        if cell not in self._cell_types:
             raise ValueError(
                 f"Cannot pull back to {cell}, which is not a cell type of this variable's domain."
             )
-        return FiniteElementVariable(EntityDomain(cell), self._label)
+        return Variable(EntityDomain(cell), self._label)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise NotImplementedError()
+
+    def __eq__(self, other) -> bool:
+        """Check for equality.
+
+        The domain counts: pulling a variable back keeps its label and
+        changes only where it lives.
+        """
+        return (
+            isinstance(other, Variable)
+            and other.label == self.label
+            and other.domain == self.domain
+        )
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"Variable({self._label}, {self._domain!r})"
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.Variable", self._label, self._domain))
 
 
 class AbstractFunction(AbstractExpression):
@@ -548,9 +518,6 @@ class TrialFunction(Argument):
         return PushedForward(element.value_map, TrialFunction(space, variable))
 
 
-def create_variable(domain: AbstractDomain) -> AbstractVariable:
+def create_variable(domain: AbstractDomain) -> Variable:
     """Create a new variable in a domain."""
-    if isinstance(domain, AbstractCellularDomain):
-        return FiniteElementVariable(domain)
-    else:
-        return Variable(domain)
+    return Variable(domain)

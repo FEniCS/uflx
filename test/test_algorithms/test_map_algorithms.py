@@ -8,7 +8,7 @@ from uflx.domains import EntityDomain
 from uflx.functions import (
     AbstractFunction,
     Coefficient,
-    FiniteElementVariable,
+    Variable,
 )
 from uflx.graphs import as_graph
 from uflx.integrals import Integral
@@ -203,7 +203,7 @@ def test_pulling_a_variable_back_changes_only_where_it_lives(lagrange_element):
     """A pulled back variable keeps its label and takes the cell's domain."""
     element = lagrange_element("triangle", 2)
     mesh = parametrized_domain(lagrange_element("triangle", 1, (3,)))
-    v = FiniteElementVariable(mesh, "x")
+    v = Variable(mesh, "x")
 
     pulled = v.to_entity_coordinates(element.cell)
 
@@ -218,7 +218,7 @@ def test_a_variable_pulls_back_only_to_a_cell_of_its_domain(lagrange_element):
     mesh = parametrized_domain(lagrange_element("triangle", 1, (3,)))
     (triangle,) = mesh.cell_types
     (facet,) = {f for f in triangle.sub_entities(1)}
-    v = FiniteElementVariable(mesh, "x")
+    v = Variable(mesh, "x")
 
     assert v.to_entity_coordinates(triangle).domain == EntityDomain(triangle)
     with pytest.raises(ValueError, match="not a cell type"):
