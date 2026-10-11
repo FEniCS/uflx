@@ -8,11 +8,11 @@ from uflx.basis_functions import EvaluatedBasisFunction
 from uflx.expressions import Product, RealScalar
 from uflx.operators import ReferenceGrad, Tr, dev, skew, sym, tr, transpose
 from uflx.points import Point
-from uflx.tensors import Identity, Matrix, Vector, zero
+from uflx.tensors import Identity, Tensor, matrix, vector, zero
 
 
-def _to_matrix(values: np.ndarray) -> Matrix:
-    return Matrix([[RealScalar(float(v)) for v in row] for row in values])
+def _to_matrix(values: np.ndarray) -> Tensor:
+    return matrix([[RealScalar(float(v)) for v in row] for row in values])
 
 
 def _to_numpy(expression, shape: tuple[int, ...]) -> np.ndarray:
@@ -108,14 +108,14 @@ def test_identity_matrix_product_acts_as_identity():
 def test_transpose_requires_rank_2():
     """transpose() should reject vectors and scalars, not just silently misbehave."""
     with pytest.raises(ValueError):
-        transpose(Vector([RealScalar(1.0), RealScalar(2.0)]))
+        transpose(vector([RealScalar(1.0), RealScalar(2.0)]))
     with pytest.raises(ValueError):
         transpose(RealScalar(1.0))
 
 
 def test_tr_and_dev_require_square():
     """tr()/dev() should reject non-square rank-2 expressions."""
-    non_square = Matrix([[RealScalar(1.0), RealScalar(2.0)]])
+    non_square = matrix([[RealScalar(1.0), RealScalar(2.0)]])
     with pytest.raises(ValueError):
         tr(non_square)
     with pytest.raises(ValueError):
@@ -124,7 +124,7 @@ def test_tr_and_dev_require_square():
 
 def test_sym_skew_reject_non_square():
     """sym()/skew() of a non-square matrix should fail (shape mismatch in A + A.T)."""
-    non_square = Matrix([[RealScalar(1.0), RealScalar(2.0)]])
+    non_square = matrix([[RealScalar(1.0), RealScalar(2.0)]])
     with pytest.raises(AssertionError):
         sym(non_square)
     with pytest.raises(AssertionError):

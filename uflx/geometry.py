@@ -9,7 +9,7 @@ from uflx.expressions import AbstractExpression, expression_sum
 from uflx.function_spaces import function_space
 from uflx.graphs import GraphNode, as_graph
 from uflx.points import AbstractPoint, Point
-from uflx.tensors import FlattenedTensorMap, Identity, Matrix
+from uflx.tensors import FlattenedTensorMap, Identity, Tensor, matrix
 
 
 @runtime_checkable
@@ -255,7 +255,7 @@ class Jacobian(AbstractExpression):
 
         assert self.point is not None
 
-        return Matrix(
+        return matrix(
             [
                 [
                     expression_sum(
@@ -323,7 +323,7 @@ class JacobianDeterminant(AbstractExpression):
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
         j = self._jacobian.expand_geometry()
-        assert isinstance(j, Matrix)
+        assert isinstance(j, Tensor)
         return abs(j.compute_determinant())
 
     def component(self, *indices: int) -> AbstractExpression:
@@ -358,7 +358,7 @@ class JacobianInverse(AbstractExpression):
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
         j = self._jacobian.expand_geometry()
-        assert isinstance(j, Matrix)
+        assert isinstance(j, Tensor)
         return j.compute_inverse()
 
     def __repr__(self) -> str:
@@ -409,7 +409,7 @@ class JacobianTranspose(AbstractExpression):
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
         j = self._jacobian.expand_geometry()
-        assert isinstance(j, Matrix)
+        assert isinstance(j, Tensor)
         return j.transpose()
 
     def __repr__(self) -> str:
@@ -460,7 +460,7 @@ class JacobianInverseTranspose(AbstractExpression):
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
         j = self._jacobian.expand_geometry()
-        assert isinstance(j, Matrix)
+        assert isinstance(j, Tensor)
         return j.compute_inverse().transpose()
 
     def __repr__(self) -> str:

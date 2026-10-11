@@ -1,13 +1,13 @@
 """Test matrix-vector products."""
 
 from uflx.expressions import MatVec, RealScalar
-from uflx.tensors import Matrix, Vector
+from uflx.tensors import matrix, vector
 
 
 def test_non_square_matvec():
     """A (3, 2) matrix times a vector of length 2 is a vector of length 3."""
-    a = Matrix([[RealScalar(float(3 * i + j)) for j in range(2)] for i in range(3)])
-    x = Vector([RealScalar(1.0), RealScalar(2.0)])
+    a = matrix([[RealScalar(float(3 * i + j)) for j in range(2)] for i in range(3)])
+    x = vector([RealScalar(1.0), RealScalar(2.0)])
 
     product = MatVec(a, x)
     assert product.value_shape == (3,)
