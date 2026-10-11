@@ -278,15 +278,10 @@ class Matrix(Tensor):
         sqrt(det(A A^T)) (wide A), i.e. the volume scaling of the parametrization of a
         manifold cell.
 
-        An empty matrix gives one, which the Leibniz formula says with
-        nothing chosen: the only permutation of no indices is the empty
-        one, its sign is positive, and the product over no entries is the
-        empty product. Multiplicativity agrees, the 0 by 0 matrix being
-        the identity on the zero vector space and det(diag(A, I0)) having
-        to be det(A); so does the volume reading, the parallelepiped
-        spanned by no columns being the zero dimensional unit cube, whose
-        measure is the counting one. numpy answers one for det(eye(0)) and
-        for det(A^T A) with A of shape (m, 0).
+        An empty matrix gives one. A block diagonal determinant is the
+        product of its blocks', so adding a 0 by 0 block must change
+        nothing: det(diag(A, I0)) = det(A) det(I0) = det(A). numpy and
+        MATLAB answer one too.
 
         Raises:
             NotImplementedError: If the matrix is square and larger than 3x3
