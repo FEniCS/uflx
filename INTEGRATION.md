@@ -250,6 +250,15 @@ Not built:
    measure a sub-entity domain of full codimension would give. The empty Gram
    determinant is one, but the empty matrix its Jacobian needs cannot be built, as
    `test_the_measure_of_a_point_is_the_counting_measure` records.
+1. **A tag carried as far as a kernel.** A marked part of a domain is a domain, as note
+   3 says, and `UnionDomain`'s label records which selection was meant. It does not
+   reach a kernel: splitting an integral retargets it onto one piece at a time and a
+   piece carries no label, so two differently marked facet integrals pull back to
+   kernels that cannot be told apart. What the label wants is to be on a domain at every
+   level -- a thin labelled domain, delegating its parametrizations, applied per piece -- after
+   which it rides into the kernel the way a facet's own geometry already does, through
+   the quantities that name the piece. That mechanism serves marked cells as much as
+   marked facets, and it would let the union's own label go.
 1. **Atomic measures**, for a point evaluation and for a quadrature rule as a sum of
    Diracs. A sibling of `Measure` rather than a weighting of one.
 

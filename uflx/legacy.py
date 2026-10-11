@@ -31,6 +31,14 @@ names its domain can always be written instead.
 The module is named for what it is rather than for a plural of what it
 contains, bending the convention in DESIGN_CHOICES.md, since what it
 contains is a vocabulary and not a kind of object.
+
+A subdomain id is refused rather than dropped. `ds(3)` means the facets a
+consumer marked with 3, which is a selection of mesh entities and so a
+domain of its own, as INTEGRATION.md note 3 says. A label on the domain
+of facets does not reach that far: splitting the integral retargets it
+onto one piece at a time, and a piece carries no label, so the tag would
+be gone by the time there were kernels to assign to it. Carrying a tag
+needs it on a domain at every level, which is not built.
 """
 
 from __future__ import annotations
@@ -242,15 +250,29 @@ class ExteriorFacetMeasure(CellMeasure):
         return ExteriorFacetMeasure(subdomain_id, domain or self._domain)
 
     def facets_for(self, integrand: AbstractExpression) -> UnionDomain:
-        """The domain of facets an integrand of this measure is over."""
-        return facets_of(self.domain_of(integrand), ExteriorFacets(self._subdomain_id))
+        """The domain of facets an integrand of this measure is over.
+
+        Raises:
+            NotImplementedError: If a subdomain was marked, which a domain
+                cannot yet carry as far as its kernels
+        """
+        if self._subdomain_id is not None:
+            raise NotImplementedError(
+                f"The facets marked {self._subdomain_id!r} are a selection of mesh "
+                f"entities and so a domain of their own, not an id on a measure. A "
+                f"label on the domain of facets does not reach a kernel: splitting the "
+                f"integral retargets it onto one piece at a time and a piece carries no "
+                f"label, so the tag would be dropped where a consumer needs it. Carrying "
+                f"a tag needs it on a domain at every level, which is not built."
+            )
+        return facets_of(self.domain_of(integrand), ExteriorFacets())
 
     def __rmul__(self, integrand: AbstractExpression) -> Integral:
         """Right multiply by an expression to form an integral over the facets."""
         if not isinstance(integrand, AbstractExpression):
             return NotImplemented
-        domain = self.domain_of(integrand)
         facets = self.facets_for(integrand)
+        domain = self.domain_of(integrand)
         integral = _restrict_fields(integrand, domain, facets) * measure_of(facets)
         assert isinstance(integral, Integral)
         return integral
