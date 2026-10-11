@@ -114,6 +114,18 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
             self._component,
         )
 
+    def reconstruct_with_space(self, space: AbstractFunctionSpace) -> Self:
+        """Reconstruct this function in another function space."""
+        assert isinstance(space, AbstractMappedFunctionSpace)
+        return self.__class__(
+            space,
+            self._basis_index,
+            self._variable,
+            self._element_index,
+            self._derivative,
+            self._component,
+        )
+
     @property
     def function_space(self) -> AbstractFunctionSpace:
         """The function space that this function lives in."""
