@@ -33,6 +33,7 @@ from uflx.domains import (
     IncludesASubEntity,
     LabelledDomain,
     UnionDomain,
+    unlabelled,
 )
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression, MatrixProduct, RealScalar, expression_sum
@@ -722,7 +723,10 @@ def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = Non
 
     A label marks each piece rather than the union of them, so that
     splitting an integral keeps it and a kernel says which selection it is
-    for.
+    for. The label is the sub-entities', so a domain that is itself a
+    selection of cells is refused rather than having its own label
+    dropped: which facets a marked region has is a question about a cell
+    complex, where which facets a consumer marked is a label.
 
     Args:
         domain: The domain whose cells' sub-entities are taken
@@ -741,6 +745,15 @@ def sub_entities_of(domain: AbstractCellularDomain, codim: int, label: Any = Non
         raise ValueError(
             f"{domain!r} is not made of cells, so it has no sub-entities to enumerate. "
             f"A domain parametrized some other way is not yet asked for its boundary pieces."
+        )
+    if unlabelled(domain) is not domain:
+        # A label on the cells changes no parametrization, so a piece built from this
+        # domain's parametrization is the unlabelled domain's piece exactly,
+        # and the selection would be dropped here without a word.
+        raise ValueError(
+            f"{domain!r} is a selection of cells, which does not say which of their "
+            f"sub-entities is meant. Mark the sub-entities instead, by passing a label "
+            f"here; the boundary of a marked region is not yet a domain of its own."
         )
     pieces: list[AbstractParametrizedDomain] = []
     for cell in domain.cell_types:

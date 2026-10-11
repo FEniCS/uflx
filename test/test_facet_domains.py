@@ -364,6 +364,26 @@ def test_a_label_marks_each_piece_so_a_kernel_keeps_it(mesh, space):
         assert read_on.label == "inflow"
 
 
+def test_the_sub_entities_of_a_marked_domain_are_refused(mesh):
+    """A label on the cells is not a label on their facets, and does not become one.
+
+    Everything geometric about a marked domain is the domain's, the
+    parametrization included, so a piece built from it is the unlabelled
+    domain's piece: equal to it, hash for hash. The selection has nowhere
+    to go, and the boundary of a marked region is a different question
+    from a marked selection of facets, so this refuses rather than
+    quietly giving the facets of the whole mesh.
+    """
+    marked = LabelledDomain(mesh, "steel")
+
+    assert marked.parametrization(PlacedTriangle()) == mesh.parametrization(PlacedTriangle())
+
+    with pytest.raises(ValueError, match="selection of cells"):
+        facets_of(marked)
+    with pytest.raises(ValueError, match="selection of cells"):
+        sub_entities_of(marked, 1, "boundary")
+
+
 def test_a_kernel_says_which_sub_entity_it_is_for(mesh, space):
     """The local index, which identifies a kernel along with the cell type.
 
