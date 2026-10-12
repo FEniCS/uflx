@@ -1,6 +1,5 @@
 """Test that Basix cells and elements are identified by their init_args."""
 
-import gc
 import os
 import subprocess
 import sys
@@ -121,15 +120,53 @@ def test_every_process_agrees_on_an_elements_hash_whatever_its_hash_seed():
     assert printed["1"] == printed["2"]
 
 
-def test_fingerprints_do_not_depend_on_where_an_element_is_in_memory():
-    """A rebuilt element has the same digest even though Basix prints an address."""
-    a = basix_uflx.element("Lagrange", "triangle", 2)
-    before, wrapped = fingerprint(a), a.init_args[0]
-    del a
-    gc.collect()
-    b = basix_uflx.element("Lagrange", "triangle", 2)
-    assert b.init_args[0] is not wrapped
-    assert fingerprint(b) == before
+@pytest.mark.parametrize(
+    "kwargs",
+    [{}, {"dof_ordering": [0, 2, 1, 3, 4, 5]}, {"dtype": np.float32}],
+    ids=["default", "dof_ordering", "float32"],
+)
+def test_a_wrapped_element_is_the_element_built_alike(kwargs):
+    """Guards against wrap_element reading back a description that differs from element's."""
+    wrapped = basix_uflx.wrap_element(
+        basix.create_element(
+            basix.ElementFamily.P,
+            basix.CellType.triangle,
+            2,
+            basix.LagrangeVariant.gll_warped,
+            **kwargs,
+        )
+    )
+    assert wrapped is basix_uflx.element("Lagrange", "triangle", 2, **kwargs)
+
+
+def test_a_custom_element_keeps_its_data_exactly():
+    """Guards against a custom element losing the shape of an empty array or an entry."""
+    p1 = basix.create_element(basix.ElementFamily.P, basix.CellType.triangle, 1)
+    custom = basix.create_custom_element(
+        p1.cell_type,
+        p1.value_shape,
+        p1.wcoeffs,
+        p1.x,
+        p1.M,
+        p1.interpolation_nderivs,
+        p1.map_type,
+        p1.sobolev_space,
+        p1.discontinuous,
+        p1.embedded_subdegree,
+        p1.embedded_superdegree,
+        p1.polyset_type,
+    )
+    wrapped = basix_uflx.wrap_element(custom)
+    points = np.array([[0.2, 0.3], [0.5, 0.1]])
+    assert np.array_equal(wrapped.tabulate(1, points), custom.tabulate(1, points))
+    assert basix_uflx.wrap_element(custom) is wrapped
+
+
+def test_an_element_prints_as_its_description():
+    """Guards against an element printing the address of the Basix object it wraps."""
+    printed = repr(basix_uflx.element("Lagrange", "triangle", 2))
+    assert "ElementFamily.P" in printed
+    assert " at 0x" not in printed
 
 
 def test_fingerprints_tell_apart_what_equality_tells_apart():

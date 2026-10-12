@@ -34,11 +34,12 @@ A class that defines `__eq__`, `__ne__`, `__hash__`, `successors` or `fingerprin
 refused when it is defined. An identity other than the arguments is one that rebuilding a
 node can silently change, and equality that reaches outside the class breaks hashing. A
 class that seems to need one is usually missing an argument or keeping one it should not.
-Avoid defining `__repr__` too. A handwritten `__repr__` drifts from
-what the value is, and nothing may depend on one. A class writes its own only when an
-argument prints as an address, as a wrapped Basix element does. The mixin's prints one level
-of arguments and anything deeper as `ClassName(...)`, so it stays short however large a
-graph is behind it. `uflx.graphs.describe` takes a depth for when more is wanted.
+Avoid defining `__repr__` too. A handwritten `__repr__` drifts from what the value is, and
+nothing may depend on one. An argument that would print as an address is a sign the class
+stores the wrong thing. A Basix element stores the family, cell, degree and variants it
+was built from, and keeps the Basix object under a name of its own. The mixin's `__repr__`
+prints one level of arguments and anything deeper as `ClassName(...)`, so it stays short
+however large a graph is behind it. `uflx.graphs.describe` takes a depth for when more is wanted.
 
 `init_args` is read back from the constructor. Each argument `name` is stored as
 `self._name`, and the mixin reads those attributes in the order of the constructor's

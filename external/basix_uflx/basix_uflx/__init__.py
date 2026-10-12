@@ -1,6 +1,5 @@
 """Basix UFLx interface."""
 
-import hashlib
 from abc import abstractmethod
 from collections.abc import Sequence
 from typing import Any
@@ -73,19 +72,6 @@ class BasixCell(uflx.entities.AbstractEntity):
         return [c[0] for c in basix.cell.sub_entity_connectivity(self._basix_cell)[dim]]
 
 
-def hash_data(data: Sequence[np.floating] | npt.ArrayLike) -> str:
-    """Return a hash of an array of floating point numbers."""
-
-    def hash_data_inner(data: Any) -> str:
-        """Represent an array as a string, ready for hashing."""
-        try:
-            return ",".join(hash_data_inner(i) for i in data)
-        except TypeError:
-            return f"{data!r}"
-
-    return hashlib.sha1(hash_data_inner(data).encode("utf-8")).hexdigest()
-
-
 def _as_tuples(data: Any) -> Any:
     """Convert nested lists to nested tuples so they can be hashed."""
     if isinstance(data, list):
@@ -93,44 +79,28 @@ def _as_tuples(data: Any) -> Any:
     return data
 
 
-class BasixElement(AbstractFiniteElement):
-    """A wrapper allowing Basix elements to be used directly with UFLx.
+ArrayData = tuple[tuple[int, ...], tuple[float, ...]]
 
-    This class allows elements created with `basix.create_element` to be
-    wrapped as UFLx compatible elements. Users should not directly call
-    this class's initialiser, but should use the `element` function
-    instead.
-    """
 
-    _element: basix.finite_element.FiniteElement
+def _array_data(array: npt.ArrayLike) -> ArrayData:
+    """Store an array as its shape and its entries, so that an empty array keeps its shape."""
+    a = np.asarray(array)
+    return tuple(a.shape), tuple(a.ravel().tolist())
 
-    def __init__(self, element: basix.finite_element.FiniteElement):
-        """Initialise."""
-        self._element = element
 
-    # The wrapped Basix element prints only its address, so describe it here.
-    def __repr__(self) -> str:
-        if self._element.family == basix.ElementFamily.custom:
-            return (
-                f"FiniteElement(CUSTOM, {self._element.cell_type.name}, "
-                f"{self._element.value_shape}, {self._element.map_type.name}, "
-                f"{self._element.discontinuous}, {self._element.embedded_subdegree}, "
-                f"{self._element.embedded_superdegree}, {self._element.dtype}, "
-                f"{self._element.dof_ordering}, {hash_data(self._element.wcoeffs)}, "
-                f"{hash_data(self._element.x)}, {hash_data(self._element.M)}"
-            )
-        else:
-            return (
-                f"FiniteElement({self._element.family.name}, {self._element.cell_type.name}, "
-                f"{self._element.degree}, "
-                f"{self._element.lagrange_variant.name}, {self._element.dpc_variant.name}, "
-                f"{self._element.discontinuous}, "
-                f"{self._element.dtype}, {self._element.dof_ordering})"
-            )
+def _array(data: ArrayData, dtype: str) -> npt.NDArray:
+    shape, entries = data
+    return np.array(entries, dtype=dtype).reshape(shape)
+
+
+class _WrappedBasixElement(AbstractFiniteElement):
+    """An element that Basix tabulates, built from its arguments."""
+
+    _basix_element: basix.finite_element.FiniteElement
 
     @property
     def cell(self) -> uflx.entities.AbstractEntity:
-        return BasixCell(self._element.cell_type)
+        return BasixCell(self._basix_element.cell_type)
 
     @property
     def real_valued(self) -> bool:
@@ -138,25 +108,118 @@ class BasixElement(AbstractFiniteElement):
 
     @property
     def dim(self) -> int:
-        return self._element.dim
+        return self._basix_element.dim
 
     @property
     def lagrange_superdegree(self) -> int:
-        d = self._element.embedded_superdegree
+        d = self._basix_element.embedded_superdegree
         if d is None:
             raise ValueError("Element does not have a well-defined Lagrange superdegree")
         return d
 
     @property
     def reference_map(self) -> uflx.maps.AbstractReferenceMap:
-        return convert_map(self._element.map_type)
+        return convert_map(self._basix_element.map_type)
 
     @property
     def reference_value_shape(self) -> tuple[int, ...]:
-        return tuple(self._element.value_shape)
+        return tuple(self._basix_element.value_shape)
 
     def tabulate(self, derivatives: int, points: npt.ArrayLike) -> npt.NDArray:
-        return np.asarray(self._element.tabulate(derivatives, np.asarray(points)))
+        return np.asarray(self._basix_element.tabulate(derivatives, np.asarray(points)))
+
+
+class BasixElement(_WrappedBasixElement):
+    """An element from one of Basix's families.
+
+    Users should not call this class's initialiser directly, but should
+    use the `element` function instead.
+    """
+
+    def __init__(
+        self,
+        family: basix.ElementFamily,
+        cell: basix.CellType,
+        degree: int,
+        lagrange_variant: basix.LagrangeVariant,
+        dpc_variant: basix.DPCVariant,
+        discontinuous: bool,
+        dof_ordering: tuple[int, ...],
+        dtype: str,
+    ):
+        """Initialise."""
+        self._family = family
+        self._cell = cell
+        self._degree = degree
+        self._lagrange_variant = lagrange_variant
+        self._dpc_variant = dpc_variant
+        self._discontinuous = discontinuous
+        self._dof_ordering = dof_ordering
+        self._dtype = dtype
+        self._basix_element = basix.create_element(
+            family,
+            cell,
+            degree,
+            lagrange_variant,
+            dpc_variant,
+            discontinuous,
+            dof_ordering=list(dof_ordering) or None,
+            dtype=np.dtype(dtype),
+        )
+
+
+class CustomBasixElement(_WrappedBasixElement):
+    """A custom Basix element, given by its coefficients and interpolation data.
+
+    Users should not call this class's initialiser directly, but should
+    use the `custom_element` function instead.
+    """
+
+    def __init__(
+        self,
+        cell: basix.CellType,
+        value_shape: tuple[int, ...],
+        wcoeffs: ArrayData,
+        x: tuple[tuple[ArrayData, ...], ...],
+        M: tuple[tuple[ArrayData, ...], ...],
+        interpolation_nderivs: int,
+        map_type: basix.MapType,
+        sobolev_space: basix.SobolevSpace,
+        discontinuous: bool,
+        embedded_subdegree: int,
+        embedded_superdegree: int,
+        polyset_type: basix.PolysetType,
+        dtype: str,
+    ):
+        """Initialise."""
+        self._cell = cell
+        self._value_shape = value_shape
+        self._wcoeffs = wcoeffs
+        self._x = x
+        self._M = M
+        self._interpolation_nderivs = interpolation_nderivs
+        self._map_type = map_type
+        self._sobolev_space = sobolev_space
+        self._discontinuous = discontinuous
+        self._embedded_subdegree = embedded_subdegree
+        self._embedded_superdegree = embedded_superdegree
+        self._polyset_type = polyset_type
+        self._dtype = dtype
+        self._basix_element = basix.create_custom_element(
+            cell,
+            value_shape,
+            _array(wcoeffs, dtype),
+            [[_array(j, dtype) for j in i] for i in x],
+            [[_array(j, dtype) for j in i] for i in M],
+            interpolation_nderivs,
+            map_type,
+            sobolev_space,
+            discontinuous,
+            embedded_subdegree,
+            embedded_superdegree,
+            polyset_type,
+            dtype=np.dtype(dtype),
+        )
 
 
 class QuadratureElement(AbstractFiniteElement):
@@ -334,19 +397,18 @@ def element(
         elif family == EF.DPC:
             dpc_variant = basix.DPCVariant.diagonal_gll
 
-    e = basix.create_element(
+    ufl_e = BasixElement(
         family,
         cell,
         degree,
         lagrange_variant,
         dpc_variant,
         discontinuous,
-        dof_ordering=dof_ordering,
-        dtype=dtype,
+        tuple(dof_ordering or ()),
+        np.dtype(dtype or np.float64).name,
     )
-    ufl_e = BasixElement(e)
 
-    if shape is None or shape == tuple(e.value_shape):
+    if shape is None or shape == ufl_e.reference_value_shape:
         if symmetry is not None:
             raise ValueError("Cannot pass a symmetry argument to this element.")
         return ufl_e
@@ -400,12 +462,12 @@ def custom_element(
     Returns:
         A custom finite element.
     """
-    e = basix.create_custom_element(
+    return CustomBasixElement(
         cell_type,
         tuple(reference_value_shape),
-        np.asarray(wcoeffs),
-        [[np.asarray(j) for j in i] for i in x],
-        [[np.asarray(j) for j in i] for i in M],
+        _array_data(wcoeffs),
+        tuple(tuple(_array_data(j) for j in i) for i in x),
+        tuple(tuple(_array_data(j) for j in i) for i in M),
         interpolation_nderivs,
         map_type,
         sobolev_space,
@@ -413,9 +475,8 @@ def custom_element(
         embedded_subdegree,
         embedded_superdegree,
         polyset_type,
-        dtype=dtype,
+        np.dtype(dtype or np.float64).name,
     )
-    return BasixElement(e)
 
 
 def mixed_element(elements: Sequence[AbstractFiniteElement]) -> AbstractFiniteElement:
@@ -540,5 +601,36 @@ def blocked_element(
 
 
 def wrap_element(element: basix.finite_element.FiniteElement) -> AbstractFiniteElement:
-    """Wrap a Basix element as a Basix UFLx element."""
-    return BasixElement(element)
+    """Wrap a Basix element as a Basix UFLx element.
+
+    The element is described by what Basix reports about it, so wrapping
+    an element gives the same value as building it with `element` or
+    `custom_element`.
+    """
+    dtype = np.dtype(element.dtype).name
+    if element.family == basix.ElementFamily.custom:
+        return custom_element(
+            element.cell_type,
+            element.value_shape,
+            element.wcoeffs,
+            element.x,
+            element.M,
+            element.interpolation_nderivs,
+            element.map_type,
+            element.sobolev_space,
+            element.discontinuous,
+            element.embedded_subdegree,
+            element.embedded_superdegree,
+            element.polyset_type,
+            dtype,
+        )
+    return BasixElement(
+        element.family,
+        element.cell_type,
+        element.degree,
+        element.lagrange_variant,
+        element.dpc_variant,
+        element.discontinuous,
+        tuple(element.dof_ordering),
+        dtype,
+    )
