@@ -28,12 +28,11 @@ class Immutable:
     ``object.__setattr__``, since it changes no argument. The kept hash
     is cached this way.
 
-    A value's identity is its class and its ``init_args``, and equality,
-    hash and repr all come from here. ``init_args`` is read back from
-    the attributes the constructor stores its arguments in, so a class
-    need not write it. A class should avoid defining ``__eq__`` or
-    ``__hash__`` itself. Any other identity is one that rebuilding a
-    node can silently change.
+    A value's identity is its class and its ``init_args``. Equality, hash
+    and repr all come from here. ``init_args`` is read back from the
+    attributes the constructor stores its arguments in. A class should
+    avoid defining ``__eq__``, ``__hash__`` or ``__repr__`` itself. Any
+    other identity is one that rebuilding a node can silently change.
     """
 
     _hash: int
@@ -55,7 +54,7 @@ class Immutable:
         if isinstance(parameters, str):
             raise TypeError(parameters)
         arguments = tuple(_stored_argument(self, name) for name in parameters)
-        # Attributes can still change during construction, so keep the result only after it.
+        # Attributes may still change during construction, so cache only once frozen.
         if self.__dict__.get("_frozen", False):
             object.__setattr__(self, "_init_args", arguments)
         return arguments
@@ -155,8 +154,8 @@ def _parameters_of(cls: type, init: Callable[..., None]) -> tuple[str, ...] | st
     """Get the names of a constructor's arguments.
 
     Returns:
-        The names in order, or why ``init_args`` cannot be read from
-        them. A tuple can only be passed back positionally.
+        The names in order, or a message saying why ``init_args`` cannot
+        be read back. Only positional arguments can be read back.
     """
     names = []
     for parameter in list(inspect.signature(init).parameters.values())[1:]:
@@ -227,10 +226,9 @@ def describe(value: Immutable, depth: int = 1) -> str:
     """Print a value as its class and its arguments, to a given depth.
 
     An argument nested deeper than ``depth`` prints as ``ClassName(...)``.
-    One whose own arguments are all plain values prints in full at any
-    depth, since it is short. The output stays bounded however large a
-    graph the value heads, because a shared node is never followed past
-    the depth.
+    An argument whose own arguments are all plain values prints in full
+    at any depth. The output stays short however large the graph behind
+    the value.
 
     Args:
         value: The value to print
@@ -264,7 +262,7 @@ def _describe_argument(value: Any, depth: int) -> str:
 
 
 def _has_plain_arguments(arguments: Any) -> bool:
-    """Whether no argument is a value with arguments of its own, looking one level down."""
+    """Check that no argument has arguments of its own, looking one level down only."""
     if isinstance(arguments, tuple | list):
         return all(_has_plain_arguments(a) for a in arguments)
     if isinstance(arguments, Immutable):
