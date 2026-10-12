@@ -7,6 +7,7 @@ import inspect
 import math
 import weakref
 from abc import ABCMeta
+from collections import deque
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from collections.abc import Set as AbstractSet
 from enum import Enum
@@ -463,9 +464,9 @@ def generate_graph(node: GraphNode) -> Graph:
     """Generate the graph that represents the construction of a node."""
     graph = Graph()
     graph.add_root_node(node)
-    unexpanded = [node]
+    unexpanded = deque([node])
     while unexpanded:
-        n = unexpanded.pop()
+        n = unexpanded.popleft()
         for successor in n.successors:
             if successor not in graph:
                 unexpanded.append(successor)
