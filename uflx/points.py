@@ -68,20 +68,11 @@ class Point(AbstractPoint):
         """The successors of this node."""
         return set(self._components)
 
+    # Leaves out is_reference until #100 lands.
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
         return (self._components,)
-
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return isinstance(other, Point) and all(
-            i == j for i, j in zip(self._components, other._components)
-        )
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.Point", *[hash(c) for c in self._components]))
 
 
 class PointComponent(AbstractExpression):
@@ -119,8 +110,3 @@ class PointComponent(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return {self._point}
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._point, self._component

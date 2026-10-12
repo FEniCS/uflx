@@ -43,11 +43,6 @@ class AbstractExpression(Immutable, ABC):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
 
-    @property
-    @abstractmethod
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-
     def __mul__(self, other: Any) -> AbstractExpression:
         """Multiply."""
         if isinstance(other, AbstractExpression):
@@ -66,23 +61,6 @@ class AbstractExpression(Immutable, ABC):
             return to_scalar(other) * self
         except ValueError:
             return NotImplemented
-
-    def __eq__(self, other) -> bool:
-        """Check for equality.
-
-        Two nodes of one class with equal arguments are equal. The kept
-        hashes are compared first, which tells most unequal nodes apart
-        without walking either tree.
-        """
-        if self is other:
-            return True
-        if not isinstance(other, self.__class__) or hash(self) != hash(other):
-            return False
-        return self.init_args == other.init_args
-
-    def __hash__(self) -> int:
-        """Hash the class and arguments, and keep the result."""
-        return hash((f"uflx.{self.__class__.__name__}", *self.init_args))
 
     def __matmul__(self, other: Any) -> AbstractExpression:
         """Matrix multiply."""
@@ -238,7 +216,12 @@ class RealScalar(AbstractScalar):
 
     def __init__(self, value: float):
         """Initialise."""
-        self.value = value
+        self._value = value
+
+    @property
+    def value(self) -> float:
+        """The value."""
+        return self._value
 
     def __repr__(self):
         """Representation."""
@@ -266,11 +249,6 @@ class RealScalar(AbstractScalar):
         return set()
 
     @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self.value,)
-
-    @property
     def re(self) -> AbstractExpression:
         """Get real part."""
         return self
@@ -290,18 +268,18 @@ class ComplexScalar(AbstractScalar):
 
     def __init__(self, real_part: AbstractScalar, imag_part: AbstractScalar):
         """Initialise."""
-        self._re = real_part
-        self._im = imag_part
+        self._real_part = real_part
+        self._imag_part = imag_part
 
     def __repr__(self):
         """Representation."""
-        return f"{self._re!r} + ({self._im!r})j"
+        return f"{self._real_part!r} + ({self._imag_part!r})j"
 
     def __recip__(self) -> AbstractExpression:
         """Reciprocal."""
-        n = self._re**2 + self._im**2
-        re = self._re / n
-        im = self._im / n
+        n = self._real_part**2 + self._imag_part**2
+        re = self._real_part / n
+        im = self._imag_part / n
         if isinstance(re, AbstractScalar) and isinstance(im, AbstractScalar):
             return ComplexScalar(re, im)
         else:
@@ -322,23 +300,18 @@ class ComplexScalar(AbstractScalar):
         return set()
 
     @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._re, self._im
-
-    @property
     def re(self) -> AbstractExpression:
         """Get real part."""
-        return self._re
+        return self._real_part
 
     @property
     def im(self) -> AbstractExpression:
         """Get imaginary part."""
-        return self._im
+        return self._imag_part
 
     def as_complex(self) -> complex:
         """Convert to a complex number."""
-        return self._re.as_float() + 1j * self._im.as_float()
+        return self._real_part.as_float() + 1j * self._imag_part.as_float()
 
 
 class Integer(AbstractInteger):
@@ -346,7 +319,12 @@ class Integer(AbstractInteger):
 
     def __init__(self, value: int):
         """Initialise."""
-        self.value = value
+        self._value = value
+
+    @property
+    def value(self) -> int:
+        """The value."""
+        return self._value
 
     def simplified_product(self, other: AbstractExpression) -> AbstractExpression | None:
         """Return a single expression representing the simplified product.
@@ -372,16 +350,6 @@ class Integer(AbstractInteger):
         if isinstance(other, Integer):
             return Integer(self.value + other.value)
 
-    def __eq__(self, other):
-        """Check for equality."""
-        if isinstance(other, Integer):
-            return self.value == other.value
-        return self.value == other
-
-    def __hash__(self):
-        """Hash."""
-        return hash(("uflx.Integer", self.value))
-
     def __repr__(self):
         """Representation."""
         return f"{self.value}"
@@ -399,11 +367,6 @@ class Integer(AbstractInteger):
         """The successors of this node."""
         return set()
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self.value,)
-
     def as_int(self) -> int:
         """Convert to an integer."""
         return self.value
@@ -415,8 +378,18 @@ class Rational(AbstractScalar):
     def __init__(self, numerator: int, denominator: int):
         """Initialise."""
         factor = gcd(numerator, denominator)
-        self.numerator = numerator // factor
-        self.denominator = denominator // factor
+        self._numerator = numerator // factor
+        self._denominator = denominator // factor
+
+    @property
+    def numerator(self) -> int:
+        """The numerator."""
+        return self._numerator
+
+    @property
+    def denominator(self) -> int:
+        """The denominator."""
+        return self._denominator
 
     def simplified_product(self, other: AbstractExpression) -> AbstractExpression | None:
         """Return a single expression representing the simplified product.
@@ -464,16 +437,6 @@ class Rational(AbstractScalar):
         else:
             return Rational(numerator, denominator)
 
-    def __eq__(self, other):
-        """Check for equality."""
-        if isinstance(other, Rational):
-            return self.numerator == other.numerator and self.denominator == other.denominator
-        return False
-
-    def __hash__(self):
-        """Hash."""
-        return hash(("uflx.Rational", self.numerator, self.denominator))
-
     def __repr__(self):
         """Representation."""
         return f"{self.numerator}/{self.denominator}"
@@ -490,11 +453,6 @@ class Rational(AbstractScalar):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self.numerator, self.denominator)
 
     def as_float(self) -> float:
         """Convert to a float."""
@@ -520,17 +478,17 @@ class UnaryOperator(AbstractExpression):
 
     def __init__(self, argument: AbstractExpression):
         """Initialise."""
-        self.argument = argument
+        self._argument = argument
+
+    @property
+    def argument(self) -> AbstractExpression:
+        """The operand."""
+        return self._argument
 
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return {self.argument}
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self.argument,)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -624,18 +582,23 @@ class BinaryOperator(AbstractExpression):
 
     def __init__(self, first: AbstractExpression, second: AbstractExpression):
         """Initialise."""
-        self.first = first
-        self.second = second
+        self._first = first
+        self._second = second
+
+    @property
+    def first(self) -> AbstractExpression:
+        """The first operand."""
+        return self._first
+
+    @property
+    def second(self) -> AbstractExpression:
+        """The second operand."""
+        return self._second
 
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return {self.first, self.second}
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.first, self.second
 
     def __repr__(self) -> str:
         """Representation."""
@@ -697,11 +660,6 @@ class Product(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set(self._items)
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._items,)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -803,11 +761,6 @@ class MatrixProduct(AbstractExpression):
         """The successors of this node."""
         return set(self._items)
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._items,)
-
     def __repr__(self) -> str:
         """Representation."""
         return "MatrixProduct([" + ", ".join(f"{i!r}" for i in self._items) + "])"
@@ -864,11 +817,6 @@ class Sum(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set(self._items)
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._items,)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -932,11 +880,11 @@ class ScalarMult(BinaryOperator):
 
 
 class Div(BinaryOperator):
-    """Scalar multiplication operator."""
+    """Scalar division operator."""
 
     def __init__(self, first: AbstractExpression, second: AbstractExpression):
         """Initialise."""
-        if second == 0:
+        if isinstance(second, (Integer, RealScalar)) and second.value == 0:
             raise ZeroDivisionError()
         super().__init__(first, second)
 

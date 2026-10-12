@@ -58,8 +58,15 @@ in `uflx/graphs/graphs.py`. It refuses to set or delete an attribute once the ou
 `__init__` has returned. It also keeps each class's hash on the instance after the
 first call, which makes graph walks and rewrites memoisable. A derived value may be
 cached on an instance through `object.__setattr__`. An argument may never change, and a
-changed node is a new node. Consumer classes such as a Basix cell or element inherit
-the rule.
+changed node is a new node. A value's identity is its class and its `init_args`. The
+mixin reads `init_args` back from the attribute `self._name` the constructor stores each
+argument `name` in, and supplies `__eq__`, `__hash__` and `__repr__`
+from them. The hash comes from `fingerprint`, a digest of the class name and arguments.
+It is the same in every process whatever its hash seed. MPI ranks then walk a graph in
+one order. Avoid defining `__eq__` or `__hash__` on a class at all costs. Any other
+identity is one that rebuilding a node can silently change. Consumer classes such as a
+Basix cell or element inherit the rule. [DESIGN_CHOICES.md](DESIGN_CHOICES.md) says how
+to store the arguments.
 
 Expression trees (the symbolic core) are not plain Python object graphs — they are
 backed by an explicit DAG in `uflx/graphs/` (`Graph` subclasses `networkx.DiGraph`;
@@ -161,3 +168,6 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
   `foo_x()`).
 - `__init__` methods take no default values; if defaults are useful, add a separate
   factory function instead of defaulting the constructor.
+- Never iterate a set of strings, bytes or enum members. Their hashes are salted per
+  process, so each MPI rank would see a different order. Use a dict or a list, or
+  `sorted()` the set.

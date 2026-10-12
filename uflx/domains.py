@@ -68,7 +68,8 @@ class CoordinateElement(AbstractCoordinateElement):
 
     def __init__(self, elements: tuple[AbstractReferenceMappedFiniteElement, ...]):
         """Initialise."""
-        self._elements = {e.cell: e for e in elements}
+        self._elements = tuple(elements)
+        self._element_of_cell = {e.cell: e for e in elements}
         (self._gdim,) = elements[0].reference_value_shape
         for e in elements[1:]:
             assert e.reference_value_shape == (self._gdim,)
@@ -81,11 +82,11 @@ class CoordinateElement(AbstractCoordinateElement):
     @property
     def cells(self) -> tuple[AbstractEntity, ...]:
         """Get the cells in the domain."""
-        return tuple(self._elements.keys())
+        return tuple(self._element_of_cell)
 
     def element(self, cell: AbstractEntity) -> AbstractReferenceMappedFiniteElement:
         """Get the elements in the domain."""
-        return self._elements[cell]
+        return self._element_of_cell[cell]
 
     @property
     def topological_dimension(self) -> int | None:

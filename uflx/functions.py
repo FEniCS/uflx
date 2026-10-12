@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from itertools import count
-from typing import Any, Self, cast
+from typing import Self, cast
 
 from uflx.domains import AbstractDomain, AbstractFiniteElementDomain
 from uflx.expressions import AbstractExpression, Im, Re
@@ -34,14 +34,6 @@ class AbstractVariable(AbstractExpression):
     @abstractmethod
     def domain(self) -> AbstractDomain:
         """The domain that this variable is in."""
-
-    @abstractmethod
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-
-    @abstractmethod
-    def __hash__(self) -> int:
-        """Hash."""
 
     @property
     def is_reference(self) -> bool:
@@ -76,27 +68,14 @@ class Variable(AbstractVariable):
         """The domain that this variable is in."""
         return self._domain
 
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return isinstance(other, Variable) and other.label == self.label
-
     def __repr__(self) -> str:
         """Representation."""
         return f"Variable({self._label})"
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.Variable", self._label))
 
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._domain, self._label)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -125,11 +104,6 @@ class FiniteElementVariable(AbstractVariable):
         return set()
 
     @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._domain, self._label, self._reference)
-
-    @property
     def label(self) -> str:
         """The label of this variable."""
         return self._label
@@ -139,24 +113,12 @@ class FiniteElementVariable(AbstractVariable):
         """The domain that this variable is in."""
         return self._domain
 
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return (
-            isinstance(other, FiniteElementVariable)
-            and other.label == self.label
-            and other.is_reference == self.is_reference
-        )
-
     def __repr__(self) -> str:
         """Representation."""
         if self._reference:
             return f"FiniteElementVariable({self._label}, reference=True)"
         else:
             return f"FiniteElementVariable({self._label})"
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.FiniteElementVariable", self._label, self._reference))
 
     @property
     def is_reference(self) -> bool:
@@ -203,11 +165,6 @@ class AbstractFunction(AbstractExpression):
     @abstractmethod
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
-
-    @property
-    @abstractmethod
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
 
     @property
     @abstractmethod
@@ -319,11 +276,6 @@ class Argument(AbstractFunction):
         """The successors of this node."""
         return set()
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._space, self._component, self._is_reference, self._variable
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise NotImplementedError()
@@ -353,7 +305,7 @@ class Coefficient(AbstractFunction):
     def __init__(
         self,
         space: AbstractFunctionSpace,
-        coefficient_label: str | None = None,
+        label: str | None = None,
         is_reference: bool = False,
         variable: AbstractVariable | None = None,
     ):
@@ -361,7 +313,7 @@ class Coefficient(AbstractFunction):
 
         Args:
             space: The function space that this function lives in
-            coefficient_label: The label for this coefficient
+            label: The label for this coefficient
             is_reference: Is this argument's domain the reference cell?
             variable: The variable that is this argument's input
         """
@@ -373,10 +325,10 @@ class Coefficient(AbstractFunction):
         self._space = space
         self._is_reference = is_reference
         self._variable = variable
-        if coefficient_label is None:
+        if label is None:
             self._label = f"coefficient-{next(self._n)}"
         else:
-            self._label = coefficient_label
+            self._label = label
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
@@ -406,11 +358,6 @@ class Coefficient(AbstractFunction):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._space, self._label, self._is_reference, self._variable
 
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""
@@ -489,11 +436,6 @@ class TestFunction(Argument):
         """Reconstruct this function taking the input variable as input."""
         return self.__class__(self._space, self._is_reference, variable)
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._space, self.is_reference, self.variable
-
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""
         raise NotImplementedError()
@@ -535,11 +477,6 @@ class TrialFunction(Argument):
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
         return self.__class__(self._space, self._is_reference, variable)
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._space, self.is_reference, self.variable
 
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""

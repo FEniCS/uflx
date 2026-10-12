@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any, Self
+from typing import Self
 
 from uflx.expressions import AbstractExpression, Im, Re
 from uflx.finite_elements import AbstractFiniteElement, AbstractReferenceMappedFiniteElement
@@ -163,18 +163,6 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (
-            self._space,
-            self._basis_index,
-            self._variable,
-            self._element_index,
-            self._derivative,
-            self._component,
-        )
 
     @property
     def derivative(self) -> tuple[int, ...]:

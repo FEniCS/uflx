@@ -1,6 +1,7 @@
 """Finite element."""
 
 from abc import abstractmethod
+from collections.abc import Sequence
 from enum import Enum
 
 import numpy as np
@@ -70,12 +71,12 @@ class MixedElement(AbstractFiniteElement):
     use the :func:`mixed_element` function instead.
     """
 
-    _sub_elements: list[AbstractFiniteElement]
+    _sub_elements: tuple[AbstractFiniteElement, ...]
 
-    def __init__(self, sub_elements: list[AbstractFiniteElement]):
+    def __init__(self, sub_elements: Sequence[AbstractFiniteElement]):
         """Initialise the element."""
         assert len(sub_elements) > 0
-        self._sub_elements = sub_elements
+        self._sub_elements = tuple(sub_elements)
         self._reference_map = MixedReferenceMap(
             [e.reference_map for e in sub_elements], [e.reference_value_shape for e in sub_elements]
         )
@@ -85,10 +86,6 @@ class MixedElement(AbstractFiniteElement):
                     "Cannot create mixed element where sub-elements are defined on different cells."
                 )
 
-    def __hash__(self):
-        """Hash."""
-        return hash(("basix_uflx", f"{self!r}"))
-
     def __repr__(self) -> str:
         """Representation."""
         return "MixedElement(" + ", ".join(f"{i!r}" for i in self._sub_elements) + ")"
@@ -96,14 +93,6 @@ class MixedElement(AbstractFiniteElement):
     def __str__(self):
         """String."""
         return f"{self!r}"
-
-    def __eq__(self, other) -> bool:
-        """Check if this element is equal to another element."""
-        return (
-            isinstance(other, MixedElement)
-            and len(self._sub_elements) == len(other._sub_elements)
-            and all(i == j for i, j in zip(self._sub_elements, other._sub_elements))
-        )
 
     @property
     def cell(self) -> AbstractEntity:
@@ -178,7 +167,7 @@ class BlockedElement(AbstractFiniteElement):
 
     """
 
-    _block_shape: tuple[int, ...]
+    _shape: tuple[int, ...]
     _sub_element: AbstractFiniteElement
     _block_size: int
     _has_symmetry: bool
@@ -214,7 +203,7 @@ class BlockedElement(AbstractFiniteElement):
 
         self._sub_element = sub_element
         self._block_size = block_size
-        self._block_shape = shape
+        self._shape = tuple(shape)
 
         if symmetry:
             n = 0
@@ -230,7 +219,8 @@ class BlockedElement(AbstractFiniteElement):
                 shape,
                 symmetry_map,
             )
-        self._symmetry = symmetry
+        # False builds the same element as None, so store one spelling.
+        self._symmetry = True if symmetry else None
         self._ordering = ordering
 
     @property
@@ -243,13 +233,9 @@ class BlockedElement(AbstractFiniteElement):
         """Check if this element is real-valued."""
         return self._sub_element.real_valued
 
-    def __hash__(self):
-        """Hash."""
-        return hash(("basix_uflx", f"{self!r}"))
-
     def __repr__(self) -> str:
         """Representation."""
-        repr = f"BlockedElement({self._sub_element!r}, {self._block_shape}"
+        repr = f"BlockedElement({self._sub_element!r}, {self._shape}"
         if self._symmetry is not None:
             repr += f", symmetry={self._symmetry}"
         repr += ")"
@@ -258,15 +244,6 @@ class BlockedElement(AbstractFiniteElement):
     def __str__(self):
         """String."""
         return f"{self!r}"
-
-    def __eq__(self, other) -> bool:
-        """Check if this element is equal to another element."""
-        return (
-            isinstance(other, BlockedElement)
-            and self._block_size == other._block_size
-            and self._block_shape == other._block_shape
-            and self._sub_element == other._sub_element
-        )
 
     @property
     def cell(self) -> AbstractEntity:
@@ -298,12 +275,12 @@ class BlockedElement(AbstractFiniteElement):
     @property
     def reference_map(self) -> AbstractReferenceMap:
         """Get the push forward and pull back map."""
-        return BlockedReferenceMap(self._sub_element.reference_map, self._block_shape)
+        return BlockedReferenceMap(self._sub_element.reference_map, self._shape)
 
     @property
     def reference_value_shape(self) -> tuple[int, ...]:
         """Return the value size of the value space on the reference cell."""
-        return self._block_shape
+        return self._shape
 
     def tabulate(self, derivatives: int, points: npt.ArrayLike) -> npt.NDArray:
         """Create table of basis function values and derivatives.

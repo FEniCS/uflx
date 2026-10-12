@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable, Hashable, Iterable
+import inspect
+from collections.abc import Callable, Hashable, Iterable, Mapping
+from collections.abc import Set as AbstractSet
 from enum import Enum
+from hashlib import blake2b
 from typing import Any, Protocol, cast, runtime_checkable
 
 import networkx as nx
@@ -24,9 +27,103 @@ class Immutable:
     A derived value may still be cached on an instance through
     ``object.__setattr__``, since it changes no argument. The kept hash
     is cached this way.
+
+    A value's identity is its class and its ``init_args``, and equality,
+    hash and repr all come from here. ``init_args`` is read back from
+    the attributes the constructor stores its arguments in, so a class
+    need not write it. A class should avoid defining ``__eq__`` or
+    ``__hash__`` itself. Any other identity is one that rebuilding a
+    node can silently change.
     """
 
     _hash: int
+    _init_parameters: tuple[str, ...] | str = ()
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object.
+
+        Each constructor argument ``name`` is read from the attribute
+        ``_name``. A class that stores an argument any other way defines
+        this itself.
+        """
+        try:
+            return self.__dict__["_init_args"]
+        except KeyError:
+            pass
+        parameters = type(self)._init_parameters
+        if isinstance(parameters, str):
+            raise TypeError(parameters)
+        arguments = tuple(_stored_argument(self, name) for name in parameters)
+        # Attributes can still change during construction, so keep the result only after it.
+        if self.__dict__.get("_frozen", False):
+            object.__setattr__(self, "_init_args", arguments)
+        return arguments
+
+    def __eq__(self, other: Any) -> bool:
+        """Check for equality.
+
+        Two values are equal when they have the same class and equal
+        arguments. The kept hashes are compared first, which tells most
+        unequal values apart without walking their arguments.
+        """
+        if self is other:
+            return True
+        if type(self) is not type(other) or hash(self) != hash(other):
+            return False
+        return self.init_args == other.init_args
+
+    def __repr__(self) -> str:
+        """Representation.
+
+        This is the class name and its arguments. A class whose arguments
+        cannot be read prints as a plain object.
+        """
+        try:
+            arguments = self.init_args
+        except TypeError:
+            return object.__repr__(self)
+        return f"{type(self).__name__}({', '.join(repr(a) for a in arguments)})"
+
+    @property
+    def fingerprint(self) -> bytes:
+        """A digest of the class and arguments that is the same in every process.
+
+        Python salts the hash of a string in each process, and a class
+        hashes by its address. The fingerprint uses neither, so MPI ranks
+        agree on it whatever their hash seeds.
+        """
+        unfinished: list[Immutable] = [self]
+        while unfinished:
+            value = unfinished[-1]
+            if "_fingerprint" in value.__dict__:
+                unfinished.pop()
+                continue
+            # Fingerprint the arguments first so that a deep graph does not recurse.
+            arguments = [a for a in _values_in(value.init_args) if "_fingerprint" not in a.__dict__]
+            if arguments:
+                unfinished.extend(arguments)
+                continue
+            object.__setattr__(
+                value,
+                "_fingerprint",
+                digest(_qualified_name(type(value)), fingerprint(value.init_args)),
+            )
+            unfinished.pop()
+        return self.__dict__["_fingerprint"]
+
+    def __hash__(self) -> int:
+        """Hash by the fingerprint, and keep the result.
+
+        Sets and dicts of values then iterate in the same order in every
+        process.
+        """
+        try:
+            return self.__dict__["_hash"]
+        except KeyError:
+            value = int.from_bytes(self.fingerprint[:8], "little", signed=True)
+            object.__setattr__(self, "_hash", value)
+            return value
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Wrap the class's own ``__init__`` to freeze and ``__hash__`` to keep.
@@ -34,12 +131,14 @@ class Immutable:
         Only methods defined in the class body are wrapped. An inherited
         method was already wrapped in its parent. Only the outermost
         ``__init__`` freezes, so an ``__init__`` that calls its parent's
-        can still set attributes afterwards.
+        can still set attributes afterwards. The names of the
+        constructor's arguments are recorded here for ``init_args``.
         """
         super().__init_subclass__(**kwargs)
         init = cls.__dict__.get("__init__")
         if init is not None:
             setattr(cls, "__init__", _freezing(init))
+            cls._init_parameters = _parameters_of(cls, init)
         hash_ = cls.__dict__.get("__hash__")
         if hash_ is not None:
             setattr(cls, "__hash__", _kept(hash_))
@@ -55,6 +154,93 @@ class Immutable:
     def __delattr__(self, name: str) -> None:
         """Refuse to delete an attribute."""
         raise AttributeError(f"{self.__class__.__name__} is immutable.")
+
+
+def _parameters_of(cls: type, init: Callable[..., None]) -> tuple[str, ...] | str:
+    """Get the names of a constructor's arguments.
+
+    Returns:
+        The names in order, or why ``init_args`` cannot be read from
+        them. A tuple can only be passed back positionally.
+    """
+    names = []
+    for parameter in list(inspect.signature(init).parameters.values())[1:]:
+        if parameter.kind is not parameter.POSITIONAL_OR_KEYWORD:
+            return (
+                f"{cls.__name__}.__init__ takes {parameter.name} as {parameter.kind.description}, "
+                f"so its init_args cannot be read back. Define init_args."
+            )
+        names.append(parameter.name)
+    return tuple(names)
+
+
+def digest(*parts: str | bytes) -> bytes:
+    """Digest parts, each prefixed by its length so that parts cannot run together."""
+    h = blake2b(digest_size=16)
+    for part in parts:
+        data = part.encode() if isinstance(part, str) else part
+        h.update(len(data).to_bytes(8, "little"))
+        h.update(data)
+    return h.digest()
+
+
+def fingerprint(value: Any) -> bytes:
+    """Digest a value or an argument the same way in every process.
+
+    A value is digested by its class and arguments. A tuple or list is
+    digested item by item in order. Any other object is digested by its
+    class and its own repr, or its own hash if it has no repr of its own.
+    Either must be the same in every process.
+
+    Raises:
+        TypeError: If an object is a set or a mapping, or has neither its
+            own repr nor its own hash.
+    """
+    if isinstance(value, Immutable):
+        return value.fingerprint
+    if isinstance(value, tuple | list):
+        return digest(type(value).__name__, *map(fingerprint, value))
+    cls = type(value)
+    if isinstance(value, AbstractSet | Mapping):
+        raise TypeError(
+            f"{_qualified_name(cls)} prints in an order that differs between processes "
+            f"or between equal values. Store a tuple instead."
+        )
+    if cls.__repr__ is not object.__repr__:
+        return digest(_qualified_name(cls), repr(value))
+    if cls.__hash__ is not None and cls.__hash__ is not object.__hash__:
+        return digest(_qualified_name(cls), str(hash(value)))
+    raise TypeError(
+        f"{_qualified_name(cls)} prints and hashes by its address, so it cannot be "
+        f"digested the same way in every process. Give it a repr or a hash."
+    )
+
+
+def _values_in(argument: Any) -> Iterable[Immutable]:
+    if isinstance(argument, Immutable):
+        yield argument
+    elif isinstance(argument, tuple | list):
+        for item in argument:
+            yield from _values_in(item)
+
+
+def _qualified_name(cls: type) -> str:
+    return f"{cls.__module__}.{cls.__qualname__}"
+
+
+def _stored_argument(value: Any, name: str) -> Any:
+    """Get the attribute ``_name`` a constructor stored its argument ``name`` in.
+
+    Raises:
+        TypeError: If ``_name`` is not set.
+    """
+    try:
+        return value.__dict__[f"_{name}"]
+    except KeyError:
+        raise TypeError(
+            f"{type(value).__name__} does not store its argument {name} as _{name}. "
+            f"Store it there, or define init_args."
+        ) from None
 
 
 def _freezing(init: Callable[..., None]) -> Callable[..., None]:

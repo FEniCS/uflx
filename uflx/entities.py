@@ -25,10 +25,6 @@ from uflx.graphs.graphs import Immutable
 class AbstractEntity(Immutable, ABC):
     """Abstract base class for entities."""
 
-    @abstractmethod
-    def __eq__(self, other) -> bool:
-        """Check if this entity is equal to another entity."""
-
     @property
     @abstractmethod
     def topological_dimension(self) -> int:
@@ -80,7 +76,3 @@ class AbstractEntity(Immutable, ABC):
         subclasses do not need to declare this themselves.
         """
         return len(self.sub_entities(0)) == self.topological_dimension + 1
-
-    @abstractmethod
-    def __hash__(self):
-        """Hash."""

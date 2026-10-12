@@ -29,10 +29,6 @@ class AbstractFiniteElement(Immutable, ABC):
     to be overwritten in your subclass.
     """
 
-    @abstractmethod
-    def __eq__(self, other) -> bool:
-        """Check if this element is equal to another element."""
-
     @property
     @abstractmethod
     def cell(self) -> AbstractEntity:
@@ -72,14 +68,6 @@ class AbstractFiniteElement(Immutable, ABC):
     @abstractmethod
     def dim(self) -> int:
         """The dimension of the finite element, ie the number of basis functions."""
-
-    @abstractmethod
-    def __hash__(self):
-        """Hash."""
-
-    @abstractmethod
-    def __repr__(self) -> str:
-        """Representation."""
 
 
 class AbstractReferenceMappedFiniteElement(AbstractFiniteElement):
