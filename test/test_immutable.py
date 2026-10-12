@@ -1,6 +1,8 @@
 """Test that everything in a graph is built once, never changed and hashed once."""
 
+import copy
 import os
+import pickle
 import subprocess
 import sys
 import textwrap
@@ -9,7 +11,7 @@ import pytest
 from conftest import LagrangeElement, Triangle
 
 from uflx import Coefficient, coordinate_element, dx, function_space
-from uflx.expressions import RealScalar
+from uflx.expressions import Rational, RealScalar
 from uflx.graphs.graphs import Immutable
 
 
@@ -215,3 +217,65 @@ def test_labels_in_a_tuple_or_list_are_hashed_in_order():
     """Guards against two differently ordered sequences of labels hashing alike."""
     assert hash(_Holder(("left", "right"))) != hash(_Holder(("right", "left")))
     assert hash(_Holder(["left", "right"])) == hash(_Holder(["left", "right"]))
+
+
+def _shared(levels):
+    from uflx.geometry import SpatialCoordinate
+
+    x = SpatialCoordinate(2)
+    e = x.component(0)
+    for _ in range(levels):
+        e = e / e - e
+    return x, e
+
+
+@pytest.mark.parametrize(
+    "build_a, build_b",
+    [
+        (lambda: RealScalar(2.0) * RealScalar(3.0), lambda: RealScalar(2.0) * RealScalar(3.0)),
+        (lambda: Rational(2, 4), lambda: Rational(1, 2)),
+        (lambda: _shared(1000)[1], lambda: _shared(1000)[1]),
+    ],
+)
+def test_a_value_built_twice_is_one_object(build_a, build_b):
+    """Guards against equal values built apart staying distinct objects."""
+    assert build_a() is build_b()
+
+
+def test_a_rebuilt_value_is_the_original():
+    """Guards against a rebuild skipping the table or re-expanding shared nodes."""
+    from uflx.algorithms import replace
+    from uflx.geometry import SpatialCoordinate
+
+    x, e = _shared(1000)
+    y = SpatialCoordinate(3)
+    assert replace(replace(e, {x: y}), {y: x}) is e
+
+
+@pytest.mark.parametrize("first, second", [(1, 1.0), (True, 1), (0.0, -0.0), (-0.0, 0.0)])
+def test_numbers_that_print_differently_stay_apart(first, second):
+    """Guards against a number printing as an equal one that was built first."""
+    kept = RealScalar(first)
+    built = RealScalar(second)
+    assert built is not kept
+    assert repr(built) == f"RealScalar({second!r})"
+
+
+def test_the_table_keeps_nothing_alive():
+    """Guards against the table holding every value ever built."""
+    import gc
+    import weakref
+
+    ref = weakref.ref(RealScalar(123.25))
+    gc.collect()
+    assert ref() is None
+
+
+@pytest.mark.parametrize(
+    "duplicate",
+    [copy.copy, copy.deepcopy, lambda value: pickle.loads(pickle.dumps(value))],
+)
+def test_a_copy_is_the_value_itself(duplicate):
+    """Guards against a copy that is unequal to its original."""
+    value = RealScalar(2.0) * RealScalar(3.0)
+    assert duplicate(value) is value

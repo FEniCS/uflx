@@ -60,9 +60,12 @@ first call, which makes graph walks and rewrites memoisable. A derived value may
 cached on an instance through `object.__setattr__`. An argument may never change, and a
 changed node is a new node. A value's identity is its class and its `init_args`. The
 mixin reads `init_args` back from the attribute `self._name` the constructor stores each
-argument `name` in, and supplies `__eq__`, `__hash__` and `__repr__` from them. The hash
-comes from `fingerprint`, a digest of the class name and arguments. It is the same in
-every process whatever its hash seed. MPI ranks then walk a graph in one order. A `repr`
+argument `name` in, and supplies `__hash__` and `__repr__` from them. The hash comes from
+`fingerprint`, a digest of the class name and arguments. It is the same in every process
+whatever its hash seed. MPI ranks then walk a graph in one order. Values are interned.
+Building one from the same class and arguments as a live value returns that value. Equal
+values are the same object and equality is `is`. A number keys with its type and sign.
+This keeps `1` apart from `1.0` and `0.0` apart from `-0.0`. A `repr`
 prints one level of arguments and anything deeper as `ClassName(...)`, so it stays one
 line however large the graph. `uflx.graphs.describe(value, depth)` prints more levels.
 Avoid defining `__eq__`, `__hash__` or `__repr__` on a class at all costs. Any other

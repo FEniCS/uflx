@@ -1,5 +1,6 @@
 """Test that Basix cells and elements are identified by their init_args."""
 
+import gc
 import os
 import subprocess
 import sys
@@ -36,20 +37,15 @@ def _values():
 
 @pytest.mark.parametrize("index", range(len(_values())))
 def test_built_twice_is_one_value(index):
-    """Values built from equal arguments are equal and hash alike."""
-    first, second = _values()[index], _values()[index]
-    assert first is not second
-    assert first == second
-    assert hash(first) == hash(second)
+    """Values built from equal arguments are one object."""
+    assert _values()[index] is _values()[index]
 
 
 @pytest.mark.parametrize("index", range(len(_values())))
 def test_rebuilt_from_its_arguments(index):
     """A value can be rebuilt from its init_args."""
     value = _values()[index]
-    rebuilt = type(value)(*value.init_args)
-    assert rebuilt == value
-    assert hash(rebuilt) == hash(value)
+    assert type(value)(*value.init_args) is value
 
 
 def test_distinct_values_are_unequal():
@@ -97,8 +93,7 @@ def test_blocked_symmetry_false_is_no_symmetry():
     sub = basix_uflx.element("Lagrange", "triangle", 1)
     a = basix_uflx.blocked_element(sub, (2, 2), symmetry=False)
     b = basix_uflx.blocked_element(sub, (2, 2))
-    assert a == b
-    assert hash(a) == hash(b)
+    assert a is b
 
 
 def test_every_process_agrees_on_an_elements_hash_whatever_its_hash_seed():
@@ -127,11 +122,14 @@ def test_every_process_agrees_on_an_elements_hash_whatever_its_hash_seed():
 
 
 def test_fingerprints_do_not_depend_on_where_an_element_is_in_memory():
-    """Two elements built alike have one digest, though Basix prints an address."""
+    """A rebuilt element has the same digest even though Basix prints an address."""
     a = basix_uflx.element("Lagrange", "triangle", 2)
+    before, wrapped = fingerprint(a), a.init_args[0]
+    del a
+    gc.collect()
     b = basix_uflx.element("Lagrange", "triangle", 2)
-    assert a.init_args[0] is not b.init_args[0]
-    assert fingerprint(a) == fingerprint(b)
+    assert b.init_args[0] is not wrapped
+    assert fingerprint(b) == before
 
 
 def test_fingerprints_tell_apart_what_equality_tells_apart():
