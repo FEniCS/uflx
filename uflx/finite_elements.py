@@ -15,10 +15,11 @@ from abc import ABC, abstractmethod
 from math import prod
 
 from uflx.entities import AbstractEntity
+from uflx.graphs.graphs import Immutable
 from uflx.maps import AbstractReferenceMap
 
 
-class AbstractFiniteElement(ABC):
+class AbstractFiniteElement(Immutable, ABC):
     """Abstract base class for a finite element.
 
     To make your element library compatible with UFL, you should make a

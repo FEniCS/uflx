@@ -11,7 +11,6 @@ An expression is any algebraic expression that could be used as an integrand.
 from __future__ import annotations
 
 import cmath
-import functools
 import math
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
@@ -23,56 +22,16 @@ from uflx.algorithms.simplify import (
     simplify_product_items,
     simplify_sum_items,
 )
-from uflx.graphs.graphs import GraphNode
+from uflx.graphs.graphs import GraphNode, Immutable
 
 
-class AbstractExpression(ABC):
+class AbstractExpression(Immutable, ABC):
     """Abstract base class for expressions.
 
-    A node is immutable: its arguments are its identity in the graph and
-    its hash, so nothing may change them once it is built. That is
-    enforced rather than assumed, by refusing to set an attribute after
-    the outermost ``__init__`` has returned. A changed node is a new
-    node, which ``reconstruct_node`` builds.
+    A node is a value, built once and never changed, which
+    :class:`uflx.graphs.Immutable` enforces: its arguments are its
+    identity in the graph and its hash.
     """
-
-    _hash: int
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Freeze each subclass's instances once its ``__init__`` has returned.
-
-        Only the outermost ``__init__`` freezes, so that one which calls
-        ``super().__init__`` can still set its own attributes afterwards.
-        """
-        super().__init_subclass__(**kwargs)
-        init = cls.__dict__.get("__init__")
-        if init is None:
-            return
-
-        @functools.wraps(init)
-        def freezing_init(self, *args: Any, **kw: Any) -> None:
-            outermost = "_initialising" not in self.__dict__
-            if outermost:
-                object.__setattr__(self, "_initialising", True)
-            init(self, *args, **kw)
-            if outermost:
-                del self.__dict__["_initialising"]
-                object.__setattr__(self, "_frozen", True)
-
-        cls.__init__ = freezing_init
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        """Set an attribute, which only construction may do."""
-        if self.__dict__.get("_frozen", False):
-            raise AttributeError(
-                f"{self.__class__.__name__} is immutable: its arguments are its identity "
-                f"and its hash. Build another node instead."
-            )
-        object.__setattr__(self, name, value)
-
-    def __delattr__(self, name: str) -> None:
-        """Delete an attribute, which nothing may do."""
-        raise AttributeError(f"{self.__class__.__name__} is immutable.")
 
     @property
     @abstractmethod
@@ -123,21 +82,8 @@ class AbstractExpression(ABC):
         return self.init_args == other.init_args
 
     def __hash__(self) -> int:
-        """Hash.
-
-        Computed once and kept. A node is immutable and hashing it walks
-        its whole subtree, so without this every set or dict holding
-        expressions walks the tree again on each lookup, which is
-        quadratic in the size of what is being expanded.
-        """
-        try:
-            return self._hash
-        except AttributeError:
-            # The one write after construction, and it changes no argument.
-            object.__setattr__(
-                self, "_hash", hash((f"uflx.{self.__class__.__name__}", *self.init_args))
-            )
-            return self._hash
+        """Hash, by class and arguments; kept after the first call."""
+        return hash((f"uflx.{self.__class__.__name__}", *self.init_args))
 
     def __matmul__(self, other: Any) -> AbstractExpression:
         """Matrix multiply."""
