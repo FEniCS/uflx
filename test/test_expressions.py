@@ -1,9 +1,8 @@
-"""Test what every expression node promises: to be what it was built as.
+"""Test that an expression node cannot change after it is built.
 
-A node's arguments are its identity in the graph and its hash, so a
-node that changed after being built would be found under the wrong
-hash and compare unequal to itself. The base class refuses the change
-rather than trusting every subclass to.
+A node's arguments are its identity in the graph and its hash. A node
+that changed after being built would sit under the wrong hash. The base
+class refuses the change so that no subclass has to.
 """
 
 import pytest

@@ -52,14 +52,14 @@ cd doc && make html
 
 ## Architecture
 
-Everything in a graph is a value: built once, never changed, hashed and compared by
-what it was built from. `uflx/graphs/graphs.py`'s `Immutable` mixin, which every
-abstract root inherits, refuses to set or delete an attribute once the outermost
-`__init__` has returned and keeps each class's hash on the instance after the first
-call, which is what makes graph walks and rewrites memoisable. A derived value may be
-cached on an instance through `object.__setattr__`; an argument may never change, and a
-changed node is a new node. Consumer classes (a Basix cell, an element) inherit the
-rule.
+Everything in a graph is a value. It is built once, never changed, and hashed and
+compared by what it was built from. Every abstract root inherits the `Immutable` mixin
+in `uflx/graphs/graphs.py`. It refuses to set or delete an attribute once the outermost
+`__init__` has returned. It also keeps each class's hash on the instance after the
+first call, which makes graph walks and rewrites memoisable. A derived value may be
+cached on an instance through `object.__setattr__`. An argument may never change, and a
+changed node is a new node. Consumer classes such as a Basix cell or element inherit
+the rule.
 
 Expression trees (the symbolic core) are not plain Python object graphs — they are
 backed by an explicit DAG in `uflx/graphs/` (`Graph` subclasses `networkx.DiGraph`;

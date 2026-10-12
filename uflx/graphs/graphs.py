@@ -11,31 +11,30 @@ import networkx as nx
 
 
 class Immutable:
-    """A value: built once, never changed, and hashed once.
+    """A value that is built once, never changed and hashed once.
 
     Everything in a graph is hashed and compared by what it was built
-    from, so a node that changed after being built would sit under the
-    wrong hash and compare unequal to itself. Rather than trust every
-    class to keep that promise, this refuses to set or delete an
-    attribute once the outermost ``__init__`` has returned, and keeps
-    the hash the class computes, whatever it is, on the instance after
-    the first call. A changed node is a new node, which
+    from. A node that changed after being built would sit under the
+    wrong hash and compare unequal to itself. This mixin refuses to set
+    or delete an attribute once the outermost ``__init__`` has returned.
+    It also keeps the hash the class computes on the instance after the
+    first call. A changed node is a new node, which
     :func:`uflx.algorithms.reconstruct_node` builds.
 
-    A derived value may still be cached on an instance, through
-    ``object.__setattr__``, since it changes no argument; the kept hash
-    is one such.
+    A derived value may still be cached on an instance through
+    ``object.__setattr__``, since it changes no argument. The kept hash
+    is cached this way.
     """
 
     _hash: int
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Wrap what the class defines itself: its ``__init__`` to freeze, its ``__hash__`` to keep.
+        """Wrap the class's own ``__init__`` to freeze and ``__hash__`` to keep.
 
-        Only what the class defines in its own body is wrapped, so a
-        method inherited from a parent, already wrapped there, is not
-        wrapped twice. Only the outermost ``__init__`` freezes, so one
-        that calls its parent's can still set its own attributes after.
+        Only methods defined in the class body are wrapped. An inherited
+        method was already wrapped in its parent. Only the outermost
+        ``__init__`` freezes, so an ``__init__`` that calls its parent's
+        can still set attributes afterwards.
         """
         super().__init_subclass__(**kwargs)
         init = cls.__dict__.get("__init__")
@@ -46,21 +45,20 @@ class Immutable:
             setattr(cls, "__hash__", _kept(hash_))
 
     def __setattr__(self, name: str, value: Any) -> None:
-        """Set an attribute, which only construction may do."""
+        """Set an attribute during construction only."""
         if self.__dict__.get("_frozen", False):
             raise AttributeError(
-                f"{self.__class__.__name__} is immutable: what it was built from is its "
-                f"identity and its hash. Build another instead."
+                f"{self.__class__.__name__} is immutable. Build a new one instead."
             )
         object.__setattr__(self, name, value)
 
     def __delattr__(self, name: str) -> None:
-        """Delete an attribute, which nothing may do."""
+        """Refuse to delete an attribute."""
         raise AttributeError(f"{self.__class__.__name__} is immutable.")
 
 
 def _freezing(init: Callable[..., None]) -> Callable[..., None]:
-    """An ``__init__`` that freezes the instance once the outermost call returns."""
+    """Wrap ``__init__`` to freeze the instance when the outermost call returns."""
 
     @functools.wraps(init)
     def freezing_init(self: Any, *args: Any, **kwargs: Any) -> None:
@@ -76,7 +74,7 @@ def _freezing(init: Callable[..., None]) -> Callable[..., None]:
 
 
 def _kept(hash_: Callable[[Any], int]) -> Callable[[Any], int]:
-    """A ``__hash__`` computed on the first call and kept on the instance."""
+    """Wrap ``__hash__`` to compute it once and keep it on the instance."""
 
     @functools.wraps(hash_)
     def kept_hash(self: Any) -> int:

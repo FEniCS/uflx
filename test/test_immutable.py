@@ -1,8 +1,7 @@
-"""Test that everything in a graph is a value: built once, never changed, hashed once.
+"""Test that everything in a graph is built once, never changed and hashed once.
 
-:mod:`test_expressions` says this of an expression. The rule is the
-same for every family that is hashed by what it was built from, so each
-is tried here, through the one mixin they all inherit.
+:mod:`test_expressions` tests this for expressions. Every other family
+follows the same rule through the same mixin, so each is tested here.
 """
 
 import pytest
@@ -36,10 +35,9 @@ def test_every_family_is_a_value(values):
 def test_every_familys_hash_is_kept(values):
     """The hash a class computes is computed once and kept on the instance.
 
-    One hashed by identity, as a function space is, computes nothing
-    and so keeps nothing. An integral is hashed while it is still being
-    built, by the graph its ``__init__`` generates, which is fine since
-    its arguments are set by then, so it arrives with its hash kept.
+    A value hashed by identity, such as a function space, keeps nothing.
+    An integral is hashed by the graph its ``__init__`` generates. Its
+    arguments are set by then, so it arrives with its hash kept.
     """
     for value in values:
         by_value = any(
@@ -53,7 +51,7 @@ def test_every_familys_hash_is_kept(values):
 
 
 def test_a_derived_value_may_still_be_cached():
-    """What the kept hash does is open to any derived value, through object.__setattr__."""
+    """Any derived value can be cached through object.__setattr__."""
     cell = Triangle()
     object.__setattr__(cell, "_memo", 42)
     assert cell.__dict__["_memo"] == 42
@@ -62,10 +60,10 @@ def test_a_derived_value_may_still_be_cached():
 
 
 def test_only_a_classs_own_methods_are_wrapped():
-    """A class that inherits its parent's hash and init is frozen and kept by the parent's.
+    """A subclass that inherits its parent's methods is frozen and hashed by them.
 
-    The wrapping happens where the method is defined, so it is not done
-    twice, and a subclass with no methods of its own still gets both.
+    Wrapping happens where a method is defined, so it is not done twice.
+    A subclass with no methods of its own still gets both.
     """
 
     class Plain(Triangle):
