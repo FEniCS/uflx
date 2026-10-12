@@ -1,7 +1,6 @@
 """Finite element."""
 
 from abc import abstractmethod
-from collections.abc import Sequence
 from enum import Enum
 
 import numpy as np
@@ -73,12 +72,13 @@ class MixedElement(AbstractFiniteElement):
 
     _sub_elements: tuple[AbstractFiniteElement, ...]
 
-    def __init__(self, sub_elements: Sequence[AbstractFiniteElement]):
+    def __init__(self, sub_elements: tuple[AbstractFiniteElement, ...]):
         """Initialise the element."""
         assert len(sub_elements) > 0
-        self._sub_elements = tuple(sub_elements)
+        self._sub_elements = sub_elements
         self._reference_map = MixedReferenceMap(
-            [e.reference_map for e in sub_elements], [e.reference_value_shape for e in sub_elements]
+            tuple(e.reference_map for e in sub_elements),
+            tuple(e.reference_value_shape for e in sub_elements),
         )
         for e in sub_elements[1:]:
             if e.cell != sub_elements[0].cell:
@@ -195,7 +195,7 @@ class BlockedElement(AbstractFiniteElement):
 
         self._sub_element = sub_element
         self._block_size = block_size
-        self._shape = tuple(shape)
+        self._shape = shape
 
         if symmetry:
             n = 0
@@ -209,7 +209,7 @@ class BlockedElement(AbstractFiniteElement):
             self._reference_map = SymmetricReferenceMap(
                 sub_element.reference_map,
                 shape,
-                symmetry_map,
+                tuple(sorted(symmetry_map.items())),
             )
         # False builds the same element as None, so store one spelling.
         self._symmetry = True if symmetry else None

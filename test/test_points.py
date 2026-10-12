@@ -16,6 +16,6 @@ def test_rd(dim):
 @pytest.mark.parametrize("dim", range(5))
 def test_point(dim):
     """Test a point."""
-    point = Point([Integer(i) for i in range(dim)])
+    point = Point(tuple(Integer(i) for i in range(dim)))
 
     assert point.domain.geometric_dimension == dim

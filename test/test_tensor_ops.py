@@ -85,17 +85,6 @@ def test_identity_is_identity_matrix():
         np.testing.assert_allclose(_to_numpy(identity, (d, d)), np.eye(d))
 
 
-def test_identity_repr():
-    """Identity's repr should reflect its own (renamed) class name."""
-    assert repr(Identity(3)) == "Identity(3)"
-
-
-def test_identity_equality():
-    """Identity instances should compare equal by size, and only by size."""
-    assert Identity(2) == Identity(2)
-    assert Identity(2) != Identity(3)
-
-
 def test_identity_matrix_product_acts_as_identity():
     """Identity(d) should act as a true identity under matrix multiplication."""
     values = np.array([[1.0, 2.0], [3.0, 4.0]])
@@ -171,7 +160,7 @@ def test_reference_grad_expand_geometry_vector_shape_regression(lagrange_element
     """ReferenceGrad.expand_geometry() must match shapes for a vector-valued argument."""
     domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 1, (2,)))
-    point = Point([RealScalar(0.25), RealScalar(0.25)], is_reference=True)
+    point = Point((RealScalar(0.25), RealScalar(0.25)), is_reference=True)
     basis_function = EvaluatedBasisFunction(space, 0, point)
 
     reference_grad = ReferenceGrad(basis_function)
@@ -188,7 +177,7 @@ def test_reference_grad_expand_geometry_scalar_unchanged(lagrange_element):
     """The pre-existing scalar-argument path is untouched by the vector-shape fix."""
     domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 1))
-    point = Point([RealScalar(0.25), RealScalar(0.25)], is_reference=True)
+    point = Point((RealScalar(0.25), RealScalar(0.25)), is_reference=True)
     basis_function = EvaluatedBasisFunction(space, 0, point)
 
     reference_grad = ReferenceGrad(basis_function)
@@ -200,7 +189,7 @@ def test_reference_grad_cellwise_constant_vector(lagrange_element):
     """A cellwise-constant vector argument's reference gradient is still exactly zero."""
     domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, lagrange_element("triangle", 0, (2,)))
-    point = Point([RealScalar(0.25), RealScalar(0.25)], is_reference=True)
+    point = Point((RealScalar(0.25), RealScalar(0.25)), is_reference=True)
     basis_function = EvaluatedBasisFunction(space, 0, point)
     assert basis_function.is_cellwise_constant
 

@@ -25,10 +25,3 @@ def test_sqrt_rejects_non_scalar():
     """sqrt() is only defined for scalar expressions."""
     with pytest.raises(ValueError):
         sqrt(Vector([RealScalar(1.0), RealScalar(4.0)]))
-
-
-def test_sqrt_equality_and_hash():
-    """Two square roots of the same expression are equal and hash equally."""
-    assert sqrt(RealScalar(2.0)) == sqrt(RealScalar(2.0))
-    assert hash(sqrt(RealScalar(2.0))) == hash(sqrt(RealScalar(2.0)))
-    assert sqrt(RealScalar(2.0)) != sqrt(RealScalar(3.0))

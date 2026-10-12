@@ -104,12 +104,3 @@ def test_flattened_tensor_map_invalid():
         FlattenedTensorMap((0, 3), (3,))
     with pytest.raises(IndexError):
         FlattenedTensorMap((-1, 0), (3,))
-
-
-def test_flattened_tensor_map_equality():
-    """Entries are equal if their indices and extents are."""
-    entry = FlattenedTensorMap((1, 2), (3,))
-    assert entry == FlattenedTensorMap((1, 2), (3,))
-    assert hash(entry) == hash(FlattenedTensorMap((1, 2), (3,)))
-    assert entry != FlattenedTensorMap((2, 1), (3,))
-    assert entry != FlattenedTensorMap((1, 2), (4,))

@@ -55,25 +55,29 @@ cd doc && make html
 Everything in a graph is a value. It is built once, never changed, and hashed and
 compared by what it was built from. Every abstract root inherits the `Immutable` mixin
 in `uflx/graphs/graphs.py`. It refuses to set or delete an attribute once the outermost
-`__init__` has returned. It also keeps each class's hash on the instance after the
-first call, which makes graph walks and rewrites memoisable. A derived value may be
-cached on an instance through `object.__setattr__`. An argument may never change, and a
-changed node is a new node. A value's identity is its class and its `init_args`. The
-mixin reads `init_args` back from the attribute `self._name` the constructor stores each
-argument `name` in, and supplies `__hash__` and `__repr__` from them. The hash comes from
+`__init__` has returned. It also keeps each class's hash on the instance after the first
+call, which makes graph walks and rewrites memoisable. A derived value may be cached on
+an instance through `object.__setattr__`. An argument may never change, and a changed
+node is a new node. A value's identity is its class and its `init_args`. The mixin reads
+`init_args` back from the attribute `self._name` the constructor stores each argument
+`name` in, and supplies `__hash__` and `__repr__` from them. The hash comes from
 `fingerprint`, a digest of the class name and arguments. It is the same in every process
 whatever its hash seed. MPI ranks then walk a graph in one order. Values are interned.
 Building one from the same class and arguments as a live value returns that value. Equal
-values are the same object and equality is `is`. A number keys with its type and sign.
-This keeps `1` apart from `1.0` and `0.0` apart from `-0.0`. A `repr`
-prints one level of arguments and anything deeper as `ClassName(...)`, so it stays one
-line however large the graph. `uflx.graphs.describe(value, depth)` prints more levels.
-A value's `successors` are the values among its arguments. A space, a mesh or a variable
-is a node like any other, so `replace` can substitute it.
-Avoid defining `__eq__`, `__hash__`, `__repr__` or `successors` on a class at all costs. Any other
-identity is one that rebuilding a node can silently change. Consumer classes such
-as a Basix cell or element inherit the rule. [DESIGN_CHOICES.md](DESIGN_CHOICES.md) says
-how to store the arguments.
+values are the same object and equality is `is`. An argument keys with its type name and
+repr, as its fingerprint does. This keeps `1` apart from `1.0` and `0.0` apart from
+`-0.0`. A `repr` prints one level of arguments and anything deeper as `ClassName(...)`,
+so it stays one line however large the graph. `uflx.graphs.describe(value, depth)`
+prints more levels. A value's `successors` are the values among its arguments. A space,
+a mesh or a variable is a node like any other, so `replace` can substitute it. A class
+that defines `__eq__`, `__ne__`, `__hash__`, `__repr__`, `__str__`, `__copy__`,
+`__deepcopy__`, `successors` or `fingerprint`, or inherits one from a mixin, is refused
+when it is defined, and an argument that is not a value, a tuple, a plain scalar, a
+string or an enum member when a value is built. Any other identity is one that
+rebuilding a node can silently change. The first value of each class must rebuild from
+its `init_args` to itself, and `uflx.testing`, imported in both conftests, checks every
+value a test builds. Consumer classes such as a Basix cell or element inherit the rule.
+[DESIGN_CHOICES.md](DESIGN_CHOICES.md) says how to store the arguments.
 
 Expression trees (the symbolic core) are not plain Python object graphs — they are
 backed by an explicit DAG in `uflx/graphs/` (`Graph` subclasses `networkx.DiGraph`;

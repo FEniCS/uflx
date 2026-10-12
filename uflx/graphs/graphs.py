@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import functools
 import inspect
-import math
 import weakref
 from abc import ABCMeta
 from collections import deque
-from collections.abc import Callable, Hashable, Iterable, Mapping
-from collections.abc import Set as AbstractSet
+from collections.abc import Callable, Hashable, Iterable
 from enum import Enum
 from hashlib import blake2b
-from typing import Any, Protocol, TypeVar, cast, runtime_checkable
+from typing import Any, ClassVar, Protocol, TypeVar, cast, runtime_checkable
 
 import networkx as nx
 
@@ -28,30 +26,92 @@ class _Interning(ABCMeta):
     """
 
     _values: weakref.WeakValueDictionary[Any, Any] = weakref.WeakValueDictionary()
+    _rebuilt: ClassVar[set[type]] = set()
+    check_every_value: ClassVar[bool] = False
+    _checking: ClassVar[bool] = False
 
     def __call__(cls: type[_T], *args: Any, **kwargs: Any) -> _T:
-        """Build a value or return the equal one already built."""
+        """Build a value or return the equal one already built.
+
+        The first value of each class is rebuilt from its ``init_args``
+        and must come back as the same object. This catches a class that
+        stores or reads back its arguments wrongly, once per class. Every
+        value is checked while ``check_every_value`` is set, as
+        :mod:`uflx.testing` does.
+
+        Raises:
+            TypeError: If the first value of a class does not rebuild to
+                itself.
+        """
         value = super().__call__(*args, **kwargs)
         # Fingerprint first so that an argument that cannot be digested is refused with a reason.
         value.fingerprint
-        return _Interning._values.setdefault((cls, _interning_key(value.init_args)), value)
+        key = (cls, _interning_key(value.init_args))
+        interned = _Interning._values.setdefault(key, value)
+        if not _Interning._checking and (
+            _Interning.check_every_value or cls not in _Interning._rebuilt
+        ):
+            # A rebuild builds values too, and they need no check of their own.
+            _Interning._checking = True
+            try:
+                _check_rebuilds(interned)
+            except Exception:
+                # A value that fails its check must not be returned by a later build.
+                if interned is value:
+                    del _Interning._values[key]
+                raise
+            finally:
+                _Interning._checking = False
+            _Interning._rebuilt.add(cls)
+        return interned
+
+
+def _check_rebuilds(value: Any) -> None:
+    """Check that a value rebuilt from its ``init_args`` is the same object."""
+    cls = type(value)
+    try:
+        rebuilt = cls(*value.init_args)
+    except TypeError as error:
+        raise TypeError(
+            f"{cls.__qualname__} cannot be rebuilt from its init_args {describe(value)}. "
+            f"Store every constructor argument as _name, or make init_args match the constructor."
+        ) from error
+    if rebuilt is not value:
+        raise TypeError(
+            f"{cls.__qualname__} rebuilt from its init_args is {describe(rebuilt)}, "
+            f"not {describe(value)}. Store every constructor argument as _name in the form "
+            f"it is compared in."
+        )
 
 
 def _interning_key(value: Any) -> Any:
-    """Key an argument so that only identical values share a key.
+    """Key an argument by what its fingerprint digests.
 
-    A value is already interned and keys as itself. A number keys with
-    its type and a float also with its sign. This keeps ``1`` apart from
-    ``1.0`` and ``0.0`` apart from ``-0.0``. Otherwise a value would
-    print and generate code as whichever was built first.
+    A value is already interned and keys as itself. Any other argument
+    keys as the description its fingerprint digests. Interning and
+    hashing then always agree. Arguments that are
+    equal but print differently stay apart, such as ``1`` and ``1.0`` or
+    ``0.0`` and ``-0.0``. Otherwise a value would print and generate code
+    as whichever was built first, and its hash would depend on it too.
     """
-    if isinstance(value, tuple | list):
-        return (type(value), *(_interning_key(item) for item in value))
-    if isinstance(value, float):
-        return (type(value), value, math.copysign(1.0, value))
-    if isinstance(value, int | complex):
-        return (type(value), value)
-    return value
+    if isinstance(value, Immutable):
+        return value
+    if type(value) is tuple:
+        return ("tuple", *map(_interning_key, value))
+    return _leaf(value)
+
+
+_DERIVED = (
+    "__eq__",
+    "__ne__",
+    "__hash__",
+    "__repr__",
+    "__str__",
+    "__copy__",
+    "__deepcopy__",
+    "successors",
+    "fingerprint",
+)
 
 
 class Immutable(metaclass=_Interning):
@@ -73,9 +133,17 @@ class Immutable(metaclass=_Interning):
     value from the same class and arguments as a live one returns that
     one. Equal values are the same object and equality is ``is``. Hash
     and repr also come from here. ``init_args`` is read back from
-    the attributes the constructor stores its arguments in. A class
-    should avoid defining ``__eq__``, ``__hash__`` or ``__repr__`` itself.
-    Any other identity is one that rebuilding a node can silently change.
+    the attributes the constructor stores its arguments in.
+
+    A subclass, in UFLx or in a consumer, gets these checks at runtime.
+    Defining ``__eq__``, ``__ne__``, ``__hash__``, ``__repr__``,
+    ``__str__``, ``__copy__``, ``__deepcopy__``, ``successors`` or
+    ``fingerprint``, in the class or in a mixin it inherits, is refused
+    when the class is defined. An argument other than a UFLx value, a
+    tuple, ``None``, a ``bool``, ``int``, ``float``, ``complex`` or
+    ``str``, or an enum member is refused when a value is built. The first value of each class must
+    rebuild from its ``init_args`` to itself. :mod:`uflx.testing` checks
+    every value a test suite builds.
     """
 
     _hash: int
@@ -126,23 +194,10 @@ class Immutable(metaclass=_Interning):
         hashes by its address. The fingerprint uses neither, so MPI ranks
         agree on it whatever their hash seeds.
         """
-        unfinished: list[Immutable] = [self]
-        while unfinished:
-            value = unfinished[-1]
-            if "_fingerprint" in value.__dict__:
-                unfinished.pop()
-                continue
-            # Fingerprint the arguments first so that a deep graph does not recurse.
-            arguments = [a for a in _values_in(value.init_args) if "_fingerprint" not in a.__dict__]
-            if arguments:
-                unfinished.extend(arguments)
-                continue
-            object.__setattr__(
-                value,
-                "_fingerprint",
-                digest(_qualified_name(type(value)), fingerprint(value.init_args)),
-            )
-            unfinished.pop()
+        if "_fingerprint" not in self.__dict__:
+            # Each argument was fingerprinted when it was built, so this goes one level deep.
+            value = digest(_qualified_name(type(self)), fingerprint(self.init_args))
+            object.__setattr__(self, "_fingerprint", value)
         return self.__dict__["_fingerprint"]
 
     def __hash__(self) -> int:
@@ -164,22 +219,39 @@ class Immutable(metaclass=_Interning):
         return type(self), self.init_args
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Wrap the class's own ``__init__`` to freeze and ``__hash__`` to keep.
+        """Refuse a class that defines its own identity, and wrap its ``__init__`` to freeze.
 
-        Only methods defined in the class body are wrapped. An inherited
-        method was already wrapped in its parent. Only the outermost
-        ``__init__`` freezes, so an ``__init__`` that calls its parent's
-        can still set attributes afterwards. The names of the
+        Only an ``__init__`` defined in the class body is wrapped. An
+        inherited one was already wrapped in its parent. Only the
+        outermost ``__init__`` freezes, so an ``__init__`` that calls its
+        parent's can still set attributes afterwards. The names of the
         constructor's arguments are recorded here for ``init_args``.
+
+        Raises:
+            TypeError: If the class or a mixin it inherits defines a
+                method that would give the class an identity, printing or
+                copying other than its ``init_args``.
         """
         super().__init_subclass__(**kwargs)
+        # A mixin can supply these as well as the class body, wherever it sits in the bases.
+        for owner in cls.__mro__:
+            if owner is Immutable or owner is object:
+                continue
+            for name in _DERIVED:
+                # Defining __eq__ alone sets __hash__ to None in the class body.
+                if name in owner.__dict__ and not (
+                    name == "__hash__" and owner.__dict__[name] is None
+                ):
+                    how = "defines" if owner is cls else f"inherits from {owner.__qualname__}"
+                    raise TypeError(
+                        f"{cls.__qualname__} {how} {name}. A value's identity, printing and "
+                        f"copying come from its init_args alone, so a class defines none of "
+                        f"{', '.join(_DERIVED)}."
+                    )
         init = cls.__dict__.get("__init__")
         if init is not None:
             setattr(cls, "__init__", _freezing(init))
             cls._init_parameters = _parameters_of(cls, init)
-        hash_ = cls.__dict__.get("__hash__")
-        if hash_ is not None:
-            setattr(cls, "__hash__", _kept(hash_))
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Set an attribute during construction only."""
@@ -225,39 +297,53 @@ def digest(*parts: str | bytes) -> bytes:
 def fingerprint(value: Any) -> bytes:
     """Digest a value or an argument the same way in every process.
 
-    A value is digested by its class and arguments. A tuple or list is
-    digested item by item in order. Any other object is digested by its
-    class and its own repr, or its own hash if it has no repr of its own.
-    Either must be the same in every process.
+    A value is digested by its class and arguments. A tuple is digested
+    item by item in order. ``None``, a ``bool``, an ``int``, a ``float``,
+    a ``complex`` or a ``str`` is digested by its type and repr, and an
+    enum member by its enum and name.
 
     Raises:
-        TypeError: If an object is a set or a mapping, or has neither its
-            own repr nor its own hash.
+        TypeError: If an argument is of any other type.
     """
     if isinstance(value, Immutable):
         return value.fingerprint
-    if isinstance(value, tuple | list):
-        return digest(type(value).__name__, *map(fingerprint, value))
+    if type(value) is tuple:
+        return digest("tuple", *map(fingerprint, value))
+    return digest(*_leaf(value))
+
+
+_PLAIN = (type(None), bool, int, float, complex, str)
+
+
+def _leaf(value: Any) -> tuple[str, str]:
+    """Describe an argument that is neither a value nor a tuple, as fingerprint and interning do.
+
+    An argument is a UFLx value, a tuple, ``None``, a ``bool``, an
+    ``int``, a ``float``, a ``complex``, a ``str`` or an enum member.
+    These print the same in every process however they were built, so
+    nothing else is accepted. The type is matched exactly, so a numpy
+    scalar is refused.
+
+    Raises:
+        TypeError: If the argument is of any other type.
+    """
     cls = type(value)
-    if isinstance(value, AbstractSet | Mapping):
-        raise TypeError(
-            f"{_qualified_name(cls)} prints in an order that differs between processes "
-            f"or between equal values. Store a tuple instead."
-        )
-    if cls.__repr__ is not object.__repr__:
-        return digest(_qualified_name(cls), repr(value))
-    if cls.__hash__ is not None and cls.__hash__ is not object.__hash__:
-        return digest(_qualified_name(cls), str(hash(value)))
+    if cls in _PLAIN:
+        return cls.__name__, repr(value)
+    if isinstance(value, Enum):
+        return _qualified_name(cls), value.name
     raise TypeError(
-        f"{_qualified_name(cls)} prints and hashes by its address, so it cannot be "
-        f"digested the same way in every process. Give it a repr or a hash."
+        f"{_qualified_name(cls)} cannot be an argument of a value. An argument is a UFLx "
+        f"value, a tuple, None, a bool, int, float, complex or str, or an enum member. Convert "
+        f"anything else before calling the constructor, as a factory function does with "
+        f"tuple(items), int(degree) or np.dtype(dtype).name."
     )
 
 
 def _values_in(argument: Any) -> Iterable[Immutable]:
     if isinstance(argument, Immutable):
         yield argument
-    elif isinstance(argument, tuple | list):
+    elif isinstance(argument, tuple):
         for item in argument:
             yield from _values_in(item)
 
@@ -298,9 +384,7 @@ def _describe_argument(value: Any, depth: int) -> str:
     if isinstance(value, tuple):
         items = [_describe_argument(i, depth) for i in value]
         return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
-    if isinstance(value, list):
-        return f"[{', '.join(_describe_argument(i, depth) for i in value)}]"
-    if isinstance(value, Immutable) and type(value).__repr__ is Immutable.__repr__:
+    if isinstance(value, Immutable):
         return describe(value, depth)
     return repr(value)
 
@@ -348,21 +432,6 @@ def _freezing(init: Callable[..., None]) -> Callable[..., None]:
     return freezing_init
 
 
-def _kept(hash_: Callable[[Any], int]) -> Callable[[Any], int]:
-    """Wrap ``__hash__`` to compute it once and keep it on the instance."""
-
-    @functools.wraps(hash_)
-    def kept_hash(self: Any) -> int:
-        try:
-            return self.__dict__["_hash"]
-        except KeyError:
-            value = hash_(self)
-            object.__setattr__(self, "_hash", value)
-            return value
-
-    return kept_hash
-
-
 class NodeOrder(Enum):
     """A node order."""
 
@@ -370,36 +439,91 @@ class NodeOrder(Enum):
     leaves_first = 1
 
 
-def print_node(graph: Graph, node: GraphNode, indentation: int = 0):
+def print_node(graph: Graph, node: GraphNode, indentation: int = 0, flat: bool = False):
     """Print a graph using the node as the root node.
 
-    A node with several parents prints in full the first time with a
-    label such as ``[1]``, and as its label alone after that. The output
+    Each line is a value and the lines below it are its arguments in
+    order. Every value below the root has a number such as ``[3]``, and
+    an argument that is a value prints as its number. A value prints in
+    full the first time and as its number alone after that. The output
     is one line per edge however much the graph shares.
+
+    Args:
+        graph: The graph
+        node: The value to print from
+        indentation: How many levels to indent every line by
+        flat: Print one line per value with no tree, each value after
+            the values it was built from, so the width does not grow
+            with the depth of the graph
     """
-    reachable = graph.descendants(node)
-    shared = {n for n in reachable if sum(p in reachable for p in graph.predecessors(n)) > 1}
-    labels: dict[GraphNode, str] = {}
+    if flat:
+        _print_flat(node, "    " * indentation)
+        return
+    walk = list(_walk_arguments(node))
+    labels: dict[Any, str] = {}
+    for value, _, _ in walk:
+        labels.setdefault(value, f"[{len(labels) + 1}]")
     indent = "    " * indentation
-    print(indent + repr(node))
-    unprinted = [(child, indent, False) for child in reversed(list(graph.successors(node)))]
-    if unprinted:
-        unprinted[0] = (unprinted[0][0], indent, True)
-    while unprinted:
-        child, prefix, is_last = unprinted.pop()
-        connector = "└── " if is_last else "├── "
-        if child in labels:
-            print(prefix + connector + labels[child])
-            continue
-        if child in shared:
-            labels[child] = f"[{len(labels) + 1}]"
-            print(f"{prefix}{connector}{labels[child]} {child!r}")
+    print(indent + _numbered(node, labels))
+    printed = set()
+    for value, prefix, is_last in walk:
+        line = indent + prefix + ("└── " if is_last else "├── ") + labels[value]
+        if value in printed:
+            print(line)
         else:
-            print(prefix + connector + repr(child))
-        extension = prefix + ("    " if is_last else "│   ")
-        children = list(graph.successors(child))
-        for i, grandchild in reversed(list(enumerate(children))):
-            unprinted.append((grandchild, extension, i == len(children) - 1))
+            printed.add(value)
+            print(f"{line} {_numbered(value, labels)}")
+
+
+def _print_flat(node: GraphNode, indent: str):
+    """Print every value once, numbered, after the values among its arguments."""
+    labels: dict[Any, str] = {}
+    unwalked = [(node, False)]
+    while unwalked:
+        value, arguments_printed = unwalked.pop()
+        if value in labels:
+            continue
+        if arguments_printed:
+            labels[value] = f"[{len(labels) + 1}]"
+            print(f"{indent}{labels[value]} {_numbered(value, labels)}")
+            continue
+        unwalked.append((value, True))
+        arguments = list(dict.fromkeys(_values_in(value.init_args)))
+        unwalked.extend((a, False) for a in reversed(arguments) if a not in labels)
+
+
+def _numbered(value: GraphNode, labels: dict[Any, str]) -> str:
+    """Print a value as its class and arguments, with each value among them as its number."""
+
+    def argument(a: Any) -> str:
+        if isinstance(a, tuple):
+            items = [argument(i) for i in a]
+            return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
+        return labels[a] if isinstance(a, Immutable) else repr(a)
+
+    return f"{type(value).__name__}({', '.join(argument(a) for a in value.init_args)})"
+
+
+def _walk_arguments(node: GraphNode) -> Iterable[tuple[Any, str, bool]]:
+    """Walk the values among a node's arguments depth first, in argument order.
+
+    Yields each value with the prefix and whether it is the last
+    argument of its parent. The arguments of a value are walked the
+    first time it is reached only.
+    """
+    expanded = set()
+    unwalked = [(node, "", True)]
+    while unwalked:
+        value, prefix, is_last = unwalked.pop()
+        if value is not node:
+            yield value, prefix, is_last
+        if value in expanded:
+            continue
+        expanded.add(value)
+        extension = "" if value is node else prefix + ("    " if is_last else "│   ")
+        arguments = list(dict.fromkeys(_values_in(value.init_args)))
+        for i, argument in reversed(list(enumerate(arguments))):
+            unwalked.append((argument, extension, i == len(arguments) - 1))
 
 
 @runtime_checkable
@@ -446,9 +570,14 @@ class Graph(nx.DiGraph):
         self.add_node(node, *args, **kwargs)
         self._root = node
 
-    def print(self):
-        """Print a graph."""
-        print_node(self, self.root)
+    def print(self, flat: bool = False):
+        """Print a graph.
+
+        Args:
+            flat: Print one line per value with no tree, so the width
+                does not grow with the depth of the graph
+        """
+        print_node(self, self.root, flat=flat)
 
     def subgraph_of_node(self, node: GraphNode) -> Graph:
         """Get the subgraph with the input node as the root node."""

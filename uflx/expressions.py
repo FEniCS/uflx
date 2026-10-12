@@ -42,7 +42,7 @@ class AbstractExpression(Immutable, ABC):
         """Multiply."""
         if isinstance(other, AbstractExpression):
             if self.value_shape == other.value_shape:
-                return Product([self, other])
+                return Product((self, other))
             if other.value_shape == ():
                 return ScalarMult(other, self)
             if self.value_shape == ():
@@ -62,7 +62,7 @@ class AbstractExpression(Immutable, ABC):
         if isinstance(other, AbstractExpression):
             if self.value_shape[-1] != other.value_shape[0]:
                 raise ValueError("Incompatible dimensions in matmul.")
-            return MatrixProduct([self, other])
+            return MatrixProduct((self, other))
         return NotImplemented
 
     def __rmul__(self, other: Any) -> AbstractExpression:
@@ -95,7 +95,7 @@ class AbstractExpression(Immutable, ABC):
     def __add__(self, other: Any) -> AbstractExpression:
         """Add."""
         if isinstance(other, AbstractExpression):
-            return Sum([self, other])
+            return Sum((self, other))
         try:
             return self + to_scalar(other)
         except ValueError:
@@ -545,14 +545,14 @@ class BinaryOperator(AbstractExpression):
 class Product(AbstractExpression):
     """Componentwise product."""
 
-    def __init__(self, items: Sequence[AbstractExpression]):
+    def __init__(self, items: tuple[AbstractExpression, ...]):
         """Initialise."""
         if len(items) == 0:
             raise ValueError("Cannot create an empty product")
         self._value_shape = items[0].value_shape
         for i in items[1:]:
             assert i.value_shape == self._value_shape
-        self._items = tuple(items)
+        self._items = items
 
     def __mul__(self, other: Any) -> AbstractExpression:
         """Multiply."""
@@ -577,7 +577,7 @@ class Product(AbstractExpression):
 
         if len(items) == 1:
             return items[0]
-        return Product(cast(list[AbstractExpression], items))
+        return Product(tuple(cast(list[AbstractExpression], items)))
 
     @property
     def is_commutative(self) -> bool:
@@ -591,7 +591,7 @@ class Product(AbstractExpression):
 
     def with_operands(self, operands: Sequence[AbstractExpression]) -> Product:
         """Create the same expression with different operands."""
-        return Product(operands)
+        return Product(tuple(operands))
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -600,7 +600,7 @@ class Product(AbstractExpression):
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
-        return Product([i.component(*indices) for i in self._items])
+        return Product(tuple(i.component(*indices) for i in self._items))
 
     def as_complex(self) -> complex:
         """Convert to a complex number."""
@@ -618,7 +618,7 @@ class Product(AbstractExpression):
 class MatrixProduct(AbstractExpression):
     """Matrix product of two or more objects."""
 
-    def __init__(self, items: Sequence[AbstractExpression]):
+    def __init__(self, items: tuple[AbstractExpression, ...]):
         """Initialise."""
         if len(items) == 0:
             raise ValueError("Cannot create an empty product")
@@ -644,7 +644,7 @@ class MatrixProduct(AbstractExpression):
                 )
         assert shape is not None
         self._value_shape = shape
-        self._items = tuple(items)
+        self._items = items
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -678,20 +678,20 @@ class MatrixProduct(AbstractExpression):
 
         if len(items) == 1:
             return items[0]
-        return MatrixProduct(cast(list[AbstractExpression], items))
+        return MatrixProduct(tuple(cast(list[AbstractExpression], items)))
 
 
 class Sum(AbstractExpression):
     """Componentwise sum."""
 
-    def __init__(self, items: Sequence[AbstractExpression]):
+    def __init__(self, items: tuple[AbstractExpression, ...]):
         """Initialise."""
         if len(items) == 0:
             raise ValueError("Cannot create an empty sum")
         self._value_shape = items[0].value_shape
         for i in items[1:]:
             assert i.value_shape == self._value_shape
-        self._items = tuple(items)
+        self._items = items
 
     def __add__(self, other: Any) -> AbstractExpression:
         """Add."""
@@ -708,7 +708,7 @@ class Sum(AbstractExpression):
 
         if len(items) == 1:
             return items[0]
-        return Sum(cast(list[AbstractExpression], items))
+        return Sum(tuple(cast(list[AbstractExpression], items)))
 
     @property
     def is_commutative(self) -> bool:
@@ -722,7 +722,7 @@ class Sum(AbstractExpression):
 
     def with_operands(self, operands: Sequence[AbstractExpression]) -> Sum:
         """Create the same expression with different operands."""
-        return Sum(operands)
+        return Sum(tuple(operands))
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -731,7 +731,7 @@ class Sum(AbstractExpression):
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
-        return Sum([i.component(*indices) for i in self._items])
+        return Sum(tuple(i.component(*indices) for i in self._items))
 
     def as_complex(self) -> complex:
         """Convert to a complex number."""
