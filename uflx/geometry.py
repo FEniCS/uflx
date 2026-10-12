@@ -236,10 +236,6 @@ class Jacobian(AbstractExpression):
             ]
         )
 
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"Jacobian({self.domain!r}, {self.point!r})"
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         return self.expand_geometry().component(*indices)
@@ -332,10 +328,6 @@ class JacobianInverse(AbstractExpression):
         assert isinstance(j, Matrix)
         return j.compute_inverse()
 
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"JacobianInverse({self.domain!r}, {self.point!r})"
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         return self.expand_geometry().component(*indices)
@@ -388,10 +380,6 @@ class JacobianTranspose(AbstractExpression):
         assert isinstance(j, Matrix)
         return j.transpose()
 
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"JacobianTranspose({self.domain!r}, {self.point!r})"
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         return self.expand_geometry().component(*indices)
@@ -443,10 +431,6 @@ class JacobianInverseTranspose(AbstractExpression):
         j = self._jacobian.expand_geometry()
         assert isinstance(j, Matrix)
         return j.compute_inverse().transpose()
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"JacobianInverseTranspose({self.domain!r}, {self.point!r})"
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""

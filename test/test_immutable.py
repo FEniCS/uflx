@@ -102,8 +102,18 @@ def test_a_value_prints_as_what_it_was_built_from():
     assert repr(IdentityReferenceMap()) == repr(IdentityReferenceMap())
 
 
+def test_a_repr_does_not_grow_with_its_graph():
+    """Printing a deeply shared expression costs a bounded number of levels."""
+    from uflx.geometry import SpatialCoordinate
+
+    e = SpatialCoordinate(2).component(0)
+    for _ in range(50):
+        e = e / e - e
+    assert repr(e) == "Sum((Product(...), Neg(...)))"
+
+
 def test_no_class_in_uflx_defines_its_own_identity():
-    """Every value in UFLx is identified by its init_args alone."""
+    """Every value in UFLx is compared, hashed and printed by its init_args alone."""
     import importlib
     import pkgutil
 
@@ -119,7 +129,7 @@ def test_no_class_in_uflx_defines_its_own_identity():
 
     for cls in subclasses(Immutable):
         if cls.__module__.startswith("uflx."):
-            for method in ("__eq__", "__hash__"):
+            for method in ("__eq__", "__hash__", "__repr__", "__str__"):
                 assert method not in vars(cls), (cls, method)
 
 

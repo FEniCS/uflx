@@ -86,14 +86,6 @@ class MixedElement(AbstractFiniteElement):
                     "Cannot create mixed element where sub-elements are defined on different cells."
                 )
 
-    def __repr__(self) -> str:
-        """Representation."""
-        return "MixedElement(" + ", ".join(f"{i!r}" for i in self._sub_elements) + ")"
-
-    def __str__(self):
-        """String."""
-        return f"{self!r}"
-
     @property
     def cell(self) -> AbstractEntity:
         """Return the cell that this element is defined on."""
@@ -232,18 +224,6 @@ class BlockedElement(AbstractFiniteElement):
     def real_valued(self) -> bool:
         """Check if this element is real-valued."""
         return self._sub_element.real_valued
-
-    def __repr__(self) -> str:
-        """Representation."""
-        repr = f"BlockedElement({self._sub_element!r}, {self._shape}"
-        if self._symmetry is not None:
-            repr += f", symmetry={self._symmetry}"
-        repr += ")"
-        return repr
-
-    def __str__(self):
-        """String."""
-        return f"{self!r}"
 
     @property
     def cell(self) -> AbstractEntity:

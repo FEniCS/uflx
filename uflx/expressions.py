@@ -137,10 +137,6 @@ class AbstractExpression(Immutable, ABC):
         """Absolute value."""
         return Abs(self)
 
-    def __repr__(self) -> str:
-        """Representation."""
-        return self.__class__.__name__
-
     def __pow__(self, power):
         """Raise to a power."""
         if isinstance(power, int):
@@ -223,10 +219,6 @@ class RealScalar(AbstractScalar):
         """The value."""
         return self._value
 
-    def __repr__(self):
-        """Representation."""
-        return f"{self.value}"
-
     def __recip__(self) -> AbstractExpression:
         """Reciprocal."""
         return RealScalar(1 / self.value)
@@ -270,10 +262,6 @@ class ComplexScalar(AbstractScalar):
         """Initialise."""
         self._real_part = real_part
         self._imag_part = imag_part
-
-    def __repr__(self):
-        """Representation."""
-        return f"{self._real_part!r} + ({self._imag_part!r})j"
 
     def __recip__(self) -> AbstractExpression:
         """Reciprocal."""
@@ -349,10 +337,6 @@ class Integer(AbstractInteger):
             return other
         if isinstance(other, Integer):
             return Integer(self.value + other.value)
-
-    def __repr__(self):
-        """Representation."""
-        return f"{self.value}"
 
     def __recip__(self) -> AbstractExpression:
         """Reciprocal."""
@@ -437,10 +421,6 @@ class Rational(AbstractScalar):
         else:
             return Rational(numerator, denominator)
 
-    def __repr__(self):
-        """Representation."""
-        return f"{self.numerator}/{self.denominator}"
-
     def __recip__(self) -> AbstractExpression:
         """Reciprocal."""
         return Rational(self.denominator, self.numerator)
@@ -489,10 +469,6 @@ class UnaryOperator(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return {self.argument}
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return self.__class__.__name__
 
 
 class Re(UnaryOperator):
@@ -600,10 +576,6 @@ class BinaryOperator(AbstractExpression):
         """The successors of this node."""
         return {self.first, self.second}
 
-    def __repr__(self) -> str:
-        """Representation."""
-        return self.__class__.__name__
-
 
 class Product(AbstractExpression):
     """Componentwise product."""
@@ -660,14 +632,6 @@ class Product(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set(self._items)
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return "Product([" + ", ".join(f"{i!r}" for i in self._items) + "])"
-
-    def __str__(self) -> str:
-        """Representation."""
-        return "Product"
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -761,14 +725,6 @@ class MatrixProduct(AbstractExpression):
         """The successors of this node."""
         return set(self._items)
 
-    def __repr__(self) -> str:
-        """Representation."""
-        return "MatrixProduct([" + ", ".join(f"{i!r}" for i in self._items) + "])"
-
-    def __str__(self) -> str:
-        """Representation."""
-        return "MatrixProduct"
-
 
 class Sum(AbstractExpression):
     """Componentwise sum."""
@@ -817,14 +773,6 @@ class Sum(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set(self._items)
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return "Sum([" + ", ".join(f"{i!r}" for i in self._items) + "])"
-
-    def __str__(self) -> str:
-        """Representation."""
-        return "Sum"
 
     @property
     def value_shape(self) -> tuple[int, ...]:

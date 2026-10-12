@@ -97,10 +97,6 @@ class PointComponent(AbstractExpression):
         """Get the point."""
         return self._point
 
-    def __repr__(self):
-        """Representation."""
-        return f"PointComponent({self._point}, {self._component})"
-
     @property
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""

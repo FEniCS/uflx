@@ -204,10 +204,6 @@ class PushedForward(AbstractExpression):
         """The value shape of the expression."""
         return self.function.value_shape
 
-    def __repr__(self):
-        """Representation."""
-        return f"PushedForward({self.reference_map})"
-
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
@@ -244,10 +240,6 @@ class PulledBack(AbstractExpression):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self.function.value_shape
-
-    def __repr__(self):
-        """Representation."""
-        return f"PulledBack({self.reference_map})"
 
     @property
     def successors(self) -> set[GraphNode]:
