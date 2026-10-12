@@ -131,7 +131,7 @@ def test_no_class_in_uflx_defines_its_own_identity():
 
     for cls in subclasses(Immutable):
         if cls.__module__.startswith("uflx."):
-            for method in ("__eq__", "__hash__", "__repr__", "__str__"):
+            for method in ("__eq__", "__hash__", "__repr__", "__str__", "successors"):
                 assert method not in vars(cls), (cls, method)
 
 

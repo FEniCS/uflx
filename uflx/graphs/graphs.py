@@ -110,6 +110,15 @@ class Immutable(metaclass=_Interning):
         return describe(self)
 
     @property
+    def successors(self) -> set[GraphNode]:
+        """The values this one was built from.
+
+        These are the values among the arguments. A graph has an edge to
+        each, so a walk or a rewrite reaches everything a value depends on.
+        """
+        return set(_values_in(self.init_args))
+
+    @property
     def fingerprint(self) -> bytes:
         """A digest of the class and arguments that is the same in every process.
 

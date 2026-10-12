@@ -7,7 +7,6 @@ from typing import Any
 from uflx.domains import RD, AbstractDomain
 from uflx.expressions import AbstractExpression
 from uflx.functions import AbstractVariable
-from uflx.graphs import GraphNode
 
 
 class AbstractSetOfPoints(AbstractDomain):
@@ -63,11 +62,6 @@ class Point(AbstractPoint):
             return self._components[i]
         return PointComponent(self, i)
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set(self._components)
-
     # Leaves out is_reference until #100 lands.
     @property
     def init_args(self) -> tuple[Any, ...]:
@@ -101,8 +95,3 @@ class PointComponent(AbstractExpression):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return ()
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return {self._point}

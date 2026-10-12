@@ -33,11 +33,6 @@ class SingleSpatialCoordinate(AbstractExpression):
         """The value shape of the expression."""
         return ()
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise ValueError("Cannot get a component of a scalar expression")
@@ -60,11 +55,6 @@ class SpatialCoordinate(AbstractExpression):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return (self._dimension,)
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -100,11 +90,6 @@ class ReferenceToPhysical(AbstractPoint):
     def dim(self) -> int:
         """The dimension of the point."""
         return self._domain.geometric_dimension
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return {self._point}
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -167,11 +152,6 @@ class PhysicalToReference(AbstractPoint):
         return tdim
 
     @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return {self._point}
-
-    @property
     def index(self) -> int | str:
         """The point's index in the set of points."""
         return self._point.index
@@ -200,11 +180,6 @@ class Jacobian(AbstractExpression):
         """The value shape of the expression."""
         assert self.domain.topological_dimension is not None
         return (self.domain.geometric_dimension, self.domain.topological_dimension)
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -277,11 +252,6 @@ class JacobianDeterminant(AbstractExpression):
         """The value shape of the expression."""
         return ()
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
         j = self._jacobian.expand_geometry()
@@ -316,11 +286,6 @@ class JacobianInverse(AbstractExpression):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self._jacobian.value_shape[::-1]
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -369,11 +334,6 @@ class JacobianTranspose(AbstractExpression):
         """The value shape of the expression."""
         return self._jacobian.value_shape[::-1]
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
         j = self._jacobian.expand_geometry()
@@ -420,11 +380,6 @@ class JacobianInverseTranspose(AbstractExpression):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return self._jacobian.value_shape
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""

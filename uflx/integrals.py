@@ -33,11 +33,6 @@ class AbstractMeasure(Immutable, ABC):
             return Integral(other, self)
         return NotImplemented
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
 
 class AbstractIntegral(Immutable, ABC):
     """Abstract base class for an integral."""
@@ -51,11 +46,6 @@ class AbstractIntegral(Immutable, ABC):
     @abstractmethod
     def measure(self) -> AbstractMeasure:
         """The integral measure."""
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return {self.integrand, self.measure}
 
     @property
     @abstractmethod
