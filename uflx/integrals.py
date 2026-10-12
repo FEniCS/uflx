@@ -370,7 +370,13 @@ class Integral(AbstractIntegral):
                     replacements[node] = node.on_domain(onto)
         integrand = replace(self._integrand, replacements) if replacements else self._integrand
         assert isinstance(integrand, AbstractExpression)
-        return Integral(integrand, self._measure.with_domain(piece))
+        # The variable keeps its label, as it does on restricting to a cell
+        # type, so that a function living on the domain itself and told the
+        # union's variable is the same point after the pull back.
+        variable = self._variable
+        if isinstance(variable, Variable):
+            variable = variable.to_domain_coordinates(piece)
+        return Integral(integrand, self._measure.with_domain(piece), variable)
 
     def split_by_piece(self) -> IntegralSum | None:
         """Split this integral into one over each piece of its domain.

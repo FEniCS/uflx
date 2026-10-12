@@ -84,7 +84,13 @@ class AbstractVariable(AbstractExpression):
         return isinstance(self.domain, EntityDomain)
 
     def to_entity_coordinates(self, cell: AbstractEntity) -> AbstractVariable:
-        """Make a version of this variable in the given cell's coordinates."""
+        """Make a version of this variable in the given cell's coordinates.
+
+        One already there is itself, a named point of a cell being as good
+        a place to read a field as a variable standing for one.
+        """
+        if self.domain == EntityDomain(cell):
+            return self
         raise ValueError("Cannot pull this variable back to a cell's coordinates.")
 
     def component(self, *indices: int) -> AbstractExpression:

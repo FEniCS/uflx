@@ -175,8 +175,13 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   is `MadeOfPieces`, one pair of pieces at a time. There is no second spelling: UFL's
   `dS` is a mesh's facets presented twice, and a mesh meeting a submesh of its entities
   is the entities presented by each, a mixed-domain form being each field restricted to
-  its side. The protocols the geometry and the integrals ask of a side are in
-  `domains.py`, since this module sits above `geometry.py`.
+  its side. `PreimageParametrization` is a side's map in general, `φ⁻¹ ∘ T ∘ ψ_Γ`, whose
+  value is a preimage and whose Jacobian is the chain rule, for a side that is a facet
+  of nothing (mortar, a periodic boundary with `T` the shift, a well through cells); a
+  presentation built from it carries `Γ` (`CarriesADomain`) and needs no transition. The
+  protocols the geometry and the integrals ask of a side are in `domains.py`, since this
+  module sits above `geometry.py`, and this class is here and not in
+  `parametrizations.py` because it is built from an image and a preimage.
 - `legacy.py` — the legacy UFL spellings (`dx`, `ds`, `dS`, their `(3)` forms, `jump`,
   `avg` and `facet_normal`), which infer the domain and insert the restrictions to build
   the native form. A side is named by `plus(u)`/`minus(u)`, a placeholder the measure

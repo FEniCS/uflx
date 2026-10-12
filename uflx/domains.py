@@ -418,6 +418,24 @@ class StatesAnOutwardNormal(Protocol):
         """The direction out of the bounded domain, as numbers."""
 
 
+@runtime_checkable
+class CarriesADomain(Protocol):
+    """A map that carries a whole domain somewhere, rather than a region of coordinates.
+
+    A map out of a coordinate domain is what a parametrization is, and
+    most say nothing about where their coordinates came from. One that
+    is a domain's own parametrization followed by something, as
+    :class:`uflx.interfaces.PreimageParametrization` is, starts from that
+    domain in all but name, and says so, which is how an interface knows
+    a side is presented through its own domain and needs no chart
+    transition.
+    """
+
+    @property
+    def carries(self) -> AbstractParametrizedDomain:
+        """The domain this map carries."""
+
+
 class IdentityParametrization(AbstractParametrization):
     """The map that leaves a coordinate domain's points where they are."""
 

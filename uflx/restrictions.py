@@ -42,7 +42,10 @@ On an interface the map is named by a side. ``restrict(u, gamma.side("-"))``
 is ``iota_-^* u``, the field read at the point of the ``-`` side's chart
 that the interface's point corresponds to, carried through that side's
 inclusion. The ``+`` and ``-`` of UFL are two such restrictions, and
-``jump`` and ``avg`` are their difference and their mean.
+``jump`` and ``avg`` are their difference and their mean. The side's map
+need not be an inclusion of a facet: a side presented through a
+preimage reads the field at the point of whichever cell the interface's
+point lands in, and the restriction does not know the difference.
 """
 
 from __future__ import annotations

@@ -237,6 +237,19 @@ inner(jump(grad(u), gamma), OutwardNormal(gamma.side("+"))) * restrict(v, gamma.
 Pulling that back gives one integral per pair of facets over the reference facet, the
 `-` side read at the point of its own facet that the chart transition gives.
 
+A side need not be a facet of anything. `PreimageParametrization(gamma, phi, T)` is a
+side's map in general, `gamma` carried into a cell's coordinates by `phi⁻¹ ∘ T ∘ ψ`,
+with `T` a stated map or the identity of sets; a periodic boundary is the facets on one
+side and, on the other, those facets carried into the translated cells:
+
+```python
+left = sub_entities_of(mesh, 1, "left")
+shifted = composed_domain(
+    composed_domain(entity_domain(Interval()), PreimageParametrization(left, phi, shift)), phi
+)
+gamma = interface(left, (("left", left), ("right", shifted)))
+```
+
 A mesh and a submesh of its entities meet as an interface too, the entities presented by
 each, and a form mixing a field on each restricts each to its side:
 

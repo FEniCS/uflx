@@ -236,10 +236,22 @@ is part of the question. So the general interface needs no new geometry: a point
 is pushed forward by `Γ`'s own parametrization and pulled back through each side's.
 
 Read in that order, UFL's `+`/`-` is the special case in which `φ₊⁻¹ ∘ ψ_Γ` is known
-combinatorially and so costs nothing. It is the same `Interface`, with `Γ` its own
-domain and no side primary, so that every side is read through a preimage; what is not
-built for it is the restriction's reading of a side that lands in a cell with no local
-facet.
+combinatorially and so costs nothing. In general the map of a side written in charts is
+`ι̂_s = φ_s⁻¹ ∘ T_s ∘ ψ_Γ`, from `Γ`'s region into a cell's coordinates, and
+`PreimageParametrization` is that map: its value is the preimage, the terminal again,
+and its Jacobian is the chain rule in closed form. `T_s` is a map the user states, the
+identity of sets unless said, which is what makes a periodic boundary an interface whose
+other side is a translation away. A presentation built from it,
+`composed_domain(composed_domain(region, PreimageParametrization(Γ, φ_s, T_s)), φ_s)`,
+has the shape a facet of a mesh has and is read the same way, and being parametrized
+from `Γ`'s own region it needs no chart transition. The matching case rested on three
+assumptions, that `ι̂_s` lands in a facet, that `ι_s` is the inclusion of sets, and that
+each piece of `Γ` meets one cell per side; this drops the first two. The third is where
+a supermesh lives, as the pieces of `Γ`, a union whose membership is external as a
+mesh's cells are, and the language says nothing about it. An interface immersed in one
+mesh, both sides carried by the same map, has sides that are one, and the jump of a
+field on that mesh vanishes node for node, which is right: without an enriched space
+there is no jump across a line through a cell.
 
 ## 6. What is built, and what is not
 
@@ -359,6 +371,12 @@ Acceptance criteria, as tests rather than prose to agree with.
 - **Two regions meet as two cells do.** Two boxes sharing a face make an `Interface`
   with the one measure and two outward normals, and no cell anywhere in it.
   `test_two_boxes_meet_along_a_face_with_no_cells_anywhere`.
+- **A side need not be a facet.** A periodic boundary's other side is a translation
+  away, checked to the number; two meshes couple through a multiplier on an interface
+  mesh of its own; a line of intervals runs through tetrahedra.
+  `test_a_periodic_boundary_is_an_interface_whose_other_side_is_a_translation_away`,
+  `test_a_mortar_coupling_of_two_meshes_through_a_multiplier` and
+  `test_a_well_in_three_dimensions_is_an_interface_of_codimension_two`.
 
 ## Notes
 

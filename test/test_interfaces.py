@@ -66,12 +66,13 @@ from uflx.geometry import (
     VolumeElement,
     expand_geometry,
 )
-from uflx.graphs import as_graph
+from uflx.graphs import GraphNode, as_graph
 from uflx.integrals import Integral, IntegralSum
-from uflx.interfaces import Interface, Side, SideParametrization
+from uflx.interfaces import Interface, PreimageParametrization, Side, SideParametrization
 from uflx.parametrizations import (
     AffineParametrization,
     ComposedDomain,
+    ComposedParametrization,
     included_sub_entity,
     sub_entities_of,
     sub_entity_domain,
@@ -1031,3 +1032,280 @@ def test_a_submesh_is_of_entities_of_its_mesh():
     ridges = sub_entities_of(tetrahedra, 2)
     along_the_edges = interface(ridges, (("mesh", ridges), ("submesh", sub_entities_of(edges, 0))))
     assert len(along_the_edges.pieces) == 6
+
+
+def embedded(gamma, omega, by=None):
+    """A domain presented from a mesh: carried into each cell type's coordinates and mapped on.
+
+    Written out, as the language has no spelling for it: the one
+    construction is ``interface(domain, sides)``, and this is what a side
+    is when the interface is a facet of no cell of the mesh.
+    """
+    (region,) = {parametrization.source for parametrization in gamma.parametrizations}
+    return union_domain(
+        [
+            composed_domain(
+                composed_domain(
+                    region, PreimageParametrization(gamma, omega.parametrization(cell), by)
+                ),
+                omega.parametrization(cell),
+            )
+            for cell in omega.cell_types
+        ]
+    )
+
+
+def answered(expression, answer):
+    """An expression with its preimage point answered, as the library would.
+
+    An affine map's Jacobian reads no point, so the preimage may have
+    dropped out already, and then there is nothing to answer.
+    """
+    expanded = expand_geometry(expression)
+    replacements: dict[GraphNode, GraphNode] = {
+        node: answer for node in as_graph(expanded) if isinstance(node, PreimagePoint)
+    }
+    assert len(replacements) <= 1
+    substituted = replace(expanded, replacements) if replacements else expanded
+    assert isinstance(substituted, AbstractExpression)
+    return substituted
+
+
+def test_a_periodic_boundary_is_an_interface_whose_other_side_is_a_translation_away(
+    plus, on_the_facet
+):
+    """The left edge of one triangle meets the left edge of its translate, through the shift.
+
+    The right side's map is ``phi_B^-1 . T . psi_Gamma``: the edge's point
+    shifted by one and pulled back into the translated triangle, where it
+    lands on that triangle's own left edge. The preimage is the library's
+    to answer, and the answer here is ``(0, s)``. The Jacobian is the chain
+    rule and comes out as the edge's own tangent, the shift being rigid.
+    """
+    shift = AffineParametrization(RD(2), RD(2), ((1.0, 0.0), (0.0, 1.0)), (1.0, 0.0))
+    translate = composed_domain(entity_domain(PlacedTriangle()), shift)
+    left_edge = composed_domain(
+        sub_entity_domain(PlacedTriangle(), 1, 1), plus.parametrization(PlacedTriangle())
+    )
+    gamma = interface(
+        left_edge, (("left", left_edge), ("right", embedded(left_edge, translate, shift)))
+    )
+
+    assert gamma.primary == "left"
+    (pair,) = gamma.pieces
+    assert isinstance(pair, Interface)
+    right = pair.side("right")
+    assert right.chart_point(on_the_facet) is on_the_facet
+    (carried,) = right.presentation.parametrizations
+    assert isinstance(carried, ComposedParametrization)
+    assert isinstance(carried.inner, PreimageParametrization)
+    assert carried.inner.carries == left_edge
+
+    u = Coefficient(function_space(translate, LagrangeElement(PlacedTriangle(), 1)))
+    image = Restriction(u, right, on_the_facet).image_point
+    assert image.domain == entity_domain(PlacedTriangle())
+    expanded = expand_geometry(image)
+    preimage = preimage_in(expanded)
+    assert preimage.parametrization == translate.parametrization(PlacedTriangle())
+    shifted = expand_geometry(preimage.ambient_point)
+    assert isinstance(shifted, AbstractExpression)
+    assert [as_number(shifted.component(i)) for i in range(2)] == pytest.approx([1.0, 0.3])
+
+    answer = Point([RealScalar(0.0), RealScalar(0.3)], entity_domain(PlacedTriangle()))
+    assert as_numbers(SpatialCoordinate(translate, answer), 2) == pytest.approx([1.0, 0.3])
+
+    tangent = answered(carried.inner.jacobian(on_the_facet), answer)
+    assert [as_number(tangent.component(i, 0)) for i in range(2)] == pytest.approx([0.0, 1.0])
+    assert answered(VolumeElement(right.presentation, on_the_facet), answer).as_float() == (
+        pytest.approx(1.0)
+    )
+
+    with pytest.raises(ValueError, match="is not a facet"):
+        OutwardNormal(right).reconstruct_with_variable(on_the_facet).expand_geometry()
+
+
+def test_an_interface_that_is_a_facet_of_neither_side_is_read_through_preimages(
+    plus, minus, along_the_edge, on_the_facet
+):
+    """Both sides carried, so no side is primary and both are read at the interface's point.
+
+    The answers are ``1 - s`` for the ``+`` side and ``s`` for the ``-``,
+    as in the matching case, but now they sit inside the sides' maps
+    rather than in a chart transition.
+    """
+    gamma = interface(
+        along_the_edge,
+        (("+", embedded(along_the_edge, plus)), ("-", embedded(along_the_edge, minus))),
+    )
+    assert gamma.primary is None
+    (pair,) = gamma.pieces
+    assert isinstance(pair, Interface)
+    here = as_numbers(SpatialCoordinate(pair, on_the_facet), 2)
+
+    # The preimage lands in each triangle's own coordinates, where the
+    # point (0.3, 0.7) of the plane sits at itself in the first and at its
+    # reflection in the second.
+    answers = {"+": (0.3, 0.7), "-": (0.7, 0.3)}
+    for side in pair.sides:
+        assert side.chart_point(on_the_facet) is on_the_facet
+        answer = Point(
+            [RealScalar(c) for c in answers[side.label]], entity_domain(PlacedTriangle())
+        )
+        through_side = answered(SpatialCoordinate(side.presentation, on_the_facet), answer)
+        assert [as_number(through_side.component(i)) for i in range(2)] == pytest.approx(here)
+
+
+def test_a_mortar_coupling_of_two_meshes_through_a_multiplier(on_the_facet):
+    """Two meshes of different geometry, an interface mesh of their own, a multiplier on it.
+
+    One kernel over the reference interval: the multiplier read at the
+    interval's point, each mesh's field at the preimage through its own
+    map, which is point location the library does.
+    """
+    tri = PlacedTriangle()
+    coarse = parametrized_domain(LagrangeElement(tri, 1, (2,)))
+    fine = parametrized_domain(LagrangeElement(tri, 2, (2,)))
+    along = parametrized_domain(LagrangeElement(Interval(), 1, (2,)))
+    u = Coefficient(function_space(coarse, LagrangeElement(tri, 1)))
+    w = Coefficient(function_space(fine, LagrangeElement(tri, 1)))
+    mu = TestFunction(function_space(along, LagrangeElement(Interval(), 1)))
+
+    gamma = interface(along, (("coarse", embedded(along, coarse)), ("fine", embedded(along, fine))))
+    coupling = (
+        mu * (restrict(u, gamma.side("coarse")) - restrict(w, gamma.side("fine"))) * dx(gamma)
+    )
+
+    pulled = pull_back_to_entity(coupling)
+    assert isinstance(pulled, IntegralSum)
+    (term,) = pulled.terms
+    assert isinstance(term, Integral)
+    assert term.domain == EntityDomain(Interval())
+    # Each mesh's field is read at the interval's point carried into that
+    # mesh's cell, and the carrying map is the preimage through that mesh.
+    through = []
+    for node in as_graph(term.integrand):
+        if isinstance(node, Coefficient):
+            assert isinstance(node.variable, ImagePoint)
+            assert node.variable.entity_point == term.variable.to_entity_coordinates(Interval())
+            carried = node.variable.parametrization
+            assert isinstance(carried, PreimageParametrization)
+            assert carried.carries == along
+            through.append(carried.through)
+        elif isinstance(node, TestFunction):
+            assert node.variable == term.variable.to_entity_coordinates(Interval())
+    assert sorted(map(repr, through)) == sorted(
+        map(repr, [coarse.parametrization(tri), fine.parametrization(tri)])
+    )
+
+
+def test_a_well_in_three_dimensions_is_an_interface_of_codimension_two():
+    """A line of intervals in a mesh of tetrahedra, which is a facet of nothing.
+
+    The rock's field is read at the point of the tetrahedron the well
+    passes through, which is where the kernel lands; there is no normal
+    to a line in space and no out of a cell across it.
+    """
+    well = parametrized_domain(LagrangeElement(Interval(), 1, (3,)))
+    rock = parametrized_domain(LagrangeElement(PlacedTetrahedron(), 1, (3,)))
+    p = Coefficient(function_space(rock, LagrangeElement(PlacedTetrahedron(), 1)))
+    lam = TestFunction(function_space(well, LagrangeElement(Interval(), 1)))
+    s = Point([RealScalar(0.3)], entity_domain(Interval()))
+
+    gamma = interface(well, (("well", well), ("rock", embedded(well, rock))))
+    assert gamma.topological_dimension == 1
+    assert gamma.side("rock").geometric_dimension == 3
+
+    pulled = pull_back_to_entity(restrict(p, gamma.side("rock")) * lam * dx(gamma))
+    assert isinstance(pulled, IntegralSum)
+    (term,) = pulled.terms
+    assert isinstance(term, Integral)
+    (field,) = [node for node in as_graph(term.integrand) if isinstance(node, Coefficient)]
+    assert isinstance(field.variable, ImagePoint)
+    assert field.variable.domain == entity_domain(PlacedTetrahedron())
+
+    with pytest.raises(ValueError, match="codimension one"):
+        UnitNormal(gamma, s).value_shape
+    (pair,) = gamma.pieces
+    assert isinstance(pair, Interface)
+    with pytest.raises(ValueError, match="is not a facet"):
+        OutwardNormal(pair.side("rock")).reconstruct_with_variable(s).expand_geometry()
+
+
+def test_a_union_presented_piece_by_piece_pairs_each_piece_with_its_own():
+    """The facets of one mesh carried into another: three pairs and not nine.
+
+    A carried piece says which piece it carries, so the fan out pairs
+    it with that one alone.
+    """
+    tri = PlacedTriangle()
+    one = parametrized_domain(LagrangeElement(tri, 1, (2,)))
+    other = parametrized_domain(LagrangeElement(tri, 2, (2,)))
+    facets = sub_entities_of(one, 1)
+    carried = union_domain(
+        [piece for facet in facets.pieces for piece in embedded(facet, other).pieces]
+    )
+
+    gamma = interface(facets, (("one", facets), ("other", carried)))
+    pairs = gamma.pieces
+    assert len(pairs) == 3
+    for facet, pair in zip(facets.pieces, pairs, strict=True):
+        assert isinstance(pair, Interface)
+        assert pair.domain == facet
+        (map_of_other,) = pair.presentation("other").parametrizations
+        assert isinstance(map_of_other, ComposedParametrization)
+        assert isinstance(map_of_other.inner, PreimageParametrization)
+        assert map_of_other.inner.carries == facet
+
+
+def test_a_domain_is_carried_from_one_cells_coordinates_by_a_map_that_joins_them(plus):
+    """What a preimage parametrization refuses: no cell to start from, no map between, a union."""
+    tri = PlacedTriangle()
+    box_face = Box(((0.0, 1.0), (0.0, 1.0))).face(axis=0, upper=True)
+    mesh = parametrized_domain(LagrangeElement(tri, 1, (2,)))
+    in_space = parametrized_domain(LagrangeElement(tri, 1, (3,)))
+    edge = composed_domain(sub_entity_domain(tri, 1, 1), plus.parametrization(tri))
+
+    with pytest.raises(ValueError, match="not a cell's coordinates"):
+        PreimageParametrization(box_face, mesh.parametrization(tri))
+    with pytest.raises(ValueError, match="piece by piece"):
+        PreimageParametrization(sub_entities_of(mesh, 1), mesh.parametrization(tri))
+    with pytest.raises(ValueError, match="without a map between them"):
+        PreimageParametrization(edge, in_space.parametrization(tri))
+    with pytest.raises(ValueError, match="does not take the coordinates"):
+        PreimageParametrization(
+            edge,
+            in_space.parametrization(tri),
+            AffineParametrization(RD(3), RD(3), ((1, 0, 0), (0, 1, 0), (0, 0, 1)), (0, 0, 0)),
+        )
+    lift = AffineParametrization(RD(2), RD(3), ((1, 0), (0, 1), (0, 0)), (0, 0, 0))
+    assert PreimageParametrization(
+        edge, in_space.parametrization(tri), lift
+    ).target == entity_domain(tri)
+
+
+def test_an_interface_immersed_in_one_mesh_has_no_jump_to_see():
+    """Both sides carried into the same mesh by the same map are the same side.
+
+    Point location names one cell for a point of the interface, so the
+    two restrictions of a field on that mesh are read at one point and
+    the pulled back jump is a difference of one node with itself. That
+    is right: without an enriched space there is no jump across a line
+    through a cell, and the language says so by making the two sides
+    one rather than by pretending otherwise.
+    """
+    tri = PlacedTriangle()
+    mesh = parametrized_domain(LagrangeElement(tri, 1, (2,)))
+    along = parametrized_domain(LagrangeElement(Interval(), 1, (2,)))
+    u = Coefficient(function_space(mesh, LagrangeElement(tri, 1)))
+    mu = TestFunction(function_space(along, LagrangeElement(Interval(), 1)))
+
+    gamma = interface(along, (("+", embedded(along, mesh)), ("-", embedded(along, mesh))))
+    assert gamma.presentation("+") == gamma.presentation("-")
+    assert gamma.side("+") != gamma.side("-")
+
+    pulled = pull_back_to_entity(mu * jump(u, gamma) * dx(gamma))
+    assert isinstance(pulled, IntegralSum)
+    (term,) = pulled.terms
+    assert isinstance(term, Integral)
+    fields = [node for node in as_graph(term.integrand) if isinstance(node, Coefficient)]
+    assert len(fields) == 1

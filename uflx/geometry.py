@@ -800,7 +800,8 @@ class OutwardNormal(AbstractGeometricQuantity):
         if sub_entity is None or sub_entity[0] != cell.topological_dimension - 1:
             raise ValueError(
                 f"{presentation!r} is not a facet of {cell}, so there is no out of the "
-                f"cell across it."
+                f"cell across it. The normal of a domain presented some other way is "
+                f"UnitNormal of it, with the sign a side names."
             )
         _, index = sub_entity
         if self._variable is None:
