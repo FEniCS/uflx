@@ -29,10 +29,13 @@ is its class and its `init_args`, and it supplies `__eq__`, `__hash__`, `__repr_
 `init_args` itself. A new mixin is for a rule of that kind, one
 that holds of everything. Code shared between a few classes is a function.
 
-Avoid defining `__eq__` or `__hash__` on a class at all costs. An identity other than the
-arguments is one that rebuilding a node can silently change, and equality that reaches
-outside the class breaks hashing. A class that seems to need one is usually missing an
-argument or keeping one it should not.
+Avoid defining `__eq__`, `__hash__` or `__repr__` on a class at all costs. An identity
+other than the arguments is one that rebuilding a node can silently change, and equality
+that reaches outside the class breaks hashing. A class that seems to need one is usually
+missing an argument or keeping one it should not. A handwritten `__repr__` drifts from
+what the value is, and nothing may depend on one. A class writes its own only when an
+argument prints as an address, as a wrapped Basix element does. A graph node prints each
+child node as `...`, since the graph shows the children.
 
 `init_args` is read back from the constructor. Each argument `name` is stored as
 `self._name`, and the mixin reads those attributes in the order of the constructor's

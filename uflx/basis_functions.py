@@ -144,21 +144,6 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
         else:
             return ()
 
-    def __repr__(self):
-        """Representation."""
-        repr = (
-            "EvaluatedBasisFunction("
-            f"{self._space!r}, {self._basis_index}, {self._variable!r}, {self.is_reference}"
-        )
-        if self._element_index is not None:
-            repr += f", {self._element_index}"
-        if self._derivative is not None:
-            repr += f", derivative={self._derivative}"
-        if self._component is not None:
-            repr += f", component={self._component}"
-        repr += ")"
-        return repr
-
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""

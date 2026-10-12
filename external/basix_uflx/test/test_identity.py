@@ -9,6 +9,7 @@ import basix
 import numpy as np
 import pytest
 import uflx
+from uflx.graphs.graphs import fingerprint
 
 import basix_uflx
 from basix_uflx import BasixCell
@@ -123,3 +124,19 @@ def test_every_process_agrees_on_an_elements_hash_whatever_its_hash_seed():
         for seed in ("1", "2")
     }
     assert printed["1"] == printed["2"]
+
+
+def test_fingerprints_do_not_depend_on_where_an_element_is_in_memory():
+    """Two elements built alike have one digest, though Basix prints an address."""
+    a = basix_uflx.element("Lagrange", "triangle", 2)
+    b = basix_uflx.element("Lagrange", "triangle", 2)
+    assert a.init_args[0] is not b.init_args[0]
+    assert fingerprint(a) == fingerprint(b)
+
+
+def test_fingerprints_tell_apart_what_equality_tells_apart():
+    """Blocked elements differing only in ordering have different digests."""
+    sub = basix_uflx.element("Lagrange", "triangle", 1)
+    a = BlockedElement(sub, (2,), None, BlockedOrdering.xyzxyz)
+    b = BlockedElement(sub, (2,), None, BlockedOrdering.xxyyzz)
+    assert fingerprint(a) != fingerprint(b)

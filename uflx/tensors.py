@@ -82,10 +82,6 @@ class Tensor(AbstractExpression):
 
         self._shape, self._entries = to_shape_and_tuple(entries)
 
-    def __repr__(self):
-        """Representation."""
-        return f"Tensor({self._entries})"
-
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
@@ -133,10 +129,6 @@ class Vector(Tensor):
         if self._shape != (len(entries),):
             raise ValueError("Vector entries must be scalars; stack tensors with Tensor.")
 
-    def __repr__(self):
-        """Representation."""
-        return f"Vector({self._entries})"
-
 
 class Matrix(Tensor):
     """A matrix, i.e. a 2D tensor."""
@@ -146,10 +138,6 @@ class Matrix(Tensor):
         super().__init__(entries)
         if self._shape != (len(entries), len(entries[0])):
             raise ValueError("Matrix entries must be scalars; stack tensors with Tensor.")
-
-    def __repr__(self):
-        """Representation."""
-        return f"Matrix({self._entries})"
 
     def transpose(self) -> Matrix:
         """Get the transpose of the matrix."""
@@ -334,10 +322,6 @@ class Identity(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"Identity({self.size})"
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""

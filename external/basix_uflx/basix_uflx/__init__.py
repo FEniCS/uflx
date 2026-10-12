@@ -72,12 +72,6 @@ class BasixCell(uflx.entities.AbstractEntity):
         """
         return [c[0] for c in basix.cell.sub_entity_connectivity(self._basix_cell)[dim]]
 
-    def __repr__(self):
-        return f"BasixCell({self._basix_cell.name})"
-
-    def __str__(self):
-        return f"{self!r}"
-
 
 def hash_data(data: Sequence[np.floating] | npt.ArrayLike) -> str:
     """Return a hash of an array of floating point numbers."""
@@ -114,6 +108,7 @@ class BasixElement(AbstractFiniteElement):
         """Initialise."""
         self._element = element
 
+    # The wrapped Basix element prints only its address, so describe it here.
     def __repr__(self) -> str:
         if self._element.family == basix.ElementFamily.custom:
             return (
@@ -132,9 +127,6 @@ class BasixElement(AbstractFiniteElement):
                 f"{self._element.discontinuous}, "
                 f"{self._element.dtype}, {self._element.dof_ordering})"
             )
-
-    def __str__(self):
-        return f"{self!r}"
 
     @property
     def cell(self) -> uflx.entities.AbstractEntity:
@@ -187,15 +179,6 @@ class QuadratureElement(AbstractFiniteElement):
         self._degree = len(self._points) if degree is None else degree
         self._dtype = np.dtype(dtype)
 
-    def __repr__(self) -> str:
-        return (
-            f"QuadratureElement({self._cell.name}, {hash_data(self._points)}, "
-            f"{hash_data(self._weights)}, {self._reference_map!r})"
-        )
-
-    def __str__(self):
-        return f"{self!r}"
-
     @property
     def cell(self) -> uflx.entities.AbstractEntity:
         return BasixCell(self._cell)
@@ -240,12 +223,6 @@ class RealElement(AbstractFiniteElement):
         """Initialise the element."""
         self._cell = cell
         self._value_shape = tuple(value_shape)
-
-    def __repr__(self) -> str:
-        return f"RealElement({self._cell.name}, {self._value_shape})"
-
-    def __str__(self):
-        return f"{self!r}"
 
     @property
     def cell(self) -> uflx.entities.AbstractEntity:

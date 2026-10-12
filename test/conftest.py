@@ -14,14 +14,6 @@ class Entity(AbstractEntity):
         """Initalise."""
         self._sub_entities = sub_entities
 
-    def __repr__(self):
-        """Representation."""
-        return self.__class__.__name__
-
-    def __str__(self):
-        """String."""
-        return f"{self!r}"
-
     @property
     def name(self) -> str:
         """Name of this entity."""

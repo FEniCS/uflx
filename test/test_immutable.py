@@ -102,6 +102,41 @@ def test_a_value_prints_as_what_it_was_built_from():
     assert repr(IdentityReferenceMap()) == repr(IdentityReferenceMap())
 
 
+def test_a_value_that_is_not_a_node_prints_in_full(lagrange_element):
+    """A space prints every argument, all the way down."""
+    element = lagrange_element("triangle", 1)
+    space = function_space(coordinate_element(lagrange_element("triangle", 1, (2,))), element)
+    assert repr(space) == (
+        "FunctionSpace(CoordinateElement((LagrangeElement(Triangle(), 1, (2,)),)), "
+        "(LagrangeElement(Triangle(), 1, None),))"
+    )
+
+
+def test_a_node_prints_its_children_as_ellipses(lagrange_element):
+    """A node prints its own arguments and leaves its children to the graph."""
+    from uflx.expressions import Integer
+    from uflx.geometry import SpatialCoordinate
+
+    x0 = SpatialCoordinate(2).component(0)
+    assert repr(Integer(3)) == "Integer(3)"
+    assert repr(x0) == "SingleSpatialCoordinate(2, 0)"
+    assert repr(x0 + Integer(1)) == "Sum((..., ...))"
+    space = function_space(
+        coordinate_element(lagrange_element("triangle", 1, (2,))), lagrange_element("triangle", 1)
+    )
+    assert repr(Coefficient(space, "f")) == f"Coefficient({space!r}, 'f', False, None)"
+
+
+def test_a_nodes_repr_does_not_grow_with_its_graph():
+    """Printing a deeply shared expression costs one level."""
+    from uflx.geometry import SpatialCoordinate
+
+    e = SpatialCoordinate(2).component(0)
+    for _ in range(50):
+        e = e / e - e
+    assert repr(e) == "Sum((..., ...))"
+
+
 def test_no_class_in_uflx_defines_its_own_identity():
     """Every value in UFLx is identified by its init_args alone."""
     import importlib

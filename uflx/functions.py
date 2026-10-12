@@ -68,10 +68,6 @@ class Variable(AbstractVariable):
         """The domain that this variable is in."""
         return self._domain
 
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"Variable({self._label})"
-
     @property
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
@@ -112,13 +108,6 @@ class FiniteElementVariable(AbstractVariable):
     def domain(self) -> AbstractDomain:
         """The domain that this variable is in."""
         return self._domain
-
-    def __repr__(self) -> str:
-        """Representation."""
-        if self._reference:
-            return f"FiniteElementVariable({self._label}, reference=True)"
-        else:
-            return f"FiniteElementVariable({self._label})"
 
     @property
     def is_reference(self) -> bool:
@@ -428,10 +417,6 @@ class TestFunction(Argument):
         """Initialise."""
         super().__init__(space, 0, is_reference, variable)
 
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"TestFunction({self.variable!r})"
-
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""
         return self.__class__(self._space, self._is_reference, variable)
@@ -469,10 +454,6 @@ class TrialFunction(Argument):
     ):
         """Initialise."""
         super().__init__(space, 1, is_reference, variable)
-
-    def __repr__(self) -> str:
-        """Representation."""
-        return f"TrialFunction({self.variable!r})"
 
     def reconstruct_with_variable(self, variable: AbstractVariable) -> Self:
         """Reconstruct this function taking the input variable as input."""

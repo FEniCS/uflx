@@ -76,14 +76,17 @@ class Immutable:
     def __repr__(self) -> str:
         """Representation.
 
-        This is the class name and its arguments. A class whose arguments
-        cannot be read prints as a plain object.
+        This is the class name and its arguments. A node of a graph prints
+        each child node as ``...``. The graph shows the children, and
+        printing them in full would repeat every shared node. A class
+        whose arguments cannot be read prints as a plain object.
         """
         try:
             arguments = self.init_args
         except TypeError:
             return object.__repr__(self)
-        return f"{type(self).__name__}({', '.join(repr(a) for a in arguments)})"
+        is_node = isinstance(self, GraphNode)
+        return f"{type(self).__name__}({', '.join(_argument_repr(a, is_node) for a in arguments)})"
 
     @property
     def fingerprint(self) -> bytes:
@@ -226,6 +229,18 @@ def _values_in(argument: Any) -> Iterable[Immutable]:
 
 def _qualified_name(cls: type) -> str:
     return f"{cls.__module__}.{cls.__qualname__}"
+
+
+def _argument_repr(value: Any, abbreviate_nodes: bool) -> str:
+    """Print an argument, with graph nodes as ``...`` if asked."""
+    if abbreviate_nodes and isinstance(value, GraphNode):
+        return "..."
+    if isinstance(value, tuple):
+        items = [_argument_repr(i, abbreviate_nodes) for i in value]
+        return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
+    if isinstance(value, list):
+        return f"[{', '.join(_argument_repr(i, abbreviate_nodes) for i in value)}]"
+    return repr(value)
 
 
 def _stored_argument(value: Any, name: str) -> Any:
