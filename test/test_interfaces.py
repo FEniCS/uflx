@@ -24,7 +24,7 @@ from test_facet_domains import (
     PlacedInterval,
     PlacedTetrahedron,
     PlacedTriangle,
-    quantities_in,
+    _quantities_in,
 )
 from test_regions import Box
 
@@ -438,7 +438,7 @@ def test_pulling_an_interface_integral_back_gives_one_kernel_per_pair(space, mes
         assert term.domain == EntityDomain(Interval())
         variable = term.variable.to_entity_coordinates(Interval())
 
-        quantities = quantities_in(term.integrand)
+        quantities = _quantities_in(term.integrand)
         assert quantities["VolumeElement"] == VolumeElement(pair, term.variable)
         assert quantities["OutwardNormal"] == OutwardNormal(pair.embedding("+"), term.variable)
 
@@ -461,7 +461,7 @@ def test_a_label_survives_to_the_pair(space, mesh):
 
     assert isinstance(pulled, IntegralSum)
     for term in pulled.terms:
-        density = quantities_in(term.integrand)["VolumeElement"]
+        density = _quantities_in(term.integrand)["VolumeElement"]
         pair = density.domain
         assert isinstance(pair, Interface)
         for label in pair.labels:
@@ -715,7 +715,7 @@ def test_a_triangle_meets_a_quadrilateral():
     assert len(pulled.terms) == 12
     pairs = []
     for term in pulled.terms:
-        pair = quantities_in(term.integrand)["VolumeElement"].domain
+        pair = _quantities_in(term.integrand)["VolumeElement"].domain
         assert isinstance(pair, Interface)
         pairs.append(
             (

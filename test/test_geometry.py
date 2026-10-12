@@ -166,7 +166,7 @@ def test_jacobian_derivatives_are_entity_derivatives(cell, gdim, lagrange_elemen
     assert derivatives == {tuple(int(d == i) for d in range(tdim)) for i in range(tdim)}
 
 
-def coordinate_dof_entries(expression):
+def _coordinate_dof_entries(expression):
     """The (node, component) of each coordinate DOF an expression refers to."""
     return {
         node.init_args[0]
@@ -182,12 +182,12 @@ def test_jacobian_coordinate_dofs(cell, gdim, lagrange_element):
     tdim = domain.cell_types[0].topological_dimension
     point = Point([RealScalar(0.1)] * tdim, EntityDomain(domain.cell_types[0]))
 
-    x_dofs = coordinate_dof_entries(ImagePoint(point, domain).expand_geometry())
+    x_dofs = _coordinate_dof_entries(ImagePoint(point, domain).expand_geometry())
     assert len(x_dofs) > 0
-    assert coordinate_dof_entries(Jacobian(domain, point).expand_geometry()) == x_dofs
+    assert _coordinate_dof_entries(Jacobian(domain, point).expand_geometry()) == x_dofs
 
 
-def mass_form(cell, gdim, lagrange_element):
+def _mass_form(cell, gdim, lagrange_element):
     """A form with geometry in it once pulled back, but no gradients."""
     domain = parametrized_domain(lagrange_element(cell, 1, (gdim,)))
     space = function_space(domain, lagrange_element(cell, 1))
@@ -196,7 +196,7 @@ def mass_form(cell, gdim, lagrange_element):
 
 def test_a_jacobian_is_told_where_it_is_evaluated(lagrange_element):
     """A pulled back integral hands its geometry the variable standing for the point."""
-    pulled = pull_back_to_entity(mass_form("triangle", 2, lagrange_element))
+    pulled = pull_back_to_entity(_mass_form("triangle", 2, lagrange_element))
 
     assert isinstance(pulled, Integral)
     jacobians = [n for n in as_graph(pulled) if isinstance(n, AbstractGeometricQuantity)]
@@ -214,7 +214,7 @@ def test_a_pulled_back_integral_expands_its_geometry(cell, gdim, lagrange_elemen
     A Jacobian built during a pull back has no point of its own, so it
     can only expand once the integral has told it where it is evaluated.
     """
-    expanded = expand_geometry(pull_back_to_entity(mass_form(cell, gdim, lagrange_element)))
+    expanded = expand_geometry(pull_back_to_entity(_mass_form(cell, gdim, lagrange_element)))
 
     assert not any(isinstance(n, AbstractGeometricQuantity) for n in as_graph(expanded))
 

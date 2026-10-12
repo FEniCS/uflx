@@ -66,7 +66,7 @@ def space(mesh):
     return function_space(mesh, LagrangeElement(PlacedTriangle(), 1))
 
 
-def kernels(form) -> tuple[Integral, ...]:
+def _kernels(form) -> tuple[Integral, ...]:
     """The integrals a form pulls back to."""
     pulled = pull_back_to_entity(form)
     terms = pulled.terms if isinstance(pulled, IntegralSum) else (pulled,)
@@ -82,7 +82,7 @@ def test_a_cell_measure_reads_its_domain_off_the_integrand(mesh, space):
 
     assert isinstance(form, Integral)
     assert form.domain == mesh
-    assert [term.domain for term in kernels(form)] == [EntityDomain(PlacedTriangle())]
+    assert [term.domain for term in _kernels(form)] == [EntityDomain(PlacedTriangle())]
 
 
 def test_an_exterior_facet_measure_integrates_over_the_facets(mesh, space):
@@ -93,7 +93,7 @@ def test_an_exterior_facet_measure_integrates_over_the_facets(mesh, space):
 
     assert isinstance(form, Integral)
     assert form.domain == sub_entities_of(mesh, 1, ExteriorFacets())
-    assert [term.domain for term in kernels(form)] == [EntityDomain(Interval())] * 3
+    assert [term.domain for term in _kernels(form)] == [EntityDomain(Interval())] * 3
 
 
 def test_a_field_in_a_facet_integral_is_restricted_for_you(mesh, space):
@@ -129,7 +129,7 @@ def test_a_gradient_in_a_facet_integral_is_restricted_whole(mesh, space):
         if isinstance(node, Restriction)
     ]
     assert sorted(restricted) == ["Grad", "TestFunction"]
-    assert len(kernels(form)) == 3
+    assert len(_kernels(form)) == 3
 
 
 def test_a_cell_integral_and_a_facet_one_add(mesh, space):
@@ -139,7 +139,7 @@ def test_a_cell_integral_and_a_facet_one_add(mesh, space):
     form = u * v * dx + u * v * ds
 
     assert isinstance(form, IntegralSum)
-    domains = [term.domain for term in kernels(form)]
+    domains = [term.domain for term in _kernels(form)]
     assert domains.count(EntityDomain(PlacedTriangle())) == 1
     assert domains.count(EntityDomain(Interval())) == 3
 
@@ -158,7 +158,7 @@ def test_a_marked_part_of_the_facets_is_another_domain(mesh, space):
     assert marked.domain == sub_entities_of(mesh, 1, ExteriorFacets(3))
     assert marked.domain != unmarked.domain
     assert marked.domain != other.domain
-    assert len(kernels(marked)) == 3
+    assert len(_kernels(marked)) == 3
 
 
 def test_a_marked_tag_is_still_there_in_the_kernels(mesh, space):
@@ -170,7 +170,7 @@ def test_a_marked_tag_is_still_there_in_the_kernels(mesh, space):
     """
     u, v = Coefficient(space), TestFunction(space)
 
-    for term in kernels(u * v * ds(3)):
+    for term in _kernels(u * v * ds(3)):
         read_on = [
             node.domain
             for node in as_graph(term.integrand).ordered_nodes()
@@ -192,7 +192,7 @@ def test_a_marked_part_of_the_cells_is_another_domain_too(mesh, space):
 
     assert marked.domain == labelled_domain(mesh, Cells(2))
     assert marked.domain != unmarked.domain
-    assert len(kernels(marked)) == 1
+    assert len(_kernels(marked)) == 1
 
 
 def test_a_named_domain_is_used_rather_than_inferred(mesh, space):

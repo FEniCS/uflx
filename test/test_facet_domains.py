@@ -207,18 +207,18 @@ def on_the_facet():
     return Point([RealScalar(0.3)], entity_domain(Interval()))
 
 
-def measure_of(domain, point) -> float:
+def _measure_of(domain, point) -> float:
     """A domain's volume element, as a number."""
     return VolumeElement(domain, point).expand_geometry().as_float()
 
 
-def normal_of(domain, point) -> list[float]:
+def _normal_of(domain, point) -> list[float]:
     """A domain's unit normal, as numbers."""
     (gdim,) = UnitNormal(domain, point).value_shape
     return [UnitNormal(domain, point).component(i).as_float() for i in range(gdim)]
 
 
-def entries_of(quantity, rows: int, cols: int) -> list[list[float]]:
+def _entries_of(quantity, rows: int, cols: int) -> list[list[float]]:
     """A matrix valued quantity, as numbers."""
     expanded = expand_geometry(quantity)
     assert isinstance(expanded, AbstractExpression)
@@ -226,13 +226,13 @@ def entries_of(quantity, rows: int, cols: int) -> list[list[float]]:
     return [[matrix.component(i, j).as_float() for j in range(cols)] for i in range(rows)]
 
 
-def normalised(vector: list[float]) -> list[float]:
+def _normalised(vector: list[float]) -> list[float]:
     """A vector of numbers, scaled to unit length."""
     length = math.sqrt(sum(c * c for c in vector))
     return [c / length for c in vector]
 
 
-def transported_normal(cell, domain, index, point) -> list[float]:
+def _transported_normal(cell, domain, index, point) -> list[float]:
     """The reference facet's normal carried onto a domain by ``J^-T``.
 
     INTEGRATION.md section 4's transport rule, written in the language:
@@ -242,15 +242,15 @@ def transported_normal(cell, domain, index, point) -> list[float]:
     point carries it.
     """
     reference_facet = sub_entity_domain(cell, cell.topological_dimension - 1, index)
-    nhat = normal_of(reference_facet, point)
+    nhat = _normal_of(reference_facet, point)
     # Written out, since a parametrization whose Jacobian depends on its point reads
     # the coordinates and an image point only has them once expanded.
     included = ImagePoint(point, reference_facet).expand_geometry()
     assert isinstance(included, Point)
-    jacobian_inverse_transpose = entries_of(
+    jacobian_inverse_transpose = _entries_of(
         JacobianInverseTranspose(domain, included), domain.geometric_dimension, len(nhat)
     )
-    return normalised(
+    return _normalised(
         [sum(row[j] * nhat[j] for j in range(len(nhat))) for row in jacobian_inverse_transpose]
     )
 
@@ -331,7 +331,7 @@ def test_the_measure_of_a_facet_is_its_length(facets, on_the_facet, k):
     """The same numbers test_boundaries gets, from the inclusion the entity gave."""
     facet = facets[k]
 
-    assert measure_of(facet, on_the_facet) == pytest.approx(facet_lengths[k])
+    assert _measure_of(facet, on_the_facet) == pytest.approx(facet_lengths[k])
     assert MetricTensor(facet, on_the_facet).expand_geometry().component(0, 0).as_float() == (
         pytest.approx(facet_lengths[k] ** 2)
     )
@@ -341,7 +341,7 @@ def test_the_measure_of_a_facet_is_its_length(facets, on_the_facet, k):
 def test_a_facet_of_a_triangle_has_a_unit_normal_across_it(facets, on_the_facet, k):
     """Codimension one fixes the normal up to a sign, which nothing here fixes."""
     facet = facets[k]
-    normal = normal_of(facet, on_the_facet)
+    normal = _normal_of(facet, on_the_facet)
     (parametrization,) = facet.parametrizations
     jacobian = _as_dense_matrix(parametrization.jacobian(on_the_facet))
     tangent = [jacobian.component(i, 0).as_float() for i in range(2)]
@@ -383,7 +383,7 @@ def test_the_measure_of_an_edge_of_a_tetrahedron_is_its_length(k):
 
     assert edge.topological_dimension == 1
     assert edge.geometric_dimension == 3
-    assert measure_of(edge, point) == pytest.approx(edge_lengths[k])
+    assert _measure_of(edge, point) == pytest.approx(edge_lengths[k])
 
 
 def test_an_edge_in_space_has_no_single_normal():
@@ -407,8 +407,8 @@ def test_a_facet_of_a_tetrahedron_is_a_triangle_with_a_normal():
 
     # Facet 3 is the one between the three unit vectors, of area sqrt(3)/2
     # against the reference triangle's half, so its volume element is sqrt(3).
-    assert measure_of(facet, point) == pytest.approx(math.sqrt(3.0))
-    assert normal_of(facet, point) == pytest.approx([1.0 / math.sqrt(3.0)] * 3)
+    assert _measure_of(facet, point) == pytest.approx(math.sqrt(3.0))
+    assert _normal_of(facet, point) == pytest.approx([1.0 / math.sqrt(3.0)] * 3)
 
 
 @pytest.fixture
@@ -513,7 +513,7 @@ def test_a_label_marks_each_piece_so_a_kernel_keeps_it(mesh, space):
     pulled = pull_back_to_entity(restrict(v, marked) * dx(marked))
     assert isinstance(pulled, IntegralSum)
     for term in pulled.terms:
-        read_on = quantities_in(term.integrand)["VolumeElement"].domain
+        read_on = _quantities_in(term.integrand)["VolumeElement"].domain
         assert isinstance(read_on, LabelledDomain)
         assert read_on.label == "inflow"
 
@@ -554,10 +554,10 @@ def test_the_edges_of_a_cells_faces_are_the_cells_edges():
     for face in sub_entities_of(entity_domain(cell), 1).pieces:
         assert isinstance(face, ComposedDomain)
         for edge in sub_entities_of(face, 1).pieces:
-            through_the_faces.append(measure_of(edge, at_the_end))
+            through_the_faces.append(_measure_of(edge, at_the_end))
 
     directly = [
-        measure_of(edge, at_the_end) for edge in sub_entities_of(entity_domain(cell), 2).pieces
+        _measure_of(edge, at_the_end) for edge in sub_entities_of(entity_domain(cell), 2).pieces
     ]
 
     assert sorted(directly) == pytest.approx(sorted(edge_lengths))
@@ -607,7 +607,7 @@ def test_a_kernel_says_which_sub_entity_it_is_for(mesh, space):
     pulled = pull_back_to_entity(restrict(v, facets) * dx(facets))
     assert isinstance(pulled, IntegralSum)
     indices = [
-        included_sub_entity(quantities_in(term.integrand)["VolumeElement"].domain)
+        included_sub_entity(_quantities_in(term.integrand)["VolumeElement"].domain)
         for term in pulled.terms
     ]
     assert indices == [(1, 0), (1, 1), (1, 2)]
@@ -645,7 +645,7 @@ def test_a_facet_of_a_mapped_cell_measures_the_mapped_length(
     """
     facets = sub_entities_of(stretched_cell, 1)
 
-    assert measure_of(facets.pieces[k], on_the_facet) == pytest.approx(length)
+    assert _measure_of(facets.pieces[k], on_the_facet) == pytest.approx(length)
 
 
 @pytest.mark.parametrize(("k", "length"), [(0, 2.0), (1, 1.0), (2, math.sqrt(5.0))])
@@ -673,7 +673,7 @@ def test_a_pulled_back_facet_integral_expands_to_that_facets_density(
 
     assert isinstance(substituted, AbstractExpression)
     assert substituted.as_float() == pytest.approx(length)
-    assert measure_of(facets.pieces[k], on_the_facet) == pytest.approx(length)
+    assert _measure_of(facets.pieces[k], on_the_facet) == pytest.approx(length)
 
 
 def test_an_integral_over_the_facets_measures_the_boundary(stretched_cell, on_the_facet):
@@ -729,8 +729,8 @@ def test_a_facets_normal_is_its_reference_normal_carried_by_the_cofactor_rule(
     """
     facet = sub_entities_of(stretched_cell, 1).pieces[k]
 
-    transported = transported_normal(PlacedTriangle(), stretched_cell, k, on_the_facet)
-    own = normal_of(facet, on_the_facet)
+    transported = _transported_normal(PlacedTriangle(), stretched_cell, k, on_the_facet)
+    own = _normal_of(facet, on_the_facet)
 
     assert transported == pytest.approx(own) or transported == pytest.approx([-c for c in own])
 
@@ -752,11 +752,11 @@ def test_the_conormal_of_a_facet_of_a_surface_is_the_same_transport(patch, on_th
         with pytest.raises(ValueError, match="codimension one"):
             UnitNormal(facet, on_the_facet).value_shape
 
-        conormal = transported_normal(cell, patch, k, on_the_facet)
-        tangent = [row[0] for row in entries_of(Jacobian(facet, on_the_facet), 3, 1)]
+        conormal = _transported_normal(cell, patch, k, on_the_facet)
+        tangent = [row[0] for row in _entries_of(Jacobian(facet, on_the_facet), 3, 1)]
         included = ImagePoint(on_the_facet, sub_entity_domain(cell, 1, k)).expand_geometry()
         assert isinstance(included, Point)
-        projector = entries_of(TangentialProjector(patch, included), 3, 3)
+        projector = _entries_of(TangentialProjector(patch, included), 3, 3)
         projected = [sum(projector[i][j] * conormal[j] for j in range(3)) for i in range(3)]
 
         assert sum(a * b for a, b in zip(conormal, tangent, strict=True)) == pytest.approx(
@@ -782,15 +782,15 @@ def test_a_facets_density_is_nansons_formula(stretched_cell, on_the_facet, k):
     included = ImagePoint(on_the_facet, reference_facet).expand_geometry()
     assert isinstance(included, Point)
 
-    nhat = normal_of(reference_facet, on_the_facet)
-    cofactor = entries_of(JacobianInverseTranspose(stretched_cell, included), 2, 2)
+    nhat = _normal_of(reference_facet, on_the_facet)
+    cofactor = _entries_of(JacobianInverseTranspose(stretched_cell, included), 2, 2)
     stretch = math.sqrt(sum(sum(row[j] * nhat[j] for j in range(2)) ** 2 for row in cofactor))
 
     nanson = (
-        measure_of(stretched_cell, included) * stretch * measure_of(reference_facet, on_the_facet)
+        _measure_of(stretched_cell, included) * stretch * _measure_of(reference_facet, on_the_facet)
     )
 
-    assert measure_of(facet, on_the_facet) == pytest.approx(nanson)
+    assert _measure_of(facet, on_the_facet) == pytest.approx(nanson)
 
 
 @pytest.mark.parametrize("k", range(3))
@@ -808,13 +808,13 @@ def test_a_facets_metric_is_the_cells_metric_pulled_back(stretched_cell, on_the_
     included = ImagePoint(on_the_facet, reference_facet).expand_geometry()
     assert isinstance(included, Point)
 
-    inclusion = entries_of(Jacobian(reference_facet, on_the_facet), 2, 1)
-    cell_metric = entries_of(MetricTensor(stretched_cell, included), 2, 2)
+    inclusion = _entries_of(Jacobian(reference_facet, on_the_facet), 2, 1)
+    cell_metric = _entries_of(MetricTensor(stretched_cell, included), 2, 2)
     pulled_back = sum(
         inclusion[i][0] * cell_metric[i][j] * inclusion[j][0] for i in range(2) for j in range(2)
     )
 
-    assert entries_of(MetricTensor(facet, on_the_facet), 1, 1)[0][0] == pytest.approx(pulled_back)
+    assert _entries_of(MetricTensor(facet, on_the_facet), 1, 1)[0][0] == pytest.approx(pulled_back)
 
 
 def test_the_normal_of_a_facet_of_a_mapped_cell_is_not_the_mapped_normal(
@@ -823,7 +823,7 @@ def test_the_normal_of_a_facet_of_a_mapped_cell_is_not_the_mapped_normal(
     """A normal is carried by the cofactor rule, not by the map, as test_boundaries says."""
     hypotenuse = sub_entities_of(stretched_cell, 1).pieces[2]
 
-    normal = normal_of(hypotenuse, on_the_facet)
+    normal = _normal_of(hypotenuse, on_the_facet)
 
     assert sum(c * c for c in normal) == pytest.approx(1.0)
     assert abs(normal[0]) == pytest.approx(1.0 / math.sqrt(5.0))
@@ -844,7 +844,7 @@ def facet(mesh):
     return piece
 
 
-def quantities_in(expression):
+def _quantities_in(expression):
     """The geometric quantities an expression reads, by class name."""
     return {
         type(node).__name__: node
@@ -992,7 +992,7 @@ def test_pulling_a_facet_integral_back_lands_on_the_reference_facet(space, facet
     assert isinstance(pulled, Integral)
     assert pulled.domain == EntityDomain(Interval())
     assert pulled.variable.domain == EntityDomain(Interval())
-    volume_element = quantities_in(pulled.integrand)["VolumeElement"]
+    volume_element = _quantities_in(pulled.integrand)["VolumeElement"]
     assert volume_element == VolumeElement(facet, pulled.variable)
 
 
@@ -1030,7 +1030,7 @@ def test_a_gradient_inside_a_restriction_is_the_cells_gradient(space, facet, mes
     pulled = pull_back_to_entity(inner(restrict(grad(v), facet), normal) * dx(facet))
     assert isinstance(pulled, Integral)
 
-    quantities = quantities_in(pulled.integrand)
+    quantities = _quantities_in(pulled.integrand)
     assert quantities["JacobianInverse"] == JacobianInverse(
         mesh, ImagePoint(pulled.variable.to_entity_coordinates(Interval()), facet.inner_domain)
     )
@@ -1120,7 +1120,7 @@ def test_splitting_reads_a_quantity_off_the_piece_it_lands_on(space, mesh):
     assert isinstance(split, IntegralSum)
 
     for piece, term in zip(facets.pieces, split.terms, strict=True):
-        quantities = quantities_in(term.integrand)
+        quantities = _quantities_in(term.integrand)
         assert quantities["UnitNormal"] == UnitNormal(piece)
         assert quantities["SpatialCoordinate"] == SpatialCoordinate(piece)
         coordinate = quantities["SingleSpatialCoordinate"]
@@ -1152,7 +1152,7 @@ def test_pulling_back_an_integral_over_the_facets_gives_one_kernel_per_facet(spa
         assert isinstance(piece, ComposedDomain)
         assert term.domain == EntityDomain(Interval())
         included = ImagePoint(term.variable.to_entity_coordinates(Interval()), piece.inner_domain)
-        quantities = quantities_in(term.integrand)
+        quantities = _quantities_in(term.integrand)
         assert quantities["VolumeElement"] == VolumeElement(piece, term.variable)
         assert quantities["UnitNormal"] == UnitNormal(piece, term.variable)
         assert quantities["JacobianInverse"] == JacobianInverse(mesh, included)
@@ -1177,7 +1177,7 @@ def test_the_facets_of_a_one_dimensional_mesh_are_its_end_points():
 
     assert len(ends.pieces) == 2
     assert ends.topological_dimension == 0
-    assert all(measure_of(end, at_the_end) == pytest.approx(1.0) for end in ends.pieces)
+    assert all(_measure_of(end, at_the_end) == pytest.approx(1.0) for end in ends.pieces)
 
     pulled = pull_back_to_entity(RealScalar(1.0) * dx(ends))
 
@@ -1240,7 +1240,7 @@ def test_the_facets_of_a_mesh_of_two_cell_types_give_a_kernel_each(space):
 # which is also all UFLx ever holds, one cell type and a map out of it.
 
 
-def paraboloid_area_element(u: float, v: float) -> float:
+def _paraboloid_area_element(u: float, v: float) -> float:
     """sqrt(1 + |grad f|^2) for the graph of f(u, v) = u^2 + v^2."""
     return math.sqrt(1.0 + 4.0 * (u * u + v * v))
 
@@ -1279,11 +1279,11 @@ def test_a_triangle_laid_on_a_paraboloid_is_a_curved_patch(patch):
 
     assert patch.topological_dimension == 2
     assert patch.geometric_dimension == 3
-    assert measure_of(patch, point) == pytest.approx(paraboloid_area_element(0.2, 0.3))
+    assert _measure_of(patch, point) == pytest.approx(_paraboloid_area_element(0.2, 0.3))
 
     expected = [-0.4, -0.6, 1.0]
-    scale = paraboloid_area_element(0.2, 0.3)
-    assert normal_of(patch, point) == pytest.approx([c / scale for c in expected])
+    scale = _paraboloid_area_element(0.2, 0.3)
+    assert _normal_of(patch, point) == pytest.approx([c / scale for c in expected])
 
 
 @pytest.mark.parametrize("k", range(3))
@@ -1301,7 +1301,7 @@ def test_a_facet_of_a_curved_patch_is_a_curve_in_space(patch, k, s):
 
     assert facet.topological_dimension == 1
     assert facet.geometric_dimension == 3
-    assert measure_of(facet, point) == pytest.approx(facet_densities[k](s))
+    assert _measure_of(facet, point) == pytest.approx(facet_densities[k](s))
 
 
 def test_a_curved_facet_in_space_has_no_single_normal(patch):
@@ -1329,7 +1329,7 @@ def test_the_measure_of_a_curved_facet_integrates_to_its_arc_length(patch):
     facet = sub_entities_of(patch, 1).pieces[2]
 
     def density(s: float) -> float:
-        return measure_of(facet, Point([RealScalar(s)], entity_domain(Interval())))
+        return _measure_of(facet, Point([RealScalar(s)], entity_domain(Interval())))
 
     def simpson(intervals: int) -> float:
         h = 1.0 / intervals
@@ -1369,7 +1369,7 @@ def test_a_form_on_the_facets_of_a_curved_patch_pulls_back_per_facet(patch):
         assert isinstance(term, Integral)
         assert isinstance(piece, ComposedDomain)
         assert term.domain == EntityDomain(Interval())
-        quantities = quantities_in(term.integrand)
+        quantities = _quantities_in(term.integrand)
         assert quantities["VolumeElement"] == VolumeElement(piece, term.variable)
         assert quantities["JacobianInverse"] == JacobianInverse(
             patch,

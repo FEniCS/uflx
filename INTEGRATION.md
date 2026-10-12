@@ -439,5 +439,5 @@ it means there.
   integration on Riemannian manifolds and densities (ch. 16), which §1 and §4 restate.
 - J. M. Lee, *Introduction to Riemannian Manifolds*, 2nd ed., Graduate Texts in
   Mathematics 176, Springer, 2018. The unit normal and the second fundamental form of a
-  hypersurface (ch. 8, Riemannian submanifolds), of which `UnitNormal` is the first and
-  nothing yet is the second.
+  hypersurface, in the chapter on Riemannian submanifolds, of which `UnitNormal` is the
+  first and nothing yet is the second.

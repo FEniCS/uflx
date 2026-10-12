@@ -358,7 +358,11 @@ class Interface(AbstractParametrizedDomain):
     the domain itself, and is read at the integral's own point; every
     other side is read through the chart transition, a second side with
     the same image included, since that is the interface of a
-    mesh with itself and its two embeddings are two cells.
+    mesh with itself and its two embeddings are two cells. So an image
+    equal to the domain is how the identity embedding is written, and
+    ``interface(left, (("left", left), ("right", shifted)))`` says that
+    the integral is over the left edge and the left embedding is the
+    identity, which is a statement and not a repetition.
 
     Implements :class:`uflx.domains.MadeOfPieces`: an interface of unions
     of pieces, which the facets of a mesh are, is integrated over as the
