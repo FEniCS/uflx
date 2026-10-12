@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import functools
 import inspect
-import math
 import weakref
 from abc import ABCMeta
 from collections import deque
@@ -87,20 +86,20 @@ def _check_rebuilds(value: Any) -> None:
 
 
 def _interning_key(value: Any) -> Any:
-    """Key an argument so that only identical values share a key.
+    """Key an argument by what its fingerprint digests.
 
-    A value is already interned and keys as itself. A number keys with
-    its type and a float also with its sign. This keeps ``1`` apart from
-    ``1.0`` and ``0.0`` apart from ``-0.0``. Otherwise a value would
-    print and generate code as whichever was built first.
+    A value is already interned and keys as itself. Any other argument
+    keys as its type name and its repr, or its hash if it has no repr of
+    its own. Interning and hashing then always agree. Arguments that are
+    equal but print differently stay apart, such as ``1`` and ``1.0`` or
+    ``0.0`` and ``-0.0``. Otherwise a value would print and generate code
+    as whichever was built first, and its hash would depend on it too.
     """
-    if isinstance(value, tuple | list):
-        return (type(value), *(_interning_key(item) for item in value))
-    if isinstance(value, float):
-        return (type(value), value, math.copysign(1.0, value))
-    if isinstance(value, int | complex):
-        return (type(value), value)
-    return value
+    if isinstance(value, Immutable):
+        return value
+    if isinstance(value, tuple):
+        return ("tuple", *map(_interning_key, value))
+    return _leaf(value)
 
 
 _DERIVED = ("__eq__", "__ne__", "__hash__", "__repr__", "__str__", "successors", "fingerprint")
@@ -305,6 +304,16 @@ def fingerprint(value: Any) -> bytes:
         return value.fingerprint
     if isinstance(value, tuple):
         return digest("tuple", *map(fingerprint, value))
+    return digest(*_leaf(value))
+
+
+def _leaf(value: Any) -> tuple[str, str]:
+    """Describe an argument that is neither a value nor a tuple, as fingerprint and interning do.
+
+    Raises:
+        TypeError: If the argument is a list, a set or a mapping, or has
+            neither its own repr nor its own hash.
+    """
     cls = type(value)
     if isinstance(value, list):
         raise TypeError(
@@ -316,9 +325,9 @@ def fingerprint(value: Any) -> bytes:
             f"or between equal values. Store a tuple instead."
         )
     if cls.__repr__ is not object.__repr__:
-        return digest(_qualified_name(cls), repr(value))
+        return _qualified_name(cls), repr(value)
     if cls.__hash__ is not None and cls.__hash__ is not object.__hash__:
-        return digest(_qualified_name(cls), str(hash(value)))
+        return _qualified_name(cls), str(hash(value))
     raise TypeError(
         f"{_qualified_name(cls)} prints and hashes by its address, so it cannot be "
         f"digested the same way in every process. Give it a repr or a hash."

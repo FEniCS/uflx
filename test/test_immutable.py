@@ -1,12 +1,14 @@
 """Test that everything in a graph is built once, never changed and hashed once."""
 
 import copy
+import decimal
 import os
 import pickle
 import subprocess
 import sys
 import textwrap
 
+import numpy as np
 import pytest
 from conftest import LagrangeElement, Triangle
 
@@ -285,6 +287,22 @@ def test_numbers_that_print_differently_stay_apart(first, second):
     built = RealScalar(second)
     assert built is not kept
     assert repr(built) == f"RealScalar({second!r})"
+
+
+@pytest.mark.parametrize(
+    "first, second",
+    [
+        (decimal.Decimal("1.0"), decimal.Decimal("1.00")),
+        (np.int64(3), np.int32(3)),
+    ],
+    ids=["decimal", "numpy-widths"],
+)
+def test_arguments_that_print_differently_stay_apart(first, second):
+    """Guards against interning merging arguments that the hash tells apart."""
+    kept = _Holder(first)
+    built = _Holder(second)
+    assert built is not kept
+    assert repr(built) == f"_Holder({second!r})"
 
 
 def test_the_table_keeps_nothing_alive():
