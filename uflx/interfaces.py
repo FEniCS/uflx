@@ -55,6 +55,10 @@ Which pieces of the interface lie in one cell of each side is a union
 whose membership is external, as a mesh's cells are, and within a piece
 the map is smooth. That is where a supermesh lives, and the language
 says nothing about it.
+
+The words are Lee's, *Introduction to Smooth Manifolds*: embedding,
+image, transition map, coordinate representation. INTEGRATION.md's
+references say which chapter each is from.
 """
 
 from __future__ import annotations

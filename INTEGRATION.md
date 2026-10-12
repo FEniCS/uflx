@@ -2,7 +2,8 @@
 
 What integration means in UFLx, written against differential geometry rather than finite
 element usage. A design note: it argues for the model, where `LANGUAGE.md` states it.
-Arguments against the alternatives are in the notes at the end.
+Arguments against the alternatives are in the notes at the end, and the vocabulary is
+Lee's, cited there.
 
 ## 1. What an integral is
 
@@ -416,3 +417,27 @@ Acceptance criteria, as tests rather than prose to agree with.
    one that costs nothing, and making `dS` a measure kind hardcodes it into the
    vocabulary. That leaves no room for the non-matching case, which is the one that
    needs the language's help and which UFL cannot express at all.
+
+## References
+
+The vocabulary is taken from John M. Lee's two textbooks, so that a word here means what
+it means there.
+
+- J. M. Lee, *Introduction to Smooth Manifolds*, 2nd ed., Graduate Texts in Mathematics
+  218, Springer, 2012. Charts, atlases and transition maps (ch. 1), which an `Interface`
+  is two of with a transition between them; the *coordinate representation* of a smooth
+  map, `F̂ = ψ ∘ F ∘ φ⁻¹` (ch. 2), which `CoordinateRepresentation` is for the map of an
+  embedding; immersions and embeddings (ch. 4) and embedded submanifolds (ch. 5), which
+  an `Embedding` is taken to be on the user's word; restricting maps to submanifolds
+  (ch. 5), which is what `Restriction` is named for; outward-pointing vectors along a
+  boundary (ch. 5) and the boundary orientation they induce (ch. 15), which
+  `OutwardNormal` writes as a unit vector; pullbacks of covector fields and of forms
+  (ch. 11 and 14), which a value map is; Riemannian metrics and the metric a submanifold
+  inherits (ch. 13) and the Riemannian volume form (ch. 15), which `MetricTensor` and
+  `VolumeElement` are; and integration of forms, change of variables as the pullback of
+  a form, Stokes's theorem with the boundary carrying the induced orientation,
+  integration on Riemannian manifolds and densities (ch. 16), which §1 and §4 restate.
+- J. M. Lee, *Introduction to Riemannian Manifolds*, 2nd ed., Graduate Texts in
+  Mathematics 176, Springer, 2018. The unit normal and the second fundamental form of a
+  hypersurface (ch. 8, Riemannian submanifolds), of which `UnitNormal` is the first and
+  nothing yet is the second.
