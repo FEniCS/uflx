@@ -348,8 +348,8 @@ def _leaf(value: Any) -> tuple[str, str]:
     raise TypeError(
         f"{_qualified_name(cls)} cannot be an argument of a value. An argument is a UFLx "
         f"value, a tuple, None, a bool, int, float, complex or str, or an enum member. Convert "
-        f"anything else in the constructor, such as tuple(items), int(degree) or "
-        f"np.dtype(dtype).name."
+        f"anything else before calling the constructor, as a factory function does with "
+        f"tuple(items), int(degree) or np.dtype(dtype).name."
     )
 
 

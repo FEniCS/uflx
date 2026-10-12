@@ -109,7 +109,7 @@ class ReferenceToPhysical(AbstractPoint):
             for j in range(dim)
         ]
 
-        return Point(components)
+        return Point(tuple(components))
 
     @property
     def index(self) -> int | str:

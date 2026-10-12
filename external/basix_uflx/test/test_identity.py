@@ -8,7 +8,6 @@ import textwrap
 import basix
 import numpy as np
 import pytest
-import uflx
 from uflx.graphs.graphs import fingerprint
 
 import basix_uflx
@@ -58,21 +57,17 @@ def test_distinct_values_are_unequal():
 def test_quadrature_elements_are_equal_exactly():
     """Quadrature elements are compared exactly and not to a tolerance."""
     points, weights = basix.make_quadrature(basix.CellType.triangle, 2)
-    identity = uflx.maps.IdentityReferenceMap()
-    a = basix_uflx.QuadratureElement(basix.CellType.triangle, points, weights, identity)
-    b = basix_uflx.QuadratureElement(basix.CellType.triangle, points + 1e-15, weights, identity)
+    a = basix_uflx.quadrature_element("triangle", points=points, weights=weights)
+    b = basix_uflx.quadrature_element("triangle", points=points + 1e-15, weights=weights)
     assert np.allclose(points, points + 1e-15)
     assert a != b
-    assert a == basix_uflx.QuadratureElement(
-        basix.CellType.triangle, points.copy(), weights, identity
-    )
+    assert a == basix_uflx.quadrature_element("triangle", points=points.copy(), weights=weights)
 
 
 def test_quadrature_points_cannot_change():
     """Changing the input array does not change the element."""
     points, weights = basix.make_quadrature(basix.CellType.triangle, 2)
-    identity = uflx.maps.IdentityReferenceMap()
-    e = basix_uflx.QuadratureElement(basix.CellType.triangle, points, weights, identity)
+    e = basix_uflx.quadrature_element("triangle", points=points, weights=weights)
     before = hash(e)
     points[0, 0] = 1.0
     assert hash(e) == before

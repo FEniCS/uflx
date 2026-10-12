@@ -24,7 +24,7 @@ def test_reference_to_physical_shape(cell, gdim, lagrange_element):
     domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
 
-    point = ReferenceToPhysical(Point([RealScalar(0.1)] * tdim, is_reference=True), domain)
+    point = ReferenceToPhysical(Point((RealScalar(0.1),) * tdim, is_reference=True), domain)
     assert point.value_shape == (gdim,)
     assert point.dim == gdim
     assert point.expand_geometry().value_shape == (gdim,)
@@ -36,6 +36,6 @@ def test_physical_to_reference_shape(cell, gdim, lagrange_element):
     domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
 
-    point = PhysicalToReference(Point([RealScalar(0.1)] * gdim), domain)
+    point = PhysicalToReference(Point((RealScalar(0.1),) * gdim), domain)
     assert point.value_shape == (tdim,)
     assert point.dim == tdim

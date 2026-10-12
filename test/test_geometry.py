@@ -40,7 +40,7 @@ def test_jacobian_expand_geometry(cell, gdim, lagrange_element):
     domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
 
-    point = Point([RealScalar(1.0)] * tdim, is_reference=True)
+    point = Point((RealScalar(1.0),) * tdim, is_reference=True)
     j = Jacobian(domain, point)
     assert j.value_shape == (gdim, tdim)
 
@@ -54,7 +54,7 @@ def test_jacobian_inverse_expand_geometry(cell, gdim, lagrange_element):
     domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
 
-    point = Point([RealScalar(1.0)] * tdim, is_reference=True)
+    point = Point((RealScalar(1.0),) * tdim, is_reference=True)
     j = JacobianInverse(domain, point)
     assert j.value_shape == (tdim, gdim)
 
@@ -68,7 +68,7 @@ def test_jacobian_tranpose_expand_geometry(cell, gdim, lagrange_element):
     domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
 
-    point = Point([RealScalar(1.0)] * tdim, is_reference=True)
+    point = Point((RealScalar(1.0),) * tdim, is_reference=True)
     j = JacobianTranspose(domain, point)
     assert j.value_shape == (tdim, gdim)
 
@@ -82,7 +82,7 @@ def test_jacobian_inverse_transpose_expand_geometry(cell, gdim, lagrange_element
     domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
 
-    point = Point([RealScalar(1.0)] * tdim, is_reference=True)
+    point = Point((RealScalar(1.0),) * tdim, is_reference=True)
     j = JacobianInverseTranspose(domain, point)
     assert j.value_shape == (gdim, tdim)
 
@@ -96,7 +96,7 @@ def test_jacobian_derivatives_are_reference_derivatives(cell, gdim, lagrange_ele
     domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
 
-    point = Point([RealScalar(1.0)] * tdim, is_reference=True)
+    point = Point((RealScalar(1.0),) * tdim, is_reference=True)
     mat = Jacobian(domain, point).expand_geometry()
     derivatives = {
         node.derivative
@@ -120,7 +120,7 @@ def test_jacobian_coordinate_dofs(cell, gdim, lagrange_element):
     """Test that the Jacobian uses the coordinate DOFs of the map it differentiates."""
     domain = coordinate_element(lagrange_element(cell, 1, (gdim,)))
     tdim = domain.cells[0].topological_dimension
-    point = Point([RealScalar(0.1)] * tdim, is_reference=True)
+    point = Point((RealScalar(0.1),) * tdim, is_reference=True)
 
     x_dofs = coordinate_dof_entries(ReferenceToPhysical(point, domain).expand_geometry())
     assert len(x_dofs) > 0

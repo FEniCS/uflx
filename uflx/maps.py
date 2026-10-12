@@ -4,7 +4,6 @@ These maps are uses to map function values between reference cells and physical 
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Mapping, Sequence
 from typing import Protocol, runtime_checkable
 
 from uflx.algorithms import replace
@@ -103,12 +102,12 @@ class SymmetricReferenceMap(AbstractReferenceMap):
         self,
         component_map: AbstractReferenceMap,
         shape: tuple[int, ...],
-        symmetry_map: Mapping[tuple[int, ...], int] | Iterable[tuple[tuple[int, ...], int]],
+        symmetry_map: tuple[tuple[tuple[int, ...], int], ...],
     ):
         """Initialise."""
         self._component_map = component_map
         self._shape = shape
-        self._symmetry_map = tuple(sorted(dict(symmetry_map).items()))
+        self._symmetry_map = symmetry_map
 
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
         """Map function values from a reference cell to a physical cell."""
@@ -135,12 +134,12 @@ class MixedReferenceMap(AbstractReferenceMap):
 
     def __init__(
         self,
-        sub_maps: Sequence[AbstractReferenceMap],
-        shapes: Sequence[tuple[int, ...]],
+        sub_maps: tuple[AbstractReferenceMap, ...],
+        shapes: tuple[tuple[int, ...], ...],
     ):
         """Initialise."""
-        self._sub_maps = tuple(sub_maps)
-        self._shapes = tuple(shapes)
+        self._sub_maps = sub_maps
+        self._shapes = shapes
 
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
         """Map function values from a reference cell to a physical cell."""

@@ -1,7 +1,6 @@
 """Sets of points."""
 
 from abc import abstractmethod
-from collections.abc import Sequence
 from typing import Any
 
 from uflx.domains import RD, AbstractDomain
@@ -35,9 +34,9 @@ class AbstractPoint(AbstractVariable):
 class Point(AbstractPoint):
     """A single point in R^d."""
 
-    def __init__(self, components: Sequence[AbstractExpression], is_reference: bool = False):
+    def __init__(self, components: tuple[AbstractExpression, ...], is_reference: bool = False):
         """Initialise."""
-        self._components = tuple(components)
+        self._components = components
         self._is_reference = is_reference
 
     @property

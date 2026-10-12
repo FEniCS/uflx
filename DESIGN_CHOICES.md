@@ -47,8 +47,8 @@ graph is behind it. `uflx.graphs.describe` takes a depth for when more is wanted
 signature. A read-only property exposes one that should be public. A class with no
 constructor of its own has no arguments. Four rules follow.
 
-- Store an argument in the form it should be compared in, such as a tuple rather than a
-  list. Then `type(v)(*v.init_args)` rebuilds `v`, which `reconstruct_node` relies on.
+- A constructor takes each argument in the form it stores it, such as a tuple rather than
+  a list. Then `type(v)(*v.init_args)` rebuilds `v`, which `reconstruct_node` relies on.
 - Store every argument. Two values with equal `init_args` are the same value, so
   anything left out is lost.
 - Store only UFLx values, tuples, `None`, `bool`, `int`, `float`, `complex`, `str` and
@@ -56,10 +56,11 @@ constructor of its own has no arguments. Four rules follow.
   print the same in every process however they were built, and a hash is a digest of
   what they print, so MPI ranks agree on it whatever their hash seeds. The type is
   matched exactly, so a numpy scalar is refused too.
-- Convert anything else in the constructor. A sequence such as several labels is stored
-  as `tuple(items)`, a numpy integer as `int(n)`, a dtype as `np.dtype(dtype).name`, and
-  an array as nested tuples of its entries. A tolerance is not transitive, so it cannot
-  decide which values are equal, and an array is compared exactly.
+- Convert anything else in the factory function, never in the constructor. A sequence
+  such as several labels is passed as `tuple(items)`, a numpy integer as `int(n)`, a dtype
+  as `np.dtype(dtype).name`, and an array as nested tuples of its entries. A tolerance is
+  not transitive, so it cannot decide which values are equal, and an array is compared
+  exactly.
 
 A derived value, such as a lookup table built from an argument, goes under a name of its
 own. A constructor that takes `*args`, `**kwargs` or keyword-only arguments cannot be

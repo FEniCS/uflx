@@ -68,7 +68,7 @@ class CoordinateElement(AbstractCoordinateElement):
 
     def __init__(self, elements: tuple[AbstractReferenceMappedFiniteElement, ...]):
         """Initialise."""
-        self._elements = tuple(elements)
+        self._elements = elements
         self._element_of_cell = {e.cell: e for e in elements}
         (self._gdim,) = elements[0].reference_value_shape
         for e in elements[1:]:

@@ -72,13 +72,6 @@ class BasixCell(uflx.entities.AbstractEntity):
         return [c[0] for c in basix.cell.sub_entity_connectivity(self._basix_cell)[dim]]
 
 
-def _as_tuples(data: Any) -> Any:
-    """Convert nested lists to nested tuples so they can be hashed."""
-    if isinstance(data, list):
-        return tuple(_as_tuples(i) for i in data)
-    return data
-
-
 ArrayData = tuple[tuple[int, ...], tuple[float, ...]]
 
 
@@ -228,19 +221,19 @@ class QuadratureElement(AbstractFiniteElement):
     def __init__(
         self,
         cell: basix.CellType,
-        points: npt.NDArray[np.floating],
-        weights: npt.NDArray[np.floating],
+        points: tuple[tuple[float, ...], ...],
+        weights: tuple[float, ...],
         reference_map: uflx.maps.AbstractReferenceMap,
-        degree: int | None = None,
-        dtype: npt.DTypeLike = np.float64,
+        degree: int,
+        dtype: str,
     ):
         """Initialise the element."""
-        self._points = _as_tuples(np.asarray(points, dtype=dtype).tolist())
-        self._weights = _as_tuples(np.asarray(weights, dtype=dtype).tolist())
         self._cell = cell
+        self._points = points
+        self._weights = weights
         self._reference_map = reference_map
-        self._degree = len(self._points) if degree is None else degree
-        self._dtype = np.dtype(dtype).name
+        self._degree = degree
+        self._dtype = dtype
 
     @property
     def cell(self) -> uflx.entities.AbstractEntity:
@@ -285,7 +278,7 @@ class RealElement(AbstractFiniteElement):
     def __init__(self, cell: basix.CellType, value_shape: tuple[int, ...]):
         """Initialise the element."""
         self._cell = cell
-        self._value_shape = tuple(value_shape)
+        self._value_shape = value_shape
 
     @property
     def cell(self) -> uflx.entities.AbstractEntity:
@@ -488,7 +481,7 @@ def mixed_element(elements: Sequence[AbstractFiniteElement]) -> AbstractFiniteEl
     Returns:
         A mixed finite element.
     """
-    return MixedElement(list(elements))
+    return MixedElement(tuple(elements))
 
 
 def quadrature_element(
@@ -546,8 +539,14 @@ def quadrature_element(
     assert points is not None
     assert weights is not None
 
+    points = np.asarray(points, dtype=dtype)
     e = QuadratureElement(
-        cell, np.asarray(points), np.asarray(weights), reference_map, degree, dtype=dtype
+        cell,
+        tuple(map(tuple, points.tolist())),
+        tuple(np.asarray(weights, dtype=dtype).tolist()),
+        reference_map,
+        len(points) if degree is None else degree,
+        np.dtype(dtype).name,
     )
     if tuple(value_shape) == ():
         if symmetry is not None:
