@@ -9,12 +9,12 @@ from uflx.expressions import ComplexScalar, Integer, RealScalar, to_scalar
 
 def test_real_part():
     """Test taking real part."""
-    assert take_real_part(ComplexScalar(Integer(4), Integer(6))) == 4
+    assert take_real_part(ComplexScalar(Integer(4), Integer(6))) == Integer(4)
 
 
 def test_imaginary_part():
     """Test taking imaginary part."""
-    assert take_imaginary_part(ComplexScalar(Integer(4), Integer(6))) == 6
+    assert take_imaginary_part(ComplexScalar(Integer(4), Integer(6))) == Integer(6)
 
 
 def test_complex_scalar_add():

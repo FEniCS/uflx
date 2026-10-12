@@ -27,7 +27,8 @@ class Immutable:
 
     A value's identity is its class and its ``init_args``. A class that
     defines ``init_args`` gets its equality, hash and repr from here. A
-    class whose identity is something else writes its own and says why.
+    class should avoid defining ``__eq__`` or ``__hash__`` itself. Any
+    other identity is one that rebuilding a node can silently change.
     """
 
     _hash: int
@@ -104,10 +105,7 @@ def _arguments_of(value: Any) -> tuple[Any, ...]:
     try:
         return value.init_args
     except AttributeError:
-        raise TypeError(
-            f"{type(value).__name__} has no init_args. Define init_args, or write "
-            f"__eq__ and __hash__."
-        ) from None
+        raise TypeError(f"{type(value).__name__} has no init_args. Define init_args.") from None
 
 
 def _freezing(init: Callable[..., None]) -> Callable[..., None]:

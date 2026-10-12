@@ -67,17 +67,6 @@ class AbstractIntegral(Immutable, ABC):
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
 
-    # The dummy variable is bound, so the integral's identity ignores it.
-    def __eq__(self, other):
-        """Check for equality."""
-        if isinstance(other, AbstractIntegral):
-            return self.integrand == other.integrand and self.measure == other.measure
-        return NotImplemented
-
-    def __hash__(self):
-        """Hash."""
-        return hash((hash(self.integrand), hash(self.measure)))
-
     @property
     @abstractmethod
     def variable(self) -> AbstractVariable:

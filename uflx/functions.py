@@ -68,18 +68,9 @@ class Variable(AbstractVariable):
         """The domain that this variable is in."""
         return self._domain
 
-    # A variable is its label, so it stays equal when pulled back onto another domain.
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return isinstance(other, Variable) and other.label == self.label
-
     def __repr__(self) -> str:
         """Representation."""
         return f"Variable({self._label})"
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.Variable", self._label))
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -132,24 +123,12 @@ class FiniteElementVariable(AbstractVariable):
         """The domain that this variable is in."""
         return self._domain
 
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return (
-            isinstance(other, FiniteElementVariable)
-            and other.label == self.label
-            and other.is_reference == self.is_reference
-        )
-
     def __repr__(self) -> str:
         """Representation."""
         if self._reference:
             return f"FiniteElementVariable({self._label}, reference=True)"
         else:
             return f"FiniteElementVariable({self._label})"
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.FiniteElementVariable", self._label, self._reference))
 
     @property
     def is_reference(self) -> bool:

@@ -355,17 +355,6 @@ class Integer(AbstractInteger):
         if isinstance(other, Integer):
             return Integer(self.value + other.value)
 
-    # An Integer equals a plain number, so it defines its own identity.
-    def __eq__(self, other):
-        """Check for equality."""
-        if isinstance(other, Integer):
-            return self.value == other.value
-        return self.value == other
-
-    def __hash__(self):
-        """Hash."""
-        return hash(("uflx.Integer", self.value))
-
     def __repr__(self):
         """Representation."""
         return f"{self.value}"
@@ -447,17 +436,6 @@ class Rational(AbstractScalar):
             return Integer(numerator)
         else:
             return Rational(numerator, denominator)
-
-    # Defines its own identity to match Integer.
-    def __eq__(self, other):
-        """Check for equality."""
-        if isinstance(other, Rational):
-            return self.numerator == other.numerator and self.denominator == other.denominator
-        return False
-
-    def __hash__(self):
-        """Hash."""
-        return hash(("uflx.Rational", self.numerator, self.denominator))
 
     def __repr__(self):
         """Representation."""
@@ -917,11 +895,11 @@ class ScalarMult(BinaryOperator):
 
 
 class Div(BinaryOperator):
-    """Scalar multiplication operator."""
+    """Scalar division operator."""
 
     def __init__(self, first: AbstractExpression, second: AbstractExpression):
         """Initialise."""
-        if second == 0:
+        if isinstance(second, (Integer, RealScalar)) and second.value == 0:
             raise ZeroDivisionError()
         super().__init__(first, second)
 

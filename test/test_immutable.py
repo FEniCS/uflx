@@ -69,12 +69,12 @@ def test_a_value_that_says_what_it_was_built_from_needs_no_equality_of_its_own()
 
 
 def test_a_value_that_says_nothing_of_itself_has_no_identity():
-    """A class with neither init_args nor its own equality fails at its first hash."""
+    """A class without init_args fails at its first hash."""
 
     class Mute(Immutable):
         pass
 
-    with pytest.raises(TypeError, match="Define init_args, or write"):
+    with pytest.raises(TypeError, match="Define init_args"):
         hash(Mute())
     with pytest.raises(TypeError, match="init_args"):
         Mute() == Mute()
@@ -102,3 +102,24 @@ def test_a_value_prints_as_what_it_was_built_from():
     assert repr(RD(2)) == "RD(2)"
     assert repr(IdentityReferenceMap()) == "IdentityReferenceMap()"
     assert repr(IdentityReferenceMap()) == repr(IdentityReferenceMap())
+
+
+def test_no_class_in_uflx_defines_its_own_identity():
+    """Every value in UFLx is identified by its init_args alone."""
+    import importlib
+    import pkgutil
+
+    import uflx
+
+    for module in pkgutil.walk_packages(uflx.__path__, "uflx."):
+        importlib.import_module(module.name)
+
+    def subclasses(cls):
+        for sub in cls.__subclasses__():
+            yield sub
+            yield from subclasses(sub)
+
+    for cls in subclasses(Immutable):
+        if cls.__module__.startswith("uflx."):
+            assert "__eq__" not in vars(cls), cls
+            assert "__hash__" not in vars(cls), cls
