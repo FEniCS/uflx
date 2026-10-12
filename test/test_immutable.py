@@ -303,17 +303,26 @@ def test_a_copy_is_the_value_itself(duplicate):
     assert duplicate(value) is value
 
 
-def test_a_shared_node_prints_once_then_by_its_label(capsys):
-    """Guards against printing a node again under every parent it has."""
+def test_a_printout_matches_each_argument_to_its_line(capsys):
+    """Guards against a shortened or shared argument that cannot be found among the lines below.
+
+    It also guards against a node printing again under every parent it
+    has, and against arguments printing out of order.
+    """
     from uflx.geometry import SpatialCoordinate
     from uflx.graphs import as_graph
 
     a = SpatialCoordinate(2).component(0)
     as_graph(a / a - a).print()
-    lines = capsys.readouterr().out.splitlines()
-    assert len(lines) == 7
-    assert sum(line.endswith("[1] SingleSpatialCoordinate(2, 0)") for line in lines) == 1
-    assert sum(line.endswith("── [1]") for line in lines) == 2
+    assert capsys.readouterr().out == textwrap.dedent("""\
+        Sum((Product[1](...), Neg[4](...)))
+        ├── [1] Product((SingleSpatialCoordinate[2](2, 0), Reciprocal[3](...)))
+        │   ├── [2] SingleSpatialCoordinate(2, 0)
+        │   └── [3] Reciprocal(SingleSpatialCoordinate[2](2, 0))
+        │       └── [2]
+        └── [4] Neg(SingleSpatialCoordinate[2](2, 0))
+            └── [2]
+    """)
 
 
 def test_a_deeply_shared_graph_prints_one_line_per_edge(capsys):

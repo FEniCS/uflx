@@ -6,7 +6,7 @@ import functools
 import inspect
 import weakref
 from abc import ABCMeta
-from collections import deque
+from collections import Counter, deque
 from collections.abc import Callable, Hashable, Iterable
 from enum import Enum
 from hashlib import blake2b
@@ -368,24 +368,32 @@ def describe(value: Immutable, depth: int = 1) -> str:
         The class name and arguments, such as
         ``Product((Coefficient(...), TestFunction(...)))``.
     """
+    return _describe(value, depth, {})
+
+
+def _describe(value: Any, depth: int, labels: dict[Any, int]) -> str:
+    """Print a value for :func:`describe`, with an argument's label after its class name."""
     try:
         arguments = value.init_args
     except TypeError:
         return object.__repr__(value)
     if depth <= 0 and not _has_plain_arguments(arguments):
         return f"{type(value).__name__}(...)"
-    return (
-        f"{type(value).__name__}({', '.join(_describe_argument(a, depth - 1) for a in arguments)})"
-    )
+    described = ", ".join(_describe_argument(a, depth - 1, labels) for a in arguments)
+    return f"{type(value).__name__}({described})"
 
 
-def _describe_argument(value: Any, depth: int) -> str:
+def _describe_argument(value: Any, depth: int, labels: dict[Any, int]) -> str:
     """Print one argument of a value for :func:`describe`."""
     if isinstance(value, tuple):
-        items = [_describe_argument(i, depth) for i in value]
+        items = [_describe_argument(i, depth, labels) for i in value]
         return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
     if isinstance(value, Immutable):
-        return describe(value, depth)
+        described = _describe(value, depth, labels)
+        if value in labels:
+            name = type(value).__name__
+            return f"{name}[{labels[value]}]{described[len(name) :]}"
+        return described
     return repr(value)
 
 
@@ -442,33 +450,53 @@ class NodeOrder(Enum):
 def print_node(graph: Graph, node: GraphNode, indentation: int = 0):
     """Print a graph using the node as the root node.
 
-    A node with several parents prints in full the first time with a
-    label such as ``[1]``, and as its label alone after that. The output
-    is one line per edge however much the graph shares.
+    Each line is a value and the lines below it are its arguments in
+    order. A value gets a number such as ``[3]`` when a line above
+    shortens it to ``Name[3](...)`` or when it has several parents.
+    Every argument with a number shows it. A value with several parents
+    prints in full the first time and as its number alone after that.
+    The output is one line per edge however much the graph shares.
     """
-    reachable = graph.descendants(node)
-    shared = {n for n in reachable if sum(p in reachable for p in graph.predecessors(n)) > 1}
-    labels: dict[GraphNode, str] = {}
+    walk = list(_walk_arguments(node))
+    visits = Counter(value for value, _, _ in walk)
+    labels: dict[Any, int] = {}
+    for value, _, _ in walk:
+        if value not in labels and (visits[value] > 1 or not _has_plain_arguments(value.init_args)):
+            labels[value] = len(labels) + 1
     indent = "    " * indentation
-    print(indent + repr(node))
-    unprinted = [(child, indent, False) for child in reversed(list(graph.successors(node)))]
-    if unprinted:
-        unprinted[0] = (unprinted[0][0], indent, True)
-    while unprinted:
-        child, prefix, is_last = unprinted.pop()
-        connector = "└── " if is_last else "├── "
-        if child in labels:
-            print(prefix + connector + labels[child])
+    print(indent + _describe(node, 1, labels))
+    printed = set()
+    for value, prefix, is_last in walk:
+        line = indent + prefix + ("└── " if is_last else "├── ")
+        label = f"[{labels[value]}]" if value in labels else ""
+        if value in printed:
+            print(line + label)
             continue
-        if child in shared:
-            labels[child] = f"[{len(labels) + 1}]"
-            print(f"{prefix}{connector}{labels[child]} {child!r}")
-        else:
-            print(prefix + connector + repr(child))
-        extension = prefix + ("    " if is_last else "│   ")
-        children = list(graph.successors(child))
-        for i, grandchild in reversed(list(enumerate(children))):
-            unprinted.append((grandchild, extension, i == len(children) - 1))
+        printed.add(value)
+        described = _describe(value, 1, labels)
+        print(line + (f"{label} {described}" if label else described))
+
+
+def _walk_arguments(node: GraphNode) -> Iterable[tuple[Any, str, bool]]:
+    """Walk the values among a node's arguments depth first, in argument order.
+
+    Yields each value with the prefix and whether it is the last
+    argument of its parent. The arguments of a value are walked the
+    first time it is reached only.
+    """
+    expanded = set()
+    unwalked = [(node, "", True)]
+    while unwalked:
+        value, prefix, is_last = unwalked.pop()
+        if value is not node:
+            yield value, prefix, is_last
+        if value in expanded:
+            continue
+        expanded.add(value)
+        extension = "" if value is node else prefix + ("    " if is_last else "│   ")
+        arguments = list(dict.fromkeys(_values_in(value.init_args)))
+        for i, argument in reversed(list(enumerate(arguments))):
+            unwalked.append((argument, extension, i == len(arguments) - 1))
 
 
 @runtime_checkable
