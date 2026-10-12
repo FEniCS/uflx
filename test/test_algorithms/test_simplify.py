@@ -1,5 +1,9 @@
 """Test forms."""
 
+import os
+import subprocess
+import sys
+
 import pytest
 
 from uflx import (
@@ -12,6 +16,7 @@ from uflx import (
     inner,
 )
 from uflx.algorithms import simplify
+from uflx.algorithms.simplify import digest
 from uflx.expressions import MatrixProduct, Product
 from uflx.geometry import Jacobian, JacobianInverse, JacobianInverseTranspose, JacobianTranspose
 from uflx.integrals import Integral
@@ -226,3 +231,37 @@ def test_commutative_operands_are_sorted(lagrange_element):
 
     assert u * f + g != g + f * u
     assert simplify(u * f + g) == simplify(g + f * u)
+
+
+def test_a_fingerprint_is_the_same_in_every_process():
+    """What the digest is for: ordering that does not depend on the hash seed.
+
+    Python salts the hashes of strings per process, so two processes
+    with different seeds disagree on ``hash``. The fingerprint of an
+    expression must not, or two MPI ranks would sort the operands of a
+    sum differently.
+    """
+    script = (
+        "from uflx.algorithms.simplify import Fingerprints\n"
+        "from uflx.expressions import RealScalar\n"
+        "print(Fingerprints()(RealScalar(1.0) * RealScalar(2.0) + RealScalar(3.0)).hex())"
+    )
+    printed = {
+        seed: subprocess.run(
+            [sys.executable, "-c", script],
+            env={**os.environ, "PYTHONHASHSEED": seed},
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        for seed in ("1", "2")
+    }
+    assert printed["1"] == printed["2"]
+    assert len(printed["1"]) == 16
+
+
+def test_the_digest_is_eight_bytes_and_unambiguous():
+    """Sized for ordering and not for an adversary, with parts that cannot run together."""
+    assert len(digest("a")) == 8
+    assert digest("ab", "c") != digest("a", "bc")
+    assert digest("a", "") != digest("a")
