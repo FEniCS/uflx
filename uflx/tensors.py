@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, TypeAlias, cast
+from typing import TypeAlias, cast
 
 from uflx.expressions import AbstractExpression, RealScalar, Sqrt, expression_sum
 from uflx.graphs import GraphNode
@@ -53,11 +53,6 @@ class FlattenedTensorMap(AbstractExpression):
         """The successors of this node."""
         return set()
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._indices, self._trailing_shape
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise ValueError("Cannot get a component of a scalar expression")
@@ -101,11 +96,6 @@ class Tensor(AbstractExpression):
             return set().union(*[extract_successors(i) for i in items])
 
         return extract_successors(self._entries)
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._entries,)
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -328,7 +318,12 @@ class Identity(AbstractExpression):
 
     def __init__(self, size: int):
         """Initialise."""
-        self.size = size
+        self._size = size
+
+    @property
+    def size(self) -> int:
+        """The size."""
+        return self._size
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -339,11 +334,6 @@ class Identity(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self.size,)
 
     def __repr__(self) -> str:
         """Representation."""

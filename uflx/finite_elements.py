@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from math import prod
-from typing import Any
 
 from uflx.entities import AbstractEntity
 from uflx.graphs.graphs import Immutable
@@ -69,16 +68,6 @@ class AbstractFiniteElement(Immutable, ABC):
     @abstractmethod
     def dim(self) -> int:
         """The dimension of the finite element, ie the number of basis functions."""
-
-    @property
-    @abstractmethod
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object.
-
-        These are the constructor's arguments, so the element can be
-        rebuilt from them. Two elements built from equal arguments are
-        equal.
-        """
 
 
 class AbstractReferenceMappedFiniteElement(AbstractFiniteElement):

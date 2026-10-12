@@ -3,7 +3,6 @@
 from abc import abstractmethod
 from collections.abc import Sequence
 from enum import Enum
-from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -87,11 +86,6 @@ class MixedElement(AbstractFiniteElement):
                     "Cannot create mixed element where sub-elements are defined on different cells."
                 )
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._sub_elements,)
-
     def __repr__(self) -> str:
         """Representation."""
         return "MixedElement(" + ", ".join(f"{i!r}" for i in self._sub_elements) + ")"
@@ -173,7 +167,7 @@ class BlockedElement(AbstractFiniteElement):
 
     """
 
-    _block_shape: tuple[int, ...]
+    _shape: tuple[int, ...]
     _sub_element: AbstractFiniteElement
     _block_size: int
     _has_symmetry: bool
@@ -209,7 +203,7 @@ class BlockedElement(AbstractFiniteElement):
 
         self._sub_element = sub_element
         self._block_size = block_size
-        self._block_shape = tuple(shape)
+        self._shape = tuple(shape)
 
         if symmetry:
             n = 0
@@ -230,11 +224,6 @@ class BlockedElement(AbstractFiniteElement):
         self._ordering = ordering
 
     @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._sub_element, self._block_shape, self._symmetry, self._ordering)
-
-    @property
     def sub_element(self):
         """Get the scalar sub-element."""
         return self._sub_element
@@ -246,7 +235,7 @@ class BlockedElement(AbstractFiniteElement):
 
     def __repr__(self) -> str:
         """Representation."""
-        repr = f"BlockedElement({self._sub_element!r}, {self._block_shape}"
+        repr = f"BlockedElement({self._sub_element!r}, {self._shape}"
         if self._symmetry is not None:
             repr += f", symmetry={self._symmetry}"
         repr += ")"
@@ -286,12 +275,12 @@ class BlockedElement(AbstractFiniteElement):
     @property
     def reference_map(self) -> AbstractReferenceMap:
         """Get the push forward and pull back map."""
-        return BlockedReferenceMap(self._sub_element.reference_map, self._block_shape)
+        return BlockedReferenceMap(self._sub_element.reference_map, self._shape)
 
     @property
     def reference_value_shape(self) -> tuple[int, ...]:
         """Return the value size of the value space on the reference cell."""
-        return self._block_shape
+        return self._shape
 
     def tabulate(self, derivatives: int, points: npt.ArrayLike) -> npt.NDArray:
         """Create table of basis function values and derivatives.

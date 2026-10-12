@@ -68,6 +68,7 @@ class Point(AbstractPoint):
         """The successors of this node."""
         return set(self._components)
 
+    # Leaves out is_reference until #100 lands.
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
@@ -109,8 +110,3 @@ class PointComponent(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return {self._point}
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._point, self._component

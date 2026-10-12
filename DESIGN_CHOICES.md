@@ -25,8 +25,8 @@ A **mixin** is inherited and supplies a rule that holds of every value. There is
 `AbstractDomain`, `AbstractReferenceMap`, `AbstractMeasure`, `AbstractIntegral`), so a
 consumer's cell or element inherits it too. It says that a value is built once and never
 changed, and that its hash is computed once and kept. It also says that a value's identity
-is its class and its `init_args`. A class that defines `init_args` gets `__eq__`,
-`__hash__` and `__repr__` from the mixin. A new mixin is for a rule of that kind, one
+is its class and its `init_args`, and it supplies `__eq__`, `__hash__`, `__repr__` and
+`init_args` itself. A new mixin is for a rule of that kind, one
 that holds of everything. Code shared between a few classes is a function.
 
 Avoid defining `__eq__` or `__hash__` on a class at all costs. An identity other than the
@@ -34,18 +34,23 @@ arguments is one that rebuilding a node can silently change, and equality that r
 outside the class breaks hashing. A class that seems to need one is usually missing an
 argument or keeping one it should not.
 
-A value's `init_args` must follow three rules.
+`init_args` is read back from the constructor. Each argument `name` is stored as
+`self._name`, and the mixin reads those attributes in the order of the constructor's
+signature. A read-only property exposes one that should be public. A class with no
+constructor of its own has no arguments. Three rules follow.
 
-- They are the constructor's arguments, so `type(v)(*v.init_args)` rebuilds `v`. This is
-  what `reconstruct_node` relies on.
-- They are complete. Two values with equal `init_args` are the same value, so anything
-  left out is lost.
-- They are hashable and compared exactly, all the way down. A tolerance is not
+- Store an argument in the form it should be compared in, such as a tuple rather than a
+  list. Then `type(v)(*v.init_args)` rebuilds `v`, which `reconstruct_node` relies on.
+- Store every argument. Two values with equal `init_args` are the same value, so
+  anything left out is lost.
+- Store only what is hashable and compared exactly, all the way down. A tolerance is not
   transitive, so it cannot decide which values are equal. An array is kept as nested
   tuples of its entries.
 
-An entity or element defines `init_args` like any other value. A consumer's cell or
-element then gets equality, hashing and rebuilding without writing them.
+A derived value, such as a lookup table built from an argument, goes under a name of its
+own. A constructor that takes `*args`, `**kwargs` or keyword-only arguments cannot be
+called with a tuple, so its class defines `init_args` itself. So does a class that stores
+an argument in a way the rules above do not cover, and it says why in a comment.
 
 A **protocol** names a question a node can be asked, and is never inherited. It is a
 `runtime_checkable` `Protocol`, so a node implements it by having the attribute and an

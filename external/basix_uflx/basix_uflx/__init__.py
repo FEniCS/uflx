@@ -41,11 +41,6 @@ class BasixCell(uflx.entities.AbstractEntity):
         self._basix_cell = basix_cell
 
     @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._basix_cell,)
-
-    @property
     def topological_dimension(self) -> int:
         """Topological dimension of the entity."""
         return len(basix.cell.topology(self._basix_cell)) - 1
@@ -119,11 +114,6 @@ class BasixElement(AbstractFiniteElement):
         """Initialise."""
         self._element = element
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._element,)
-
     def __repr__(self) -> str:
         if self._element.family == basix.ElementFamily.custom:
             return (
@@ -192,26 +182,14 @@ class QuadratureElement(AbstractFiniteElement):
         """Initialise the element."""
         self._points = _as_tuples(np.asarray(points, dtype=dtype).tolist())
         self._weights = _as_tuples(np.asarray(weights, dtype=dtype).tolist())
-        self._cell_type = cell
+        self._cell = cell
         self._reference_map = reference_map
         self._degree = len(self._points) if degree is None else degree
         self._dtype = np.dtype(dtype)
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (
-            self._cell_type,
-            self._points,
-            self._weights,
-            self._reference_map,
-            self._degree,
-            self._dtype,
-        )
-
     def __repr__(self) -> str:
         return (
-            f"QuadratureElement({self._cell_type.name}, {hash_data(self._points)}, "
+            f"QuadratureElement({self._cell.name}, {hash_data(self._points)}, "
             f"{hash_data(self._weights)}, {self._reference_map!r})"
         )
 
@@ -220,7 +198,7 @@ class QuadratureElement(AbstractFiniteElement):
 
     @property
     def cell(self) -> uflx.entities.AbstractEntity:
-        return BasixCell(self._cell_type)
+        return BasixCell(self._cell)
 
     @property
     def real_valued(self) -> bool:
@@ -260,23 +238,18 @@ class RealElement(AbstractFiniteElement):
 
     def __init__(self, cell: basix.CellType, value_shape: tuple[int, ...]):
         """Initialise the element."""
-        self._cell_type = cell
+        self._cell = cell
         self._value_shape = tuple(value_shape)
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._cell_type, self._value_shape)
-
     def __repr__(self) -> str:
-        return f"RealElement({self._cell_type.name}, {self._value_shape})"
+        return f"RealElement({self._cell.name}, {self._value_shape})"
 
     def __str__(self):
         return f"{self!r}"
 
     @property
     def cell(self) -> uflx.entities.AbstractEntity:
-        return BasixCell(self._cell_type)
+        return BasixCell(self._cell)
 
     @property
     def real_valued(self) -> bool:

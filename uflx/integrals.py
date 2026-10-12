@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from itertools import count
-from typing import Any, cast
+from typing import cast
 
 from uflx.algorithms import replace
 from uflx.domains import AbstractCoordinateElement
@@ -38,11 +38,6 @@ class AbstractMeasure(Immutable, ABC):
         """The successors of this node."""
         return set()
 
-    @property
-    @abstractmethod
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-
 
 class AbstractIntegral(Immutable, ABC):
     """Abstract base class for an integral."""
@@ -61,11 +56,6 @@ class AbstractIntegral(Immutable, ABC):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return {self.integrand, self.measure}
-
-    @property
-    @abstractmethod
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
 
     @property
     @abstractmethod
@@ -127,11 +117,6 @@ class Integral(AbstractIntegral):
         """The graph that represents this object."""
         return self._graph
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._integrand, self._measure, self._variable
-
     def pull_back_to_reference(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
         """Pull the node back to the reference cell."""
         integrand = node_map.get(self._integrand, self._integrand)
@@ -165,11 +150,6 @@ class Measure(AbstractMeasure):
         self._dim = dim
         self._codim = codim
         self._boundary_only = boundary_only
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._dim, self._codim, self._boundary_only
 
     def __repr__(self) -> str:
         """Representation."""

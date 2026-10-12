@@ -4,7 +4,8 @@ These maps are uses to map function values between reference cells and physical 
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Protocol, runtime_checkable
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Protocol, runtime_checkable
 
 from uflx.algorithms import replace
 from uflx.expressions import AbstractExpression
@@ -43,11 +44,6 @@ class AbstractReferenceMap(Immutable, ABC):
 class IdentityReferenceMap(AbstractReferenceMap):
     """Identity map."""
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return ()
-
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
         """Map function values from a reference cell to a physical cell."""
         return function
@@ -80,11 +76,6 @@ class BlockedReferenceMap(AbstractReferenceMap):
         self._component_map = component_map
         self._shape = shape
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._component_map, self._shape)
-
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
         """Map function values from a reference cell to a physical cell."""
         return function  # TODO
@@ -112,17 +103,12 @@ class SymmetricReferenceMap(AbstractReferenceMap):
         self,
         component_map: AbstractReferenceMap,
         shape: tuple[int, ...],
-        symmetry_map: dict[tuple[int, ...], int],
+        symmetry_map: Mapping[tuple[int, ...], int] | Iterable[tuple[tuple[int, ...], int]],
     ):
         """Initialise."""
         self._component_map = component_map
         self._shape = shape
-        self._symmetry_map = symmetry_map
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._component_map, self._shape, tuple(sorted(self._symmetry_map.items())))
+        self._symmetry_map = tuple(sorted(dict(symmetry_map).items()))
 
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
         """Map function values from a reference cell to a physical cell."""
@@ -149,17 +135,12 @@ class MixedReferenceMap(AbstractReferenceMap):
 
     def __init__(
         self,
-        sub_maps: list[AbstractReferenceMap],
-        shapes: list[tuple[int, ...]],
+        sub_maps: Sequence[AbstractReferenceMap],
+        shapes: Sequence[tuple[int, ...]],
     ):
         """Initialise."""
-        self._sub_maps = sub_maps
-        self._shapes = shapes
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (tuple(self._sub_maps), tuple(self._shapes))
+        self._sub_maps = tuple(sub_maps)
+        self._shapes = tuple(shapes)
 
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
         """Map function values from a reference cell to a physical cell."""
@@ -205,8 +186,18 @@ class PushedForward(AbstractExpression):
 
     def __init__(self, reference_map: AbstractReferenceMap, function: AbstractExpression):
         """Initialise."""
-        self.reference_map = reference_map
-        self.function = function
+        self._reference_map = reference_map
+        self._function = function
+
+    @property
+    def reference_map(self) -> AbstractReferenceMap:
+        """The reference map."""
+        return self._reference_map
+
+    @property
+    def function(self) -> AbstractExpression:
+        """The function."""
+        return self._function
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -222,11 +213,6 @@ class PushedForward(AbstractExpression):
         """The successors of this node."""
         return {self.function}
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.reference_map, self.function
-
     def apply_push_forward(self) -> AbstractExpression:
         """Apply the push forward."""
         return self.reference_map.push_forward(self.function)
@@ -241,8 +227,18 @@ class PulledBack(AbstractExpression):
 
     def __init__(self, reference_map: AbstractReferenceMap, function: AbstractExpression):
         """Initalise."""
-        self.reference_map = reference_map
-        self.function = function
+        self._reference_map = reference_map
+        self._function = function
+
+    @property
+    def reference_map(self) -> AbstractReferenceMap:
+        """The reference map."""
+        return self._reference_map
+
+    @property
+    def function(self) -> AbstractExpression:
+        """The function."""
+        return self._function
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -257,11 +253,6 @@ class PulledBack(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return {self.function}
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.reference_map, self.function
 
     def apply_pull_back(self) -> AbstractExpression:
         """Apply the pull back."""

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import Any
 
 from uflx.domains import AbstractDomain
 from uflx.finite_elements import AbstractReferenceMappedFiniteElement
@@ -66,11 +65,6 @@ class FunctionSpace(AbstractReferenceMappedFunctionSpace):
                 raise ValueError(
                     "Elements in a functions space must have the same physical value shape."
                 )
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._domain, self._elements)
 
     @property
     def domain(self) -> AbstractDomain:

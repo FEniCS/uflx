@@ -18,23 +18,12 @@ facets, ridges and peaks (respectively).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
 
 from uflx.graphs.graphs import Immutable
 
 
 class AbstractEntity(Immutable, ABC):
     """Abstract base class for entities."""
-
-    @property
-    @abstractmethod
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object.
-
-        These are the constructor's arguments, so the entity can be
-        rebuilt from them. Two entities built from equal arguments are
-        equal.
-        """
 
     @property
     @abstractmethod

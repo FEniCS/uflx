@@ -1,7 +1,5 @@
 """Implmentations of domains."""
 
-from typing import Any
-
 import pytest
 
 from uflx.entities import AbstractEntity
@@ -23,15 +21,6 @@ class Entity(AbstractEntity):
     def __str__(self):
         """String."""
         return f"{self!r}"
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object.
-
-        Each concrete cell takes none. Its sub-entities include the cell
-        itself, so they cannot identify it.
-        """
-        return ()
 
     @property
     def name(self) -> str:
@@ -169,11 +158,6 @@ class LagrangeElement(AbstractReferenceMappedFiniteElement):
         self._cell = cell
         self._degree = degree
         self._block_shape = block_shape
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._cell, self._degree, self._block_shape)
 
     @property
     def cell(self) -> AbstractEntity:

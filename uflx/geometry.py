@@ -1,6 +1,6 @@
 """Geometry."""
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from uflx.algorithms import replace
 from uflx.basis_functions import EvaluatedBasisFunction
@@ -38,11 +38,6 @@ class SingleSpatialCoordinate(AbstractExpression):
         """The successors of this node."""
         return set()
 
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._dimension, self._component
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise ValueError("Cannot get a component of a scalar expression")
@@ -70,11 +65,6 @@ class SpatialCoordinate(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._dimension,)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -115,11 +105,6 @@ class ReferenceToPhysical(AbstractPoint):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return {self._point}
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._point, self._domain
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -187,11 +172,6 @@ class PhysicalToReference(AbstractPoint):
         return {self._point}
 
     @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self._point, self._domain
-
-    @property
     def index(self) -> int | str:
         """The point's index in the set of points."""
         return self._point.index
@@ -202,8 +182,18 @@ class Jacobian(AbstractExpression):
 
     def __init__(self, domain: AbstractCoordinateElement, point: AbstractPoint | None = None):
         """Initalise."""
-        self.domain = domain
-        self.point = point
+        self._domain = domain
+        self._point = point
+
+    @property
+    def domain(self) -> AbstractCoordinateElement:
+        """The domain."""
+        return self._domain
+
+    @property
+    def point(self) -> AbstractPoint | None:
+        """The point this quantity is read at."""
+        return self._point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -215,11 +205,6 @@ class Jacobian(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.domain, self.point
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -278,8 +263,18 @@ class JacobianDeterminant(AbstractExpression):
     def __init__(self, domain: AbstractCoordinateElement, point: AbstractPoint | None = None):
         """Initialise."""
         self._jacobian = Jacobian(domain, point)
-        self.domain = domain
-        self.point = point
+        self._domain = domain
+        self._point = point
+
+    @property
+    def domain(self) -> AbstractCoordinateElement:
+        """The domain."""
+        return self._domain
+
+    @property
+    def point(self) -> AbstractPoint | None:
+        """The point this quantity is read at."""
+        return self._point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -290,11 +285,6 @@ class JacobianDeterminant(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.domain, self.point
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -313,8 +303,18 @@ class JacobianInverse(AbstractExpression):
     def __init__(self, domain: AbstractCoordinateElement, point: AbstractPoint | None = None):
         """Initalise."""
         self._jacobian = Jacobian(domain, point)
-        self.domain = domain
-        self.point = point
+        self._domain = domain
+        self._point = point
+
+    @property
+    def domain(self) -> AbstractCoordinateElement:
+        """The domain."""
+        return self._domain
+
+    @property
+    def point(self) -> AbstractPoint | None:
+        """The point this quantity is read at."""
+        return self._point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -325,11 +325,6 @@ class JacobianInverse(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.domain, self.point
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -364,8 +359,18 @@ class JacobianTranspose(AbstractExpression):
     def __init__(self, domain: AbstractCoordinateElement, point: AbstractPoint | None = None):
         """Initalise."""
         self._jacobian = Jacobian(domain, point)
-        self.domain = domain
-        self.point = point
+        self._domain = domain
+        self._point = point
+
+    @property
+    def domain(self) -> AbstractCoordinateElement:
+        """The domain."""
+        return self._domain
+
+    @property
+    def point(self) -> AbstractPoint | None:
+        """The point this quantity is read at."""
+        return self._point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -376,11 +381,6 @@ class JacobianTranspose(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.domain, self.point
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
@@ -415,8 +415,18 @@ class JacobianInverseTranspose(AbstractExpression):
     def __init__(self, domain: AbstractCoordinateElement, point: AbstractPoint | None = None):
         """Initalise."""
         self._jacobian = Jacobian(domain, point)
-        self.domain = domain
-        self.point = point
+        self._domain = domain
+        self._point = point
+
+    @property
+    def domain(self) -> AbstractCoordinateElement:
+        """The domain."""
+        return self._domain
+
+    @property
+    def point(self) -> AbstractPoint | None:
+        """The point this quantity is read at."""
+        return self._point
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -427,11 +437,6 @@ class JacobianInverseTranspose(AbstractExpression):
     def successors(self) -> set[GraphNode]:
         """The successors of this node."""
         return set()
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return self.domain, self.point
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""

@@ -13,7 +13,6 @@ a mixture of (eq) tetrahedra and intervals.
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from typing import Any
 
 from uflx.entities import AbstractEntity
 from uflx.finite_elements import AbstractReferenceMappedFiniteElement
@@ -69,15 +68,11 @@ class CoordinateElement(AbstractCoordinateElement):
 
     def __init__(self, elements: tuple[AbstractReferenceMappedFiniteElement, ...]):
         """Initialise."""
-        self._elements = {e.cell: e for e in elements}
+        self._elements = tuple(elements)
+        self._element_of_cell = {e.cell: e for e in elements}
         (self._gdim,) = elements[0].reference_value_shape
         for e in elements[1:]:
             assert e.reference_value_shape == (self._gdim,)
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (tuple(self._elements.values()),)
 
     @property
     def geometric_dimension(self) -> int:
@@ -87,11 +82,11 @@ class CoordinateElement(AbstractCoordinateElement):
     @property
     def cells(self) -> tuple[AbstractEntity, ...]:
         """Get the cells in the domain."""
-        return tuple(self._elements.keys())
+        return tuple(self._element_of_cell)
 
     def element(self, cell: AbstractEntity) -> AbstractReferenceMappedFiniteElement:
         """Get the elements in the domain."""
-        return self._elements[cell]
+        return self._element_of_cell[cell]
 
     @property
     def topological_dimension(self) -> int | None:
@@ -114,11 +109,6 @@ class RD(AbstractDomain):
     def __init__(self, dim: int):
         """Initialise."""
         self._dim = dim
-
-    @property
-    def init_args(self) -> tuple[Any, ...]:
-        """The arguments used to initialise this object."""
-        return (self._dim,)
 
     @property
     def geometric_dimension(self) -> int:

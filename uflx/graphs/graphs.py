@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import inspect
 from collections.abc import Callable, Hashable, Iterable
 from enum import Enum
 from typing import Any, Protocol, cast, runtime_checkable
@@ -25,13 +26,37 @@ class Immutable:
     ``object.__setattr__``, since it changes no argument. The kept hash
     is cached this way.
 
-    A value's identity is its class and its ``init_args``. A class that
-    defines ``init_args`` gets its equality, hash and repr from here. A
-    class should avoid defining ``__eq__`` or ``__hash__`` itself. Any
-    other identity is one that rebuilding a node can silently change.
+    A value's identity is its class and its ``init_args``, and equality,
+    hash and repr all come from here. ``init_args`` is read back from
+    the attributes the constructor stores its arguments in, so a class
+    need not write it. A class should avoid defining ``__eq__`` or
+    ``__hash__`` itself. Any other identity is one that rebuilding a
+    node can silently change.
     """
 
     _hash: int
+    _init_parameters: tuple[str, ...] | str = ()
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object.
+
+        Each constructor argument ``name`` is read from the attribute
+        ``_name``. A class that stores an argument any other way defines
+        this itself.
+        """
+        try:
+            return self.__dict__["_init_args"]
+        except KeyError:
+            pass
+        parameters = type(self)._init_parameters
+        if isinstance(parameters, str):
+            raise TypeError(parameters)
+        arguments = tuple(_stored_argument(self, name) for name in parameters)
+        # Attributes can still change during construction, so keep the result only after it.
+        if self.__dict__.get("_frozen", False):
+            object.__setattr__(self, "_init_args", arguments)
+        return arguments
 
     def __eq__(self, other: Any) -> bool:
         """Check for equality.
@@ -44,16 +69,16 @@ class Immutable:
             return True
         if type(self) is not type(other) or hash(self) != hash(other):
             return False
-        return _arguments_of(self) == _arguments_of(other)
+        return self.init_args == other.init_args
 
     def __repr__(self) -> str:
         """Representation.
 
-        This is the class name and its arguments. A class without
-        ``init_args`` prints as a plain object.
+        This is the class name and its arguments. A class whose arguments
+        cannot be read prints as a plain object.
         """
         try:
-            arguments = _arguments_of(self)
+            arguments = self.init_args
         except TypeError:
             return object.__repr__(self)
         return f"{type(self).__name__}({', '.join(repr(a) for a in arguments)})"
@@ -63,7 +88,7 @@ class Immutable:
         try:
             return self.__dict__["_hash"]
         except KeyError:
-            value = hash((type(self), *_arguments_of(self)))
+            value = hash((type(self), *self.init_args))
             object.__setattr__(self, "_hash", value)
             return value
 
@@ -73,12 +98,14 @@ class Immutable:
         Only methods defined in the class body are wrapped. An inherited
         method was already wrapped in its parent. Only the outermost
         ``__init__`` freezes, so an ``__init__`` that calls its parent's
-        can still set attributes afterwards.
+        can still set attributes afterwards. The names of the
+        constructor's arguments are recorded here for ``init_args``.
         """
         super().__init_subclass__(**kwargs)
         init = cls.__dict__.get("__init__")
         if init is not None:
             setattr(cls, "__init__", _freezing(init))
+            cls._init_parameters = _parameters_of(cls, init)
         hash_ = cls.__dict__.get("__hash__")
         if hash_ is not None:
             setattr(cls, "__hash__", _kept(hash_))
@@ -96,16 +123,37 @@ class Immutable:
         raise AttributeError(f"{self.__class__.__name__} is immutable.")
 
 
-def _arguments_of(value: Any) -> tuple[Any, ...]:
-    """Get the arguments a value was built from.
+def _parameters_of(cls: type, init: Callable[..., None]) -> tuple[str, ...] | str:
+    """Get the names of a constructor's arguments.
+
+    Returns:
+        The names in order, or why ``init_args`` cannot be read from
+        them. A tuple can only be passed back positionally.
+    """
+    names = []
+    for parameter in list(inspect.signature(init).parameters.values())[1:]:
+        if parameter.kind is not parameter.POSITIONAL_OR_KEYWORD:
+            return (
+                f"{cls.__name__}.__init__ takes {parameter.name} as {parameter.kind.description}, "
+                f"so its init_args cannot be read back. Define init_args."
+            )
+        names.append(parameter.name)
+    return tuple(names)
+
+
+def _stored_argument(value: Any, name: str) -> Any:
+    """Get the attribute ``_name`` a constructor stored its argument ``name`` in.
 
     Raises:
-        TypeError: If the value has no ``init_args``.
+        TypeError: If ``_name`` is not set.
     """
     try:
-        return value.init_args
-    except AttributeError:
-        raise TypeError(f"{type(value).__name__} has no init_args. Define init_args.") from None
+        return value.__dict__[f"_{name}"]
+    except KeyError:
+        raise TypeError(
+            f"{type(value).__name__} does not store its argument {name} as _{name}. "
+            f"Store it there, or define init_args."
+        ) from None
 
 
 def _freezing(init: Callable[..., None]) -> Callable[..., None]:

@@ -47,37 +47,30 @@ def test_every_familys_hash_is_kept(values):
         assert ("_hash" in value.__dict__) == by_value
 
 
-def test_a_value_that_says_what_it_was_built_from_needs_no_equality_of_its_own():
-    """A class that defines init_args needs no equality of its own."""
+def test_a_subclass_is_not_equal_to_its_parent():
+    """Equal arguments make equal values only within one class."""
 
     class Pair(Immutable):
         def __init__(self, a, b):
-            self.a, self.b = a, b
-
-        @property
-        def init_args(self):
-            return (self.a, self.b)
+            self._a = a
+            self._b = b
 
     class Twin(Pair):
         pass
 
     assert Pair(1, 2) == Pair(1, 2)
-    assert hash(Pair(1, 2)) == hash(Pair(1, 2))
-    assert Pair(1, 2) != Pair(2, 1)
     assert Pair(1, 2) != Twin(1, 2)
-    assert len({Pair(1, 2), Pair(1, 2), Twin(1, 2)}) == 2
 
 
-def test_a_value_that_says_nothing_of_itself_has_no_identity():
-    """A class without init_args fails at its first hash."""
+def test_an_argument_stored_under_another_name_is_refused():
+    """The first hash names the argument and where it should be stored."""
 
-    class Mute(Immutable):
-        pass
+    class Renamed(Immutable):
+        def __init__(self, a):
+            self._other = a
 
-    with pytest.raises(TypeError, match="Define init_args"):
-        hash(Mute())
-    with pytest.raises(TypeError, match="init_args"):
-        Mute() == Mute()
+    with pytest.raises(TypeError, match="does not store its argument a as _a"):
+        hash(Renamed(1))
 
 
 def test_the_librarys_values_are_equal_by_what_they_were_built_from(lagrange_element):
@@ -121,5 +114,5 @@ def test_no_class_in_uflx_defines_its_own_identity():
 
     for cls in subclasses(Immutable):
         if cls.__module__.startswith("uflx."):
-            assert "__eq__" not in vars(cls), cls
-            assert "__hash__" not in vars(cls), cls
+            for method in ("__eq__", "__hash__"):
+                assert method not in vars(cls), (cls, method)
