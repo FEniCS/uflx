@@ -63,12 +63,32 @@ class AbstractExpression(ABC):
             return NotImplemented
 
     def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return isinstance(other, self.__class__) and self.init_args == other.init_args
+        """Check for equality.
+
+        Two nodes of one class with equal arguments are equal. The hash is
+        compared first, since it is kept and theirs differ whenever the
+        arguments do, so unequal nodes are told apart without walking
+        either tree.
+        """
+        if self is other:
+            return True
+        if not isinstance(other, self.__class__) or hash(self) != hash(other):
+            return False
+        return self.init_args == other.init_args
 
     def __hash__(self) -> int:
-        """Hash."""
-        return hash((f"uflx.{self.__class__.__name__}", *self.init_args))
+        """Hash.
+
+        Computed once and kept. A node is immutable and hashing it walks
+        its whole subtree, so without this every set or dict holding
+        expressions walks the tree again on each lookup, which is
+        quadratic in the size of what is being expanded.
+        """
+        try:
+            return self._hash
+        except AttributeError:
+            self._hash = hash((f"uflx.{self.__class__.__name__}", *self.init_args))
+            return self._hash
 
     def __matmul__(self, other: Any) -> AbstractExpression:
         """Matrix multiply."""
