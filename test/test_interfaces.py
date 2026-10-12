@@ -38,7 +38,6 @@ from uflx import (
     grad,
     inner,
     interface,
-    interface_of,
     jump,
     parametrized_domain,
     restrict,
@@ -142,6 +141,12 @@ def glued(plus, minus):
 def on_the_facet():
     """A point of the reference interval, away from either end."""
     return Point([RealScalar(0.3)], entity_domain(Interval()))
+
+
+def interior_facets_of(mesh, label=None):
+    """UFL's dS as a domain: the interface of a mesh's facets with themselves."""
+    facets = sub_entities_of(mesh, 1, label)
+    return interface(facets, (("+", facets), ("-", facets)))
 
 
 @pytest.fixture
@@ -327,7 +332,7 @@ def test_an_interface_refuses_what_is_not_two_presentations_of_one_domain(plus, 
 
 def test_a_field_is_restricted_to_a_side_and_not_to_the_interface(space, mesh):
     """Which map a field is read through is the whole question, so it is named."""
-    gamma = interface_of(mesh, mesh)
+    gamma = interior_facets_of(mesh)
     u = Coefficient(space)
 
     restricted = restrict(u, gamma.side("-"))
@@ -341,7 +346,7 @@ def test_a_field_is_restricted_to_a_side_and_not_to_the_interface(space, mesh):
 
 def test_the_jump_is_a_difference_of_restrictions_on_one_domain(space, mesh):
     """``iota_+^* u - iota_-^* u`` typechecks because both are fields on the interface."""
-    gamma = interface_of(mesh, mesh)
+    gamma = interior_facets_of(mesh)
     u = Coefficient(space)
 
     assert jump(u, gamma) == restrict(u, gamma.side("+")) - restrict(u, gamma.side("-"))
@@ -357,14 +362,14 @@ def test_the_jump_is_a_difference_of_restrictions_on_one_domain(space, mesh):
 
 def test_a_field_reaches_an_interface_only_through_a_side(space, mesh):
     """An unrestricted field in an interface integral is refused, as in a facet one."""
-    gamma = interface_of(mesh, mesh)
+    gamma = interior_facets_of(mesh)
     with pytest.raises(ValueError, match="through a map"):
         Coefficient(space) * dx(gamma)
 
 
 def test_a_side_of_an_unsplit_interface_names_no_one_map(space, mesh):
     """Three facets a side, so no one transition until the integral is split."""
-    gamma = interface_of(mesh, mesh)
+    gamma = interior_facets_of(mesh)
     point = Point([RealScalar(0.3)], entity_domain(Interval()))
     with pytest.raises(ValueError, match="Split the integral by piece"):
         gamma.side("-").chart_point(point)
@@ -372,7 +377,7 @@ def test_a_side_of_an_unsplit_interface_names_no_one_map(space, mesh):
 
 def test_the_interface_of_a_mesh_with_itself_is_every_pair_of_facets(mesh):
     """Three facets a side gives nine pairs, each an interface of one facet a side."""
-    gamma = interface_of(mesh, mesh)
+    gamma = interior_facets_of(mesh)
     facets = sub_entities_of(mesh, 1)
 
     assert gamma.domain == facets
@@ -407,7 +412,7 @@ def test_pulling_an_interface_integral_back_gives_one_kernel_per_pair(space, mes
     ``-`` facet that the chart transition gives, carried through the
     ``-`` facet's inclusion. Nine kernels, telling their pair.
     """
-    gamma = interface_of(mesh, mesh)
+    gamma = interior_facets_of(mesh)
     u, v = Coefficient(space), TestFunction(space)
 
     pulled = pull_back_to_entity(
@@ -442,7 +447,7 @@ def test_pulling_an_interface_integral_back_gives_one_kernel_per_pair(space, mes
 
 def test_a_label_survives_to_the_pair(space, mesh):
     """A marked interface, as ``dS(3)``, keeps its mark on every piece of every pair."""
-    gamma = interface_of(mesh, mesh, "interior-3")
+    gamma = interior_facets_of(mesh, "interior-3")
     pulled = pull_back_to_entity(jump(Coefficient(space), gamma) * dx(gamma))
 
     assert isinstance(pulled, IntegralSum)
@@ -464,7 +469,7 @@ def test_the_pairs_of_a_mixed_mesh_match_facet_types():
     mesh = parametrized_domain(
         (LagrangeElement(PlacedTriangle(), 1, (3,)), LagrangeElement(PlacedTetrahedron(), 1, (3,)))
     )
-    pairs = interface_of(mesh, mesh).pieces
+    pairs = interior_facets_of(mesh).pieces
     regions = [{p.source for p in pair.parametrizations} for pair in pairs]
 
     assert len(pairs) == 9 + 16
@@ -671,7 +676,7 @@ def test_a_one_dimensional_mesh_has_an_interior_facet_integral():
     mesh = parametrized_domain(LagrangeElement(PlacedInterval(), 1, (1,)))
     space = function_space(mesh, LagrangeElement(PlacedInterval(), 1))
     u, v = Coefficient(space), TestFunction(space)
-    gamma = interface_of(mesh, mesh)
+    gamma = interior_facets_of(mesh)
 
     pulled = pull_back_to_entity(jump(u, gamma) * restrict(v, gamma.side("+")) * dx(gamma))
     assert isinstance(pulled, IntegralSum)
@@ -683,7 +688,10 @@ def test_a_triangle_meets_a_quadrilateral():
     """Two meshes of different cell types, sharing interval facets: three by four pairs."""
     triangles = parametrized_domain(LagrangeElement(PlacedTriangle(), 1, (2,)))
     quadrilaterals = parametrized_domain(LagrangeElement(PlacedQuadrilateral(), 1, (2,)))
-    gamma = interface_of(triangles, quadrilaterals)
+    gamma = interface(
+        sub_entities_of(triangles, 1),
+        (("+", sub_entities_of(triangles, 1)), ("-", sub_entities_of(quadrilaterals, 1))),
+    )
     assert len(gamma.pieces) == 12
 
     u = Coefficient(function_space(triangles, LagrangeElement(PlacedTriangle(), 1)))

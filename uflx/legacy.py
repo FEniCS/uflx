@@ -39,8 +39,8 @@ a kernel afterwards. Which entities a consumer marked 3 is the
 consumer's, as its cells are; UFLx records only that a selection was
 meant and which one.
 
-`dS` infers the mesh the same way and integrates over
-`interface_of(mesh, mesh)`. A side is named by `plus(u)` and `minus(u)`,
+`dS` infers the mesh the same way and integrates over the interface of
+its facets with its facets. A side is named by `plus(u)` and `minus(u)`,
 and `jump`, `avg` and `facet_normal` are built on those with UFL's
 signatures. A marked side is a placeholder until the measure knows the
 interface, which is the inference again: which interface `u("+")` means
@@ -77,7 +77,7 @@ from uflx.geometry import AbstractGeometricQuantity, OutwardNormal
 from uflx.graphs import GraphNode, NodeOrder, as_graph
 from uflx.integrals import Integral
 from uflx.integrals import dx as measure_of
-from uflx.interfaces import Interface, interface_of
+from uflx.interfaces import Interface
 from uflx.operators import inner
 from uflx.parametrizations import sub_entities_of
 from uflx.restrictions import restrict
@@ -437,9 +437,9 @@ class ExteriorFacetMeasure(CellMeasure):
 class InteriorFacetMeasure(CellMeasure):
     """`dS` as UFL writes it: an interior facet measure over the interface it infers.
 
-    The integral it builds is the one measure over
-    `interface_of(mesh, mesh)`, with every side marked by `plus` or
-    `minus` read on the interface through that side. Call it to mark a
+    The integral it builds is the one measure over the interface the
+    mesh's facets make with themselves, with every side marked by `plus`
+    or `minus` read on the interface through that side. Call it to mark a
     subdomain, as `dS(3)`, which labels the facets of both sides.
 
     A field on the mesh that is not marked is refused, as UFL refuses an
@@ -457,8 +457,8 @@ class InteriorFacetMeasure(CellMeasure):
 
     def interface_for(self, integrand: AbstractExpression) -> Interface:
         """The interface an integrand of this measure is over."""
-        domain = self.domain_of(integrand)
-        return interface_of(domain, domain, InteriorFacets(self._subdomain_id))
+        facets = sub_entities_of(self.domain_of(integrand), 1, InteriorFacets(self._subdomain_id))
+        return Interface(facets, (("+", facets), ("-", facets)))
 
     def __rmul__(self, integrand: AbstractExpression) -> Integral:
         """Right multiply by an expression to form an integral over the interface."""

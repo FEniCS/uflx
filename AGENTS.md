@@ -172,11 +172,11 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   side's own region, the integral's variable on the primary side and the chart
   transition `ψ₋⁻¹(ψ₊(X))` on any other, written as a `PreimagePoint` of an `ImagePoint`
   with the side's map named by the side (`SideParametrization`). An interface of unions
-  is `MadeOfPieces`, one pair of pieces at a time. `interface_of(mesh, mesh)` is UFL's
-  `dS`, and the one convenience: a mesh meeting a submesh of its entities is
-  `interface(entities, ...)` with the entities presented by each, a mixed-domain form
-  being each field restricted to its side. The protocols the geometry and the integrals
-  ask of a side are in `domains.py`, since this module sits above `geometry.py`.
+  is `MadeOfPieces`, one pair of pieces at a time. There is no second spelling: UFL's
+  `dS` is a mesh's facets presented twice, and a mesh meeting a submesh of its entities
+  is the entities presented by each, a mixed-domain form being each field restricted to
+  its side. The protocols the geometry and the integrals ask of a side are in
+  `domains.py`, since this module sits above `geometry.py`.
 - `legacy.py` — the legacy UFL spellings (`dx`, `ds`, `dS`, their `(3)` forms, `jump`,
   `avg` and `facet_normal`), which infer the domain and insert the restrictions to build
   the native form. A side is named by `plus(u)`/`minus(u)`, a placeholder the measure
@@ -199,7 +199,8 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   pull back is onto the parameter region of the domain's one parametrization, which is
   what lets an interface pull back like a facet. There is no `ds` or `dS`: an exterior
   facet integral is this measure over `sub_entities_of(mesh, 1)` with the fields
-  restricted, and an interior one is it over `interface_of(mesh, mesh)` with the fields
+  restricted, and an interior one is it over the interface of those facets with
+  themselves, `interface(facets, (("+", facets), ("-", facets)))`, with the fields
   restricted to its sides, which [INTEGRATION.md](INTEGRATION.md) §3 and §5 argue for.
 
 Symbolic (Gateaux) differentiation and expression/integral transformation between domain

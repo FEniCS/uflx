@@ -220,13 +220,15 @@ inner(restrict(grad(u), facets), UnitNormal(facets)) * dx(facets)
 Pulling that back gives one integral per facet over the reference facet, each carrying
 that facet's volume element as its density. No part of it is a facet measure.
 
-An interface is a domain with a presentation of it per side, `interface_of(a, b)` for
-the facets two meshes share and `interface_of(mesh, mesh)` for a mesh's interior facets.
-The `+`/`-` of UFL is a restriction to a side, a field pulled back along that side's
-inclusion, and belongs to the integrand and not to the measure:
+An interface is a domain with a presentation of it per side: `interface(gamma, sides)`.
+A mesh's interior facets are its facets presented twice, once per side, and the facets
+two meshes share are each mesh's facets as a side. The `+`/`-` of UFL is a restriction
+to a side, a field pulled back along that side's inclusion, and belongs to the integrand
+and not to the measure:
 
 ```python
-gamma = interface_of(mesh, mesh)
+facets = sub_entities_of(mesh, 1)
+gamma = interface(facets, (("+", facets), ("-", facets)))
 inner(jump(grad(u), gamma), OutwardNormal(gamma.side("+"))) * restrict(v, gamma.side("+")) * dx(
     gamma
 )

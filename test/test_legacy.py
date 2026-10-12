@@ -13,6 +13,7 @@ from typing import cast
 import pytest
 from conftest import Interval, LagrangeElement, Triangle
 from test_facet_domains import PlacedTriangle
+from test_interfaces import interior_facets_of
 
 from uflx import (
     Coefficient,
@@ -30,7 +31,7 @@ from uflx.geometry import AbstractGeometricQuantity, OutwardNormal, UnitNormal, 
 from uflx.graphs import as_graph
 from uflx.integrals import Integral, IntegralSum
 from uflx.integrals import dx as measure_of
-from uflx.interfaces import Interface, interface_of
+from uflx.interfaces import Interface
 from uflx.legacy import (
     Cells,
     ExteriorFacets,
@@ -232,7 +233,7 @@ def test_an_interior_facet_measure_integrates_over_the_interface(mesh, space):
     knows the interface, so the two spellings build the same integral.
     """
     u, v = Coefficient(space), TestFunction(space)
-    gamma = interface_of(mesh, mesh, InteriorFacets(None))
+    gamma = interior_facets_of(mesh, InteriorFacets(None))
 
     integral = jump(u) * avg(v) * dS
     assert isinstance(integral, Integral)
@@ -252,7 +253,7 @@ def test_an_interior_facet_measure_integrates_over_the_interface(mesh, space):
 def test_a_side_is_named_by_plus_and_minus(mesh, space):
     """``plus(u)`` stands where a restriction to the ``+`` side will."""
     u = Coefficient(space)
-    gamma = interface_of(mesh, mesh, InteriorFacets(None))
+    gamma = interior_facets_of(mesh, InteriorFacets(None))
 
     marked = plus(u)
     assert isinstance(marked, SideMarker)
@@ -277,7 +278,7 @@ def test_adding_plus_minus_restriction_makes_an_expression_callable_with_a_side(
     interpreter that only imported ``uflx``, there is no such call.
     """
     u = Coefficient(space)
-    gamma = interface_of(mesh, mesh, InteriorFacets(None))
+    gamma = interior_facets_of(mesh, InteriorFacets(None))
 
     assert "__call__" not in vars(AbstractExpression)
     with pytest.raises(TypeError):
@@ -378,7 +379,7 @@ def test_a_facet_normal_is_read_off_a_side_under_dS(mesh, space):
     """``n("+")`` is the normal out of the ``+`` side, and ``jump(v, n)`` uses both."""
     u, v = Coefficient(space), TestFunction(space)
     n = facet_normal(mesh)
-    gamma = interface_of(mesh, mesh, InteriorFacets(None))
+    gamma = interior_facets_of(mesh, InteriorFacets(None))
 
     assert jump(v, n) == plus(v) * plus(n) + minus(v) * minus(n)
     assert jump(grad(u), n) == inner(plus(grad(u)), plus(n)) + inner(minus(grad(u)), minus(n))

@@ -11,7 +11,7 @@ from uflx.function_spaces import function_space
 from uflx.functions import Coefficient, TestFunction, TrialFunction
 from uflx.geometry import SpatialCoordinate
 from uflx.integrals import dx
-from uflx.interfaces import interface, interface_of
+from uflx.interfaces import interface
 from uflx.operators import dev, grad, inner, skew, sqrt, sym, tr, transpose
 from uflx.parametrizations import (
     composed_domain,

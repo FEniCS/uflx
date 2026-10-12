@@ -104,10 +104,10 @@ The `+`/`-` of UFL is not part of the measure either. It is a *restriction of a 
 which is a pullback along one side's inclusion map, and it lives in the integrand.
 
 So a codimension and a boundary flag become operators on domains —
-`sub_entities_of(omega, codim)` and `interface_of(omega_plus, omega_minus)` — returning
-domains that then need only the one measure. That is the home for a mesh-relative query,
-and it makes the derived domain an object carrying a parametrization, a metric, a normal
-and a measure like any other.
+`sub_entities_of(omega, codim)` and `interface(gamma, sides)` — returning domains that
+then need only the one measure. That is the home for a mesh-relative query, and it makes
+the derived domain an object carrying a parametrization, a metric, a normal and a
+measure like any other.
 
 The derived domain is named for the sub-entities it is parametrized by and not for a
 boundary. Which facets it has — those with one adjacent cell, those with two, those a
@@ -265,9 +265,9 @@ Built, as `ds` and `dS`:
    carrying the measure, the restrictions and the geometric quantities onto it, and runs
    before the cell type split. Pulling back then multiplies the piece's volume element
    into the integrand, which is the factor an exterior facet integral picks up.
-1. **A presentation per side.** `Interface(Γ, sides)` is §5's atlas,
-   `interface_of(a, b)` the interface along which two meshes' facets meet, and
-   `interface_of(mesh, mesh)` is `dS`. A restriction names a side,
+1. **A presentation per side.** `Interface(Γ, sides)` is §5's atlas, and the facets of a
+   mesh presented twice, `interface(facets, (("+", facets), ("-", facets)))`, is `dS`.
+   There is no second spelling of it. A restriction names a side,
    `restrict(u, Γ.side("-"))`, and reads the field at that side's chart point through
    that side's inclusion; `jump` and `avg` are the two restrictions' difference and
    mean. An interface of unions fans out over pairs of pieces, which is what identifies

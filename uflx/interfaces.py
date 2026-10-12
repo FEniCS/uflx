@@ -45,7 +45,6 @@ from itertools import product
 from typing import Any
 
 from uflx.domains import (
-    AbstractCellularDomain,
     AbstractCoordinateDomain,
     AbstractParametrization,
     AbstractParametrizedDomain,
@@ -53,7 +52,6 @@ from uflx.domains import (
 )
 from uflx.expressions import AbstractExpression
 from uflx.geometry import ImagePoint, PreimagePoint
-from uflx.parametrizations import sub_entities_of
 from uflx.variables import AbstractVariable
 
 
@@ -436,27 +434,3 @@ def interface(
         That interface
     """
     return Interface(domain, sides)
-
-
-def interface_of(
-    plus: AbstractCellularDomain, minus: AbstractCellularDomain, label: Any = None
-) -> Interface:
-    """Create the interface along which the facets of two domains of cells meet.
-
-    UFL's ``dS``, as a domain: the one measure over this is the interior
-    facet integral, with the fields read on it through the sides ``"+"``
-    and ``"-"``. Passing one domain twice is the interface of a mesh with
-    itself. Which facets two cells actually share is external, as the
-    cells are; this says only how each pair of them is parametrized.
-
-    Args:
-        plus: The domain whose facets are the ``"+"`` side
-        minus: The domain whose facets are the ``"-"`` side
-        label: Anything hashable the consumer selects these facets by, or
-            None for no selection
-
-    Returns:
-        The interface, over the ``"+"`` side's facets
-    """
-    facets = sub_entities_of(plus, 1, label)
-    return Interface(facets, (("+", facets), ("-", sub_entities_of(minus, 1, label))))
