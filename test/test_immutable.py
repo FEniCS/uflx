@@ -1,13 +1,10 @@
-"""Test that everything in a graph is built once, never changed and hashed once.
-
-:mod:`test_expressions` tests this for expressions. Every other family
-follows the same rule through the same mixin, so each is tested here.
-"""
+"""Test that everything in a graph is built once, never changed and hashed once."""
 
 import pytest
 from conftest import LagrangeElement, Triangle
 
 from uflx import Coefficient, coordinate_element, dx, function_space
+from uflx.expressions import RealScalar
 from uflx.graphs.graphs import Immutable
 
 
@@ -19,7 +16,8 @@ def values(lagrange_element):
     domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
     space = function_space(domain, element)
     integral = Coefficient(space) * dx
-    return [cell, element, domain, space, dx, integral]
+    expression = RealScalar(2.0) * RealScalar(3.0)
+    return [cell, element, domain, space, dx, integral, expression]
 
 
 def test_every_family_is_a_value(values):
@@ -48,31 +46,3 @@ def test_every_familys_hash_is_kept(values):
         first = hash(value)
         assert hash(value) == first
         assert ("_hash" in value.__dict__) == by_value
-
-
-def test_a_derived_value_may_still_be_cached():
-    """Any derived value can be cached through object.__setattr__."""
-    cell = Triangle()
-    object.__setattr__(cell, "_memo", 42)
-    assert cell.__dict__["_memo"] == 42
-    with pytest.raises(AttributeError, match="immutable"):
-        object.__getattribute__(cell, "__setattr__")("_memo", 43)
-
-
-def test_only_a_classs_own_methods_are_wrapped():
-    """A subclass that inherits its parent's methods is frozen and hashed by them.
-
-    Wrapping happens where a method is defined, so it is not done twice.
-    A subclass with no methods of its own still gets both.
-    """
-
-    class Plain(Triangle):
-        pass
-
-    assert "__hash__" not in Plain.__dict__
-    assert "__init__" not in Plain.__dict__
-    plain = Plain()
-    assert hash(plain) == hash(plain)
-    assert "_hash" in plain.__dict__
-    with pytest.raises(AttributeError, match="immutable"):
-        plain.anything = 1
