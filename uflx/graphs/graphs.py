@@ -102,7 +102,17 @@ def _interning_key(value: Any) -> Any:
     return _leaf(value)
 
 
-_DERIVED = ("__eq__", "__ne__", "__hash__", "__repr__", "__str__", "successors", "fingerprint")
+_DERIVED = (
+    "__eq__",
+    "__ne__",
+    "__hash__",
+    "__repr__",
+    "__str__",
+    "__copy__",
+    "__deepcopy__",
+    "successors",
+    "fingerprint",
+)
 
 
 class Immutable(metaclass=_Interning):
@@ -128,8 +138,9 @@ class Immutable(metaclass=_Interning):
 
     A subclass, in UFLx or in a consumer, gets these checks at runtime.
     Defining ``__eq__``, ``__ne__``, ``__hash__``, ``__repr__``,
-    ``__str__``, ``successors`` or ``fingerprint`` is refused when the
-    class is defined. An argument
+    ``__str__``, ``__copy__``, ``__deepcopy__``, ``successors`` or
+    ``fingerprint``, in the class or in a mixin it inherits, is refused
+    when the class is defined. An argument
     that is a list, a set, a dict or an object known only by its address
     is refused when a value is built. The first value of each class must
     rebuild from its ``init_args`` to itself. :mod:`uflx.testing` checks
@@ -231,17 +242,26 @@ class Immutable(metaclass=_Interning):
         constructor's arguments are recorded here for ``init_args``.
 
         Raises:
-            TypeError: If the class body defines a method that would give
-                the class an identity other than its ``init_args``.
+            TypeError: If the class or a mixin it inherits defines a
+                method that would give the class an identity, printing or
+                copying other than its ``init_args``.
         """
         super().__init_subclass__(**kwargs)
-        for name in _DERIVED:
-            # Defining __eq__ alone sets __hash__ to None in the class body.
-            if name in cls.__dict__ and not (name == "__hash__" and cls.__dict__[name] is None):
-                raise TypeError(
-                    f"{cls.__qualname__} defines {name}. A value's identity and printing come "
-                    f"from its init_args alone, so a class defines none of {', '.join(_DERIVED)}."
-                )
+        # A mixin can supply these as well as the class body, wherever it sits in the bases.
+        for owner in cls.__mro__:
+            if owner is Immutable or owner is object:
+                continue
+            for name in _DERIVED:
+                # Defining __eq__ alone sets __hash__ to None in the class body.
+                if name in owner.__dict__ and not (
+                    name == "__hash__" and owner.__dict__[name] is None
+                ):
+                    how = "defines" if owner is cls else f"inherits from {owner.__qualname__}"
+                    raise TypeError(
+                        f"{cls.__qualname__} {how} {name}. A value's identity, printing and "
+                        f"copying come from its init_args alone, so a class defines none of "
+                        f"{', '.join(_DERIVED)}."
+                    )
         init = cls.__dict__.get("__init__")
         if init is not None:
             setattr(cls, "__init__", _freezing(init))

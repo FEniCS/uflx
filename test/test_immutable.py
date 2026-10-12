@@ -201,12 +201,36 @@ def test_labels_in_a_tuple_are_hashed_in_order():
 
 
 @pytest.mark.parametrize(
-    "name", ["__eq__", "__ne__", "__hash__", "__repr__", "__str__", "successors", "fingerprint"]
+    "name",
+    [
+        "__eq__",
+        "__ne__",
+        "__hash__",
+        "__repr__",
+        "__str__",
+        "__copy__",
+        "__deepcopy__",
+        "successors",
+        "fingerprint",
+    ],
 )
 def test_a_class_that_defines_its_own_identity_is_refused(name):
     """Guards against a consumer's class giving itself an identity or printing of its own."""
     with pytest.raises(TypeError, match=f"defines {name}"):
         type("Custom", (Immutable,), {name: lambda self: None})
+
+
+@pytest.mark.parametrize("mixin_first", [True, False], ids=["mixin-first", "mixin-last"])
+def test_an_identity_method_from_a_mixin_is_refused(mixin_first):
+    """Guards against a mixin supplying an identity method that the class body does not."""
+
+    class Loose:
+        def __eq__(self, other):
+            return True
+
+    bases = (Loose, Immutable) if mixin_first else (Immutable, Loose)
+    with pytest.raises(TypeError, match=r"inherits from .*Loose __eq__"):
+        type("Custom", bases, {})
 
 
 def test_a_class_whose_init_args_lose_an_argument_is_refused(monkeypatch):
