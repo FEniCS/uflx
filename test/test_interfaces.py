@@ -89,21 +89,21 @@ from uflx.tensors import Matrix, Vector
 from uflx.variables import AbstractVariable
 
 
-def as_numbers(expression, length: int) -> list[float]:
+def _as_numbers(expression, length: int) -> list[float]:
     """A vector valued expression, expanded, as numbers."""
     expanded = expand_geometry(expression)
     assert isinstance(expanded, AbstractExpression)
-    return [as_number(expanded.component(i)) for i in range(length)]
+    return [_as_number(expanded.component(i)) for i in range(length)]
 
 
-def as_number(expression) -> float:
+def _as_number(expression) -> float:
     """A scalar expression, simplified, as a number."""
     simplified = simplify(expression)
     assert isinstance(simplified, AbstractExpression)
     return simplified.as_float()
 
 
-def preimage_in(expression):
+def _preimage_in(expression):
     """The one preimage point an expression reads, which stands for a library's answer."""
     (point,) = [node for node in as_graph(expression) if isinstance(node, PreimagePoint)]
     return point
@@ -127,7 +127,7 @@ def minus():
     )
 
 
-def hypotenuse_of(domain):
+def _hypotenuse_of(domain):
     """Facet 2 of a placed triangle mapped on, as a piece of its facets."""
     return composed_domain(
         sub_entity_domain(PlacedTriangle(), 1, 2), domain.parametrization(PlacedTriangle())
@@ -141,7 +141,9 @@ def glued(plus, minus):
     The reflection reverses the facet, so the chart transition is
     ``s -> 1 - s``.
     """
-    return interface(hypotenuse_of(plus), (("+", hypotenuse_of(plus)), ("-", hypotenuse_of(minus))))
+    return interface(
+        _hypotenuse_of(plus), (("+", _hypotenuse_of(plus)), ("-", _hypotenuse_of(minus)))
+    )
 
 
 @pytest.fixture
@@ -150,7 +152,7 @@ def on_the_facet():
     return Point([RealScalar(0.3)], entity_domain(Interval()))
 
 
-def interior_facets_of(mesh, label=None):
+def _interior_facets_of(mesh, label=None):
     """UFL's dS as a domain: the interface of a mesh's facets with themselves."""
     facets = sub_entities_of(mesh, 1, label)
     return interface(facets, (("+", facets), ("-", facets)))
@@ -170,9 +172,9 @@ def space(mesh):
 
 def test_an_interface_is_the_domain_it_is_over_with_a_presentation_per_side(glued, plus):
     """Its geometry is the domain's, and each side is a domain of its own."""
-    assert glued.domain == hypotenuse_of(plus)
+    assert glued.domain == _hypotenuse_of(plus)
     assert glued.labels == ("+", "-")
-    assert glued.parametrizations == hypotenuse_of(plus).parametrizations
+    assert glued.parametrizations == _hypotenuse_of(plus).parametrizations
     assert glued.geometric_dimension == 2
     assert glued.topological_dimension == 1
 
@@ -192,7 +194,7 @@ def test_an_embeddings_parametrization_is_its_images_named_by_the_embedding(glue
     """The map is the image's. What the side adds is identity."""
     (parametrization,) = glued.embedding("-").parametrizations
     assert isinstance(parametrization, LabelledParametrization)
-    assert parametrization.parametrization == hypotenuse_of(minus).parametrizations[0]
+    assert parametrization.parametrization == _hypotenuse_of(minus).parametrizations[0]
     assert parametrization.label == glued.embedding("-")
     assert parametrization != glued.embedding("+").parametrizations[0]
     assert parametrization.is_affine
@@ -211,10 +213,10 @@ def test_the_measure_of_an_interface_is_its_domains(glued, on_the_facet):
 def test_the_jump_is_side_symmetric_in_the_measure(plus, minus, on_the_facet):
     """Either side induces the same density, differing by an isometry of the facet."""
     from_plus = interface(
-        hypotenuse_of(plus), (("+", hypotenuse_of(plus)), ("-", hypotenuse_of(minus)))
+        _hypotenuse_of(plus), (("+", _hypotenuse_of(plus)), ("-", _hypotenuse_of(minus)))
     )
     from_minus = interface(
-        hypotenuse_of(minus), (("-", hypotenuse_of(minus)), ("+", hypotenuse_of(plus)))
+        _hypotenuse_of(minus), (("-", _hypotenuse_of(minus)), ("+", _hypotenuse_of(plus)))
     )
 
     assert from_plus != from_minus
@@ -255,13 +257,13 @@ def test_the_transition_is_the_reflection_of_the_facet(glued, minus, on_the_face
     transition = glued.embedding("-").transition(on_the_facet)
     answer = Point([RealScalar(1.0) - RealScalar(0.3)], entity_domain(Interval()))
 
-    through_minus = SpatialCoordinate(hypotenuse_of(minus), transition)
+    through_minus = SpatialCoordinate(_hypotenuse_of(minus), transition)
     substituted = replace(expand_geometry(through_minus), {transition: answer})
     assert isinstance(substituted, AbstractExpression)
     through_plus = SpatialCoordinate(glued.domain, on_the_facet)
 
-    assert [as_number(substituted.component(i)) for i in range(2)] == pytest.approx(
-        as_numbers(through_plus, 2)
+    assert [_as_number(substituted.component(i)) for i in range(2)] == pytest.approx(
+        _as_numbers(through_plus, 2)
     )
 
 
@@ -278,11 +280,11 @@ def test_the_outward_normals_of_the_two_sides_are_opposite(glued, on_the_facet):
     assert isinstance(minus.variable, PreimagePoint)
 
     root_half = 1.0 / math.sqrt(2.0)
-    assert as_numbers(plus, 2) == pytest.approx([root_half, root_half])
-    assert as_numbers(minus, 2) == pytest.approx([-root_half, -root_half])
+    assert _as_numbers(plus, 2) == pytest.approx([root_half, root_half])
+    assert _as_numbers(minus, 2) == pytest.approx([-root_half, -root_half])
 
-    direction = as_numbers(UnitNormal(glued, on_the_facet), 2)
-    assert abs(sum(a * b for a, b in zip(direction, as_numbers(plus, 2)))) == pytest.approx(1.0)
+    direction = _as_numbers(UnitNormal(glued, on_the_facet), 2)
+    assert abs(sum(a * b for a, b in zip(direction, _as_numbers(plus, 2)))) == pytest.approx(1.0)
 
 
 def test_an_outward_normal_of_a_reference_facet_is_the_entitys_own():
@@ -292,7 +294,7 @@ def test_an_outward_normal_of_a_reference_facet_is_the_entitys_own():
     for k in range(3):
         facet = sub_entity_domain(PlacedTriangle(), 1, k)
         point = Point([RealScalar(0.3)], entity_domain(Interval()))
-        assert as_numbers(OutwardNormal(facet, point), 2) == pytest.approx(outward_normals[k])
+        assert _as_numbers(OutwardNormal(facet, point), 2) == pytest.approx(outward_normals[k])
         assert PlacedTriangle().facet_outward_normal(k) == pytest.approx(outward_normals[k])
 
 
@@ -325,21 +327,21 @@ def test_an_outward_normal_wants_a_facet(glued, mesh):
 
 def test_an_interface_refuses_what_is_not_two_presentations_of_one_domain(plus, minus):
     """Fewer than two sides, two of one label, or an image of another dimension."""
-    gamma = hypotenuse_of(plus)
+    gamma = _hypotenuse_of(plus)
     with pytest.raises(ValueError, match="two embeddings"):
         Interface(gamma, (("+", gamma),))
     with pytest.raises(ValueError, match="told apart by label"):
-        Interface(gamma, (("+", gamma), ("+", hypotenuse_of(minus))))
+        Interface(gamma, (("+", gamma), ("+", _hypotenuse_of(minus))))
     with pytest.raises(ValueError, match="topological dimension"):
         Interface(gamma, (("+", gamma), ("-", minus)))
     with pytest.raises(ValueError, match="has no side"):
-        gamma_interface = Interface(gamma, (("+", gamma), ("-", hypotenuse_of(minus))))
+        gamma_interface = Interface(gamma, (("+", gamma), ("-", _hypotenuse_of(minus))))
         gamma_interface.embedding("top")
 
 
 def test_a_field_is_restricted_to_a_side_and_not_to_the_interface(space, mesh):
     """Which map a field is read through is the whole question, so it is named."""
-    gamma = interior_facets_of(mesh)
+    gamma = _interior_facets_of(mesh)
     u = Coefficient(space)
 
     restricted = restrict(u, gamma.embedding("-"))
@@ -353,7 +355,7 @@ def test_a_field_is_restricted_to_a_side_and_not_to_the_interface(space, mesh):
 
 def test_the_jump_is_a_difference_of_restrictions_on_one_domain(space, mesh):
     """``iota_+^* u - iota_-^* u`` typechecks because both are fields on the interface."""
-    gamma = interior_facets_of(mesh)
+    gamma = _interior_facets_of(mesh)
     u = Coefficient(space)
 
     assert jump(u, gamma) == restrict(u, gamma.embedding("+")) - restrict(u, gamma.embedding("-"))
@@ -369,14 +371,14 @@ def test_the_jump_is_a_difference_of_restrictions_on_one_domain(space, mesh):
 
 def test_a_field_reaches_an_interface_only_through_a_side(space, mesh):
     """An unrestricted field in an interface integral is refused, as in a facet one."""
-    gamma = interior_facets_of(mesh)
+    gamma = _interior_facets_of(mesh)
     with pytest.raises(ValueError, match="through a map"):
         Coefficient(space) * dx(gamma)
 
 
 def test_a_side_of_an_unsplit_interface_names_no_one_map(space, mesh):
     """Three facets a side, so no one transition until the integral is split."""
-    gamma = interior_facets_of(mesh)
+    gamma = _interior_facets_of(mesh)
     point = Point([RealScalar(0.3)], entity_domain(Interval()))
     with pytest.raises(ValueError, match="Split the integral by piece"):
         gamma.embedding("-").transition(point)
@@ -384,7 +386,7 @@ def test_a_side_of_an_unsplit_interface_names_no_one_map(space, mesh):
 
 def test_the_interface_of_a_mesh_with_itself_is_every_pair_of_facets(mesh):
     """Three facets a side gives nine pairs, each an interface of one facet a side."""
-    gamma = interior_facets_of(mesh)
+    gamma = _interior_facets_of(mesh)
     facets = sub_entities_of(mesh, 1)
 
     assert gamma.domain == facets
@@ -419,7 +421,7 @@ def test_pulling_an_interface_integral_back_gives_one_kernel_per_pair(space, mes
     ``-`` facet that the chart transition gives, carried through the
     ``-`` facet's inclusion. Nine kernels, telling their pair.
     """
-    gamma = interior_facets_of(mesh)
+    gamma = _interior_facets_of(mesh)
     u, v = Coefficient(space), TestFunction(space)
 
     pulled = pull_back_to_entity(
@@ -454,7 +456,7 @@ def test_pulling_an_interface_integral_back_gives_one_kernel_per_pair(space, mes
 
 def test_a_label_survives_to_the_pair(space, mesh):
     """A marked interface, as ``dS(3)``, keeps its mark on every piece of every pair."""
-    gamma = interior_facets_of(mesh, "interior-3")
+    gamma = _interior_facets_of(mesh, "interior-3")
     pulled = pull_back_to_entity(jump(Coefficient(space), gamma) * dx(gamma))
 
     assert isinstance(pulled, IntegralSum)
@@ -476,7 +478,7 @@ def test_the_pairs_of_a_mixed_mesh_match_facet_types():
     mesh = parametrized_domain(
         (LagrangeElement(PlacedTriangle(), 1, (3,)), LagrangeElement(PlacedTetrahedron(), 1, (3,)))
     )
-    pairs = interior_facets_of(mesh).pieces
+    pairs = _interior_facets_of(mesh).pieces
     regions = [{p.source for p in pair.parametrizations} for pair in pairs]
 
     assert len(pairs) == 9 + 16
@@ -506,8 +508,8 @@ def test_two_boxes_meet_along_a_face_with_no_cells_anywhere(on_the_facet):
 
     out_of_left = OutwardNormal(gamma.embedding("left")).reconstruct_with_variable(point)
     out_of_right = OutwardNormal(gamma.embedding("right")).reconstruct_with_variable(point)
-    assert as_numbers(out_of_left, 2) == pytest.approx([1.0, 0.0])
-    assert as_numbers(out_of_right, 2) == pytest.approx([-1.0, 0.0])
+    assert _as_numbers(out_of_left, 2) == pytest.approx([1.0, 0.0])
+    assert _as_numbers(out_of_right, 2) == pytest.approx([-1.0, 0.0])
 
     with pytest.raises(ValueError, match="is not made of cells"):
         pull_back_to_entity(integral)
@@ -541,13 +543,13 @@ def test_an_interval_laid_along_the_edge_is_an_interface_of_its_own(
     answers here are ``1 - s`` for the ``+`` side and ``s`` for the ``-``,
     and substituting them lands each side on the interface's own point.
     """
-    gamma = interface(along_the_edge, (("+", hypotenuse_of(plus)), ("-", hypotenuse_of(minus))))
+    gamma = interface(along_the_edge, (("+", _hypotenuse_of(plus)), ("-", _hypotenuse_of(minus))))
     assert gamma.primary is None
 
     density = VolumeElement(gamma, on_the_facet).expand_geometry()
     assert density.as_float() == pytest.approx(math.sqrt(2.0))
 
-    here = as_numbers(SpatialCoordinate(gamma, on_the_facet), 2)
+    here = _as_numbers(SpatialCoordinate(gamma, on_the_facet), 2)
     assert here == pytest.approx([0.3, 0.7])
 
     answers = {"+": 1.0 - 0.3, "-": 0.3}
@@ -558,13 +560,13 @@ def test_an_interval_laid_along_the_edge_is_an_interface_of_its_own(
         answer = Point([RealScalar(answers[side.label])], entity_domain(Interval()))
         substituted = replace(through_side, {transition: answer})
         assert isinstance(substituted, AbstractExpression)
-        assert [as_number(substituted.component(i)) for i in range(2)] == pytest.approx(here)
+        assert [_as_number(substituted.component(i)) for i in range(2)] == pytest.approx(here)
 
     root_half = 1.0 / math.sqrt(2.0)
     out_of_plus = OutwardNormal(gamma.embedding("+")).reconstruct_with_variable(on_the_facet)
     out_of_minus = OutwardNormal(gamma.embedding("-")).reconstruct_with_variable(on_the_facet)
-    assert as_numbers(out_of_plus, 2) == pytest.approx([root_half, root_half])
-    assert as_numbers(out_of_minus, 2) == pytest.approx([-root_half, -root_half])
+    assert _as_numbers(out_of_plus, 2) == pytest.approx([root_half, root_half])
+    assert _as_numbers(out_of_minus, 2) == pytest.approx([-root_half, -root_half])
 
 
 def test_a_multiplier_on_the_interface_couples_the_two_sides(space, mesh):
@@ -628,19 +630,19 @@ def test_a_reflected_neighbour_has_the_same_facet_map_and_the_opposite_outward_n
         AffineParametrization(RD(2), RD(2), ((0.0, -1.0), (-1.0, 0.0)), (1.0, 1.0)),
     )
     gamma = interface(
-        hypotenuse_of(plus), (("+", hypotenuse_of(plus)), ("-", hypotenuse_of(reflected)))
+        _hypotenuse_of(plus), (("+", _hypotenuse_of(plus)), ("-", _hypotenuse_of(reflected)))
     )
 
-    assert as_numbers(
-        SpatialCoordinate(hypotenuse_of(reflected), on_the_facet), 2
-    ) == pytest.approx(as_numbers(SpatialCoordinate(hypotenuse_of(plus), on_the_facet), 2))
-    assert as_numbers(UnitNormal(hypotenuse_of(reflected), on_the_facet), 2) == pytest.approx(
-        as_numbers(UnitNormal(hypotenuse_of(plus), on_the_facet), 2)
+    assert _as_numbers(
+        SpatialCoordinate(_hypotenuse_of(reflected), on_the_facet), 2
+    ) == pytest.approx(_as_numbers(SpatialCoordinate(_hypotenuse_of(plus), on_the_facet), 2))
+    assert _as_numbers(UnitNormal(_hypotenuse_of(reflected), on_the_facet), 2) == pytest.approx(
+        _as_numbers(UnitNormal(_hypotenuse_of(plus), on_the_facet), 2)
     )
 
     out_of_plus = OutwardNormal(gamma.embedding("+")).reconstruct_with_variable(on_the_facet)
     out_of_minus = OutwardNormal(gamma.embedding("-")).reconstruct_with_variable(on_the_facet)
-    assert as_numbers(out_of_minus, 2) == pytest.approx([-c for c in as_numbers(out_of_plus, 2)])
+    assert _as_numbers(out_of_minus, 2) == pytest.approx([-c for c in _as_numbers(out_of_plus, 2)])
 
 
 def test_two_intervals_meet_at_a_point():
@@ -674,8 +676,8 @@ def test_two_intervals_meet_at_a_point():
 
     out_of_left = OutwardNormal(gamma.embedding("left")).reconstruct_with_variable(at_the_point)
     out_of_right = OutwardNormal(gamma.embedding("right")).reconstruct_with_variable(at_the_point)
-    assert as_numbers(out_of_left, 1) == pytest.approx([1.0])
-    assert as_numbers(out_of_right, 1) == pytest.approx([-1.0])
+    assert _as_numbers(out_of_left, 1) == pytest.approx([1.0])
+    assert _as_numbers(out_of_right, 1) == pytest.approx([-1.0])
 
 
 def test_a_one_dimensional_mesh_has_an_interior_facet_integral():
@@ -683,7 +685,7 @@ def test_a_one_dimensional_mesh_has_an_interior_facet_integral():
     mesh = parametrized_domain(LagrangeElement(PlacedInterval(), 1, (1,)))
     space = function_space(mesh, LagrangeElement(PlacedInterval(), 1))
     u, v = Coefficient(space), TestFunction(space)
-    gamma = interior_facets_of(mesh)
+    gamma = _interior_facets_of(mesh)
 
     pulled = pull_back_to_entity(jump(u, gamma) * restrict(v, gamma.embedding("+")) * dx(gamma))
     assert isinstance(pulled, IntegralSum)
@@ -724,7 +726,7 @@ def test_a_triangle_meets_a_quadrilateral():
     assert pairs == [((1, k), (1, m)) for k in range(3) for m in range(4)]
 
 
-def dot(a, b) -> float:
+def _dot(a, b) -> float:
     """The dot product of two lists of numbers."""
     return sum(x * y for x, y in zip(a, b, strict=True))
 
@@ -778,8 +780,8 @@ def test_a_curved_interface_has_arc_length_and_opposite_outward_normals(plus, mi
     bent_plus = composed_domain(plus, Sheared())
     bent_minus = composed_domain(minus, Sheared())
     gamma = interface(
-        hypotenuse_of(bent_plus),
-        (("+", hypotenuse_of(bent_plus)), ("-", hypotenuse_of(bent_minus))),
+        _hypotenuse_of(bent_plus),
+        (("+", _hypotenuse_of(bent_plus)), ("-", _hypotenuse_of(bent_minus))),
     )
 
     s = 0.3
@@ -790,25 +792,25 @@ def test_a_curved_interface_has_arc_length_and_opposite_outward_normals(plus, mi
         arc_speed
     )
     answer = Point([RealScalar(1.0 - s)], entity_domain(Interval()))
-    other_way = VolumeElement(hypotenuse_of(bent_minus), answer).expand_geometry()
+    other_way = VolumeElement(_hypotenuse_of(bent_minus), answer).expand_geometry()
     assert other_way.as_float() == pytest.approx(arc_speed)
 
     out_of_plus = OutwardNormal(gamma.embedding("+")).reconstruct_with_variable(on_the_facet)
     out_of_minus = OutwardNormal(gamma.embedding("-")).reconstruct_with_variable(on_the_facet)
-    nu_plus = as_numbers(out_of_plus, 2)
+    nu_plus = _as_numbers(out_of_plus, 2)
     expanded = expand_geometry(out_of_minus)
-    substituted = replace(expanded, {preimage_in(out_of_minus.variable): answer})
+    substituted = replace(expanded, {_preimage_in(out_of_minus.variable): answer})
     assert isinstance(substituted, AbstractExpression)
-    nu_minus = [as_number(substituted.component(i)) for i in range(2)]
+    nu_minus = [_as_number(substituted.component(i)) for i in range(2)]
 
     tangent = [-1.0, 2.0 * s - 1.0]
-    assert dot(nu_plus, nu_plus) == pytest.approx(1.0)
-    assert dot(nu_plus, tangent) == pytest.approx(0.0)
+    assert _dot(nu_plus, nu_plus) == pytest.approx(1.0)
+    assert _dot(nu_plus, tangent) == pytest.approx(0.0)
     assert nu_minus == pytest.approx([-c for c in nu_plus])
 
     here = [1.0 - s, s + (1.0 - s) ** 2]
     inside_plus = [0.2, 0.2 + 0.2**2]
-    assert dot(nu_plus, [a - b for a, b in zip(inside_plus, here, strict=True)]) < 0
+    assert _dot(nu_plus, [a - b for a, b in zip(inside_plus, here, strict=True)]) < 0
 
 
 @pytest.fixture
@@ -820,7 +822,7 @@ def flat_in_space():
     )
 
 
-def folded_onto(apex):
+def _folded_onto(apex):
     """A triangle in space sharing the flat one's hypotenuse as facet 2, with vertex 0 at the apex.
 
     An affine map sending vertex 1 to (1, 0, 0), vertex 2 to (0, 1, 0) and
@@ -844,31 +846,31 @@ def test_two_triangles_meeting_at_an_angle_have_conormals_and_not_a_normal(
     which is what out of a surface across its edge means; an ambient
     normal to the edge is not a single direction at all.
     """
-    leaning = folded_onto((1.0, 1.0, 1.0))
+    leaning = _folded_onto((1.0, 1.0, 1.0))
     gamma = interface(
-        hypotenuse_of(flat_in_space),
-        (("flat", hypotenuse_of(flat_in_space)), ("leaning", hypotenuse_of(leaning))),
+        _hypotenuse_of(flat_in_space),
+        (("flat", _hypotenuse_of(flat_in_space)), ("leaning", _hypotenuse_of(leaning))),
     )
-    assert as_numbers(SpatialCoordinate(hypotenuse_of(leaning), on_the_facet), 3) == pytest.approx(
-        as_numbers(SpatialCoordinate(gamma, on_the_facet), 3)
-    )
+    assert _as_numbers(
+        SpatialCoordinate(_hypotenuse_of(leaning), on_the_facet), 3
+    ) == pytest.approx(_as_numbers(SpatialCoordinate(gamma, on_the_facet), 3))
     with pytest.raises(ValueError, match="codimension one"):
         UnitNormal(gamma, on_the_facet).value_shape
 
-    nu_flat = as_numbers(
+    nu_flat = _as_numbers(
         OutwardNormal(gamma.embedding("flat")).reconstruct_with_variable(on_the_facet), 3
     )
-    nu_leaning = as_numbers(
+    nu_leaning = _as_numbers(
         OutwardNormal(gamma.embedding("leaning")).reconstruct_with_variable(on_the_facet), 3
     )
     tangent = [-1.0, 1.0, 0.0]
 
     assert nu_flat == pytest.approx([1.0 / math.sqrt(2.0), 1.0 / math.sqrt(2.0), 0.0])
-    assert dot(nu_leaning, nu_leaning) == pytest.approx(1.0)
-    assert dot(nu_leaning, tangent) == pytest.approx(0.0)
+    assert _dot(nu_leaning, nu_leaning) == pytest.approx(1.0)
+    assert _dot(nu_leaning, tangent) == pytest.approx(0.0)
     # Away from the apex, within the leaning plane: minus (1/2, 1/2, 1) normalised.
     assert nu_leaning == pytest.approx([-c / math.sqrt(1.5) for c in (0.5, 0.5, 1.0)])
-    assert dot(nu_flat, nu_leaning) == pytest.approx(-1.0 / math.sqrt(3.0))
+    assert _dot(nu_flat, nu_leaning) == pytest.approx(-1.0 / math.sqrt(3.0))
 
 
 def test_three_surfaces_meeting_along_an_edge(flat_in_space, on_the_facet):
@@ -881,28 +883,28 @@ def test_three_surfaces_meeting_along_an_edge(flat_in_space, on_the_facet):
     says so; a Kirchhoff-type sum of the three is written as the three
     restrictions it is.
     """
-    up = folded_onto((1.0, 1.0, 1.0))
-    down = folded_onto((1.0, 1.0, -1.0))
+    up = _folded_onto((1.0, 1.0, 1.0))
+    down = _folded_onto((1.0, 1.0, -1.0))
     gamma = interface(
-        hypotenuse_of(flat_in_space),
+        _hypotenuse_of(flat_in_space),
         (
-            ("flat", hypotenuse_of(flat_in_space)),
-            ("up", hypotenuse_of(up)),
-            ("down", hypotenuse_of(down)),
+            ("flat", _hypotenuse_of(flat_in_space)),
+            ("up", _hypotenuse_of(up)),
+            ("down", _hypotenuse_of(down)),
         ),
     )
     assert gamma.labels == ("flat", "up", "down")
     assert gamma.pieces == (gamma,)
 
     normals = {
-        label: as_numbers(
+        label: _as_numbers(
             OutwardNormal(gamma.embedding(label)).reconstruct_with_variable(on_the_facet), 3
         )
         for label in gamma.labels
     }
     for normal in normals.values():
-        assert dot(normal, normal) == pytest.approx(1.0)
-        assert dot(normal, [-1.0, 1.0, 0.0]) == pytest.approx(0.0)
+        assert _dot(normal, normal) == pytest.approx(1.0)
+        assert _dot(normal, [-1.0, 1.0, 0.0]) == pytest.approx(0.0)
     assert normals["up"][2] == pytest.approx(-normals["down"][2])
 
     fields = {
@@ -934,7 +936,7 @@ def test_three_surfaces_meeting_along_an_edge(flat_in_space, on_the_facet):
     assert read_through == {"flat", "up", "down"}
 
 
-def read_through(term: Integral) -> dict[str, str | None]:
+def _read_through(term: Integral) -> dict[str, str | None]:
     """Which side each function in a pulled back term is read through, or None if directly."""
     sides: dict[str, str | None] = {}
     for node in as_graph(term.integrand):
@@ -986,7 +988,7 @@ def test_a_mesh_and_a_submesh_of_its_cells_meet_as_an_interface_of_codimension_z
     (term,) = pulled.terms
     assert isinstance(term, Integral)
     assert term.domain == EntityDomain(tri)
-    assert read_through(term) == {"Coefficient": None, "TestFunction": "submesh"}
+    assert _read_through(term) == {"Coefficient": None, "TestFunction": "submesh"}
 
 
 def test_a_mesh_and_a_submesh_of_its_facets_meet_along_those_facets():
@@ -1020,7 +1022,7 @@ def test_a_mesh_and_a_submesh_of_its_facets_meet_along_those_facets():
         assert isinstance(term, Integral)
         assert term.domain == EntityDomain(Interval())
         assert included_sub_entity(pair.image("mesh")) == included_sub_entity(pair.domain)
-        assert read_through(term) == {"Coefficient": None, "TestFunction": "submesh"}
+        assert _read_through(term) == {"Coefficient": None, "TestFunction": "submesh"}
         inverses = [node for node in as_graph(term.integrand) if isinstance(node, JacobianInverse)]
         assert len(inverses) == 1
         assert inverses[0].domain == mesh
@@ -1044,7 +1046,7 @@ def test_a_submesh_is_of_entities_of_its_mesh():
     assert len(along_the_edges.pieces) == 6
 
 
-def embedded(gamma, omega, by=None):
+def _embedded(gamma, omega, by=None):
     """A domain presented from a mesh: carried into each cell type's coordinates and mapped on.
 
     Written out, as the language has no spelling for it: the one
@@ -1065,7 +1067,7 @@ def embedded(gamma, omega, by=None):
     )
 
 
-def answered(expression, answer):
+def _answered(expression, answer):
     """An expression with its preimage point answered, as the library would.
 
     An affine map's Jacobian reads no point, so the preimage may have
@@ -1098,7 +1100,7 @@ def test_a_periodic_boundary_is_an_interface_whose_other_side_is_a_translation_a
         sub_entity_domain(PlacedTriangle(), 1, 1), plus.parametrization(PlacedTriangle())
     )
     gamma = interface(
-        left_edge, (("left", left_edge), ("right", embedded(left_edge, translate, shift)))
+        left_edge, (("left", left_edge), ("right", _embedded(left_edge, translate, shift)))
     )
 
     assert gamma.primary == "left"
@@ -1115,18 +1117,18 @@ def test_a_periodic_boundary_is_an_interface_whose_other_side_is_a_translation_a
     image = Restriction(u, right, on_the_facet).image_point
     assert image.domain == entity_domain(PlacedTriangle())
     expanded = expand_geometry(image)
-    preimage = preimage_in(expanded)
+    preimage = _preimage_in(expanded)
     assert preimage.parametrization == translate.parametrization(PlacedTriangle())
     shifted = expand_geometry(preimage.ambient_point)
     assert isinstance(shifted, AbstractExpression)
-    assert [as_number(shifted.component(i)) for i in range(2)] == pytest.approx([1.0, 0.3])
+    assert [_as_number(shifted.component(i)) for i in range(2)] == pytest.approx([1.0, 0.3])
 
     answer = Point([RealScalar(0.0), RealScalar(0.3)], entity_domain(PlacedTriangle()))
-    assert as_numbers(SpatialCoordinate(translate, answer), 2) == pytest.approx([1.0, 0.3])
+    assert _as_numbers(SpatialCoordinate(translate, answer), 2) == pytest.approx([1.0, 0.3])
 
-    tangent = answered(carried.inner.jacobian(on_the_facet), answer)
-    assert [as_number(tangent.component(i, 0)) for i in range(2)] == pytest.approx([0.0, 1.0])
-    assert answered(VolumeElement(right.image, on_the_facet), answer).as_float() == (
+    tangent = _answered(carried.inner.jacobian(on_the_facet), answer)
+    assert [_as_number(tangent.component(i, 0)) for i in range(2)] == pytest.approx([0.0, 1.0])
+    assert _answered(VolumeElement(right.image, on_the_facet), answer).as_float() == (
         pytest.approx(1.0)
     )
 
@@ -1145,12 +1147,12 @@ def test_an_interface_that_is_a_facet_of_neither_side_is_read_through_preimages(
     """
     gamma = interface(
         along_the_edge,
-        (("+", embedded(along_the_edge, plus)), ("-", embedded(along_the_edge, minus))),
+        (("+", _embedded(along_the_edge, plus)), ("-", _embedded(along_the_edge, minus))),
     )
     assert gamma.primary is None
     (pair,) = gamma.pieces
     assert isinstance(pair, Interface)
-    here = as_numbers(SpatialCoordinate(pair, on_the_facet), 2)
+    here = _as_numbers(SpatialCoordinate(pair, on_the_facet), 2)
 
     # The preimage lands in each triangle's own coordinates, where the
     # point (0.3, 0.7) of the plane sits at itself in the first and at its
@@ -1161,8 +1163,8 @@ def test_an_interface_that_is_a_facet_of_neither_side_is_read_through_preimages(
         answer = Point(
             [RealScalar(c) for c in answers[side.label]], entity_domain(PlacedTriangle())
         )
-        through_side = answered(SpatialCoordinate(side.image, on_the_facet), answer)
-        assert [as_number(through_side.component(i)) for i in range(2)] == pytest.approx(here)
+        through_side = _answered(SpatialCoordinate(side.image, on_the_facet), answer)
+        assert [_as_number(through_side.component(i)) for i in range(2)] == pytest.approx(here)
 
 
 def test_a_mortar_coupling_of_two_meshes_through_a_multiplier(on_the_facet):
@@ -1180,7 +1182,9 @@ def test_a_mortar_coupling_of_two_meshes_through_a_multiplier(on_the_facet):
     w = Coefficient(function_space(fine, LagrangeElement(tri, 1)))
     mu = TestFunction(function_space(along, LagrangeElement(Interval(), 1)))
 
-    gamma = interface(along, (("coarse", embedded(along, coarse)), ("fine", embedded(along, fine))))
+    gamma = interface(
+        along, (("coarse", _embedded(along, coarse)), ("fine", _embedded(along, fine)))
+    )
     coupling = (
         mu
         * (restrict(u, gamma.embedding("coarse")) - restrict(w, gamma.embedding("fine")))
@@ -1223,7 +1227,7 @@ def test_a_well_in_three_dimensions_is_an_interface_of_codimension_two():
     lam = TestFunction(function_space(well, LagrangeElement(Interval(), 1)))
     s = Point([RealScalar(0.3)], entity_domain(Interval()))
 
-    gamma = interface(well, (("well", well), ("rock", embedded(well, rock))))
+    gamma = interface(well, (("well", well), ("rock", _embedded(well, rock))))
     assert gamma.topological_dimension == 1
     assert gamma.embedding("rock").geometric_dimension == 3
 
@@ -1254,7 +1258,7 @@ def test_a_union_presented_piece_by_piece_pairs_each_piece_with_its_own():
     other = parametrized_domain(LagrangeElement(tri, 2, (2,)))
     facets = sub_entities_of(one, 1)
     carried = union_domain(
-        [piece for facet in facets.pieces for piece in embedded(facet, other).pieces]
+        [piece for facet in facets.pieces for piece in _embedded(facet, other).pieces]
     )
 
     gamma = interface(facets, (("one", facets), ("other", carried)))
@@ -1313,7 +1317,7 @@ def test_an_interface_immersed_in_one_mesh_has_no_jump_to_see():
     u = Coefficient(function_space(mesh, LagrangeElement(tri, 1)))
     mu = TestFunction(function_space(along, LagrangeElement(Interval(), 1)))
 
-    gamma = interface(along, (("+", embedded(along, mesh)), ("-", embedded(along, mesh))))
+    gamma = interface(along, (("+", _embedded(along, mesh)), ("-", _embedded(along, mesh))))
     assert gamma.image("+") == gamma.image("-")
     assert gamma.embedding("+") != gamma.embedding("-")
 

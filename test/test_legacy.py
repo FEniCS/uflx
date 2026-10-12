@@ -13,7 +13,7 @@ from typing import cast
 import pytest
 from conftest import Interval, LagrangeElement, Triangle
 from test_facet_domains import PlacedTriangle
-from test_interfaces import interior_facets_of
+from test_interfaces import _interior_facets_of
 
 from uflx import (
     Coefficient,
@@ -217,7 +217,7 @@ def test_an_integrand_that_does_not_say_which_domain_is_refused(space):
         inner(Coefficient(space), TestFunction(elsewhere)) * ds
 
 
-def restrictions_in(integral: Integral) -> set:
+def _restrictions_in(integral: Integral) -> set:
     """The fields an integral reads through a map, and the domain each is read through."""
     return {
         (node.field, node.domain)
@@ -233,7 +233,7 @@ def test_an_interior_facet_measure_integrates_over_the_interface(mesh, space):
     knows the interface, so the two spellings build the same integral.
     """
     u, v = Coefficient(space), TestFunction(space)
-    gamma = interior_facets_of(mesh, InteriorFacets(None))
+    gamma = _interior_facets_of(mesh, InteriorFacets(None))
 
     integral = jump(u) * avg(v) * dS
     assert isinstance(integral, Integral)
@@ -241,8 +241,8 @@ def test_an_interior_facet_measure_integrates_over_the_interface(mesh, space):
     native = native_jump(u, gamma) * native_avg(v, gamma) * measure_of(gamma)
     assert isinstance(native, Integral)
     assert integral.measure == native.measure
-    assert restrictions_in(integral) == restrictions_in(native)
-    assert restrictions_in(integral) == {
+    assert _restrictions_in(integral) == _restrictions_in(native)
+    assert _restrictions_in(integral) == {
         (u, gamma.embedding("+")),
         (u, gamma.embedding("-")),
         (v, gamma.embedding("+")),
@@ -253,7 +253,7 @@ def test_an_interior_facet_measure_integrates_over_the_interface(mesh, space):
 def test_a_side_is_named_by_plus_and_minus(mesh, space):
     """``plus(u)`` stands where a restriction to the ``+`` side will."""
     u = Coefficient(space)
-    gamma = interior_facets_of(mesh, InteriorFacets(None))
+    gamma = _interior_facets_of(mesh, InteriorFacets(None))
 
     marked = plus(u)
     assert isinstance(marked, SideMarker)
@@ -262,7 +262,7 @@ def test_a_side_is_named_by_plus_and_minus(mesh, space):
 
     integral = plus(u) * minus(u) * dS
     assert isinstance(integral, Integral)
-    assert restrictions_in(integral) == {(u, gamma.embedding("+")), (u, gamma.embedding("-"))}
+    assert _restrictions_in(integral) == {(u, gamma.embedding("+")), (u, gamma.embedding("-"))}
 
     with pytest.raises(ValueError, match="marked with a side already"):
         plus(minus(u))
@@ -278,7 +278,7 @@ def test_adding_plus_minus_restriction_makes_an_expression_callable_with_a_side(
     interpreter that only imported ``uflx``, there is no such call.
     """
     u = Coefficient(space)
-    gamma = interior_facets_of(mesh, InteriorFacets(None))
+    gamma = _interior_facets_of(mesh, InteriorFacets(None))
 
     assert "__call__" not in vars(AbstractExpression)
     with pytest.raises(TypeError):
@@ -293,7 +293,7 @@ def test_adding_plus_minus_restriction_makes_an_expression_callable_with_a_side(
 
         integral = u("+") * u("-") * dS  # pyrefly: ignore
         assert isinstance(integral, Integral)
-        assert restrictions_in(integral) == {(u, gamma.embedding("+")), (u, gamma.embedding("-"))}
+        assert _restrictions_in(integral) == {(u, gamma.embedding("+")), (u, gamma.embedding("-"))}
 
         with pytest.raises(ValueError, match="not with"):
             u(0.5)  # pyrefly: ignore
@@ -366,7 +366,7 @@ def test_a_facet_normal_is_read_off_the_facets_under_ds(mesh, space):
     integral = inner(grad(u), n) * v * ds
     assert isinstance(integral, Integral)
     facets = sub_entities_of(mesh, 1, ExteriorFacets(None))
-    assert restrictions_in(integral) == {(grad(u), facets), (v, facets)}
+    assert _restrictions_in(integral) == {(grad(u), facets), (v, facets)}
     normals = {node for node in as_graph(integral.integrand) if isinstance(node, OutwardNormal)}
     assert normals == {OutwardNormal(facets)}
 
@@ -379,7 +379,7 @@ def test_a_facet_normal_is_read_off_a_side_under_dS(mesh, space):
     """``n("+")`` is the normal out of the ``+`` side, and ``jump(v, n)`` uses both."""
     u, v = Coefficient(space), TestFunction(space)
     n = facet_normal(mesh)
-    gamma = interior_facets_of(mesh, InteriorFacets(None))
+    gamma = _interior_facets_of(mesh, InteriorFacets(None))
 
     assert jump(v, n) == plus(v) * plus(n) + minus(v) * minus(n)
     assert jump(grad(u), n) == inner(plus(grad(u)), plus(n)) + inner(minus(grad(u)), minus(n))
