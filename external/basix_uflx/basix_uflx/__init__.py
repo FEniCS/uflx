@@ -129,7 +129,7 @@ class _WrappedBasixElement(AbstractFiniteElement):
         return np.asarray(self._basix_element.tabulate(derivatives, np.asarray(points)))
 
 
-class BasixElement(_WrappedBasixElement):
+class Element(_WrappedBasixElement):
     """An element from one of Basix's families.
 
     Users should not call this class's initialiser directly, but should
@@ -168,7 +168,7 @@ class BasixElement(_WrappedBasixElement):
         )
 
 
-class CustomBasixElement(_WrappedBasixElement):
+class CustomElement(_WrappedBasixElement):
     """A custom Basix element, given by its coefficients and interpolation data.
 
     Users should not call this class's initialiser directly, but should
@@ -397,7 +397,7 @@ def element(
         elif family == EF.DPC:
             dpc_variant = basix.DPCVariant.diagonal_gll
 
-    ufl_e = BasixElement(
+    ufl_e = Element(
         family,
         cell,
         degree,
@@ -462,7 +462,7 @@ def custom_element(
     Returns:
         A custom finite element.
     """
-    return CustomBasixElement(
+    return CustomElement(
         cell_type,
         tuple(reference_value_shape),
         _array_data(wcoeffs),
@@ -624,7 +624,7 @@ def wrap_element(element: basix.finite_element.FiniteElement) -> AbstractFiniteE
             element.polyset_type,
             dtype,
         )
-    return BasixElement(
+    return Element(
         element.family,
         element.cell_type,
         element.degree,
