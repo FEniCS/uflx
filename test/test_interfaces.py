@@ -69,7 +69,12 @@ from uflx.geometry import (
 )
 from uflx.graphs import GraphNode, as_graph
 from uflx.integrals import Integral, IntegralSum
-from uflx.interfaces import CoordinateRepresentation, Embedding, Interface
+from uflx.interfaces import (
+    CoordinateRepresentation,
+    Embedding,
+    Interface,
+    coordinate_representation,
+)
 from uflx.parametrizations import (
     AffineParametrization,
     ComposedDomain,
@@ -1051,7 +1056,7 @@ def embedded(gamma, omega, by=None):
         [
             composed_domain(
                 composed_domain(
-                    region, CoordinateRepresentation(gamma, omega.parametrization(cell), by)
+                    region, coordinate_representation(gamma, omega.parametrization(cell), by)
                 ),
                 omega.parametrization(cell),
             )
@@ -1273,21 +1278,21 @@ def test_a_domain_is_carried_from_one_cells_coordinates_by_a_map_that_joins_them
     edge = composed_domain(sub_entity_domain(tri, 1, 1), plus.parametrization(tri))
 
     # The map needs no cell on either end; presenting its image as a domain does.
-    of_a_box = CoordinateRepresentation(box_face, mesh.parametrization(tri))
+    of_a_box = coordinate_representation(box_face, mesh.parametrization(tri))
     assert of_a_box.source == box_face.parameter_region
     assert of_a_box.target == entity_domain(tri)
     with pytest.raises(ValueError, match="piece by piece"):
-        CoordinateRepresentation(sub_entities_of(mesh, 1), mesh.parametrization(tri))
+        coordinate_representation(sub_entities_of(mesh, 1), mesh.parametrization(tri))
     with pytest.raises(ValueError, match="without a map between them"):
-        CoordinateRepresentation(edge, in_space.parametrization(tri))
+        coordinate_representation(edge, in_space.parametrization(tri))
     with pytest.raises(ValueError, match="does not take the coordinates"):
-        CoordinateRepresentation(
+        coordinate_representation(
             edge,
             in_space.parametrization(tri),
             AffineParametrization(RD(3), RD(3), ((1, 0, 0), (0, 1, 0), (0, 0, 1)), (0, 0, 0)),
         )
     lift = AffineParametrization(RD(2), RD(3), ((1, 0), (0, 1), (0, 0)), (0, 0, 0))
-    assert CoordinateRepresentation(
+    assert coordinate_representation(
         edge, in_space.parametrization(tri), lift
     ).target == entity_domain(tri)
 

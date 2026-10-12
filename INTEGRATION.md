@@ -243,7 +243,7 @@ combinatorially and so costs nothing. In general the map of a side written in ch
 and its Jacobian is the chain rule in closed form. `T_s` is a map the user states, the
 identity of sets unless said, which is what makes a periodic boundary an interface whose
 other side is a translation away. An image built from it,
-`composed_domain(composed_domain(region, CoordinateRepresentation(Γ, φ_s, T_s)), φ_s)`,
+`composed_domain(composed_domain(region, coordinate_representation(Γ, φ_s, T_s)), φ_s)`,
 has the shape a facet of a mesh has and is read the same way, and being parametrized
 from `Γ`'s own region it needs no chart transition. The matching case rested on three
 assumptions, that `ι̂_s` lands in a facet, that `ι_s` is the inclusion of sets, and that

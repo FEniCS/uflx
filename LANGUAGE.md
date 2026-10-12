@@ -237,7 +237,7 @@ inner(jump(grad(u), gamma), OutwardNormal(gamma.embedding("+"))) * restrict(
 Pulling that back gives one integral per pair of facets over the reference facet, the
 `-` side read at the point of its own facet that the chart transition gives.
 
-A side need not be a facet of anything. `CoordinateRepresentation(gamma, phi, T)` is a
+A side need not be a facet of anything. `coordinate_representation(gamma, phi, T)` is a
 side's map in general, `gamma` carried into a cell's coordinates by `phi⁻¹ ∘ T ∘ ψ`,
 with `T` a stated map or the identity of sets; a periodic boundary is the facets on one
 side and, on the other, those facets carried into the translated cells:
@@ -245,7 +245,7 @@ side and, on the other, those facets carried into the translated cells:
 ```python
 left = sub_entities_of(mesh, 1, "left")
 shifted = composed_domain(
-    composed_domain(entity_domain(Interval()), CoordinateRepresentation(left, phi, shift)), phi
+    composed_domain(entity_domain(Interval()), coordinate_representation(left, phi, shift)), phi
 )
 gamma = interface(left, (("left", left), ("right", shifted)))
 ```

@@ -74,8 +74,8 @@ from uflx.domains import (
     AbstractParametrization,
     AbstractParametrizedDomain,
     CarriesADomain,
-    LabelledParametrization,
     MadeOfPieces,
+    labelled_parametrization,
     parameter_regions,
     parametrization_out_of,
     pieces_of,
@@ -285,7 +285,7 @@ class Embedding(AbstractParametrizedDomain):
         if the map does.
         """
         return tuple(
-            LabelledParametrization(parametrization, self)
+            labelled_parametrization(parametrization, self)
             for parametrization in self.image.parametrizations
         )
 
@@ -322,7 +322,7 @@ class Embedding(AbstractParametrizedDomain):
             return variable
         if self._label == self._interface.primary or _carried_by(self.image) == domain:
             return variable
-        transition = CoordinateRepresentation(domain, parametrization_out_of(self, region))
+        transition = coordinate_representation(domain, parametrization_out_of(self, region))
         point = transition.value(variable)
         assert isinstance(point, AbstractVariable)
         return point
@@ -538,6 +538,26 @@ def _carried_by(image: AbstractParametrizedDomain) -> AbstractParametrizedDomain
     if len(carried) == 1 and None not in carried:
         return carried.pop()
     return None
+
+
+def coordinate_representation(
+    domain: AbstractParametrizedDomain,
+    through: AbstractParametrization,
+    by: AbstractParametrization | None = None,
+) -> CoordinateRepresentation:
+    """Create the map of an embedding written in charts, ``phi^-1 . T . psi``.
+
+    Args:
+        domain: The domain carried, parametrized from one region
+        through: The map of the cell it is carried into
+        by: The map applied to the domain's points first, or None for the
+            identity of sets
+
+    Returns:
+        That map, whose value is a preimage and whose Jacobian is the
+        chain rule
+    """
+    return CoordinateRepresentation(domain, through, by)
 
 
 def interface(

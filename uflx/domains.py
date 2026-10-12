@@ -883,6 +883,21 @@ def labelled_domain(domain: AbstractCellularDomain, label: Any) -> LabelledDomai
     return LabelledDomain(domain, label)
 
 
+def labelled_parametrization(
+    parametrization: AbstractParametrization, label: Any
+) -> LabelledParametrization:
+    """Create a map told apart from another by a label.
+
+    Args:
+        parametrization: The map being named
+        label: Anything hashable it is told apart by
+
+    Returns:
+        The same map, told apart by that label
+    """
+    return LabelledParametrization(parametrization, label)
+
+
 def unlabelled(domain: AbstractDomain) -> AbstractDomain:
     """The domain a selection selects from, or the domain itself.
 
