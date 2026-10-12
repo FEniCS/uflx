@@ -3,6 +3,7 @@
 import os
 import subprocess
 import sys
+import textwrap
 
 import pytest
 from conftest import LagrangeElement, Triangle
@@ -122,21 +123,23 @@ def test_no_class_in_uflx_defines_its_own_identity():
                 assert method not in vars(cls), (cls, method)
 
 
-_HASHES = (
-    "from uflx import dx\n"
-    "from uflx.domains import RD\n"
-    "from uflx.expressions import RealScalar\n"
-    "from uflx.maps import IdentityReferenceMap\n"
-    "values = (dx, RD(2), IdentityReferenceMap(), RealScalar(1.0) * RealScalar(2.0))\n"
-    "print([hash(v) for v in values])"
-)
-_ORDER = (
-    "from uflx.geometry import SpatialCoordinate\n"
-    "from uflx.graphs import as_graph\n"
-    "x = SpatialCoordinate(2)\n"
-    "e = x.component(0) * x.component(1) + x.component(1) / x.component(0)\n"
-    "print(as_graph(e).ordered_nodes())"
-)
+_HASHES = textwrap.dedent("""
+    from uflx import dx
+    from uflx.domains import RD
+    from uflx.expressions import RealScalar
+    from uflx.maps import IdentityReferenceMap
+
+    values = (dx, RD(2), IdentityReferenceMap(), RealScalar(1.0) * RealScalar(2.0))
+    print([hash(v) for v in values])
+""")
+_ORDER = textwrap.dedent("""
+    from uflx.geometry import SpatialCoordinate
+    from uflx.graphs import as_graph
+
+    x = SpatialCoordinate(2)
+    e = x.component(0) * x.component(1) + x.component(1) / x.component(0)
+    print(as_graph(e).ordered_nodes())
+""")
 
 
 @pytest.mark.parametrize("script", [_HASHES, _ORDER], ids=["hashes", "order"])

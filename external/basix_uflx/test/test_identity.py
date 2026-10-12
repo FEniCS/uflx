@@ -3,6 +3,7 @@
 import os
 import subprocess
 import sys
+import textwrap
 
 import basix
 import numpy as np
@@ -101,14 +102,16 @@ def test_blocked_symmetry_false_is_no_symmetry():
 
 def test_every_process_agrees_on_an_elements_hash_whatever_its_hash_seed():
     """Guards against a wrapped Basix object hashing differently on two MPI ranks."""
-    script = (
-        "import basix_uflx\n"
-        "print([hash(e) for e in (\n"
-        "    basix_uflx.element('Lagrange', 'triangle', 2, shape=(2,)),\n"
-        "    basix_uflx.quadrature_element('triangle', degree=2),\n"
-        "    basix_uflx.real_element('triangle', ()),\n"
-        ")])"
-    )
+    script = textwrap.dedent("""
+        import basix_uflx
+
+        elements = (
+            basix_uflx.element("Lagrange", "triangle", 2, shape=(2,)),
+            basix_uflx.quadrature_element("triangle", degree=2),
+            basix_uflx.real_element("triangle", ()),
+        )
+        print([hash(e) for e in elements])
+    """)
     printed = {
         seed: subprocess.run(
             [sys.executable, "-c", script],
