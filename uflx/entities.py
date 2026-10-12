@@ -88,6 +88,30 @@ class AbstractEntity(ABC):
             f"{self!r} does not say where its sub-entities are. That is the definer's to supply."
         )
 
+    def facet_outward_normal(self, index: int) -> tuple[float, ...]:
+        """Get the unit normal to one of this entity's facets, pointing out of it.
+
+        Reference geometry again, and the second piece of it an entity
+        is asked for. The inclusion fixes the facet's normal up to sign,
+        and which sign points out is about which side of the facet the
+        interior lies on, which the combinatorics do not say either. It
+        is supplied by whoever defines the entity, as Basix supplies its
+        ``facet_outward_normals``.
+
+        Args:
+            index: Which facet.
+
+        Returns:
+            The outward unit normal, in this entity's coordinates.
+
+        Raises:
+            NotImplementedError: If this entity does not say which way
+                is out of it.
+        """
+        raise NotImplementedError(
+            f"{self!r} does not say which way is out of it. That is the definer's to supply."
+        )
+
     def sub_entity_count(self, dim: int) -> int:
         """Get the number of sub-entities of a given dimension.
 

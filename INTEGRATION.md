@@ -104,10 +104,10 @@ The `+`/`-` of UFL is not part of the measure either. It is a *restriction of a 
 which is a pullback along one side's inclusion map, and it lives in the integrand.
 
 So a codimension and a boundary flag become operators on domains —
-`sub_entities_of(omega, codim)`, and an `interface_of(omega_plus, omega_minus)` still to
-come — returning domains that then need only the one measure. That is the home for a
-mesh-relative query, and it makes the derived domain an object carrying a
-parametrization, a metric, a normal and a measure like any other.
+`sub_entities_of(omega, codim)` and `interface_of(omega_plus, omega_minus)` — returning
+domains that then need only the one measure. That is the home for a mesh-relative query,
+and it makes the derived domain an object carrying a parametrization, a metric, a normal
+and a measure like any other.
 
 The derived domain is named for the sub-entities it is parametrized by and not for a
 boundary. Which facets it has — those with one adjacent cell, those with two, those a
@@ -209,9 +209,19 @@ same reference facet, `ψ± = φ± ∘ ι̂±`, differing by a reparametrization
 facet, `ψ₊ = ψ₋ ∘ τ`, fixed by the two cells' vertex orderings. `τ` is an isometry of
 the reference facet, so `|det Dτ| = 1`: the two sides induce *the same* density on `Γ`,
 which is why one measure serves both. This is a two-map atlas with a genuine transition
-map, and it is the one place in UFLx where an atlas is earned rather than decorative. It
-also wants a map per `(cell type, side)`, where
-`AbstractParametrizedDomain.parametrization` is keyed on cell type alone.
+map, and it is the one place in UFLx where an atlas is earned rather than decorative.
+
+`Interface` is that atlas: a domain `Γ` and, per side, a *presentation* of it, which is
+`Γ` parametrized by that side's own map. A presentation is a piece as `sub_entities_of`
+already builds them, or a face of a box, so an interface of two cells and an interface
+of two regions are one construction. The transition map is never an object. The point of
+the `-` side's chart that `X` corresponds to is `ψ₋⁻¹(ψ₊(X))`, written literally as the
+preimage through `ψ₋` of the image through `ψ₊`, both of which exist already; the
+preimage is the terminal the surrounding library evaluates, as a facet permutation here
+and by point location below. No derivative of `τ` is ever wanted, a restriction being
+the pullback of a function and the measure being `Γ`'s. The two sides of one mesh share
+one `φ`, so `ψ₋` is named by its side (`SideParametrization`), which is to a map what a
+labelled domain is to a domain: identity and nothing geometric.
 
 **Non-matching: `Γ` is its own domain.** Mortar coupling, a Lagrange multiplier on a
 contact surface, two independently meshed subdomains. `Γ` is a facet of neither side and
@@ -226,11 +236,14 @@ is part of the question. So the general interface needs no new geometry: a point
 is pushed forward by `Γ`'s own parametrization and pulled back through each side's.
 
 Read in that order, UFL's `+`/`-` is the special case in which `φ₊⁻¹ ∘ ψ_Γ` is known
-combinatorially and so costs nothing.
+combinatorially and so costs nothing. It is the same `Interface`, with `Γ` its own
+domain and no side primary, so that every side is read through a preimage; what is not
+built for it is the restriction's reading of a side that lands in a cell with no local
+facet.
 
 ## 6. What is built, and what is not
 
-Built, as `ds`:
+Built, as `ds` and `dS`:
 
 1. **The derived domain of facets.** `AbstractEntity.sub_entity_inclusion(dim, index)`
    is the reference geometry UFLx cannot supply, so the entity's definer supplies it and
@@ -252,20 +265,27 @@ Built, as `ds`:
    carrying the measure, the restrictions and the geometric quantities onto it, and runs
    before the cell type split. Pulling back then multiplies the piece's volume element
    into the integrand, which is the factor an exterior facet integral picks up.
+1. **A presentation per side.** `Interface(Γ, sides)` is §5's atlas,
+   `interface_of(a, b)` the interface along which two meshes' facets meet, and
+   `interface_of(mesh, mesh)` is `dS`. A restriction names a side,
+   `restrict(u, Γ.side("-"))`, and reads the field at that side's chart point through
+   that side's inclusion; `jump` and `avg` are the two restrictions' difference and
+   mean. An interface of unions fans out over pairs of pieces, which is what identifies
+   a kernel, and the pull back is onto the parameter region of the domain's one
+   parametrization, so an interface needs no special case there.
+1. **The outward normal.** `OutwardNormal(side)` is §4's transport rule: the reference
+   facet's outward normal, which the entity supplies as `facet_outward_normal`, carried
+   by the cell map's inverse transpose at the side's cell point. It needs no orientation
+   of `Γ`, is outward under a reflection, and `ν₊ = -ν₋` is checked rather than defined.
+   `UnitNormal` stays as the direction a domain of codimension one has on its own.
 
 Not built:
 
-1. **A parametrization per side**, generalising `parametrization(cell)`. This is `dS` in
-   both cases of §5, and it subsumes `+`/`-`. The restriction it needs is the one above,
-   told which side.
-1. **Orientation carried on a restriction**, giving a signed normal and a statable
-   divergence theorem. Without it the facet normal is a direction with no outwardness,
-   as `test_a_facets_normal_is_normal_but_not_outward` records.
 1. **Pull back off a cell.** Change of variables onto a parametrization's parameter
    region is meaningful for any parametrized domain — the identity for `R^d` and for a
-   region, the inclusion for a face — but the variable it hands the integrand is a
-   cell's, so `on_cell_type` and `pull_back_to_entity` require a cellular domain and
-   say so.
+   region, the inclusion for a face — and `pull_back_to_entity` now asks for that
+   region, but the variable it hands the integrand is still a cell's, so a region
+   refuses. An interface of two boxes builds and has its normals, and stops there.
 1. **A measure over a domain of topological dimension zero**, which is the counting
    measure a sub-entity domain of full codimension would give. The empty Gram
    determinant is one, but the empty matrix its Jacobian needs cannot be built, as
@@ -318,14 +338,22 @@ Acceptance criteria, as tests rather than prose to agree with.
 - **The facet geometry is the cell's geometry, asked for.** The inclusion an entity
   supplies gives the same facet lengths as the one `test_boundaries.py` writes by hand.
   `test_the_measure_of_a_facet_is_its_length` in `test_facet_domains.py`.
-- **One integral, two domains.** `inner(ι₊* u₊ − ι₋* u₋, v) * dx(interface)` builds, and
-  the two restrictions are distinguishable in the graph.
+- **One integral, two domains.** `inner(jump(u, Γ), v) * dx(Γ)` builds, the two
+  restrictions are distinguishable in the graph, and pulling it back gives one kernel
+  per pair of facets, the `-` side read at the chart transition.
+  `test_the_jump_is_a_difference_of_restrictions_on_one_domain` and
+  `test_pulling_an_interface_integral_back_gives_one_kernel_per_pair`.
 - **The jump is side-symmetric in the measure.** Pulling the interface integral back
   through either side's parametrization gives the same density factor.
+  `test_the_jump_is_side_symmetric_in_the_measure`.
 - **The divergence theorem is statable.** `∫ div(u) dx(omega)` and
-  `∫ inner(restrict(u, facets), n) dx(facets)` are both expressible, with `n`'s sign
-  fixed by the facet's inclusion rather than by a consumer's convention. Both sides
-  build and pull back; the sign is what is still open.
+  `∫ inner(restrict(u, facets), OutwardNormal(facets)) dx(facets)` are both expressible,
+  with the normal's sign fixed by the cell it points out of rather than by a consumer's
+  convention, and the two sides of an interface have opposite ones.
+  `test_the_outward_normals_of_the_two_sides_are_opposite`.
+- **Two regions meet as two cells do.** Two boxes sharing a face make an `Interface`
+  with the one measure and two outward normals, and no cell anywhere in it.
+  `test_two_boxes_meet_along_a_face_with_no_cells_anywhere`.
 
 ## Notes
 

@@ -112,6 +112,43 @@ class Placed(Entity):
             entity_domain(sub_entity), entity_domain(self), matrix, origin, dim, index
         )
 
+    def facet_outward_normal(self, index: int) -> tuple[float, ...]:
+        """Get the unit normal pointing out of this cell across one of its facets.
+
+        The cross product of the facet's edges from its first vertex
+        fixes the direction, and a vertex off the facet says which sign
+        is out: the cell is convex, so the interior is on that vertex's
+        side.
+        """
+        dim = self.topological_dimension
+        inclusion = self.sub_entity_inclusion(dim - 1, index)
+        matrix = inclusion.matrix
+        normal = []
+        for i in range(dim):
+            minor = [[matrix[r][c] for c in range(dim - 1)] for r in range(dim) if r != i]
+            normal.append(_determinant(minor) * (1.0 if i % 2 == 0 else -1.0))
+        length = math.sqrt(sum(c * c for c in normal))
+        normal = [c / length for c in normal]
+        on_facet = self.sub_entity_vertices(dim - 1)[index]
+        inside = next(v for v in range(len(self.vertices)) if v not in on_facet)
+        towards_inside = sum(
+            n * (a - b) for n, a, b in zip(normal, self.vertices[inside], inclusion.offset)
+        )
+        sign = -1.0 if towards_inside > 0 else 1.0
+        return tuple(sign * c for c in normal)
+
+
+def _determinant(matrix: list[list[float]]) -> float:
+    """The determinant of a small matrix of numbers, by expansion."""
+    if len(matrix) == 0:
+        return 1.0
+    if len(matrix) == 1:
+        return matrix[0][0]
+    return sum(
+        (-1.0) ** j * matrix[0][j] * _determinant([row[:j] + row[j + 1 :] for row in matrix[1:]])
+        for j in range(len(matrix))
+    )
+
 
 class PlacedInterval(Placed, Interval):
     """The reference interval, whose facets are its two end points."""

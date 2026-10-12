@@ -220,9 +220,20 @@ inner(restrict(grad(u), facets), UnitNormal(facets)) * dx(facets)
 Pulling that back gives one integral per facet over the reference facet, each carrying
 that facet's volume element as its density. No part of it is a facet measure.
 
-An interface is not constructible yet: it needs a parametrization per side. The `+`/`-`
-restriction below belongs to the integrand either way, being a field pulled back along
-one side's inclusion, and not to the measure.
+An interface is a domain with a presentation of it per side, `interface_of(a, b)` for
+the facets two meshes share and `interface_of(mesh, mesh)` for a mesh's interior facets.
+The `+`/`-` of UFL is a restriction to a side, a field pulled back along that side's
+inclusion, and belongs to the integrand and not to the measure:
+
+```python
+gamma = interface_of(mesh, mesh)
+inner(jump(grad(u), gamma), OutwardNormal(gamma.side("+"))) * restrict(v, gamma.side("+")) * dx(
+    gamma
+)
+```
+
+Pulling that back gives one integral per pair of facets over the reference facet, the
+`-` side read at the point of its own facet that the chart transition gives.
 
 `uflx.legacy` offers UFL's spellings -- a measure with no domain, and fields written
 unrestricted -- by inferring the domain and inserting the restrictions. It is for code
@@ -238,7 +249,7 @@ Examples:
 v * f * dx(mesh)
 inner(grad(v), grad(u)) * dx(mesh)
 restrict(v, facets) * g * dx(facets)  # an exterior facet integral, facets as above
-jump(v) * dS  # once an interface domain exists
+jump(v, gamma) * dx(gamma)  # an interior facet integral, gamma as above
 ```
 
 A valid integral has a scalar-valued integrand with no unresolved free indices.
@@ -283,17 +294,17 @@ The language is small, but it is typed.
 - Spatial derivatives require a spatial domain.
 - Facet quantities such as a normal are read off the domain they are a normal to, so a
   facet's normal is `UnitNormal(sub_entities_of(mesh, 1))`, and a normal is only defined
-  in codimension one.
+  in codimension one. The outward one needs the cell it points out of, which a facet of
+  a mesh or a side of an interface names: `OutwardNormal(gamma.side("+"))`.
 - A field on one domain is read on another through a restriction, `restrict(u, facets)`,
   which is the pullback of the field along that domain's parametrization.
-- Interior-facet expressions may use side restrictions:
+- Interior-facet expressions restrict to a side of the interface:
   ```python
-  u("+")
-  u("-")
+  restrict(u, gamma.side("+"))
+  restrict(u, gamma.side("-"))
   ```
-  which are that same restriction along one side's inclusion, once a domain has a
-  parametrization per side.
-- Operators such as `jump` and `avg` are shorthand for combinations of such
+  which is that same restriction along one side's inclusion.
+- `jump(u, gamma)` and `avg(u, gamma)` are shorthand for combinations of such
   restrictions.
 - An integral is valid only when the final integrand is scalar and has no free indices.
 - A form is valid when all of its integrals are valid and their domains, arguments, and

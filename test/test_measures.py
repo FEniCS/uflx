@@ -6,7 +6,7 @@ from uflx import Coefficient, TestFunction, dx, function_space, inner, parametri
 from uflx.algorithms import pull_back_to_entity
 from uflx.domains import EntityDomain
 from uflx.geometry import SpatialCoordinate, VolumeElement
-from uflx.integrals import AbstractMeasure, Integral, Measure
+from uflx.integrals import AbstractMeasure, Integral, IntegralSum, Measure
 
 
 @pytest.fixture
@@ -153,3 +153,22 @@ def test_pulling_back_retargets_the_measure(mesh, space):
     assert integral.measure.domain == mesh
     assert pulled.measure.domain == EntityDomain(cell)
     assert pulled.domain == EntityDomain(cell)
+
+
+def test_subtracting_integrals_negates_the_integrand(mesh, space):
+    """``a - b`` is ``a + (-b)``, and a sum of integrals negates term by term."""
+    u, v = Coefficient(space), TestFunction(space)
+    a = Integral(inner(u, v), dx(mesh))
+    b = Integral(u * v, dx(mesh))
+
+    difference = a - b
+    assert isinstance(difference, IntegralSum)
+    assert difference.terms == (a, -b)
+    negated = difference.terms[1]
+    assert isinstance(negated, Integral)
+    assert negated.integrand == -b.integrand
+    assert negated.measure == b.measure
+
+    assert (-(a + b)).terms == (-a, -b)
+    assert ((a + b) - a).terms == (a, b, -a)
+    assert (a - (a + b)).terms == (a, -a, -b)

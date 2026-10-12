@@ -350,6 +350,74 @@ class ComposesADomain(Protocol):
         """The map applied to that domain's own coordinates."""
 
 
+@runtime_checkable
+class MadeOfPieces(Protocol):
+    """A domain integrated over as the sum over its pieces.
+
+    A union is one, each piece a parametrized domain in its own right,
+    and so is an interface of unions, each piece a pair of them. An
+    integral over such a domain is split into one integral per piece
+    before anything is pulled back, since a piece is what names one
+    parametrization.
+    """
+
+    @property
+    def pieces(self) -> tuple[AbstractParametrizedDomain, ...]:
+        """The domains this one is integrated over as a sum of."""
+
+
+@runtime_checkable
+class PresentsAnInterface(Protocol):
+    """A domain that is one side of an interface.
+
+    An interface is a domain two others meet along, and a side is that
+    domain presented from one of them: the same set, parametrized by the
+    one domain's own map. A field on that domain is read on the
+    interface through the side, and a quantity of the side -- the normal
+    pointing out of it -- is read at the point of the side's own
+    parameter region that the interface's point corresponds to, which
+    ``chart_point`` gives. :class:`uflx.interfaces.Side` is the
+    implementation; this is what the geometry and the integrals ask of
+    it without naming it.
+    """
+
+    @property
+    def interface(self) -> AbstractParametrizedDomain:
+        """The interface this is a side of."""
+
+    @property
+    def presentation(self) -> AbstractParametrizedDomain:
+        """The interface as this side's domain presents it."""
+
+    def chart_point(self, variable: AbstractVariable) -> AbstractVariable:
+        """Where in this side's parameter region a point of the interface is.
+
+        Args:
+            variable: A point of a parameter region of the interface
+
+        Returns:
+            The point of this side's parameter region that lands on it,
+            or the variable itself where this side's region is the
+            interface's own
+        """
+
+
+@runtime_checkable
+class StatesAnOutwardNormal(Protocol):
+    """A domain that says which way is out of the domain it bounds.
+
+    A face of a box knows from its own description: the held coordinate
+    increases out of the box at its upper end. Nothing is computed and no
+    orientation is left open, so :class:`uflx.geometry.OutwardNormal`
+    takes such a domain at its word rather than transporting a reference
+    normal it does not have.
+    """
+
+    @property
+    def outward_normal(self) -> tuple[float, ...]:
+        """The direction out of the bounded domain, as numbers."""
+
+
 class IdentityParametrization(AbstractParametrization):
     """The map that leaves a coordinate domain's points where they are."""
 
