@@ -168,3 +168,6 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
   `foo_x()`).
 - `__init__` methods take no default values; if defaults are useful, add a separate
   factory function instead of defaulting the constructor.
+- Never iterate a set of strings, bytes or enum members. Their hashes are salted per
+  process, so each MPI rank would see a different order. Use a dict or a list, or
+  `sorted()` the set.

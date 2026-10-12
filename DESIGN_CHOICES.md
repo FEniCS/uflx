@@ -57,6 +57,13 @@ own. A constructor that takes `*args`, `**kwargs` or keyword-only arguments cann
 called with a tuple, so its class defines `init_args` itself. So does a class that stores
 an argument in a way the rules above do not cover, and it says why in a comment.
 
+An algorithm must do the same thing on every MPI rank, and each rank has its own hash
+seed. Python salts the hash of a string and of bytes. An enum member hashes by its name
+and is salted too. A set of any of these iterates in a different order on each rank.
+Collect them in a dict or a list, which keep the order they were built in. Otherwise
+iterate `sorted()` of the set. A set of UFLx values or of integers iterates alike
+everywhere, because their hashes take no salt.
+
 A **protocol** names a question a node can be asked, and is never inherited. It is a
 `runtime_checkable` `Protocol`, so a node implements it by having the attribute and an
 algorithm asks with `isinstance`; a node that cannot answer is not an instance, and the
