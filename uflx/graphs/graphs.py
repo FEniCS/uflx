@@ -6,6 +6,7 @@ import functools
 import inspect
 from collections.abc import Callable, Hashable, Iterable
 from enum import Enum
+from hashlib import blake2b
 from typing import Any, Protocol, cast, runtime_checkable
 
 import networkx as nx
@@ -83,18 +84,43 @@ class Immutable:
             return object.__repr__(self)
         return f"{type(self).__name__}({', '.join(repr(a) for a in arguments)})"
 
-    def __hash__(self) -> int:
-        """Hash the class and arguments, and keep the result.
+    @property
+    def fingerprint(self) -> bytes:
+        """A digest of the class and arguments that is the same in every process.
 
-        The hash is the same in every process that has the same hash
-        seed. A class object hashes by its address. The class is hashed
-        by its name instead.
+        Python salts the hash of a string in each process, and a class
+        hashes by its address. The fingerprint uses neither, so MPI ranks
+        agree on it whatever their hash seeds.
+        """
+        unfinished: list[Immutable] = [self]
+        while unfinished:
+            value = unfinished[-1]
+            if "_fingerprint" in value.__dict__:
+                unfinished.pop()
+                continue
+            # Fingerprint the arguments first so that a deep graph does not recurse.
+            arguments = [a for a in _values_in(value.init_args) if "_fingerprint" not in a.__dict__]
+            if arguments:
+                unfinished.extend(arguments)
+                continue
+            object.__setattr__(
+                value,
+                "_fingerprint",
+                digest(_qualified_name(type(value)), fingerprint(value.init_args)),
+            )
+            unfinished.pop()
+        return self.__dict__["_fingerprint"]
+
+    def __hash__(self) -> int:
+        """Hash by the fingerprint, and keep the result.
+
+        Sets and dicts of values then iterate in the same order in every
+        process.
         """
         try:
             return self.__dict__["_hash"]
         except KeyError:
-            cls = type(self)
-            value = hash((f"{cls.__module__}.{cls.__qualname__}", *map(_seeded, self.init_args)))
+            value = int.from_bytes(self.fingerprint[:8], "little", signed=True)
             object.__setattr__(self, "_hash", value)
             return value
 
@@ -147,14 +173,51 @@ def _parameters_of(cls: type, init: Callable[..., None]) -> tuple[str, ...] | st
     return tuple(names)
 
 
-def _seeded(value: Any) -> Any:
-    """Replace ``None`` so that hashing depends only on the hash seed."""
-    # None hashes by its address before Python 3.12.
-    if value is None:
-        return "uflx.None"
-    if isinstance(value, tuple):
-        return tuple(map(_seeded, value))
-    return value
+def digest(*parts: str | bytes) -> bytes:
+    """Digest parts, each prefixed by its length so that parts cannot run together."""
+    h = blake2b(digest_size=16)
+    for part in parts:
+        data = part.encode() if isinstance(part, str) else part
+        h.update(len(data).to_bytes(8, "little"))
+        h.update(data)
+    return h.digest()
+
+
+def fingerprint(value: Any) -> bytes:
+    """Digest a value or an argument the same way in every process.
+
+    A value is digested by its class and arguments. Any other object is
+    digested by its class and its own repr, or its own hash if it has no
+    repr of its own. Either must be the same in every process.
+
+    Raises:
+        TypeError: If an object has neither its own repr nor its own hash.
+    """
+    if isinstance(value, Immutable):
+        return value.fingerprint
+    if isinstance(value, tuple | list):
+        return digest(type(value).__name__, *map(fingerprint, value))
+    cls = type(value)
+    if cls.__repr__ is not object.__repr__:
+        return digest(_qualified_name(cls), repr(value))
+    if cls.__hash__ is not None and cls.__hash__ is not object.__hash__:
+        return digest(_qualified_name(cls), str(hash(value)))
+    raise TypeError(
+        f"{_qualified_name(cls)} prints and hashes by its address, so it cannot be "
+        f"digested the same way in every process. Give it a repr or a hash."
+    )
+
+
+def _values_in(argument: Any) -> Iterable[Immutable]:
+    if isinstance(argument, Immutable):
+        yield argument
+    elif isinstance(argument, tuple | list):
+        for item in argument:
+            yield from _values_in(item)
+
+
+def _qualified_name(cls: type) -> str:
+    return f"{cls.__module__}.{cls.__qualname__}"
 
 
 def _stored_argument(value: Any, name: str) -> Any:

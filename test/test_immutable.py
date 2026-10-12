@@ -122,24 +122,61 @@ def test_no_class_in_uflx_defines_its_own_identity():
                 assert method not in vars(cls), (cls, method)
 
 
-def test_a_hash_is_the_same_in_every_process_with_one_seed():
-    """Guards against a hash that follows memory addresses and so differs between MPI ranks."""
-    script = (
-        "from uflx import dx\n"
-        "from uflx.domains import RD\n"
-        "from uflx.expressions import RealScalar\n"
-        "from uflx.maps import IdentityReferenceMap\n"
-        "values = (dx, RD(2), IdentityReferenceMap(), RealScalar(1.0) * RealScalar(2.0))\n"
-        "print([hash(v) for v in values])"
-    )
-    printed = [
-        subprocess.run(
+_HASHES = (
+    "from uflx import dx\n"
+    "from uflx.domains import RD\n"
+    "from uflx.expressions import RealScalar\n"
+    "from uflx.maps import IdentityReferenceMap\n"
+    "values = (dx, RD(2), IdentityReferenceMap(), RealScalar(1.0) * RealScalar(2.0))\n"
+    "print([hash(v) for v in values])"
+)
+_ORDER = (
+    "from uflx.geometry import SpatialCoordinate\n"
+    "from uflx.graphs import as_graph\n"
+    "x = SpatialCoordinate(2)\n"
+    "e = x.component(0) * x.component(1) + x.component(1) / x.component(0)\n"
+    "print(as_graph(e).ordered_nodes())"
+)
+
+
+@pytest.mark.parametrize("script", [_HASHES, _ORDER], ids=["hashes", "order"])
+def test_every_process_agrees_whatever_its_hash_seed(script):
+    """Guards against hashes or graph order differing between MPI ranks."""
+    printed = {
+        seed: subprocess.run(
             [sys.executable, "-c", script],
-            env={**os.environ, "PYTHONHASHSEED": "0"},
+            env={**os.environ, "PYTHONHASHSEED": seed},
             capture_output=True,
             text=True,
             check=True,
         ).stdout
-        for _ in range(2)
-    ]
-    assert printed[0] == printed[1]
+        for seed in ("1", "2")
+    }
+    assert printed["1"] == printed["2"]
+
+
+def test_a_deep_value_hashes_without_recursing():
+    """Guards against the first hash of a deep graph overflowing the stack."""
+    from uflx.geometry import SpatialCoordinate
+
+    def deep():
+        e = SpatialCoordinate(2).component(0)
+        for _ in range(2000):
+            e = e / e - e
+        return e
+
+    assert hash(deep()) == hash(deep())
+
+
+def test_an_argument_known_only_by_its_address_is_refused():
+    """Guards against hashing by an address that differs between processes."""
+
+    class Opaque:
+        pass
+
+    class Holder(Immutable):
+        def __init__(self, a):
+            self._a = a
+
+    with pytest.raises(TypeError, match="prints and hashes by its address"):
+        hash(Holder(Opaque()))
