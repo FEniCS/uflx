@@ -22,11 +22,16 @@ from uflx.algorithms.simplify import (
     simplify_product_items,
     simplify_sum_items,
 )
-from uflx.graphs.graphs import GraphNode
+from uflx.graphs.graphs import GraphNode, Immutable
 
 
-class AbstractExpression(ABC):
-    """Abstract base class for expressions."""
+class AbstractExpression(Immutable, ABC):
+    """Abstract base class for expressions.
+
+    A node is a value that is built once and never changed.
+    :class:`uflx.graphs.Immutable` enforces this. A node's arguments are
+    its identity in the graph and its hash.
+    """
 
     @property
     @abstractmethod
@@ -63,11 +68,20 @@ class AbstractExpression(ABC):
             return NotImplemented
 
     def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return isinstance(other, self.__class__) and self.init_args == other.init_args
+        """Check for equality.
+
+        Two nodes of one class with equal arguments are equal. The kept
+        hashes are compared first, which tells most unequal nodes apart
+        without walking either tree.
+        """
+        if self is other:
+            return True
+        if not isinstance(other, self.__class__) or hash(self) != hash(other):
+            return False
+        return self.init_args == other.init_args
 
     def __hash__(self) -> int:
-        """Hash."""
+        """Hash the class and arguments, and keep the result."""
         return hash((f"uflx.{self.__class__.__name__}", *self.init_args))
 
     def __matmul__(self, other: Any) -> AbstractExpression:

@@ -9,9 +9,10 @@ from typing import Any, Protocol, runtime_checkable
 from uflx.algorithms import replace
 from uflx.expressions import AbstractExpression
 from uflx.graphs import GraphNode, as_graph
+from uflx.graphs.graphs import Immutable
 
 
-class AbstractReferenceMap(ABC):
+class AbstractReferenceMap(Immutable, ABC):
     """Abstract base class for reference maps."""
 
     @abstractmethod

@@ -15,11 +15,13 @@ adding to the object model.
 ## Commands
 
 Install for development (editable):
+
 ```
 pip install -e ".[ci,lint,docs]"
 ```
 
 Lint (must pass with zero diff/errors, matches CI):
+
 ```
 ruff check .
 ruff format --check .          # use `ruff format .` to auto-fix
@@ -27,6 +29,7 @@ pyrefly check                  # type checker, config in [tool.pyrefly]
 ```
 
 Run the core test suite:
+
 ```
 pytest test/
 pytest test/test_forms.py::test_name    # single test
@@ -35,17 +38,28 @@ pytest -n auto test/                    # parallel, matches CI (needs pytest-xdi
 
 `external/basix_uflx` is a separate installable package excluded from the main `uflx`
 package; install and test it independently:
+
 ```
 pip install external/basix_uflx
 pytest external/basix_uflx/test
 ```
 
 Build docs:
+
 ```
 cd doc && make html
 ```
 
 ## Architecture
+
+Everything in a graph is a value. It is built once, never changed, and hashed and
+compared by what it was built from. Every abstract root inherits the `Immutable` mixin
+in `uflx/graphs/graphs.py`. It refuses to set or delete an attribute once the outermost
+`__init__` has returned. It also keeps each class's hash on the instance after the
+first call, which makes graph walks and rewrites memoisable. A derived value may be
+cached on an instance through `object.__setattr__`. An argument may never change, and a
+changed node is a new node. Consumer classes such as a Basix cell or element inherit
+the rule.
 
 Expression trees (the symbolic core) are not plain Python object graphs — they are
 backed by an explicit DAG in `uflx/graphs/` (`Graph` subclasses `networkx.DiGraph`;
@@ -105,14 +119,18 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
   flake8-import-conventions, NumPy-specific rules, and a few more (`RUF`, `FLY`,
   `LOG`, `ISC`). Run the formatter/linter locally before calling a change done —
   don't rely on CI to catch formatting.
+
 - **Import order** (ruff's isort, default grouping): future → standard-library →
   third-party (`networkx`, `pytest`) → first-party (`uflx`) → local-folder.
+
 - **Docstrings**: Google style (`Args:`, `Returns:`, etc.), required on modules,
   classes and methods (`D` rules are enforced, `__init__.py` is exempted from unused
   imports only — not docstrings).
+
 - **Type hints**: used throughout and checked with `pyrefly` (`[tool.pyrefly]` in
   `pyproject.toml`); not currently enforced by a ruff annotation rule, but new public
   functions/methods should still be annotated to match the rest of the codebase.
+
 - **File header**: most files under `uflx/` (the core object-model layer —
   `entities.py`, `finite_elements.py`, `domains.py`, `function_spaces.py`,
   `functions.py`, `expressions.py`, `operators.py`, `integrals.py`,

@@ -16,9 +16,10 @@ from collections.abc import Sequence
 
 from uflx.entities import AbstractEntity
 from uflx.finite_elements import AbstractReferenceMappedFiniteElement
+from uflx.graphs.graphs import Immutable
 
 
-class AbstractDomain(ABC):
+class AbstractDomain(Immutable, ABC):
     """Base class for a domain."""
 
     @property

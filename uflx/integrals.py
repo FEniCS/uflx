@@ -21,9 +21,10 @@ from uflx.functions import (
 )
 from uflx.geometry import JacobianDeterminant
 from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
+from uflx.graphs.graphs import Immutable
 
 
-class AbstractMeasure(ABC):
+class AbstractMeasure(Immutable, ABC):
     """Abstract base class for an integral measure."""
 
     def __rmul__(self, other: AbstractExpression) -> Integral:
@@ -43,7 +44,7 @@ class AbstractMeasure(ABC):
         """The arguments used to initialise this object."""
 
 
-class AbstractIntegral(ABC):
+class AbstractIntegral(Immutable, ABC):
     """Abstract base class for an integral."""
 
     @property

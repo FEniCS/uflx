@@ -16,9 +16,10 @@ from collections.abc import Sequence
 
 from uflx.domains import AbstractDomain
 from uflx.finite_elements import AbstractReferenceMappedFiniteElement
+from uflx.graphs.graphs import Immutable
 
 
-class AbstractFunctionSpace(ABC):
+class AbstractFunctionSpace(Immutable, ABC):
     """Abstract base class for a function space."""
 
     @property

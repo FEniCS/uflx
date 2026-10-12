@@ -19,8 +19,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from uflx.graphs.graphs import Immutable
 
-class AbstractEntity(ABC):
+
+class AbstractEntity(Immutable, ABC):
     """Abstract base class for entities."""
 
     @abstractmethod

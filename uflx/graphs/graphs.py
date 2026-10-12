@@ -2,11 +2,90 @@
 
 from __future__ import annotations
 
-from collections.abc import Hashable, Iterable
+import functools
+from collections.abc import Callable, Hashable, Iterable
 from enum import Enum
 from typing import Any, Protocol, cast, runtime_checkable
 
 import networkx as nx
+
+
+class Immutable:
+    """A value that is built once, never changed and hashed once.
+
+    Everything in a graph is hashed and compared by what it was built
+    from. A node that changed after being built would sit under the
+    wrong hash and compare unequal to itself. This mixin refuses to set
+    or delete an attribute once the outermost ``__init__`` has returned.
+    It also keeps the hash the class computes on the instance after the
+    first call. A changed node is a new node, which
+    :func:`uflx.algorithms.reconstruct_node` builds.
+
+    A derived value may still be cached on an instance through
+    ``object.__setattr__``, since it changes no argument. The kept hash
+    is cached this way.
+    """
+
+    _hash: int
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Wrap the class's own ``__init__`` to freeze and ``__hash__`` to keep.
+
+        Only methods defined in the class body are wrapped. An inherited
+        method was already wrapped in its parent. Only the outermost
+        ``__init__`` freezes, so an ``__init__`` that calls its parent's
+        can still set attributes afterwards.
+        """
+        super().__init_subclass__(**kwargs)
+        init = cls.__dict__.get("__init__")
+        if init is not None:
+            setattr(cls, "__init__", _freezing(init))
+        hash_ = cls.__dict__.get("__hash__")
+        if hash_ is not None:
+            setattr(cls, "__hash__", _kept(hash_))
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set an attribute during construction only."""
+        if self.__dict__.get("_frozen", False):
+            raise AttributeError(
+                f"{self.__class__.__name__} is immutable. Build a new one instead."
+            )
+        object.__setattr__(self, name, value)
+
+    def __delattr__(self, name: str) -> None:
+        """Refuse to delete an attribute."""
+        raise AttributeError(f"{self.__class__.__name__} is immutable.")
+
+
+def _freezing(init: Callable[..., None]) -> Callable[..., None]:
+    """Wrap ``__init__`` to freeze the instance when the outermost call returns."""
+
+    @functools.wraps(init)
+    def freezing_init(self: Any, *args: Any, **kwargs: Any) -> None:
+        outermost = "_initialising" not in self.__dict__
+        if outermost:
+            object.__setattr__(self, "_initialising", True)
+        init(self, *args, **kwargs)
+        if outermost:
+            del self.__dict__["_initialising"]
+            object.__setattr__(self, "_frozen", True)
+
+    return freezing_init
+
+
+def _kept(hash_: Callable[[Any], int]) -> Callable[[Any], int]:
+    """Wrap ``__hash__`` to compute it once and keep it on the instance."""
+
+    @functools.wraps(hash_)
+    def kept_hash(self: Any) -> int:
+        try:
+            return self.__dict__["_hash"]
+        except KeyError:
+            value = hash_(self)
+            object.__setattr__(self, "_hash", value)
+            return value
+
+    return kept_hash
 
 
 class NodeOrder(Enum):
