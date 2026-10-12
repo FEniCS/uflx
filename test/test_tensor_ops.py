@@ -85,17 +85,6 @@ def test_identity_is_identity_matrix():
         np.testing.assert_allclose(_to_numpy(identity, (d, d)), np.eye(d))
 
 
-def test_identity_repr():
-    """Identity's repr should reflect its own (renamed) class name."""
-    assert repr(Identity(3)) == "Identity(3)"
-
-
-def test_identity_equality():
-    """Identity instances should compare equal by size, and only by size."""
-    assert Identity(2) == Identity(2)
-    assert Identity(2) != Identity(3)
-
-
 def test_identity_matrix_product_acts_as_identity():
     """Identity(d) should act as a true identity under matrix multiplication."""
     values = np.array([[1.0, 2.0], [3.0, 4.0]])

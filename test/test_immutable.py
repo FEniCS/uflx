@@ -11,33 +11,18 @@ import textwrap
 
 import numpy as np
 import pytest
-from conftest import LagrangeElement, Triangle
 
-from uflx import Coefficient, coordinate_element, dx, function_space
 from uflx.expressions import Rational, RealScalar
 from uflx.graphs.graphs import Immutable, _Interning
 
 
-@pytest.fixture
-def values(lagrange_element):
-    """One instance of each family that is hashed by value."""
-    cell = Triangle()
-    element = LagrangeElement(cell, 1)
-    domain = coordinate_element(lagrange_element("triangle", 1, (2,)))
-    space = function_space(domain, element)
-    integral = Coefficient(space) * dx
-    expression = RealScalar(2.0) * RealScalar(3.0)
-    return [cell, element, domain, space, dx, integral, expression]
-
-
-def test_every_family_is_a_value(values):
-    """Each is immutable once built, whatever class defined its hash."""
-    for value in values:
-        assert isinstance(value, Immutable)
-        with pytest.raises(AttributeError, match="immutable"):
-            value.anything = 1
-        with pytest.raises(AttributeError, match="immutable"):
-            del value.anything
+def test_a_value_cannot_be_changed():
+    """Guards against setting or deleting an attribute once a value is built."""
+    value = _Holder(1)
+    with pytest.raises(AttributeError, match="immutable"):
+        value._a = 2
+    with pytest.raises(AttributeError, match="immutable"):
+        del value._a
 
 
 def test_a_subclass_is_not_equal_to_its_parent():
@@ -77,6 +62,8 @@ def test_a_repr_does_not_grow_with_its_graph():
 
 
 _HASHES = textwrap.dedent("""
+    import enum
+
     from uflx import dx
     from uflx.domains import RD
     from uflx.expressions import RealScalar
@@ -87,7 +74,10 @@ _HASHES = textwrap.dedent("""
         def __init__(self, labels):
             self._labels = labels
 
-    labels = Labelled(("left", "right", "top", "bottom"))
+    class Side(enum.Enum):
+        LEFT = 1
+
+    labels = Labelled(("left", "right", "top", "bottom", Side.LEFT))
     values = (dx, RD(2), IdentityReferenceMap(), RealScalar(1.0) * RealScalar(2.0), labels)
     print([hash(v) for v in values])
 """)

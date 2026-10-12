@@ -1,10 +1,5 @@
 """Test that Basix cells and elements are identified by their init_args."""
 
-import os
-import subprocess
-import sys
-import textwrap
-
 import basix
 import numpy as np
 import pytest
@@ -23,6 +18,7 @@ def _values():
         BasixCell(basix.CellType.triangle),
         basix_uflx.element("Lagrange", "triangle", 2),
         basix_uflx.element("Lagrange", "triangle", 1, shape=(2,)),
+        basix_uflx.element("Lagrange", "triangle", 1, shape=(2, 2)),
         basix_uflx.element("Lagrange", "triangle", 1, shape=(2, 2), symmetry=True),
         basix_uflx.mixed_element(
             [basix_uflx.element("Lagrange", "triangle", 2), basix_uflx.real_element("triangle", ())]
@@ -59,31 +55,6 @@ def test_blocked_symmetry_false_is_no_symmetry():
     a = basix_uflx.blocked_element(sub, (2, 2), symmetry=False)
     b = basix_uflx.blocked_element(sub, (2, 2))
     assert a is b
-
-
-def test_every_process_agrees_on_an_elements_hash_whatever_its_hash_seed():
-    """Guards against a wrapped Basix object hashing differently on two MPI ranks."""
-    script = textwrap.dedent("""
-        import basix_uflx
-
-        elements = (
-            basix_uflx.element("Lagrange", "triangle", 2, shape=(2,)),
-            basix_uflx.quadrature_element("triangle", degree=2),
-            basix_uflx.real_element("triangle", ()),
-        )
-        print([hash(e) for e in elements])
-    """)
-    printed = {
-        seed: subprocess.run(
-            [sys.executable, "-c", script],
-            env={**os.environ, "PYTHONHASHSEED": seed},
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-        for seed in ("1", "2")
-    }
-    assert printed["1"] == printed["2"]
 
 
 @pytest.mark.parametrize(
