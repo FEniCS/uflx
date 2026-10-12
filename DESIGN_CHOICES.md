@@ -25,8 +25,9 @@ A **mixin** is inherited and supplies a rule that holds of every value. There is
 `AbstractDomain`, `AbstractReferenceMap`, `AbstractMeasure`, `AbstractIntegral`), so a
 consumer's cell or element inherits it too. It says that a value is built once and never
 changed, and that its hash is computed once and kept. It also says that a value's identity
-is its class and its `init_args`, and it supplies `__eq__`, `__hash__`, `__repr__` and
-`init_args` itself. A new mixin is for a rule of that kind, one
+is its class and its `init_args`, and it supplies `__hash__`, `__repr__` and `init_args`
+itself. A value built from the same class and arguments as a live one is that one.
+Equality is `is`. A new mixin is for a rule of that kind, one
 that holds of everything. Code shared between a few classes is a function.
 
 Avoid defining `__eq__`, `__hash__` or `__repr__` on a class at all costs. An identity

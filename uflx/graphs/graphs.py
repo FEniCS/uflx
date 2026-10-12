@@ -4,16 +4,57 @@ from __future__ import annotations
 
 import functools
 import inspect
+import math
+import weakref
+from abc import ABCMeta
+from collections import deque
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from collections.abc import Set as AbstractSet
 from enum import Enum
 from hashlib import blake2b
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Any, Protocol, TypeVar, cast, runtime_checkable
 
 import networkx as nx
 
+_T = TypeVar("_T")
 
-class Immutable:
+
+class _Interning(ABCMeta):
+    """Return the value already built from the same class and arguments.
+
+    The key is read after the outermost ``__init__`` returns. A
+    constructor that normalises its arguments interns on the normalised
+    ones. The table holds its values weakly and keeps nothing alive.
+    """
+
+    _values: weakref.WeakValueDictionary[Any, Any] = weakref.WeakValueDictionary()
+
+    def __call__(cls: type[_T], *args: Any, **kwargs: Any) -> _T:
+        """Build a value or return the equal one already built."""
+        value = super().__call__(*args, **kwargs)
+        # Fingerprint first so that an argument that cannot be digested is refused with a reason.
+        value.fingerprint
+        return _Interning._values.setdefault((cls, _interning_key(value.init_args)), value)
+
+
+def _interning_key(value: Any) -> Any:
+    """Key an argument so that only identical values share a key.
+
+    A value is already interned and keys as itself. A number keys with
+    its type and a float also with its sign. This keeps ``1`` apart from
+    ``1.0`` and ``0.0`` apart from ``-0.0``. Otherwise a value would
+    print and generate code as whichever was built first.
+    """
+    if isinstance(value, tuple | list):
+        return (type(value), *(_interning_key(item) for item in value))
+    if isinstance(value, float):
+        return (type(value), value, math.copysign(1.0, value))
+    if isinstance(value, int | complex):
+        return (type(value), value)
+    return value
+
+
+class Immutable(metaclass=_Interning):
     """A value that is built once, never changed and hashed once.
 
     Everything in a graph is hashed and compared by what it was built
@@ -28,11 +69,13 @@ class Immutable:
     ``object.__setattr__``, since it changes no argument. The kept hash
     is cached this way.
 
-    A value's identity is its class and its ``init_args``. Equality, hash
-    and repr all come from here. ``init_args`` is read back from the
-    attributes the constructor stores its arguments in. A class should
-    avoid defining ``__eq__``, ``__hash__`` or ``__repr__`` itself. Any
-    other identity is one that rebuilding a node can silently change.
+    A value's identity is its class and its ``init_args``. Building a
+    value from the same class and arguments as a live one returns that
+    one. Equal values are the same object and equality is ``is``. Hash
+    and repr also come from here. ``init_args`` is read back from
+    the attributes the constructor stores its arguments in. A class
+    should avoid defining ``__eq__``, ``__hash__`` or ``__repr__`` itself.
+    Any other identity is one that rebuilding a node can silently change.
     """
 
     _hash: int
@@ -58,19 +101,6 @@ class Immutable:
         if self.__dict__.get("_frozen", False):
             object.__setattr__(self, "_init_args", arguments)
         return arguments
-
-    def __eq__(self, other: Any) -> bool:
-        """Check for equality.
-
-        Two values are equal when they have the same class and equal
-        arguments. The kept hashes are compared first, which tells most
-        unequal values apart without walking their arguments.
-        """
-        if self is other:
-            return True
-        if type(self) is not type(other) or hash(self) != hash(other):
-            return False
-        return self.init_args == other.init_args
 
     def __repr__(self) -> str:
         """Representation.
@@ -109,7 +139,8 @@ class Immutable:
     def __hash__(self) -> int:
         """Hash by the fingerprint, and keep the result.
 
-        Sets and dicts of values then iterate in the same order in every
+        Equality is identity. The hash still comes from the arguments so
+        that sets and dicts of values iterate in the same order in every
         process.
         """
         try:
@@ -118,6 +149,10 @@ class Immutable:
             value = int.from_bytes(self.fingerprint[:8], "little", signed=True)
             object.__setattr__(self, "_hash", value)
             return value
+
+    def __reduce__(self) -> tuple[type, tuple[Any, ...]]:
+        """Copy or unpickle by building again to get the interned value."""
+        return type(self), self.init_args
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Wrap the class's own ``__init__`` to freeze and ``__hash__`` to keep.
@@ -428,16 +463,14 @@ class RepresentedByGraph(Protocol):
 def generate_graph(node: GraphNode) -> Graph:
     """Generate the graph that represents the construction of a node."""
     graph = Graph()
-
-    added_nodes = {node}
     graph.add_root_node(node)
-    while len(added_nodes) > 0:
-        for n in added_nodes:
-            for successor in n.successors:
-                graph.add_node(successor)
-                graph.add_edge(n, successor)
-        added_nodes = set().union(*[n.successors for n in added_nodes])
-
+    unexpanded = deque([node])
+    while unexpanded:
+        n = unexpanded.popleft()
+        for successor in n.successors:
+            if successor not in graph:
+                unexpanded.append(successor)
+            graph.add_edge(n, successor)
     return graph
 
 
