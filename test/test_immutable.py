@@ -114,27 +114,6 @@ def test_a_repr_does_not_grow_with_its_graph():
     assert repr(e) == "Sum((Product(...), Neg(...)))"
 
 
-def test_no_class_in_uflx_prints_itself():
-    """Guards against a handwritten repr in UFLx drifting from the value's init_args."""
-    import importlib
-    import pkgutil
-
-    import uflx
-
-    for module in pkgutil.walk_packages(uflx.__path__, "uflx."):
-        importlib.import_module(module.name)
-
-    def subclasses(cls):
-        for sub in cls.__subclasses__():
-            yield sub
-            yield from subclasses(sub)
-
-    for cls in subclasses(Immutable):
-        if cls.__module__.startswith("uflx."):
-            for method in ("__repr__", "__str__"):
-                assert method not in vars(cls), (cls, method)
-
-
 _HASHES = textwrap.dedent("""
     from uflx import dx
     from uflx.domains import RD
@@ -219,9 +198,11 @@ def test_labels_in_a_tuple_are_hashed_in_order():
     assert hash(_Holder(("left", "right"))) != hash(_Holder(("right", "left")))
 
 
-@pytest.mark.parametrize("name", ["__eq__", "__ne__", "__hash__", "successors", "fingerprint"])
+@pytest.mark.parametrize(
+    "name", ["__eq__", "__ne__", "__hash__", "__repr__", "__str__", "successors", "fingerprint"]
+)
 def test_a_class_that_defines_its_own_identity_is_refused(name):
-    """Guards against a consumer's class giving itself an identity other than its init_args."""
+    """Guards against a consumer's class giving itself an identity or printing of its own."""
     with pytest.raises(TypeError, match=f"defines {name}"):
         type("Custom", (Immutable,), {name: lambda self: None})
 

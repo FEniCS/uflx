@@ -97,6 +97,9 @@ def _interning_key(value: Any) -> Any:
     return value
 
 
+_DERIVED = ("__eq__", "__ne__", "__hash__", "__repr__", "__str__", "successors", "fingerprint")
+
+
 class Immutable(metaclass=_Interning):
     """A value that is built once, never changed and hashed once.
 
@@ -119,8 +122,9 @@ class Immutable(metaclass=_Interning):
     the attributes the constructor stores its arguments in.
 
     A subclass, in UFLx or in a consumer, gets these checks at runtime.
-    Defining ``__eq__``, ``__ne__``, ``__hash__``, ``successors`` or
-    ``fingerprint`` is refused when the class is defined. An argument
+    Defining ``__eq__``, ``__ne__``, ``__hash__``, ``__repr__``,
+    ``__str__``, ``successors`` or ``fingerprint`` is refused when the
+    class is defined. An argument
     that is a list, a set, a dict or an object known only by its address
     is refused when a value is built. The first value of each class must
     rebuild from its ``init_args`` to itself. :mod:`uflx.testing` checks
@@ -226,13 +230,12 @@ class Immutable(metaclass=_Interning):
                 the class an identity other than its ``init_args``.
         """
         super().__init_subclass__(**kwargs)
-        for name in ("__eq__", "__ne__", "__hash__", "successors", "fingerprint"):
+        for name in _DERIVED:
             # Defining __eq__ alone sets __hash__ to None in the class body.
             if name in cls.__dict__ and not (name == "__hash__" and cls.__dict__[name] is None):
                 raise TypeError(
-                    f"{cls.__qualname__} defines {name}. A value's identity comes from its "
-                    f"init_args alone, so a class defines none of __eq__, __ne__, __hash__, "
-                    f"successors or fingerprint."
+                    f"{cls.__qualname__} defines {name}. A value's identity and printing come "
+                    f"from its init_args alone, so a class defines none of {', '.join(_DERIVED)}."
                 )
         init = cls.__dict__.get("__init__")
         if init is not None:
@@ -362,7 +365,7 @@ def _describe_argument(value: Any, depth: int) -> str:
         return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
     if isinstance(value, list):
         return f"[{', '.join(_describe_argument(i, depth) for i in value)}]"
-    if isinstance(value, Immutable) and type(value).__repr__ is Immutable.__repr__:
+    if isinstance(value, Immutable):
         return describe(value, depth)
     return repr(value)
 
