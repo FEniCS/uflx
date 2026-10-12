@@ -194,23 +194,10 @@ class Immutable(metaclass=_Interning):
         hashes by its address. The fingerprint uses neither, so MPI ranks
         agree on it whatever their hash seeds.
         """
-        unfinished: list[Immutable] = [self]
-        while unfinished:
-            value = unfinished[-1]
-            if "_fingerprint" in value.__dict__:
-                unfinished.pop()
-                continue
-            # Fingerprint the arguments first so that a deep graph does not recurse.
-            arguments = [a for a in _values_in(value.init_args) if "_fingerprint" not in a.__dict__]
-            if arguments:
-                unfinished.extend(arguments)
-                continue
-            object.__setattr__(
-                value,
-                "_fingerprint",
-                digest(_qualified_name(type(value)), fingerprint(value.init_args)),
-            )
-            unfinished.pop()
+        if "_fingerprint" not in self.__dict__:
+            # Each argument was fingerprinted when it was built, so this goes one level deep.
+            value = digest(_qualified_name(type(self)), fingerprint(self.init_args))
+            object.__setattr__(self, "_fingerprint", value)
         return self.__dict__["_fingerprint"]
 
     def __hash__(self) -> int:

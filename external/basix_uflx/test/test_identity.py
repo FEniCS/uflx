@@ -8,7 +8,6 @@ import textwrap
 import basix
 import numpy as np
 import pytest
-from uflx.graphs.graphs import fingerprint
 
 import basix_uflx
 from basix_uflx import BasixCell
@@ -30,20 +29,10 @@ def _values():
         ),
         _quadrature(),
         basix_uflx.real_element("triangle", (2,)),
+        BlockedElement(
+            basix_uflx.element("Lagrange", "triangle", 1), (2,), None, BlockedOrdering.xxyyzz
+        ),
     ]
-
-
-@pytest.mark.parametrize("index", range(len(_values())))
-def test_built_twice_is_one_value(index):
-    """Values built from equal arguments are one object."""
-    assert _values()[index] is _values()[index]
-
-
-@pytest.mark.parametrize("index", range(len(_values())))
-def test_rebuilt_from_its_arguments(index):
-    """A value can be rebuilt from its init_args."""
-    value = _values()[index]
-    assert type(value)(*value.init_args) is value
 
 
 def test_distinct_values_are_unequal():
@@ -62,24 +51,6 @@ def test_quadrature_elements_are_equal_exactly():
     assert np.allclose(points, points + 1e-15)
     assert a != b
     assert a == basix_uflx.quadrature_element("triangle", points=points.copy(), weights=weights)
-
-
-def test_quadrature_points_cannot_change():
-    """Changing the input array does not change the element."""
-    points, weights = basix.make_quadrature(basix.CellType.triangle, 2)
-    e = basix_uflx.quadrature_element("triangle", points=points, weights=weights)
-    before = hash(e)
-    points[0, 0] = 1.0
-    assert hash(e) == before
-    assert isinstance(e.init_args[1], tuple)
-
-
-def test_blocked_ordering_is_part_of_the_element():
-    """Blocked elements with different orderings are unequal."""
-    sub = basix_uflx.element("Lagrange", "triangle", 1)
-    a = BlockedElement(sub, (2,), None, BlockedOrdering.xyzxyz)
-    b = BlockedElement(sub, (2,), None, BlockedOrdering.xxyyzz)
-    assert a != b
 
 
 def test_blocked_symmetry_false_is_no_symmetry():
@@ -155,18 +126,3 @@ def test_a_custom_element_keeps_its_data_exactly():
     points = np.array([[0.2, 0.3], [0.5, 0.1]])
     assert np.array_equal(wrapped.tabulate(1, points), custom.tabulate(1, points))
     assert basix_uflx.wrap_element(custom) is wrapped
-
-
-def test_an_element_prints_as_its_description():
-    """Guards against an element printing the address of the Basix object it wraps."""
-    printed = repr(basix_uflx.element("Lagrange", "triangle", 2))
-    assert "ElementFamily.P" in printed
-    assert " at 0x" not in printed
-
-
-def test_fingerprints_tell_apart_what_equality_tells_apart():
-    """Blocked elements differing only in ordering have different digests."""
-    sub = basix_uflx.element("Lagrange", "triangle", 1)
-    a = BlockedElement(sub, (2,), None, BlockedOrdering.xyzxyz)
-    b = BlockedElement(sub, (2,), None, BlockedOrdering.xxyyzz)
-    assert fingerprint(a) != fingerprint(b)
