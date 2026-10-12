@@ -171,7 +171,7 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   `OutwardNormal` takes; its `transition` is where a point of the interface sits in the
   side's own region, the integral's variable on the primary side and the chart
   transition `ψ₋⁻¹(ψ₊(X))` on any other, written as a `PreimagePoint` of an `ImagePoint`
-  with the side's map named by the side (`EmbeddingParametrization`). An interface of
+  with the side's map named by the side (`LabelledParametrization`). An interface of
   unions is `MadeOfPieces`, one pair of pieces at a time. There is no second spelling:
   UFL's `dS` is a mesh's facets presented twice, and a mesh meeting a submesh of its
   entities is the entities presented by each, a mixed-domain form being each field

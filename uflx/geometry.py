@@ -13,6 +13,8 @@ from uflx.domains import (
     EmbedsAnInterface,
     EntityDomain,
     StatesAnOutwardNormal,
+    parameter_regions,
+    parametrization_out_of,
     unlabelled,
 )
 from uflx.expressions import AbstractExpression, RealScalar, Sqrt, expression_sum
@@ -31,20 +33,14 @@ class ExpandableGeometry(Protocol):
         """Expand geometry."""
 
 
-def _parametrizations_out_of(
-    domain: AbstractParametrizedDomain, source: AbstractCoordinateDomain
-) -> tuple[AbstractParametrization, ...]:
-    """The domain's parametrizations that start from the given region.
+def inverse_jacobian(parametrization: AbstractParametrization, point: AbstractVariable) -> Matrix:
+    """A map's Jacobian at a point, written out and inverted.
 
-    A domain holds its parametrizations rather than keying them by their region,
-    since several may share one. Needing exactly one is what evaluating a
-    quantity at a point asks for, so it is asked here.
+    The pseudo-inverse where the map is not square. Written out rather
+    than left as a quantity, so that expanding reaches the bottom in one
+    go.
     """
-    return tuple(
-        parametrization
-        for parametrization in domain.parametrizations
-        if parametrization.source == source
-    )
+    return _as_dense_matrix(parametrization.jacobian(point)).compute_inverse()
 
 
 def _as_dense_matrix(jacobian: AbstractExpression) -> Matrix:
@@ -95,8 +91,8 @@ class ImagePoint(AbstractPoint):
                 point's region
         """
         source = point.domain
-        if not isinstance(source, AbstractCoordinateDomain) or not _parametrizations_out_of(
-            domain, source
+        if not isinstance(source, AbstractCoordinateDomain) or source not in parameter_regions(
+            domain
         ):
             raise ValueError(
                 f"A point is pushed forward from a cell's coordinates, or from another "
@@ -128,15 +124,7 @@ class ImagePoint(AbstractPoint):
         """
         source = self._point.domain
         assert isinstance(source, AbstractCoordinateDomain)
-        parametrizations = _parametrizations_out_of(self._parametrized_domain, source)
-        if len(parametrizations) != 1:
-            raise ValueError(
-                f"{self._parametrized_domain!r} has {len(parametrizations)} parametrizations "
-                f"out of {source!r}, so a point there names no one map. Split the "
-                f"integral by piece first."
-            )
-        (parametrization,) = parametrizations
-        return parametrization
+        return parametrization_out_of(self._parametrized_domain, source)
 
     @property
     def domain(self) -> AbstractCoordinateDomain:
@@ -360,17 +348,7 @@ class AbstractGeometricQuantity(AbstractExpression):
             raise ValueError(
                 f"This quantity is evaluated at a point of a coordinate domain, not of {source!r}."
             )
-        parametrizations = _parametrizations_out_of(self.domain, source)
-        if len(parametrizations) == 0:
-            raise ValueError(f"{self.domain!r} has no parametrization out of {source!r}.")
-        if len(parametrizations) > 1:
-            raise ValueError(
-                f"{self.domain!r} has {len(parametrizations)} parametrizations out "
-                f"of {source!r}, so a point there names no one map. Split the integral "
-                f"by piece first."
-            )
-        (parametrization,) = parametrizations
-        return parametrization
+        return parametrization_out_of(self.domain, source)
 
     @property
     def _jacobian(self) -> Jacobian:
@@ -473,7 +451,7 @@ class AbstractGeometricQuantity(AbstractExpression):
         source = variable.domain
         if not isinstance(source, AbstractCoordinateDomain):
             return self
-        if len(_parametrizations_out_of(self._domain, source)) == 0:
+        if source not in parameter_regions(self._domain):
             return self
         if isinstance(self._domain, EmbedsAnInterface):
             variable = self._domain.transition(variable)
@@ -776,8 +754,8 @@ class OutwardNormal(AbstractGeometricQuantity):
         return (self._domain.geometric_dimension,)
 
     @property
-    def _presentation(self) -> AbstractParametrizedDomain:
-        """The facet this points out of, which a side presents."""
+    def _image(self) -> AbstractParametrizedDomain:
+        """The facet this points out of, which an embedding presents as its image."""
         domain = self._domain
         if isinstance(domain, EmbedsAnInterface):
             domain = domain.image
@@ -792,7 +770,7 @@ class OutwardNormal(AbstractGeometricQuantity):
             ValueError: If the domain is not a facet of a cell, or has not
                 been told where it is read
         """
-        image = self._presentation
+        image = self._image
         if isinstance(image, StatesAnOutwardNormal):
             return Vector([RealScalar(c) for c in image.outward_normal])
         inner, cell, cell_map = sub_entity_in_cell(image)
@@ -808,12 +786,10 @@ class OutwardNormal(AbstractGeometricQuantity):
             raise ValueError("This normal has not been told where it is read.")
         reference = [RealScalar(c) for c in cell.facet_outward_normal(index)]
         # Expanding has to reach the bottom in one go, so the included point
-        # is written out, for a map whose Jacobian reads its coordinates, and
-        # the cell map's Jacobian is written out rather than left as a quantity.
+        # is written out, for a map whose Jacobian reads its coordinates.
         included = ImagePoint(self._variable, inner).expand_geometry()
         assert isinstance(included, AbstractVariable)
-        jacobian = _as_dense_matrix(cell_map.jacobian(included))
-        inverse_transpose = jacobian.compute_inverse().transpose()
+        inverse_transpose = inverse_jacobian(cell_map, included).transpose()
         rows, cols = inverse_transpose.value_shape
         transported = [
             expression_sum(inverse_transpose.component(i, j) * reference[j] for j in range(cols))
@@ -870,8 +846,8 @@ class JacobianInverse(AbstractGeometricQuantity):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = _as_dense_matrix(self._jacobian.expand_geometry())
-        return j.compute_inverse()
+        assert self.variable is not None
+        return inverse_jacobian(self.parametrization, self.variable)
 
     def simplified_matrix_product(self, other: GraphNode) -> GraphNode | None:
         """Return a single expression representing the simplified matrix product.
@@ -918,8 +894,8 @@ class JacobianInverseTranspose(AbstractGeometricQuantity):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = _as_dense_matrix(self._jacobian.expand_geometry())
-        return j.compute_inverse().transpose()
+        assert self.variable is not None
+        return inverse_jacobian(self.parametrization, self.variable).transpose()
 
     def simplified_matrix_product(self, other: GraphNode) -> GraphNode | None:
         """Return a single expression representing the simplified matrix product.

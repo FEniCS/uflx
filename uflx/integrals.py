@@ -19,7 +19,8 @@ from uflx.domains import (
     AbstractDomain,
     AbstractParametrizedDomain,
     EntityDomain,
-    MadeOfPieces,
+    parameter_regions,
+    pieces_of,
     unlabelled,
 )
 from uflx.entities import AbstractEntity
@@ -393,9 +394,7 @@ class Integral(AbstractIntegral):
             has nothing to split.
         """
         domain = self.domain
-        if not isinstance(domain, MadeOfPieces):
-            return None
-        pieces = domain.pieces
+        pieces = pieces_of(domain)
         if pieces == (domain,):
             return None
         return IntegralSum(tuple(self.on_piece(p) for p in pieces))
@@ -431,7 +430,7 @@ class Integral(AbstractIntegral):
                 parametrizations, or its one region is not a cell's
         """
         domain = self.domain
-        sources = {parametrization.source for parametrization in domain.parametrizations}
+        sources = parameter_regions(domain)
         if len(sources) != 1:
             # Each parametrization has its own region, so there is no one set
             # of coordinates to pull back to. Split first.

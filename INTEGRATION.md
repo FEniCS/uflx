@@ -221,7 +221,7 @@ preimage through `ψ₋` of the image through `ψ₊`, both of which exist alrea
 preimage is the terminal the surrounding library evaluates, as a facet permutation here
 and by point location below. No derivative of `τ` is ever wanted, a restriction being
 the pullback of a function and the measure being `Γ`'s. The two sides of one mesh share
-one `φ`, so `ψ₋` is named by its side (`EmbeddingParametrization`), which is to a map
+one `φ`, so `ψ₋` is named by its side (`LabelledParametrization`), which is to a map
 what a labelled domain is to a domain: identity and nothing geometric.
 
 **Non-matching: `Γ` is its own domain.** Mortar coupling, a Lagrange multiplier on a

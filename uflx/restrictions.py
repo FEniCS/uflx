@@ -57,7 +57,7 @@ from uflx.domains import (
     AbstractCellularDomain,
     AbstractParametrizedDomain,
     EmbedsAnInterface,
-    MadeOfPieces,
+    pieces_of,
 )
 from uflx.expressions import AbstractExpression, RealScalar
 from uflx.functions import extract_domain
@@ -146,7 +146,7 @@ class Restriction(AbstractExpression):
         field_domain = extract_domain(field)
         if not isinstance(field_domain, AbstractCellularDomain):
             raise ValueError(f"{field_domain!r} has no cells to include a sub-entity into.")
-        for piece in _pieces_of(domain):
+        for piece in _pieces_read_through(domain):
             _, cell, cell_map = sub_entity_in_cell(piece)
             if cell not in field_domain.cell_types or cell_map != field_domain.parametrization(
                 cell
@@ -247,7 +247,7 @@ class Restriction(AbstractExpression):
         """
         if self._variable is None:
             raise ValueError("This restriction has not been told where it is read.")
-        pieces = _pieces_of(self._domain)
+        pieces = _pieces_read_through(self._domain)
         if len(pieces) != 1:
             raise ValueError(
                 f"{self._domain!r} has a parametrization per piece. Split the "
@@ -277,19 +277,17 @@ class Restriction(AbstractExpression):
         return f"Restriction({self._field!r}, {self._domain!r}, {self._variable!r})"
 
 
-def _pieces_of(domain: AbstractParametrizedDomain) -> tuple[AbstractParametrizedDomain, ...]:
-    """The pieces a field is read through, or the domain itself when it is one piece.
+def _pieces_read_through(
+    domain: AbstractParametrizedDomain,
+) -> tuple[AbstractParametrizedDomain, ...]:
+    """The pieces a field is read through.
 
-    A side of an interface is read through the pieces of its
-    image, that being the domain the field is on.
+    An embedding of an interface reads through the pieces of its image,
+    that being the domain the field is on.
     """
     if isinstance(domain, EmbedsAnInterface):
-        return _pieces_of(domain.image)
-    if isinstance(domain, MadeOfPieces):
-        pieces = domain.pieces
-        if pieces != (domain,):
-            return pieces
-    return (domain,)
+        domain = domain.image
+    return pieces_of(domain)
 
 
 def restrict(field: AbstractExpression, domain: AbstractParametrizedDomain) -> Restriction:

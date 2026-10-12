@@ -30,6 +30,7 @@ from uflx.domains import (
     AbstractDomain,
     AbstractParametrizedDomain,
     EntityDomain,
+    parameter_regions,
 )
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
@@ -253,7 +254,7 @@ class Variable(AbstractVariable):
                 f"{self._domain!r} is not made of cells, so a point of it is in no "
                 f"cell's coordinates."
             )
-        return {parametrization.source for parametrization in self._domain.parametrizations}
+        return parameter_regions(self._domain)
 
     def to_domain_coordinates(self, domain: AbstractParametrizedDomain) -> Variable:
         """Make a version of this variable in a domain's own coordinates.

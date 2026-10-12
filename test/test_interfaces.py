@@ -50,6 +50,7 @@ from uflx.domains import (
     EmbedsAnInterface,
     EntityDomain,
     LabelledDomain,
+    LabelledParametrization,
     MadeOfPieces,
     entity_domain,
     union_domain,
@@ -68,7 +69,7 @@ from uflx.geometry import (
 )
 from uflx.graphs import GraphNode, as_graph
 from uflx.integrals import Integral, IntegralSum
-from uflx.interfaces import CoordinateRepresentation, Embedding, EmbeddingParametrization, Interface
+from uflx.interfaces import CoordinateRepresentation, Embedding, Interface
 from uflx.parametrizations import (
     AffineParametrization,
     ComposedDomain,
@@ -185,9 +186,9 @@ def test_an_interface_is_the_domain_it_is_over_with_a_presentation_per_side(glue
 def test_an_embeddings_parametrization_is_its_images_named_by_the_embedding(glued, minus):
     """The map is the image's. What the side adds is identity."""
     (parametrization,) = glued.embedding("-").parametrizations
-    assert isinstance(parametrization, EmbeddingParametrization)
+    assert isinstance(parametrization, LabelledParametrization)
     assert parametrization.parametrization == hypotenuse_of(minus).parametrizations[0]
-    assert parametrization.embedding == glued.embedding("-")
+    assert parametrization.label == glued.embedding("-")
     assert parametrization != glued.embedding("+").parametrizations[0]
     assert parametrization.is_affine
 
@@ -600,8 +601,8 @@ def test_a_multiplier_on_the_interface_couples_the_two_sides(space, mesh):
         for point in read_at:
             assert isinstance(point, PreimagePoint)
             assert point.ambient_point == ImagePoint(variable, along)
-            assert isinstance(point.parametrization, EmbeddingParametrization)
-            sides.add(point.parametrization.embedding.label)
+            assert isinstance(point.parametrization, LabelledParametrization)
+            sides.add(point.parametrization.label.label)
         assert sides == {"+", "-"}
 
 
@@ -921,8 +922,8 @@ def test_three_surfaces_meeting_along_an_edge(flat_in_space, on_the_facet):
             assert isinstance(node.variable, ImagePoint)
             point = node.variable.entity_point
             if isinstance(point, PreimagePoint):
-                assert isinstance(point.parametrization, EmbeddingParametrization)
-                read_through.add(point.parametrization.embedding.label)
+                assert isinstance(point.parametrization, LabelledParametrization)
+                read_through.add(point.parametrization.label.label)
             else:
                 read_through.add("flat")
     assert read_through == {"flat", "up", "down"}
@@ -936,8 +937,8 @@ def read_through(term: Integral) -> dict[str, str | None]:
             assert isinstance(node.variable, ImagePoint)
             point = node.variable.entity_point
             if isinstance(point, PreimagePoint):
-                assert isinstance(point.parametrization, EmbeddingParametrization)
-                sides[type(node).__name__] = point.parametrization.embedding.label
+                assert isinstance(point.parametrization, LabelledParametrization)
+                sides[type(node).__name__] = point.parametrization.label.label
             else:
                 assert isinstance(point.domain, EntityDomain)
                 (entity,) = point.domain.cell_types
@@ -1264,15 +1265,17 @@ def test_a_union_presented_piece_by_piece_pairs_each_piece_with_its_own():
 
 
 def test_a_domain_is_carried_from_one_cells_coordinates_by_a_map_that_joins_them(plus):
-    """What a preimage parametrization refuses: no cell to start from, no map between, a union."""
+    """What a coordinate representation refuses: a union, no map between; and a box is fine."""
     tri = PlacedTriangle()
     box_face = Box(((0.0, 1.0), (0.0, 1.0))).face(axis=0, upper=True)
     mesh = parametrized_domain(LagrangeElement(tri, 1, (2,)))
     in_space = parametrized_domain(LagrangeElement(tri, 1, (3,)))
     edge = composed_domain(sub_entity_domain(tri, 1, 1), plus.parametrization(tri))
 
-    with pytest.raises(ValueError, match="not a cell's coordinates"):
-        CoordinateRepresentation(box_face, mesh.parametrization(tri))
+    # The map needs no cell on either end; presenting its image as a domain does.
+    of_a_box = CoordinateRepresentation(box_face, mesh.parametrization(tri))
+    assert of_a_box.source == box_face.parameter_region
+    assert of_a_box.target == entity_domain(tri)
     with pytest.raises(ValueError, match="piece by piece"):
         CoordinateRepresentation(sub_entities_of(mesh, 1), mesh.parametrization(tri))
     with pytest.raises(ValueError, match="without a map between them"):
