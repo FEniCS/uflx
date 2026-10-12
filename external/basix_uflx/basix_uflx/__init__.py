@@ -40,9 +40,10 @@ class BasixCell(uflx.entities.AbstractEntity):
     def __init__(self, basix_cell: basix.CellType):
         self._basix_cell = basix_cell
 
-    def __eq__(self, other) -> bool:
-        """Check if this entity is equal to another entity."""
-        return isinstance(other, BasixCell) and self._basix_cell == other._basix_cell
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (self._basix_cell,)
 
     @property
     def topological_dimension(self) -> int:
@@ -76,9 +77,6 @@ class BasixCell(uflx.entities.AbstractEntity):
         """
         return [c[0] for c in basix.cell.sub_entity_connectivity(self._basix_cell)[dim]]
 
-    def __hash__(self):
-        return hash(("basix.uflx", f"{self!r}"))
-
     def __repr__(self):
         return f"BasixCell({self._basix_cell.name})"
 
@@ -99,6 +97,13 @@ def hash_data(data: Sequence[np.floating] | npt.ArrayLike) -> str:
     return hashlib.sha1(hash_data_inner(data).encode("utf-8")).hexdigest()
 
 
+def _as_tuples(data: Any) -> Any:
+    """Convert nested lists to nested tuples so they can be hashed."""
+    if isinstance(data, list):
+        return tuple(_as_tuples(i) for i in data)
+    return data
+
+
 class BasixElement(AbstractFiniteElement):
     """A wrapper allowing Basix elements to be used directly with UFLx.
 
@@ -114,8 +119,10 @@ class BasixElement(AbstractFiniteElement):
         """Initialise."""
         self._element = element
 
-    def __hash__(self):
-        return hash(("basix.uflx", f"{self!r}"))
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (self._element,)
 
     def __repr__(self) -> str:
         if self._element.family == basix.ElementFamily.custom:
@@ -138,9 +145,6 @@ class BasixElement(AbstractFiniteElement):
 
     def __str__(self):
         return f"{self!r}"
-
-    def __eq__(self, other) -> bool:
-        return isinstance(other, BasixElement) and self._element == other._element
 
     @property
     def cell(self) -> uflx.entities.AbstractEntity:
@@ -186,14 +190,24 @@ class QuadratureElement(AbstractFiniteElement):
         dtype: npt.DTypeLike = np.float64,
     ):
         """Initialise the element."""
-        self._points = points.astype(dtype)
-        self._weights = weights.astype(dtype)
+        self._points = _as_tuples(np.asarray(points, dtype=dtype).tolist())
+        self._weights = _as_tuples(np.asarray(weights, dtype=dtype).tolist())
         self._cell_type = cell
         self._reference_map = reference_map
-        self._degree = len(points) if degree is None else degree
+        self._degree = len(self._points) if degree is None else degree
+        self._dtype = np.dtype(dtype)
 
-    def __hash__(self):
-        return hash(("basix.uflx", f"{self!r}"))
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (
+            self._cell_type,
+            self._points,
+            self._weights,
+            self._reference_map,
+            self._degree,
+            self._dtype,
+        )
 
     def __repr__(self) -> str:
         return (
@@ -203,16 +217,6 @@ class QuadratureElement(AbstractFiniteElement):
 
     def __str__(self):
         return f"{self!r}"
-
-    def __eq__(self, other) -> bool:
-        return isinstance(other, QuadratureElement) and (
-            self._cell_type == other._cell_type
-            and self._reference_map == other._reference_map
-            and self._points.shape == other._points.shape
-            and self._weights.shape == other._weights.shape
-            and np.allclose(self._points, other._points)
-            and np.allclose(self._weights, other._weights)
-        )
 
     @property
     def cell(self) -> uflx.entities.AbstractEntity:
@@ -224,7 +228,7 @@ class QuadratureElement(AbstractFiniteElement):
 
     @property
     def dim(self) -> int:
-        return self._points.shape[0]
+        return len(self._points)
 
     @property
     def lagrange_superdegree(self) -> int:
@@ -243,7 +247,8 @@ class QuadratureElement(AbstractFiniteElement):
             raise ValueError("Cannot take derivatives of Quadrature element.")
 
         points = np.asarray(points)
-        if points.shape != self._points.shape or not np.allclose(points, self._points):
+        own = np.asarray(self._points, dtype=self._dtype)
+        if points.shape != own.shape or not np.allclose(points, own):
             raise ValueError("Mismatch of tabulation points and element points.")
         npts = points.shape[0]
         table = np.eye(npts, npts).reshape([1, npts, npts, 1])
@@ -256,23 +261,18 @@ class RealElement(AbstractFiniteElement):
     def __init__(self, cell: basix.CellType, value_shape: tuple[int, ...]):
         """Initialise the element."""
         self._cell_type = cell
-        self._value_shape = value_shape
+        self._value_shape = tuple(value_shape)
 
-    def __hash__(self):
-        return hash(("basix.uflx", f"{self!r}"))
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (self._cell_type, self._value_shape)
 
     def __repr__(self) -> str:
         return f"RealElement({self._cell_type.name}, {self._value_shape})"
 
     def __str__(self):
         return f"{self!r}"
-
-    def __eq__(self, other) -> bool:
-        return (
-            isinstance(other, RealElement)
-            and self._cell_type == other._cell_type
-            and self._value_shape == other._value_shape
-        )
 
     @property
     def cell(self) -> uflx.entities.AbstractEntity:

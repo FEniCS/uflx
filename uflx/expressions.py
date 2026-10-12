@@ -355,7 +355,7 @@ class Integer(AbstractInteger):
         if isinstance(other, Integer):
             return Integer(self.value + other.value)
 
-    # Its own identity, not the mixin's: an Integer equals a plain number.
+    # An Integer equals a plain number, so it defines its own identity.
     def __eq__(self, other):
         """Check for equality."""
         if isinstance(other, Integer):
@@ -448,7 +448,7 @@ class Rational(AbstractScalar):
         else:
             return Rational(numerator, denominator)
 
-    # Its own identity, not the mixin's, to sit beside Integer's.
+    # Defines its own identity to match Integer.
     def __eq__(self, other):
         """Check for equality."""
         if isinstance(other, Rational):

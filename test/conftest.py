@@ -1,5 +1,7 @@
 """Implmentations of domains."""
 
+from typing import Any
+
 import pytest
 
 from uflx.entities import AbstractEntity
@@ -22,18 +24,19 @@ class Entity(AbstractEntity):
         """String."""
         return f"{self!r}"
 
-    def __hash__(self):
-        """Hash."""
-        return hash(("uflx.test", self.__class__.__name__))
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object.
+
+        Each concrete cell takes none. Its sub-entities include the cell
+        itself, so they cannot identify it.
+        """
+        return ()
 
     @property
     def name(self) -> str:
         """Name of this entity."""
         return self.__class__.__name__.lower()
-
-    def __eq__(self, other) -> bool:
-        """Check if this cell is equal to another cell."""
-        return isinstance(other, Entity) and f"{self!r}" == f"{other!r}"
 
     @property
     def topological_dimension(self) -> int:
@@ -167,20 +170,10 @@ class LagrangeElement(AbstractReferenceMappedFiniteElement):
         self._degree = degree
         self._block_shape = block_shape
 
-    def __repr__(self):
-        """Representation."""
-        return f"uflx.test.LagrangeElement({self._cell!r}, {self._degree}, self._block_shape)"
-
-    def __eq__(self, other) -> bool:
-        """Check if this element is equal to another element."""
-        return (
-            isinstance(
-                other,
-                LagrangeElement,
-            )
-            and self._cell == other._cell
-            and self._degree == other._degree
-        )
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (self._cell, self._degree, self._block_shape)
 
     @property
     def cell(self) -> AbstractEntity:
@@ -225,10 +218,6 @@ class LagrangeElement(AbstractReferenceMappedFiniteElement):
     def reference_map(self) -> AbstractReferenceMap:
         """Get the push forward and pull back map."""
         return IdentityReferenceMap()
-
-    def __hash__(self):
-        """Hash."""
-        return hash(("uflx_test.LagrangeElement", self._cell, self._degree))
 
 
 @pytest.fixture

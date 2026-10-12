@@ -33,7 +33,6 @@ def test_every_family_is_a_value(values):
 def test_every_familys_hash_is_kept(values):
     """The hash a class computes is computed once and kept on the instance.
 
-    A value hashed by identity, such as a function space, keeps nothing.
     An integral is hashed by the graph its ``__init__`` generates. Its
     arguments are set by then, so it arrives with its hash kept.
     """
@@ -49,7 +48,7 @@ def test_every_familys_hash_is_kept(values):
 
 
 def test_a_value_that_says_what_it_was_built_from_needs_no_equality_of_its_own():
-    """Identity is the class and the arguments, so saying the arguments is enough."""
+    """A class that defines init_args needs no equality of its own."""
 
     class Pair(Immutable):
         def __init__(self, a, b):
@@ -70,19 +69,19 @@ def test_a_value_that_says_what_it_was_built_from_needs_no_equality_of_its_own()
 
 
 def test_a_value_that_says_nothing_of_itself_has_no_identity():
-    """Neither arguments nor its own equality: refused at the first hash, with what to do."""
+    """A class with neither init_args nor its own equality fails at its first hash."""
 
     class Mute(Immutable):
         pass
 
-    with pytest.raises(TypeError, match="init_args, or writes its own"):
+    with pytest.raises(TypeError, match="Define init_args, or write"):
         hash(Mute())
     with pytest.raises(TypeError, match="init_args"):
         Mute() == Mute()
 
 
 def test_the_librarys_values_are_equal_by_what_they_were_built_from(lagrange_element):
-    """Two of anything built the same way are the same, with no equality written by hand."""
+    """Library values built the same way are equal without hand-written equality."""
     from uflx.domains import RD
     from uflx.maps import IdentityReferenceMap
 
@@ -96,7 +95,7 @@ def test_the_librarys_values_are_equal_by_what_they_were_built_from(lagrange_ele
 
 
 def test_a_value_prints_as_what_it_was_built_from():
-    """So that nothing that hashes or compares by repr sees an address."""
+    """A repr shows the arguments and never an address."""
     from uflx.domains import RD
     from uflx.maps import IdentityReferenceMap
 

@@ -30,6 +30,13 @@ what it was built from: a class that says `init_args` gets `__eq__`, `__hash__` 
 something else writes its own and says why. A new mixin is for a rule of that kind, one
 that holds of everything; code shared between a few classes is a function.
 
+`init_args` is a value's constructor arguments, so that `type(v)(*v.init_args)` rebuilds
+it and `reconstruct_node` can; it is all of them, since anything left out is not part of
+what the value is and two values differing only there are one; and it is hashable and
+compared by value all the way down, exactly rather than to a tolerance, since a tolerance
+is not transitive. An entity or element says it like any other value, which is what lets
+a consumer's cell or element be compared, hashed and rebuilt without writing any of that.
+
 A **protocol** names a question a node can be asked, and is never inherited. It is a
 `runtime_checkable` `Protocol`, so a node implements it by having the attribute and an
 algorithm asks with `isinstance`; a node that cannot answer is not an instance, and the

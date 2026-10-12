@@ -1,7 +1,9 @@
 """Finite element."""
 
 from abc import abstractmethod
+from collections.abc import Sequence
 from enum import Enum
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -70,12 +72,12 @@ class MixedElement(AbstractFiniteElement):
     use the :func:`mixed_element` function instead.
     """
 
-    _sub_elements: list[AbstractFiniteElement]
+    _sub_elements: tuple[AbstractFiniteElement, ...]
 
-    def __init__(self, sub_elements: list[AbstractFiniteElement]):
+    def __init__(self, sub_elements: Sequence[AbstractFiniteElement]):
         """Initialise the element."""
         assert len(sub_elements) > 0
-        self._sub_elements = sub_elements
+        self._sub_elements = tuple(sub_elements)
         self._reference_map = MixedReferenceMap(
             [e.reference_map for e in sub_elements], [e.reference_value_shape for e in sub_elements]
         )
@@ -85,9 +87,10 @@ class MixedElement(AbstractFiniteElement):
                     "Cannot create mixed element where sub-elements are defined on different cells."
                 )
 
-    def __hash__(self):
-        """Hash."""
-        return hash(("basix_uflx", f"{self!r}"))
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (self._sub_elements,)
 
     def __repr__(self) -> str:
         """Representation."""
@@ -96,14 +99,6 @@ class MixedElement(AbstractFiniteElement):
     def __str__(self):
         """String."""
         return f"{self!r}"
-
-    def __eq__(self, other) -> bool:
-        """Check if this element is equal to another element."""
-        return (
-            isinstance(other, MixedElement)
-            and len(self._sub_elements) == len(other._sub_elements)
-            and all(i == j for i, j in zip(self._sub_elements, other._sub_elements))
-        )
 
     @property
     def cell(self) -> AbstractEntity:
@@ -214,7 +209,7 @@ class BlockedElement(AbstractFiniteElement):
 
         self._sub_element = sub_element
         self._block_size = block_size
-        self._block_shape = shape
+        self._block_shape = tuple(shape)
 
         if symmetry:
             n = 0
@@ -230,8 +225,14 @@ class BlockedElement(AbstractFiniteElement):
                 shape,
                 symmetry_map,
             )
-        self._symmetry = symmetry
+        # False builds the same element as None, so store one spelling.
+        self._symmetry = True if symmetry else None
         self._ordering = ordering
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (self._sub_element, self._block_shape, self._symmetry, self._ordering)
 
     @property
     def sub_element(self):
@@ -242,10 +243,6 @@ class BlockedElement(AbstractFiniteElement):
     def real_valued(self) -> bool:
         """Check if this element is real-valued."""
         return self._sub_element.real_valued
-
-    def __hash__(self):
-        """Hash."""
-        return hash(("basix_uflx", f"{self!r}"))
 
     def __repr__(self) -> str:
         """Representation."""
@@ -258,15 +255,6 @@ class BlockedElement(AbstractFiniteElement):
     def __str__(self):
         """String."""
         return f"{self!r}"
-
-    def __eq__(self, other) -> bool:
-        """Check if this element is equal to another element."""
-        return (
-            isinstance(other, BlockedElement)
-            and self._block_size == other._block_size
-            and self._block_shape == other._block_shape
-            and self._sub_element == other._sub_element
-        )
 
     @property
     def cell(self) -> AbstractEntity:

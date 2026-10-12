@@ -63,7 +63,11 @@ a class that says what that is, as `init_args`, gets `__eq__`, `__hash__` and `_
 from the mixin and writes none of them, and one whose identity is deliberately something
 else (an `Integer` equals a plain number, a `Variable` is its label alone, an `Integral`
 ignores its bound variable) writes its own and says why in a comment. Consumer classes
-(a Basix cell, an element) inherit the rule.
+(a Basix cell, an element) inherit the rule, and an entity or element must say
+`init_args`. What `init_args` says is the constructor's arguments, so that
+`type(v)(*v.init_args)` rebuilds `v`; all of them, since two built from equal arguments
+are one value; and hashable and compared by value all the way down, so an array is kept
+as nested tuples of its entries.
 
 Expression trees (the symbolic core) are not plain Python object graphs — they are
 backed by an explicit DAG in `uflx/graphs/` (`Graph` subclasses `networkx.DiGraph`;
