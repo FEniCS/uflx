@@ -48,18 +48,24 @@ class _Interning(ABCMeta):
         value = super().__call__(*args, **kwargs)
         # Fingerprint first so that an argument that cannot be digested is refused with a reason.
         value.fingerprint
-        value = _Interning._values.setdefault((cls, _interning_key(value.init_args)), value)
+        key = (cls, _interning_key(value.init_args))
+        interned = _Interning._values.setdefault(key, value)
         if not _Interning._checking and (
             _Interning.check_every_value or cls not in _Interning._rebuilt
         ):
-            _Interning._rebuilt.add(cls)
             # A rebuild builds values too, and they need no check of their own.
             _Interning._checking = True
             try:
-                _check_rebuilds(value)
+                _check_rebuilds(interned)
+            except Exception:
+                # A value that fails its check must not be returned by a later build.
+                if interned is value:
+                    del _Interning._values[key]
+                raise
             finally:
                 _Interning._checking = False
-        return value
+            _Interning._rebuilt.add(cls)
+        return interned
 
 
 def _check_rebuilds(value: Any) -> None:

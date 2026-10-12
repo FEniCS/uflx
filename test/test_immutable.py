@@ -12,7 +12,7 @@ from conftest import LagrangeElement, Triangle
 
 from uflx import Coefficient, coordinate_element, dx, function_space
 from uflx.expressions import Rational, RealScalar
-from uflx.graphs.graphs import Immutable
+from uflx.graphs.graphs import Immutable, _Interning
 
 
 @pytest.fixture
@@ -207,8 +207,13 @@ def test_a_class_that_defines_its_own_identity_is_refused(name):
         type("Custom", (Immutable,), {name: lambda self: None})
 
 
-def test_a_class_whose_init_args_lose_an_argument_is_refused():
-    """Guards against a class whose values cannot be rebuilt from their init_args."""
+def test_a_class_whose_init_args_lose_an_argument_is_refused(monkeypatch):
+    """Guards against a class whose values cannot be rebuilt from their init_args.
+
+    It is refused every time, not only the first. Outside a test only the
+    first value of a class is checked, so the test checks that way too.
+    """
+    monkeypatch.setattr(_Interning, "check_every_value", False)
 
     class Lossy(Immutable):
         def __init__(self, a, b):
@@ -219,19 +224,25 @@ def test_a_class_whose_init_args_lose_an_argument_is_refused():
         def init_args(self):
             return (self._a,)
 
-    with pytest.raises(TypeError, match="cannot be rebuilt from its init_args"):
-        Lossy(1, 2)
+    for _ in range(2):
+        with pytest.raises(TypeError, match="cannot be rebuilt from its init_args"):
+            Lossy(1, 2)
 
 
-def test_a_class_that_alters_its_argument_is_refused():
-    """Guards against a constructor whose stored argument rebuilds to a different value."""
+def test_a_class_that_alters_its_argument_is_refused(monkeypatch):
+    """Guards against a constructor whose stored argument rebuilds to a different value.
+
+    It is refused every time, and the refused value is never returned.
+    """
+    monkeypatch.setattr(_Interning, "check_every_value", False)
 
     class Shifting(Immutable):
         def __init__(self, n):
             self._n = n + 1
 
-    with pytest.raises(TypeError, match="rebuilt from its init_args is"):
-        Shifting(1)
+    for _ in range(2):
+        with pytest.raises(TypeError, match="rebuilt from its init_args is"):
+            Shifting(1)
 
 
 def _shared(levels):
