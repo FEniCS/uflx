@@ -4,6 +4,7 @@ import pytest
 
 from uflx.entities import AbstractEntity
 from uflx.finite_elements import AbstractReferenceMappedFiniteElement
+from uflx.graphs.graphs import _Interning, describe
 from uflx.maps import AbstractReferenceMap, IdentityReferenceMap
 
 
@@ -245,3 +246,16 @@ def pytest_generate_tests(metafunc):
                 pytest.param(Tetrahedron(), id="tetrahedron"),
             ],
         )
+
+
+@pytest.fixture(autouse=True)
+def every_value_rebuilds_to_itself(monkeypatch):
+    """Check that every value a test builds is rebuilt from its init_args as the same object."""
+    build = _Interning.__call__
+
+    def checked(cls, *args, **kwargs):
+        value = build(cls, *args, **kwargs)
+        assert build(cls, *value.init_args) is value, describe(value)
+        return value
+
+    monkeypatch.setattr(_Interning, "__call__", checked)

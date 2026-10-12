@@ -68,11 +68,6 @@ class Variable(AbstractVariable):
         """The domain that this variable is in."""
         return self._domain
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise NotImplementedError()
@@ -93,11 +88,6 @@ class FiniteElementVariable(AbstractVariable):
             self._label = label
         self._domain = domain
         self._reference = reference
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
 
     @property
     def label(self) -> str:
@@ -149,11 +139,6 @@ class AbstractFunction(AbstractExpression):
     @abstractmethod
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""
-
-    @property
-    @abstractmethod
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
 
     @property
     @abstractmethod
@@ -260,11 +245,6 @@ class Argument(AbstractFunction):
         """The component of the finite element tensor that this function represents."""
         return self._component
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise NotImplementedError()
@@ -342,11 +322,6 @@ class Coefficient(AbstractFunction):
     def variable(self) -> AbstractVariable | None:
         """Get the variable that is this function's input."""
         return self._variable
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
 
     def diff(self, index: int) -> AbstractFunction:
         """Take a derivative of this function."""

@@ -48,11 +48,6 @@ class FlattenedTensorMap(AbstractExpression):
         """The value shape of the expression."""
         return ()
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
         raise ValueError("Cannot get a component of a scalar expression")
@@ -81,17 +76,6 @@ class Tensor(AbstractExpression):
             return (len(t), *s), tuple(t)
 
         self._shape, self._entries = to_shape_and_tuple(entries)
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-
-        def extract_successors(items: NestedTuple) -> set[GraphNode]:
-            if isinstance(items, GraphNode):
-                return {items}
-            return set().union(*[extract_successors(i) for i in items])
-
-        return extract_successors(self._entries)
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -317,11 +301,6 @@ class Identity(AbstractExpression):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
         return (self.size, self.size)
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""

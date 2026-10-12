@@ -21,3 +21,20 @@ def test_replace(lagrange_element):
     assert isinstance(form.integrand, TrialFunction)
     assert isinstance(replaced_form, Integral)
     assert isinstance(replaced_form.integrand, TestFunction)
+
+
+def test_replace_reaches_the_values_an_expression_was_built_from(lagrange_element):
+    """Guards against a substitution for a space or a mesh being silently ignored."""
+    from uflx import Coefficient
+    from uflx.geometry import Jacobian
+
+    mesh = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    curved = coordinate_element(lagrange_element("triangle", 2, (2,)))
+    linear = function_space(mesh, lagrange_element("triangle", 1))
+    quadratic = function_space(mesh, lagrange_element("triangle", 2))
+
+    f = Coefficient(linear, "f")
+    assert replace(f * f, {linear: quadratic}) is Coefficient(quadratic, "f") * Coefficient(
+        quadratic, "f"
+    )
+    assert replace(Jacobian(mesh), {mesh: curved}) is Jacobian(curved)

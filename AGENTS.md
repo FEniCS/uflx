@@ -68,7 +68,9 @@ values are the same object and equality is `is`. A number keys with its type and
 This keeps `1` apart from `1.0` and `0.0` apart from `-0.0`. A `repr`
 prints one level of arguments and anything deeper as `ClassName(...)`, so it stays one
 line however large the graph. `uflx.graphs.describe(value, depth)` prints more levels.
-Avoid defining `__eq__`, `__hash__` or `__repr__` on a class at all costs. Any other
+A value's `successors` are the values among its arguments. A space, a mesh or a variable
+is a node like any other, so `replace` can substitute it.
+Avoid defining `__eq__`, `__hash__`, `__repr__` or `successors` on a class at all costs. Any other
 identity is one that rebuilding a node can silently change. Consumer classes such
 as a Basix cell or element inherit the rule. [DESIGN_CHOICES.md](DESIGN_CHOICES.md) says
 how to store the arguments.

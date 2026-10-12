@@ -110,6 +110,15 @@ class Immutable(metaclass=_Interning):
         return describe(self)
 
     @property
+    def successors(self) -> set[GraphNode]:
+        """The values this one was built from.
+
+        These are the values among the arguments. A graph has an edge to
+        each, so a walk or a rewrite reaches everything a value depends on.
+        """
+        return set(_values_in(self.init_args))
+
+    @property
     def fingerprint(self) -> bytes:
         """A digest of the class and arguments that is the same in every process.
 
@@ -361,22 +370,36 @@ class NodeOrder(Enum):
     leaves_first = 1
 
 
-def _print_tree(graph: Graph, node: GraphNode, prefix: str, is_last: bool):
-    connector = "└── " if is_last else "├── "
-    print(prefix + connector + repr(node))
-    successors = list(graph.successors(node))
-    extension = "    " if is_last else "│   "
-    for i, child in enumerate(successors):
-        _print_tree(graph, child, prefix + extension, i == len(successors) - 1)
-
-
 def print_node(graph: Graph, node: GraphNode, indentation: int = 0):
-    """Print a graph using the node as the root node."""
+    """Print a graph using the node as the root node.
+
+    A node with several parents prints in full the first time with a
+    label such as ``[1]``, and as its label alone after that. The output
+    is one line per edge however much the graph shares.
+    """
+    reachable = graph.descendants(node)
+    shared = {n for n in reachable if sum(p in reachable for p in graph.predecessors(n)) > 1}
+    labels: dict[GraphNode, str] = {}
     indent = "    " * indentation
     print(indent + repr(node))
-    successors = list(graph.successors(node))
-    for i, child in enumerate(successors):
-        _print_tree(graph, child, indent, i == len(successors) - 1)
+    unprinted = [(child, indent, False) for child in reversed(list(graph.successors(node)))]
+    if unprinted:
+        unprinted[0] = (unprinted[0][0], indent, True)
+    while unprinted:
+        child, prefix, is_last = unprinted.pop()
+        connector = "└── " if is_last else "├── "
+        if child in labels:
+            print(prefix + connector + labels[child])
+            continue
+        if child in shared:
+            labels[child] = f"[{len(labels) + 1}]"
+            print(f"{prefix}{connector}{labels[child]} {child!r}")
+        else:
+            print(prefix + connector + repr(child))
+        extension = prefix + ("    " if is_last else "│   ")
+        children = list(graph.successors(child))
+        for i, grandchild in reversed(list(enumerate(children))):
+            unprinted.append((grandchild, extension, i == len(children) - 1))
 
 
 @runtime_checkable

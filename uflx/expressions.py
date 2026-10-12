@@ -38,11 +38,6 @@ class AbstractExpression(Immutable, ABC):
     def value_shape(self) -> tuple[int, ...]:
         """The value shape of the expression."""
 
-    @property
-    @abstractmethod
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-
     def __mul__(self, other: Any) -> AbstractExpression:
         """Multiply."""
         if isinstance(other, AbstractExpression):
@@ -236,11 +231,6 @@ class RealScalar(AbstractScalar):
             return other
 
     @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
-    @property
     def re(self) -> AbstractExpression:
         """Get real part."""
         return self
@@ -281,11 +271,6 @@ class ComplexScalar(AbstractScalar):
             return ComplexScalar(re, im)
         else:
             return Neg(self)
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
 
     @property
     def re(self) -> AbstractExpression:
@@ -345,11 +330,6 @@ class Integer(AbstractInteger):
     def __neg__(self) -> AbstractExpression:
         """Negation."""
         return Integer(-self.value)
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
 
     def as_int(self) -> int:
         """Convert to an integer."""
@@ -429,11 +409,6 @@ class Rational(AbstractScalar):
         """Negation."""
         return Rational(-self.numerator, self.denominator)
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
-
     def as_float(self) -> float:
         """Convert to a float."""
         return self.numerator / self.denominator
@@ -464,11 +439,6 @@ class UnaryOperator(AbstractExpression):
     def argument(self) -> AbstractExpression:
         """The operand."""
         return self._argument
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return {self.argument}
 
 
 class Re(UnaryOperator):
@@ -571,11 +541,6 @@ class BinaryOperator(AbstractExpression):
         """The second operand."""
         return self._second
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return {self.first, self.second}
-
 
 class Product(AbstractExpression):
     """Componentwise product."""
@@ -627,11 +592,6 @@ class Product(AbstractExpression):
     def with_operands(self, operands: Sequence[AbstractExpression]) -> Product:
         """Create the same expression with different operands."""
         return Product(operands)
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set(self._items)
 
     @property
     def value_shape(self) -> tuple[int, ...]:
@@ -720,11 +680,6 @@ class MatrixProduct(AbstractExpression):
             return items[0]
         return MatrixProduct(cast(list[AbstractExpression], items))
 
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set(self._items)
-
 
 class Sum(AbstractExpression):
     """Componentwise sum."""
@@ -768,11 +723,6 @@ class Sum(AbstractExpression):
     def with_operands(self, operands: Sequence[AbstractExpression]) -> Sum:
         """Create the same expression with different operands."""
         return Sum(operands)
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set(self._items)
 
     @property
     def value_shape(self) -> tuple[int, ...]:

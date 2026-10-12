@@ -14,7 +14,6 @@ from uflx.expressions import AbstractExpression, Im, Re
 from uflx.finite_elements import AbstractFiniteElement, AbstractReferenceMappedFiniteElement
 from uflx.function_spaces import AbstractFunctionSpace, AbstractReferenceMappedFunctionSpace
 from uflx.functions import AbstractFunction, AbstractVariable
-from uflx.graphs import GraphNode
 from uflx.tensors import zero
 from uflx.utils import flatten
 
@@ -143,11 +142,6 @@ class EvaluatedBasisFunction(AbstractEvaluatedBasisFunction):
                 )
         else:
             return ()
-
-    @property
-    def successors(self) -> set[GraphNode]:
-        """The successors of this node."""
-        return set()
 
     @property
     def derivative(self) -> tuple[int, ...]:
