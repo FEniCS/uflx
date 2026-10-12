@@ -34,8 +34,9 @@ other than the arguments is one that rebuilding a node can silently change, and 
 that reaches outside the class breaks hashing. A class that seems to need one is usually
 missing an argument or keeping one it should not. A handwritten `__repr__` drifts from
 what the value is, and nothing may depend on one. A class writes its own only when an
-argument prints as an address, as a wrapped Basix element does. A graph node prints each
-child node as `...`, since the graph shows the children.
+argument prints as an address, as a wrapped Basix element does. The mixin's prints one level
+of arguments and anything deeper as `ClassName(...)`, so it stays short however large a
+graph is behind it. `uflx.graphs.describe` takes a depth for when more is wanted.
 
 `init_args` is read back from the constructor. Each argument `name` is stored as
 `self._name`, and the mixin reads those attributes in the order of the constructor's

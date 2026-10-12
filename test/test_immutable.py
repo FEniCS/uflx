@@ -102,39 +102,60 @@ def test_a_value_prints_as_what_it_was_built_from():
     assert repr(IdentityReferenceMap()) == repr(IdentityReferenceMap())
 
 
-def test_a_value_that_is_not_a_node_prints_in_full(lagrange_element):
-    """A space prints every argument, all the way down."""
-    element = lagrange_element("triangle", 1)
-    space = function_space(coordinate_element(lagrange_element("triangle", 1, (2,))), element)
+@pytest.fixture
+def space(lagrange_element):
+    """A scalar P1 space on a P1 triangle mesh."""
+    mesh = coordinate_element(lagrange_element("triangle", 1, (2,)))
+    return function_space(mesh, lagrange_element("triangle", 1))
+
+
+def test_a_repr_prints_one_level_of_arguments(space):
+    """Arguments of arguments print as ellipses, unless they are plain values."""
+    from uflx import TestFunction
+
+    f = Coefficient(space, "f")
     assert repr(space) == (
-        "FunctionSpace(CoordinateElement((LagrangeElement(Triangle(), 1, (2,)),)), "
-        "(LagrangeElement(Triangle(), 1, None),))"
+        "FunctionSpace(CoordinateElement(...), (LagrangeElement(Triangle(), 1, None),))"
+    )
+    assert repr(f) == "Coefficient(FunctionSpace(...), 'f', False, None)"
+    assert repr(f * TestFunction(space)) == "Product((Coefficient(...), TestFunction(...)))"
+    assert (
+        repr(f * dx)
+        == "Integral(Coefficient(...), Measure(None, 0, False), FiniteElementVariable(...))"
     )
 
 
-def test_a_node_prints_its_children_as_ellipses(lagrange_element):
-    """A node prints its own arguments and leaves its children to the graph."""
+def test_a_value_made_of_plain_values_prints_in_full():
+    """A short value prints in full however deep it sits."""
     from uflx.expressions import Integer
     from uflx.geometry import SpatialCoordinate
 
     x0 = SpatialCoordinate(2).component(0)
     assert repr(Integer(3)) == "Integer(3)"
-    assert repr(x0) == "SingleSpatialCoordinate(2, 0)"
-    assert repr(x0 + Integer(1)) == "Sum((..., ...))"
-    space = function_space(
-        coordinate_element(lagrange_element("triangle", 1, (2,))), lagrange_element("triangle", 1)
+    assert repr(x0 + Integer(1)) == "Sum((SingleSpatialCoordinate(2, 0), Integer(1)))"
+
+
+def test_describe_takes_a_depth(space):
+    """A larger depth prints more levels, and zero prints only the class."""
+    from uflx.graphs import describe
+
+    f = Coefficient(space, "f")
+    assert describe(f, 0) == "Coefficient(...)"
+    assert describe(f, 1) == repr(f)
+    assert describe(f, 2) == (
+        "Coefficient(FunctionSpace(CoordinateElement(...), "
+        "(LagrangeElement(Triangle(), 1, None),)), 'f', False, None)"
     )
-    assert repr(Coefficient(space, "f")) == f"Coefficient({space!r}, 'f', False, None)"
 
 
-def test_a_nodes_repr_does_not_grow_with_its_graph():
-    """Printing a deeply shared expression costs one level."""
+def test_a_repr_does_not_grow_with_its_graph():
+    """Printing a deeply shared expression costs a bounded number of levels."""
     from uflx.geometry import SpatialCoordinate
 
     e = SpatialCoordinate(2).component(0)
     for _ in range(50):
         e = e / e - e
-    assert repr(e) == "Sum((..., ...))"
+    assert repr(e) == "Sum((Product(...), Neg(...)))"
 
 
 def test_no_class_in_uflx_defines_its_own_identity():

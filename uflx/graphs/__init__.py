@@ -8,5 +8,6 @@ from uflx.graphs.graphs import (
     NodeOrder,
     RepresentedByGraph,
     as_graph,
+    describe,
     generate_graph,
 )

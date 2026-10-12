@@ -62,10 +62,11 @@ changed node is a new node. A value's identity is its class and its `init_args`.
 mixin reads `init_args` back from the attribute `self._name` the constructor stores each
 argument `name` in, and supplies `__eq__`, `__hash__` and `__repr__` from them. The hash
 comes from `fingerprint`, a digest of the class name and arguments. It is the same in
-every process whatever its hash seed. MPI ranks then walk a graph in one order. A graph
-node's `repr` prints each child node as `...`, so it stays one line however large the
-graph. Avoid defining `__eq__`, `__hash__` or `__repr__` on a class at all costs. Any
-other identity is one that rebuilding a node can silently change. Consumer classes such
+every process whatever its hash seed. MPI ranks then walk a graph in one order. A `repr`
+prints one level of arguments and anything deeper as `ClassName(...)`, so it stays one
+line however large the graph. `uflx.graphs.describe(value, depth)` prints more levels.
+Avoid defining `__eq__`, `__hash__` or `__repr__` on a class at all costs. Any other
+identity is one that rebuilding a node can silently change. Consumer classes such
 as a Basix cell or element inherit the rule. [DESIGN_CHOICES.md](DESIGN_CHOICES.md) says
 how to store the arguments.
 

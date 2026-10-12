@@ -76,17 +76,9 @@ class Immutable:
     def __repr__(self) -> str:
         """Representation.
 
-        This is the class name and its arguments. A node of a graph prints
-        each child node as ``...``. The graph shows the children, and
-        printing them in full would repeat every shared node. A class
-        whose arguments cannot be read prints as a plain object.
+        This is :func:`describe` at its default depth of one.
         """
-        try:
-            arguments = self.init_args
-        except TypeError:
-            return object.__repr__(self)
-        is_node = isinstance(self, GraphNode)
-        return f"{type(self).__name__}({', '.join(_argument_repr(a, is_node) for a in arguments)})"
+        return describe(self)
 
     @property
     def fingerprint(self) -> bytes:
@@ -231,16 +223,56 @@ def _qualified_name(cls: type) -> str:
     return f"{cls.__module__}.{cls.__qualname__}"
 
 
-def _argument_repr(value: Any, abbreviate_nodes: bool) -> str:
-    """Print an argument, with graph nodes as ``...`` if asked."""
-    if abbreviate_nodes and isinstance(value, GraphNode):
-        return "..."
+def describe(value: Immutable, depth: int = 1) -> str:
+    """Print a value as its class and its arguments, to a given depth.
+
+    An argument nested deeper than ``depth`` prints as ``ClassName(...)``.
+    One whose own arguments are all plain values prints in full at any
+    depth, since it is short. The output stays bounded however large a
+    graph the value heads, because a shared node is never followed past
+    the depth.
+
+    Args:
+        value: The value to print
+        depth: How many levels of arguments to print in full
+
+    Returns:
+        The class name and arguments, such as
+        ``Product((Coefficient(...), TestFunction(...)))``.
+    """
+    try:
+        arguments = value.init_args
+    except TypeError:
+        return object.__repr__(value)
+    if depth <= 0 and not _has_plain_arguments(arguments):
+        return f"{type(value).__name__}(...)"
+    return (
+        f"{type(value).__name__}({', '.join(_describe_argument(a, depth - 1) for a in arguments)})"
+    )
+
+
+def _describe_argument(value: Any, depth: int) -> str:
+    """Print one argument of a value for :func:`describe`."""
     if isinstance(value, tuple):
-        items = [_argument_repr(i, abbreviate_nodes) for i in value]
+        items = [_describe_argument(i, depth) for i in value]
         return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
     if isinstance(value, list):
-        return f"[{', '.join(_argument_repr(i, abbreviate_nodes) for i in value)}]"
+        return f"[{', '.join(_describe_argument(i, depth) for i in value)}]"
+    if isinstance(value, Immutable) and type(value).__repr__ is Immutable.__repr__:
+        return describe(value, depth)
     return repr(value)
+
+
+def _has_plain_arguments(arguments: Any) -> bool:
+    """Whether no argument is a value with arguments of its own, looking one level down."""
+    if isinstance(arguments, tuple | list):
+        return all(_has_plain_arguments(a) for a in arguments)
+    if isinstance(arguments, Immutable):
+        try:
+            return arguments.init_args == ()
+        except TypeError:
+            return False
+    return True
 
 
 def _stored_argument(value: Any, name: str) -> Any:
