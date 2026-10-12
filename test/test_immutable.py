@@ -279,3 +279,28 @@ def test_a_copy_is_the_value_itself(duplicate):
     """Guards against a copy that is unequal to its original."""
     value = RealScalar(2.0) * RealScalar(3.0)
     assert duplicate(value) is value
+
+
+def test_a_shared_node_prints_once_then_by_its_label(capsys):
+    """Guards against printing a node again under every parent it has."""
+    from uflx.geometry import SpatialCoordinate
+    from uflx.graphs import as_graph
+
+    a = SpatialCoordinate(2).component(0)
+    as_graph(a / a - a).print()
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 7
+    assert sum(line.endswith("[1] SingleSpatialCoordinate(2, 0)") for line in lines) == 1
+    assert sum(line.endswith("── [1]") for line in lines) == 2
+
+
+def test_a_deeply_shared_graph_prints_one_line_per_edge(capsys):
+    """Guards against printing a path count that doubles with every level of sharing."""
+    from uflx.geometry import SpatialCoordinate
+    from uflx.graphs import as_graph
+
+    e = SpatialCoordinate(2).component(0)
+    for _ in range(1000):
+        e = e / e - e
+    as_graph(e).print()
+    assert len(capsys.readouterr().out.splitlines()) == 6 * 1000 + 1
