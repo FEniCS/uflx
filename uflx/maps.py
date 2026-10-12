@@ -182,9 +182,9 @@ class IsPulledBack(Protocol):
 class PushedForward(AbstractExpression):
     """A function on a reference cell that has been mapped to a physical cell."""
 
-    def __init__(self, map: AbstractReferenceMap, function: AbstractExpression):
+    def __init__(self, reference_map: AbstractReferenceMap, function: AbstractExpression):
         """Initialise."""
-        self.map = map
+        self.reference_map = reference_map
         self.function = function
 
     @property
@@ -194,7 +194,7 @@ class PushedForward(AbstractExpression):
 
     def __repr__(self):
         """Representation."""
-        return f"PushedForward({self.map})"
+        return f"PushedForward({self.reference_map})"
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -204,11 +204,11 @@ class PushedForward(AbstractExpression):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self.map, self.function
+        return self.reference_map, self.function
 
     def apply_push_forward(self) -> AbstractExpression:
         """Apply the push forward."""
-        return self.map.push_forward(self.function)
+        return self.reference_map.push_forward(self.function)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
@@ -218,9 +218,9 @@ class PushedForward(AbstractExpression):
 class PulledBack(AbstractExpression):
     """A function on a physical cell that has been mapped to a reference cell."""
 
-    def __init__(self, map: AbstractReferenceMap, function: AbstractExpression):
+    def __init__(self, reference_map: AbstractReferenceMap, function: AbstractExpression):
         """Initalise."""
-        self.map = map
+        self.reference_map = reference_map
         self.function = function
 
     @property
@@ -230,7 +230,7 @@ class PulledBack(AbstractExpression):
 
     def __repr__(self):
         """Representation."""
-        return f"PulledBack({self.map})"
+        return f"PulledBack({self.reference_map})"
 
     @property
     def successors(self) -> set[GraphNode]:
@@ -240,11 +240,11 @@ class PulledBack(AbstractExpression):
     @property
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
-        return self.map, self.function
+        return self.reference_map, self.function
 
     def apply_pull_back(self) -> AbstractExpression:
         """Apply the pull back."""
-        return self.map.pull_back(self.function)
+        return self.reference_map.pull_back(self.function)
 
     def component(self, *indices: int) -> AbstractExpression:
         """Get a component of the expression."""
