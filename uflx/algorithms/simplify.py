@@ -95,8 +95,17 @@ class Commutative(Protocol):
 
 
 def digest(*parts: str | bytes) -> bytes:
-    """Digest a sequence of parts, each prefixed by its length so the encoding is unambiguous."""
-    h = blake2b(digest_size=16)
+    """Digest a sequence of parts, each prefixed by its length so the encoding is unambiguous.
+
+    The digest orders and names things and keeps no secret, so it is not
+    sized for an adversary: eight bytes put a collision between two
+    different subtrees of one expression at about n^2 / 2^65, which no
+    expression will reach, where four would be reached around ten
+    thousand nodes. blake2b is CPython's own, so it is there whatever
+    OpenSSL was built with, and no faster digest is in the standard
+    library.
+    """
+    h = blake2b(digest_size=8, usedforsecurity=False)
     for part in parts:
         data = part.encode() if isinstance(part, str) else part
         h.update(len(data).to_bytes(8, "little"))

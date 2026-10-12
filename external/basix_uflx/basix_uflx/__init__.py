@@ -1,6 +1,5 @@
 """Basix UFLx interface."""
 
-import hashlib
 from abc import abstractmethod
 from collections.abc import Sequence
 from typing import Any
@@ -10,6 +9,7 @@ import basix
 import numpy as np
 import numpy.typing as npt
 import uflx
+from uflx.algorithms.simplify import digest
 
 from basix_uflx.finite_element import AbstractFiniteElement, BlockedElement, MixedElement
 from basix_uflx.utils import number_of_derivatives
@@ -87,7 +87,12 @@ class BasixCell(uflx.entities.AbstractEntity):
 
 
 def hash_data(data: Sequence[np.floating] | npt.ArrayLike) -> str:
-    """Return a hash of an array of floating point numbers."""
+    """Return a digest of an array of floating point numbers, as hexadecimal.
+
+    The same digest UFLx orders expressions by, so that there is one
+    convention for naming a thing by its numbers and it is the one that
+    keeps no secret.
+    """
 
     def hash_data_inner(data: Any) -> str:
         """Represent an array as a string, ready for hashing."""
@@ -96,7 +101,7 @@ def hash_data(data: Sequence[np.floating] | npt.ArrayLike) -> str:
         except TypeError:
             return f"{data!r}"
 
-    return hashlib.sha1(hash_data_inner(data).encode("utf-8")).hexdigest()
+    return digest(hash_data_inner(data)).hex()
 
 
 class BasixElement(AbstractFiniteElement):
