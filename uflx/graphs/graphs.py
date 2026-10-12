@@ -439,7 +439,7 @@ class NodeOrder(Enum):
     leaves_first = 1
 
 
-def print_node(graph: Graph, node: GraphNode, indentation: int = 0):
+def print_node(graph: Graph, node: GraphNode, indentation: int = 0, flat: bool = False):
     """Print a graph using the node as the root node.
 
     Each line is a value and the lines below it are its arguments in
@@ -447,7 +447,18 @@ def print_node(graph: Graph, node: GraphNode, indentation: int = 0):
     an argument that is a value prints as its number. A value prints in
     full the first time and as its number alone after that. The output
     is one line per edge however much the graph shares.
+
+    Args:
+        graph: The graph
+        node: The value to print from
+        indentation: How many levels to indent every line by
+        flat: Print one line per value with no tree, each value after
+            the values it was built from, so the width does not grow
+            with the depth of the graph
     """
+    if flat:
+        _print_flat(node, "    " * indentation)
+        return
     walk = list(_walk_arguments(node))
     labels: dict[Any, str] = {}
     for value, _, _ in walk:
@@ -462,6 +473,23 @@ def print_node(graph: Graph, node: GraphNode, indentation: int = 0):
         else:
             printed.add(value)
             print(f"{line} {_numbered(value, labels)}")
+
+
+def _print_flat(node: GraphNode, indent: str):
+    """Print every value once, numbered, after the values among its arguments."""
+    labels: dict[Any, str] = {}
+    unwalked = [(node, False)]
+    while unwalked:
+        value, arguments_printed = unwalked.pop()
+        if value in labels:
+            continue
+        if arguments_printed:
+            labels[value] = f"[{len(labels) + 1}]"
+            print(f"{indent}{labels[value]} {_numbered(value, labels)}")
+            continue
+        unwalked.append((value, True))
+        arguments = list(dict.fromkeys(_values_in(value.init_args)))
+        unwalked.extend((a, False) for a in reversed(arguments) if a not in labels)
 
 
 def _numbered(value: GraphNode, labels: dict[Any, str]) -> str:
@@ -542,9 +570,14 @@ class Graph(nx.DiGraph):
         self.add_node(node, *args, **kwargs)
         self._root = node
 
-    def print(self):
-        """Print a graph."""
-        print_node(self, self.root)
+    def print(self, flat: bool = False):
+        """Print a graph.
+
+        Args:
+            flat: Print one line per value with no tree, so the width
+                does not grow with the depth of the graph
+        """
+        print_node(self, self.root, flat=flat)
 
     def subgraph_of_node(self, node: GraphNode) -> Graph:
         """Get the subgraph with the input node as the root node."""
