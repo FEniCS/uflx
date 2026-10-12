@@ -67,6 +67,8 @@ class AbstractIntegral(Immutable, ABC):
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
 
+    # Its own identity, not the mixin's: the dummy variable is bound, so two
+    # integrals of one integrand over one measure are one integral.
     def __eq__(self, other):
         """Check for equality."""
         if isinstance(other, AbstractIntegral):

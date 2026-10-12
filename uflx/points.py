@@ -73,16 +73,6 @@ class Point(AbstractPoint):
         """The arguments used to initialise this object."""
         return (self._components,)
 
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return isinstance(other, Point) and all(
-            i == j for i, j in zip(self._components, other._components)
-        )
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.Point", *[hash(c) for c in self._components]))
-
 
 class PointComponent(AbstractExpression):
     """A component of a point."""

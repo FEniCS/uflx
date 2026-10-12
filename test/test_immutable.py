@@ -38,7 +38,7 @@ def test_every_familys_hash_is_kept(values):
     arguments are set by then, so it arrives with its hash kept.
     """
     for value in values:
-        by_value = any(
+        by_value = hasattr(value, "init_args") or any(
             "__hash__" in vars(cls)
             for cls in type(value).__mro__
             if cls is not object and cls is not Immutable
@@ -46,3 +46,60 @@ def test_every_familys_hash_is_kept(values):
         first = hash(value)
         assert hash(value) == first
         assert ("_hash" in value.__dict__) == by_value
+
+
+def test_a_value_that_says_what_it_was_built_from_needs_no_equality_of_its_own():
+    """Identity is the class and the arguments, so saying the arguments is enough."""
+
+    class Pair(Immutable):
+        def __init__(self, a, b):
+            self.a, self.b = a, b
+
+        @property
+        def init_args(self):
+            return (self.a, self.b)
+
+    class Twin(Pair):
+        pass
+
+    assert Pair(1, 2) == Pair(1, 2)
+    assert hash(Pair(1, 2)) == hash(Pair(1, 2))
+    assert Pair(1, 2) != Pair(2, 1)
+    assert Pair(1, 2) != Twin(1, 2)
+    assert len({Pair(1, 2), Pair(1, 2), Twin(1, 2)}) == 2
+
+
+def test_a_value_that_says_nothing_of_itself_has_no_identity():
+    """Neither arguments nor its own equality: refused at the first hash, with what to do."""
+
+    class Mute(Immutable):
+        pass
+
+    with pytest.raises(TypeError, match="init_args, or writes its own"):
+        hash(Mute())
+    with pytest.raises(TypeError, match="init_args"):
+        Mute() == Mute()
+
+
+def test_the_librarys_values_are_equal_by_what_they_were_built_from(lagrange_element):
+    """Two of anything built the same way are the same, with no equality written by hand."""
+    from uflx.domains import RD
+    from uflx.maps import IdentityReferenceMap
+
+    element = lagrange_element("triangle", 1, (2,))
+    assert RD(2) == RD(2) and RD(2) != RD(3)
+    assert IdentityReferenceMap() == IdentityReferenceMap()
+    assert coordinate_element(element) == coordinate_element(element)
+    assert function_space(coordinate_element(element), element) == function_space(
+        coordinate_element(element), element
+    )
+
+
+def test_a_value_prints_as_what_it_was_built_from():
+    """So that nothing that hashes or compares by repr sees an address."""
+    from uflx.domains import RD
+    from uflx.maps import IdentityReferenceMap
+
+    assert repr(RD(2)) == "RD(2)"
+    assert repr(IdentityReferenceMap()) == "IdentityReferenceMap()"
+    assert repr(IdentityReferenceMap()) == repr(IdentityReferenceMap())

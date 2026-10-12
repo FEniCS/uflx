@@ -24,9 +24,48 @@ class Immutable:
     A derived value may still be cached on an instance through
     ``object.__setattr__``, since it changes no argument. The kept hash
     is cached this way.
+
+    A value's identity is its class and what it was built from, so a
+    class that says what that is, as ``init_args``, gets its equality
+    and hash from here and need not write them. One whose identity is
+    deliberately something else, as a dummy variable's is its label
+    alone, writes its own and says why.
     """
 
     _hash: int
+
+    def __eq__(self, other: Any) -> bool:
+        """Equal when of one class and built from equal arguments.
+
+        The kept hashes are compared first, so that unequal values are
+        told apart without walking what they were built from.
+        """
+        if self is other:
+            return True
+        if type(self) is not type(other) or hash(self) != hash(other):
+            return False
+        return _arguments_of(self) == _arguments_of(other)
+
+    def __repr__(self) -> str:
+        """The class and what it was built from, which is what the value is.
+
+        A class that says nothing of what it was built from prints as
+        any object does, since there is nothing else to print.
+        """
+        try:
+            arguments = _arguments_of(self)
+        except TypeError:
+            return object.__repr__(self)
+        return f"{type(self).__name__}({', '.join(repr(a) for a in arguments)})"
+
+    def __hash__(self) -> int:
+        """Hash, by class and arguments; kept after the first call."""
+        try:
+            return self.__dict__["_hash"]
+        except KeyError:
+            value = hash((type(self), *_arguments_of(self)))
+            object.__setattr__(self, "_hash", value)
+            return value
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Wrap the class's own ``__init__`` to freeze and ``__hash__`` to keep.
@@ -55,6 +94,22 @@ class Immutable:
     def __delattr__(self, name: str) -> None:
         """Refuse to delete an attribute."""
         raise AttributeError(f"{self.__class__.__name__} is immutable.")
+
+
+def _arguments_of(value: Any) -> tuple[Any, ...]:
+    """What a value was built from, which it says as ``init_args``.
+
+    Raises:
+        TypeError: If it does not say, since then it has no identity to
+            be compared or hashed by
+    """
+    try:
+        return value.init_args
+    except AttributeError:
+        raise TypeError(
+            f"{type(value).__name__} does not say what it was built from. A value says, "
+            f"as init_args, or writes its own __eq__ and __hash__."
+        ) from None
 
 
 def _freezing(init: Callable[..., None]) -> Callable[..., None]:

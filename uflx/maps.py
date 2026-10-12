@@ -43,6 +43,11 @@ class AbstractReferenceMap(Immutable, ABC):
 class IdentityReferenceMap(AbstractReferenceMap):
     """Identity map."""
 
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return ()
+
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
         """Map function values from a reference cell to a physical cell."""
         return function
@@ -74,6 +79,11 @@ class BlockedReferenceMap(AbstractReferenceMap):
         """Initialise."""
         self._component_map = component_map
         self._shape = shape
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (self._component_map, self._shape)
 
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
         """Map function values from a reference cell to a physical cell."""
@@ -109,6 +119,11 @@ class SymmetricReferenceMap(AbstractReferenceMap):
         self._shape = shape
         self._symmetry_map = symmetry_map
 
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (self._component_map, self._shape, tuple(sorted(self._symmetry_map.items())))
+
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
         """Map function values from a reference cell to a physical cell."""
         return function  # TODO
@@ -140,6 +155,11 @@ class MixedReferenceMap(AbstractReferenceMap):
         """Initialise."""
         self._sub_maps = sub_maps
         self._shapes = shapes
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (tuple(self._sub_maps), tuple(self._shapes))
 
     def push_forward(self, function: AbstractExpression) -> AbstractExpression:
         """Map function values from a reference cell to a physical cell."""

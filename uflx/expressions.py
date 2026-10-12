@@ -67,23 +67,6 @@ class AbstractExpression(Immutable, ABC):
         except ValueError:
             return NotImplemented
 
-    def __eq__(self, other) -> bool:
-        """Check for equality.
-
-        Two nodes of one class with equal arguments are equal. The kept
-        hashes are compared first, which tells most unequal nodes apart
-        without walking either tree.
-        """
-        if self is other:
-            return True
-        if not isinstance(other, self.__class__) or hash(self) != hash(other):
-            return False
-        return self.init_args == other.init_args
-
-    def __hash__(self) -> int:
-        """Hash the class and arguments, and keep the result."""
-        return hash((f"uflx.{self.__class__.__name__}", *self.init_args))
-
     def __matmul__(self, other: Any) -> AbstractExpression:
         """Matrix multiply."""
         if isinstance(other, AbstractExpression):
@@ -372,6 +355,7 @@ class Integer(AbstractInteger):
         if isinstance(other, Integer):
             return Integer(self.value + other.value)
 
+    # Its own identity, not the mixin's: an Integer equals a plain number.
     def __eq__(self, other):
         """Check for equality."""
         if isinstance(other, Integer):
@@ -464,6 +448,7 @@ class Rational(AbstractScalar):
         else:
             return Rational(numerator, denominator)
 
+    # Its own identity, not the mixin's, to sit beside Integer's.
     def __eq__(self, other):
         """Check for equality."""
         if isinstance(other, Rational):

@@ -58,8 +58,12 @@ in `uflx/graphs/graphs.py`. It refuses to set or delete an attribute once the ou
 `__init__` has returned. It also keeps each class's hash on the instance after the
 first call, which makes graph walks and rewrites memoisable. A derived value may be
 cached on an instance through `object.__setattr__`. An argument may never change, and a
-changed node is a new node. Consumer classes such as a Basix cell or element inherit
-the rule.
+changed node is a new node. A value's identity is its class and what it was built from:
+a class that says what that is, as `init_args`, gets `__eq__`, `__hash__` and `__repr__`
+from the mixin and writes none of them, and one whose identity is deliberately something
+else (an `Integer` equals a plain number, a `Variable` is its label alone, an `Integral`
+ignores its bound variable) writes its own and says why in a comment. Consumer classes
+(a Basix cell, an element) inherit the rule.
 
 Expression trees (the symbolic core) are not plain Python object graphs — they are
 backed by an explicit DAG in `uflx/graphs/` (`Graph` subclasses `networkx.DiGraph`;

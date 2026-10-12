@@ -141,18 +141,6 @@ class ReferenceToPhysical(AbstractPoint):
 
         return Point(components)
 
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return (
-            isinstance(other, ReferenceToPhysical)
-            and self._point == other._point
-            and self._domain == other._domain
-        )
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.ReferenceToPhysical", hash(self._point), hash(self._domain)))
-
     @property
     def index(self) -> int | str:
         """The point's index in the set of points."""
@@ -202,18 +190,6 @@ class PhysicalToReference(AbstractPoint):
     def init_args(self) -> tuple[Any, ...]:
         """The arguments used to initialise this object."""
         return self._point, self._domain
-
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-        return (
-            isinstance(other, ReferenceToPhysical)
-            and self._point == other._point
-            and self._domain == other._domain
-        )
-
-    def __hash__(self) -> int:
-        """Hash."""
-        return hash(("uflx.ReferenceToPhysical", hash(self._point), hash(self._domain)))
 
     @property
     def index(self) -> int | str:

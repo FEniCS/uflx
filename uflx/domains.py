@@ -13,6 +13,7 @@ a mixture of (eq) tetrahedra and intervals.
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from typing import Any
 
 from uflx.entities import AbstractEntity
 from uflx.finite_elements import AbstractReferenceMappedFiniteElement
@@ -74,6 +75,11 @@ class CoordinateElement(AbstractCoordinateElement):
             assert e.reference_value_shape == (self._gdim,)
 
     @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (tuple(self._elements.values()),)
+
+    @property
     def geometric_dimension(self) -> int:
         """Dimension of the space this domain is embedded in."""
         return self._gdim
@@ -108,6 +114,11 @@ class RD(AbstractDomain):
     def __init__(self, dim: int):
         """Initialise."""
         self._dim = dim
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return (self._dim,)
 
     @property
     def geometric_dimension(self) -> int:

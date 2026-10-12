@@ -35,14 +35,6 @@ class AbstractVariable(AbstractExpression):
     def domain(self) -> AbstractDomain:
         """The domain that this variable is in."""
 
-    @abstractmethod
-    def __eq__(self, other) -> bool:
-        """Check for equality."""
-
-    @abstractmethod
-    def __hash__(self) -> int:
-        """Hash."""
-
     @property
     def is_reference(self) -> bool:
         """Check if this domain is on a reference cell."""
@@ -76,6 +68,8 @@ class Variable(AbstractVariable):
         """The domain that this variable is in."""
         return self._domain
 
+    # Its own identity, not the mixin's: a variable is its label, and stays
+    # itself when pulled back onto another domain.
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return isinstance(other, Variable) and other.label == self.label
