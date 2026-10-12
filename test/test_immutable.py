@@ -127,9 +127,15 @@ _HASHES = textwrap.dedent("""
     from uflx import dx
     from uflx.domains import RD
     from uflx.expressions import RealScalar
+    from uflx.graphs.graphs import Immutable
     from uflx.maps import IdentityReferenceMap
 
-    values = (dx, RD(2), IdentityReferenceMap(), RealScalar(1.0) * RealScalar(2.0))
+    class Labelled(Immutable):
+        def __init__(self, labels):
+            self._labels = labels
+
+    labels = Labelled(("left", "right", "top", "bottom"))
+    values = (dx, RD(2), IdentityReferenceMap(), RealScalar(1.0) * RealScalar(2.0), labels)
     print([hash(v) for v in values])
 """)
 _ORDER = textwrap.dedent("""
@@ -171,15 +177,31 @@ def test_a_deep_value_hashes_without_recursing():
     assert hash(deep()) == hash(deep())
 
 
-def test_an_argument_known_only_by_its_address_is_refused():
-    """Guards against hashing by an address that differs between processes."""
+class _Holder(Immutable):
+    def __init__(self, a):
+        self._a = a
 
-    class Opaque:
-        pass
 
-    class Holder(Immutable):
-        def __init__(self, a):
-            self._a = a
+class _Opaque:
+    pass
 
-    with pytest.raises(TypeError, match="prints and hashes by its address"):
-        hash(Holder(Opaque()))
+
+@pytest.mark.parametrize(
+    "argument, message",
+    [
+        (_Opaque(), "prints and hashes by its address"),
+        (frozenset({"left", "right"}), "Store a tuple instead"),
+        ({"left": 1, "right": 2}, "Store a tuple instead"),
+    ],
+    ids=["address", "frozenset", "dict"],
+)
+def test_an_argument_that_prints_differently_between_processes_is_refused(argument, message):
+    """Guards against hashing by an address or by an order that differs between processes."""
+    with pytest.raises(TypeError, match=message):
+        hash(_Holder(argument))
+
+
+def test_labels_in_a_tuple_or_list_are_hashed_in_order():
+    """Guards against two differently ordered sequences of labels hashing alike."""
+    assert hash(_Holder(("left", "right"))) != hash(_Holder(("right", "left")))
+    assert hash(_Holder(["left", "right"])) == hash(_Holder(["left", "right"]))

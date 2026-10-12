@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import functools
 import inspect
-from collections.abc import Callable, Hashable, Iterable
+from collections.abc import Callable, Hashable, Iterable, Mapping
+from collections.abc import Set as AbstractSet
 from enum import Enum
 from hashlib import blake2b
 from typing import Any, Protocol, cast, runtime_checkable
@@ -186,18 +187,25 @@ def digest(*parts: str | bytes) -> bytes:
 def fingerprint(value: Any) -> bytes:
     """Digest a value or an argument the same way in every process.
 
-    A value is digested by its class and arguments. Any other object is
-    digested by its class and its own repr, or its own hash if it has no
-    repr of its own. Either must be the same in every process.
+    A value is digested by its class and arguments. A tuple or list is
+    digested item by item in order. Any other object is digested by its
+    class and its own repr, or its own hash if it has no repr of its own.
+    Either must be the same in every process.
 
     Raises:
-        TypeError: If an object has neither its own repr nor its own hash.
+        TypeError: If an object is a set or a mapping, or has neither its
+            own repr nor its own hash.
     """
     if isinstance(value, Immutable):
         return value.fingerprint
     if isinstance(value, tuple | list):
         return digest(type(value).__name__, *map(fingerprint, value))
     cls = type(value)
+    if isinstance(value, AbstractSet | Mapping):
+        raise TypeError(
+            f"{_qualified_name(cls)} prints in an order that differs between processes "
+            f"or between equal values. Store a tuple instead."
+        )
     if cls.__repr__ is not object.__repr__:
         return digest(_qualified_name(cls), repr(value))
     if cls.__hash__ is not None and cls.__hash__ is not object.__hash__:

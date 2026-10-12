@@ -37,7 +37,7 @@ argument or keeping one it should not.
 `init_args` is read back from the constructor. Each argument `name` is stored as
 `self._name`, and the mixin reads those attributes in the order of the constructor's
 signature. A read-only property exposes one that should be public. A class with no
-constructor of its own has no arguments. Four rules follow.
+constructor of its own has no arguments. Five rules follow.
 
 - Store an argument in the form it should be compared in, such as a tuple rather than a
   list. Then `type(v)(*v.init_args)` rebuilds `v`, which `reconstruct_node` relies on.
@@ -46,6 +46,8 @@ constructor of its own has no arguments. Four rules follow.
 - Store only what is hashable and compared exactly, all the way down. A tolerance is not
   transitive, so it cannot decide which values are equal. An array is kept as nested
   tuples of its entries.
+- Store a sequence, such as several labels, as a tuple. A set or a dict prints in an order
+  that depends on the hash seed or on how it was built, so it is refused.
 - Store only what prints or hashes the same in every process. A hash is a digest of the
   arguments, and MPI ranks must agree on it whatever their hash seeds. An object that
   prints and hashes by its address is refused.
