@@ -1,5 +1,9 @@
 """Test that everything in a graph is built once, never changed and hashed once."""
 
+import os
+import subprocess
+import sys
+
 import pytest
 from conftest import LagrangeElement, Triangle
 
@@ -116,3 +120,26 @@ def test_no_class_in_uflx_defines_its_own_identity():
         if cls.__module__.startswith("uflx."):
             for method in ("__eq__", "__hash__"):
                 assert method not in vars(cls), (cls, method)
+
+
+def test_a_hash_is_the_same_in_every_process_with_one_seed():
+    """Guards against a hash that follows memory addresses and so differs between MPI ranks."""
+    script = (
+        "from uflx import dx\n"
+        "from uflx.domains import RD\n"
+        "from uflx.expressions import RealScalar\n"
+        "from uflx.maps import IdentityReferenceMap\n"
+        "values = (dx, RD(2), IdentityReferenceMap(), RealScalar(1.0) * RealScalar(2.0))\n"
+        "print([hash(v) for v in values])"
+    )
+    printed = [
+        subprocess.run(
+            [sys.executable, "-c", script],
+            env={**os.environ, "PYTHONHASHSEED": "0"},
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        for _ in range(2)
+    ]
+    assert printed[0] == printed[1]

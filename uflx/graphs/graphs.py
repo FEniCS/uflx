@@ -84,11 +84,17 @@ class Immutable:
         return f"{type(self).__name__}({', '.join(repr(a) for a in arguments)})"
 
     def __hash__(self) -> int:
-        """Hash the class and arguments, and keep the result."""
+        """Hash the class and arguments, and keep the result.
+
+        The hash is the same in every process that has the same hash
+        seed. A class object hashes by its address. The class is hashed
+        by its name instead.
+        """
         try:
             return self.__dict__["_hash"]
         except KeyError:
-            value = hash((type(self), *self.init_args))
+            cls = type(self)
+            value = hash((f"{cls.__module__}.{cls.__qualname__}", *map(_seeded, self.init_args)))
             object.__setattr__(self, "_hash", value)
             return value
 
@@ -139,6 +145,16 @@ def _parameters_of(cls: type, init: Callable[..., None]) -> tuple[str, ...] | st
             )
         names.append(parameter.name)
     return tuple(names)
+
+
+def _seeded(value: Any) -> Any:
+    """Replace ``None`` so that hashing depends only on the hash seed."""
+    # None hashes by its address before Python 3.12.
+    if value is None:
+        return "uflx.None"
+    if isinstance(value, tuple):
+        return tuple(map(_seeded, value))
+    return value
 
 
 def _stored_argument(value: Any, name: str) -> Any:
