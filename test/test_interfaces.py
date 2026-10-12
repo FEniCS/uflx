@@ -53,6 +53,7 @@ from uflx.domains import (
     MadeOfPieces,
     PresentsAnInterface,
     entity_domain,
+    union_domain,
 )
 from uflx.expressions import AbstractExpression, RealScalar, expression_sum
 from uflx.functions import extract_domain
@@ -916,6 +917,24 @@ def test_three_surfaces_meeting_along_an_edge(flat_in_space, on_the_facet):
     assert read_through == {"flat", "up", "down"}
 
 
+def read_through(term: Integral) -> dict[str, str | None]:
+    """Which side each function in a pulled back term is read through, or None if directly."""
+    sides: dict[str, str | None] = {}
+    for node in as_graph(term.integrand):
+        if isinstance(node, Coefficient | TestFunction):
+            assert isinstance(node.variable, ImagePoint)
+            point = node.variable.entity_point
+            if isinstance(point, PreimagePoint):
+                assert isinstance(point.parametrization, SideParametrization)
+                sides[type(node).__name__] = point.parametrization.side.label
+            else:
+                assert isinstance(point.domain, EntityDomain)
+                (entity,) = point.domain.cell_types
+                assert point == term.variable.to_entity_coordinates(entity)
+                sides[type(node).__name__] = None
+    return sides
+
+
 def test_a_mesh_and_a_submesh_of_its_cells_meet_as_an_interface_of_codimension_zero():
     """A mixed domain form: a field on a mesh against a field on a submesh of its cells.
 
@@ -931,33 +950,76 @@ def test_a_mesh_and_a_submesh_of_its_cells_meet_as_an_interface_of_codimension_z
     u = Coefficient(function_space(parent, LagrangeElement(tri, 1)))
     v = TestFunction(function_space(submesh, LagrangeElement(tri, 1)))
 
-    cells = sub_entities_of(parent, 0, "parent")
-    assert cells.pieces == (
-        LabelledDomain(composed_domain(entity_domain(tri), parent.parametrization(tri)), "parent"),
+    cells = sub_entities_of(parent, 0, "marked")
+    assert cells == union_domain(
+        [LabelledDomain(composed_domain(entity_domain(tri), parent.parametrization(tri)), "marked")]
     )
-    gamma = interface(cells, (("parent", cells), ("sub", sub_entities_of(submesh, 0, "sub"))))
+    gamma = interface(cells, (("mesh", cells), ("submesh", sub_entities_of(submesh, 0, "marked"))))
+    assert gamma.primary == "mesh"
     assert gamma.topological_dimension == 2
     assert len(gamma.pieces) == 1
 
     with pytest.raises(ValueError, match="through a map"):
-        u * restrict(v, gamma.side("sub")) * dx(gamma)
+        u * restrict(v, gamma.side("submesh")) * dx(gamma)
 
     pulled = pull_back_to_entity(
-        restrict(u, gamma.side("parent")) * restrict(v, gamma.side("sub")) * dx(gamma)
+        restrict(u, gamma.side("mesh")) * restrict(v, gamma.side("submesh")) * dx(gamma)
     )
     assert isinstance(pulled, IntegralSum)
     (term,) = pulled.terms
     assert isinstance(term, Integral)
     assert term.domain == EntityDomain(tri)
-    read_at = {
-        type(node).__name__: node.variable
-        for node in as_graph(term.integrand)
-        if isinstance(node, Coefficient | TestFunction)
-    }
-    assert isinstance(read_at["Coefficient"], ImagePoint)
-    assert read_at["Coefficient"].entity_point == term.variable.to_entity_coordinates(tri)
-    assert isinstance(read_at["TestFunction"], ImagePoint)
-    through = read_at["TestFunction"].entity_point
-    assert isinstance(through, PreimagePoint)
-    assert isinstance(through.parametrization, SideParametrization)
-    assert through.parametrization.side.label == "sub"
+    assert read_through(term) == {"Coefficient": None, "TestFunction": "submesh"}
+
+
+def test_a_mesh_and_a_submesh_of_its_facets_meet_along_those_facets():
+    """A field on the boundary against a field in the bulk, the facets being the submesh's cells.
+
+    The mesh presents the facets as its sub-entities of codimension one
+    and the submesh as its cells, so there is one pair per facet of the
+    mesh. The bulk field is read through the facet's inclusion into its
+    cell, as under ``ds``, and the boundary field at the point its own
+    cell gives, through the map between the facet and the submesh cell.
+    """
+    tri = PlacedTriangle()
+    mesh = parametrized_domain(LagrangeElement(tri, 1, (2,)))
+    boundary = parametrized_domain(LagrangeElement(Interval(), 1, (2,)))
+    u = Coefficient(function_space(mesh, LagrangeElement(tri, 1)))
+    mu = TestFunction(function_space(boundary, LagrangeElement(Interval(), 1)))
+
+    facets = sub_entities_of(mesh, 1)
+    gamma = interface(facets, (("mesh", facets), ("submesh", sub_entities_of(boundary, 0))))
+    assert gamma.topological_dimension == 1
+    assert len(gamma.pieces) == 3
+
+    coupling = inner(restrict(grad(u), gamma.side("mesh")), OutwardNormal(gamma.side("mesh")))
+    pulled = pull_back_to_entity(coupling * restrict(mu, gamma.side("submesh")) * dx(gamma))
+    assert isinstance(pulled, IntegralSum)
+    assert len(pulled.terms) == 3
+    for pair, term in zip(gamma.pieces, pulled.terms, strict=True):
+        assert isinstance(pair, Interface)
+        assert isinstance(term, Integral)
+        assert term.domain == EntityDomain(Interval())
+        assert included_sub_entity(pair.presentation("mesh")) == included_sub_entity(pair.domain)
+        assert read_through(term) == {"Coefficient": None, "TestFunction": "submesh"}
+        inverses = [node for node in as_graph(term.integrand) if isinstance(node, JacobianInverse)]
+        assert len(inverses) == 1
+        assert inverses[0].domain == mesh
+
+
+def test_a_submesh_is_of_entities_of_its_mesh():
+    """Cells of a higher dimension than the entities they are said to be are refused."""
+    tri, tet = PlacedTriangle(), PlacedTetrahedron()
+    tetrahedra = parametrized_domain(LagrangeElement(tet, 1, (3,)))
+    faces = parametrized_domain(LagrangeElement(tri, 1, (3,)))
+    edges = parametrized_domain(LagrangeElement(Interval(), 1, (3,)))
+
+    with pytest.raises(ValueError, match="topological dimension"):
+        interface(
+            sub_entities_of(tetrahedra, 2),
+            (("mesh", sub_entities_of(tetrahedra, 2)), ("submesh", sub_entities_of(faces, 0))),
+        )
+
+    ridges = sub_entities_of(tetrahedra, 2)
+    along_the_edges = interface(ridges, (("mesh", ridges), ("submesh", sub_entities_of(edges, 0))))
+    assert len(along_the_edges.pieces) == 6

@@ -235,9 +235,14 @@ inner(jump(grad(u), gamma), OutwardNormal(gamma.side("+"))) * restrict(v, gamma.
 Pulling that back gives one integral per pair of facets over the reference facet, the
 `-` side read at the point of its own facet that the chart transition gives.
 
-`uflx.legacy` offers UFL's spellings -- a measure with no domain, and fields written
-unrestricted -- by inferring the domain and inserting the restrictions. It is for code
-being moved onto UFLx and not part of the language, which states its domain.
+A mesh and a submesh of its entities meet as an interface too, the entities presented by
+each, and a form mixing a field on each restricts each to its side:
+
+```python
+facets = sub_entities_of(mesh, 1)
+gamma = interface(facets, (("mesh", facets), ("boundary", sub_entities_of(boundary, 0))))
+restrict(u, gamma.side("mesh")) * restrict(mu, gamma.side("boundary")) * dx(gamma)
+```
 
 ### Integrals
 

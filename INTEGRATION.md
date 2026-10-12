@@ -272,7 +272,12 @@ Built, as `ds` and `dS`:
    that side's inclusion; `jump` and `avg` are the two restrictions' difference and
    mean. An interface of unions fans out over pairs of pieces, which is what identifies
    a kernel, and the pull back is onto the parameter region of the domain's one
-   parametrization, so an interface needs no special case there.
+   parametrization, so an interface needs no special case there. A mesh and a submesh of
+   its entities meet the same way, with no spelling of their own: the entities presented
+   by the mesh as `sub_entities_of(mesh, codim)` and by the submesh as
+   `sub_entities_of(submesh, 0)`, at codimension zero as much as one, with the map
+   between the two meshes' entities as the chart transition. A form mixing fields on
+   both is each field restricted to its side.
 1. **The outward normal.** `OutwardNormal(side)` is §4's transport rule: the reference
    facet's outward normal, which the entity supplies as `facet_outward_normal`, carried
    by the cell map's inverse transpose at the side's cell point. It needs no orientation

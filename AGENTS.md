@@ -173,8 +173,10 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   transition `ψ₋⁻¹(ψ₊(X))` on any other, written as a `PreimagePoint` of an `ImagePoint`
   with the side's map named by the side (`SideParametrization`). An interface of unions
   is `MadeOfPieces`, one pair of pieces at a time. `interface_of(mesh, mesh)` is UFL's
-  `dS`. The protocols the geometry and the integrals ask of a side are in `domains.py`,
-  since this module sits above `geometry.py`.
+  `dS`, and the one convenience: a mesh meeting a submesh of its entities is
+  `interface(entities, ...)` with the entities presented by each, a mixed-domain form
+  being each field restricted to its side. The protocols the geometry and the integrals
+  ask of a side are in `domains.py`, since this module sits above `geometry.py`.
 - `legacy.py` — the legacy UFL spellings (`dx`, `ds`, `dS`, their `(3)` forms, `jump`,
   `avg` and `facet_normal`), which infer the domain and insert the restrictions to build
   the native form. A side is named by `plus(u)`/`minus(u)`, a placeholder the measure
