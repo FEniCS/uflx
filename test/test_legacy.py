@@ -243,10 +243,10 @@ def test_an_interior_facet_measure_integrates_over_the_interface(mesh, space):
     assert integral.measure == native.measure
     assert restrictions_in(integral) == restrictions_in(native)
     assert restrictions_in(integral) == {
-        (u, gamma.side("+")),
-        (u, gamma.side("-")),
-        (v, gamma.side("+")),
-        (v, gamma.side("-")),
+        (u, gamma.embedding("+")),
+        (u, gamma.embedding("-")),
+        (v, gamma.embedding("+")),
+        (v, gamma.embedding("-")),
     }
 
 
@@ -262,7 +262,7 @@ def test_a_side_is_named_by_plus_and_minus(mesh, space):
 
     integral = plus(u) * minus(u) * dS
     assert isinstance(integral, Integral)
-    assert restrictions_in(integral) == {(u, gamma.side("+")), (u, gamma.side("-"))}
+    assert restrictions_in(integral) == {(u, gamma.embedding("+")), (u, gamma.embedding("-"))}
 
     with pytest.raises(ValueError, match="marked with a side already"):
         plus(minus(u))
@@ -293,7 +293,7 @@ def test_adding_plus_minus_restriction_makes_an_expression_callable_with_a_side(
 
         integral = u("+") * u("-") * dS  # pyrefly: ignore
         assert isinstance(integral, Integral)
-        assert restrictions_in(integral) == {(u, gamma.side("+")), (u, gamma.side("-"))}
+        assert restrictions_in(integral) == {(u, gamma.embedding("+")), (u, gamma.embedding("-"))}
 
         with pytest.raises(ValueError, match="not with"):
             u(0.5)  # pyrefly: ignore
@@ -387,7 +387,7 @@ def test_a_facet_normal_is_read_off_a_side_under_dS(mesh, space):
     integral = inner(avg(grad(u)), plus(n)) * jump(v) * dS
     assert isinstance(integral, Integral)
     normals = {node for node in as_graph(integral.integrand) if isinstance(node, OutwardNormal)}
-    assert normals == {OutwardNormal(gamma.side("+"))}
+    assert normals == {OutwardNormal(gamma.embedding("+"))}
 
     pulled = pull_back_to_entity(jump(grad(u), n) * jump(v) * dS)
     assert isinstance(pulled, IntegralSum)
@@ -395,7 +395,7 @@ def test_a_facet_normal_is_read_off_a_side_under_dS(mesh, space):
     for pair, term in zip(gamma.pieces, pulled.terms, strict=True):
         assert isinstance(pair, Interface)
         normals = {node for node in as_graph(term.integrand) if isinstance(node, OutwardNormal)}
-        assert {node.domain for node in normals} == {pair.side("+"), pair.side("-")}
+        assert {node.domain for node in normals} == {pair.embedding("+"), pair.embedding("-")}
 
 
 def test_a_marked_part_of_the_interface_is_another_domain(mesh, space):
@@ -412,9 +412,9 @@ def test_a_marked_part_of_the_interface_is_another_domain(mesh, space):
         pair = density.domain
         assert isinstance(pair, Interface)
         for label in pair.labels:
-            presentation = pair.presentation(label)
-            assert isinstance(presentation, LabelledDomain)
-            assert presentation.label == InteriorFacets(3)
+            image = pair.image(label)
+            assert isinstance(image, LabelledDomain)
+            assert image.label == InteriorFacets(3)
 
 
 def test_a_discontinuous_galerkin_form_builds_and_pulls_back(mesh, space):

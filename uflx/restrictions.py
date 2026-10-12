@@ -38,7 +38,7 @@ facet -- a multiplier on one -- restricted to that facet's own boundary
 is a single map out of the domain it lives on, like any other, since the
 facet is where the field is.
 
-On an interface the map is named by a side. ``restrict(u, gamma.side("-"))``
+On an interface the map is named by a side. ``restrict(u, gamma.embedding("-"))``
 is ``iota_-^* u``, the field read at the point of the ``-`` side's chart
 that the interface's point corresponds to, carried through that side's
 inclusion. The ``+`` and ``-`` of UFL are two such restrictions, and
@@ -56,14 +56,14 @@ from uflx.algorithms import replace
 from uflx.domains import (
     AbstractCellularDomain,
     AbstractParametrizedDomain,
+    EmbedsAnInterface,
     MadeOfPieces,
-    PresentsAnInterface,
 )
 from uflx.expressions import AbstractExpression, RealScalar
 from uflx.functions import extract_domain
 from uflx.geometry import ImagePoint
 from uflx.graphs import GraphNode, as_graph
-from uflx.interfaces import Interface, Side
+from uflx.interfaces import Embedding, Interface
 from uflx.parametrizations import sub_entity_in_cell
 from uflx.variables import AbstractVariable, ReadAtAVariable
 
@@ -141,7 +141,7 @@ class Restriction(AbstractExpression):
         if isinstance(domain, Interface):
             raise ValueError(
                 f"{domain!r} is reached from either of its sides, and a field is read "
-                f"through one of them. Name it: restrict(u, interface.side(label))."
+                f"through one of them. Name it: restrict(u, interface.embedding(label))."
             )
         field_domain = extract_domain(field)
         if not isinstance(field_domain, AbstractCellularDomain):
@@ -187,7 +187,7 @@ class Restriction(AbstractExpression):
         disagreement. Through a side it is read on the interface, which
         is what makes a jump an expression on one domain.
         """
-        if isinstance(self._domain, PresentsAnInterface):
+        if isinstance(self._domain, EmbedsAnInterface):
             return self._domain.interface
         return self._domain
 
@@ -257,8 +257,8 @@ class Restriction(AbstractExpression):
         inclusion, _, _ = sub_entity_in_cell(piece)
         (sub_entity,) = inclusion.cell_types
         point = self._variable.to_entity_coordinates(sub_entity)
-        if isinstance(self._domain, PresentsAnInterface):
-            point = self._domain.chart_point(point)
+        if isinstance(self._domain, EmbedsAnInterface):
+            point = self._domain.transition(point)
         return ImagePoint(point, inclusion)
 
     def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
@@ -281,10 +281,10 @@ def _pieces_of(domain: AbstractParametrizedDomain) -> tuple[AbstractParametrized
     """The pieces a field is read through, or the domain itself when it is one piece.
 
     A side of an interface is read through the pieces of its
-    presentation, that being the domain the field is on.
+    image, that being the domain the field is on.
     """
-    if isinstance(domain, PresentsAnInterface):
-        return _pieces_of(domain.presentation)
+    if isinstance(domain, EmbedsAnInterface):
+        return _pieces_of(domain.image)
     if isinstance(domain, MadeOfPieces):
         pieces = domain.pieces
         if pieces != (domain,):
@@ -306,9 +306,9 @@ def restrict(field: AbstractExpression, domain: AbstractParametrizedDomain) -> R
     return Restriction(field, domain)
 
 
-def _two_sides(interface: Interface) -> tuple[Side, Side]:
+def _two_sides(interface: Interface) -> tuple[Embedding, Embedding]:
     """The two sides of an interface, in order."""
-    sides = interface.sides
+    sides = interface.embeddings
     if len(sides) != 2:
         raise ValueError(
             f"{interface!r} has {len(sides)} sides, so which two to take is not said. "

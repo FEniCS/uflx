@@ -220,24 +220,24 @@ inner(restrict(grad(u), facets), UnitNormal(facets)) * dx(facets)
 Pulling that back gives one integral per facet over the reference facet, each carrying
 that facet's volume element as its density. No part of it is a facet measure.
 
-An interface is a domain with a presentation of it per side: `interface(gamma, sides)`.
-A mesh's interior facets are its facets presented twice, once per side, and the facets
-two meshes share are each mesh's facets as a side. The `+`/`-` of UFL is a restriction
-to a side, a field pulled back along that side's inclusion, and belongs to the integrand
-and not to the measure:
+An interface is a domain with an image of it per side: `interface(gamma, embeddings)`. A
+mesh's interior facets are its facets presented twice, once per side, and the facets two
+meshes share are each mesh's facets as a side. The `+`/`-` of UFL is a restriction to a
+side, a field pulled back along that side's inclusion, and belongs to the integrand and
+not to the measure:
 
 ```python
 facets = sub_entities_of(mesh, 1)
 gamma = interface(facets, (("+", facets), ("-", facets)))
-inner(jump(grad(u), gamma), OutwardNormal(gamma.side("+"))) * restrict(v, gamma.side("+")) * dx(
-    gamma
-)
+inner(jump(grad(u), gamma), OutwardNormal(gamma.embedding("+"))) * restrict(
+    v, gamma.embedding("+")
+) * dx(gamma)
 ```
 
 Pulling that back gives one integral per pair of facets over the reference facet, the
 `-` side read at the point of its own facet that the chart transition gives.
 
-A side need not be a facet of anything. `PreimageParametrization(gamma, phi, T)` is a
+A side need not be a facet of anything. `CoordinateRepresentation(gamma, phi, T)` is a
 side's map in general, `gamma` carried into a cell's coordinates by `phi⁻¹ ∘ T ∘ ψ`,
 with `T` a stated map or the identity of sets; a periodic boundary is the facets on one
 side and, on the other, those facets carried into the translated cells:
@@ -245,7 +245,7 @@ side and, on the other, those facets carried into the translated cells:
 ```python
 left = sub_entities_of(mesh, 1, "left")
 shifted = composed_domain(
-    composed_domain(entity_domain(Interval()), PreimageParametrization(left, phi, shift)), phi
+    composed_domain(entity_domain(Interval()), CoordinateRepresentation(left, phi, shift)), phi
 )
 gamma = interface(left, (("left", left), ("right", shifted)))
 ```
@@ -256,7 +256,7 @@ each, and a form mixing a field on each restricts each to its side:
 ```python
 facets = sub_entities_of(mesh, 1)
 gamma = interface(facets, (("mesh", facets), ("boundary", sub_entities_of(boundary, 0))))
-restrict(u, gamma.side("mesh")) * restrict(mu, gamma.side("boundary")) * dx(gamma)
+restrict(u, gamma.embedding("mesh")) * restrict(mu, gamma.embedding("boundary")) * dx(gamma)
 ```
 
 ### Integrals
@@ -315,13 +315,13 @@ The language is small, but it is typed.
 - Facet quantities such as a normal are read off the domain they are a normal to, so a
   facet's normal is `UnitNormal(sub_entities_of(mesh, 1))`, and a normal is only defined
   in codimension one. The outward one needs the cell it points out of, which a facet of
-  a mesh or a side of an interface names: `OutwardNormal(gamma.side("+"))`.
+  a mesh or a side of an interface names: `OutwardNormal(gamma.embedding("+"))`.
 - A field on one domain is read on another through a restriction, `restrict(u, facets)`,
   which is the pullback of the field along that domain's parametrization.
 - Interior-facet expressions restrict to a side of the interface:
   ```python
-  restrict(u, gamma.side("+"))
-  restrict(u, gamma.side("-"))
+  restrict(u, gamma.embedding("+"))
+  restrict(u, gamma.embedding("-"))
   ```
   which is that same restriction along one side's inclusion.
 - `jump(u, gamma)` and `avg(u, gamma)` are shorthand for combinations of such

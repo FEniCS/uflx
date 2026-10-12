@@ -506,7 +506,7 @@ def _resolve_sides(
     for node in as_graph(integrand):
         if not isinstance(node, SideMarker):
             continue
-        side = interface.side(node.side)
+        side = interface.embedding(node.side)
         marked = _retarget_normals(node.expression, domain, side)
         resolved[node] = _restrict_fields(marked, domain, side)
     if len(resolved) == 0:
@@ -529,7 +529,7 @@ def facet_normal(domain: AbstractCellularDomain) -> AbstractGeometricQuantity:
     outward normal of the mesh's cells, which `ds` reads off the facets
     and `dS` reads off the side it is marked with, as `plus(n)`. The
     native spelling is `OutwardNormal(sub_entities_of(mesh, 1))`, or
-    `OutwardNormal(interface.side("+"))`.
+    `OutwardNormal(interface.embedding("+"))`.
 
     Args:
         domain: The mesh whose cells the normal points out of

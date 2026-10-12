@@ -367,7 +367,7 @@ class MadeOfPieces(Protocol):
 
 
 @runtime_checkable
-class PresentsAnInterface(Protocol):
+class EmbedsAnInterface(Protocol):
     """A domain that is one side of an interface.
 
     An interface is a domain two others meet along, and a side is that
@@ -376,7 +376,7 @@ class PresentsAnInterface(Protocol):
     interface through the side, and a quantity of the side -- the normal
     pointing out of it -- is read at the point of the side's own
     parameter region that the interface's point corresponds to, which
-    ``chart_point`` gives. :class:`uflx.interfaces.Side` is the
+    ``transition`` gives. :class:`uflx.interfaces.Embedding` is the
     implementation; this is what the geometry and the integrals ask of
     it without naming it.
     """
@@ -386,10 +386,10 @@ class PresentsAnInterface(Protocol):
         """The interface this is a side of."""
 
     @property
-    def presentation(self) -> AbstractParametrizedDomain:
+    def image(self) -> AbstractParametrizedDomain:
         """The interface as this side's domain presents it."""
 
-    def chart_point(self, variable: AbstractVariable) -> AbstractVariable:
+    def transition(self, variable: AbstractVariable) -> AbstractVariable:
         """Where in this side's parameter region a point of the interface is.
 
         Args:
@@ -425,7 +425,7 @@ class CarriesADomain(Protocol):
     A map out of a coordinate domain is what a parametrization is, and
     most say nothing about where their coordinates came from. One that
     is a domain's own parametrization followed by something, as
-    :class:`uflx.interfaces.PreimageParametrization` is, starts from that
+    :class:`uflx.interfaces.CoordinateRepresentation` is, starts from that
     domain in all but name, and says so, which is how an interface knows
     a side is presented through its own domain and needs no chart
     transition.

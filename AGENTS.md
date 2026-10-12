@@ -162,26 +162,26 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   is read through one map and never two: restricting along the composition is what a
   second restriction would be, so a sub-entity of a sub-entity is reached with
   `sub_entities_of` at the cell's codimension. On an interface the map is named by a
-  side, `restrict(u, gamma.side("-"))`, and `jump`/`avg` are the two sides' difference
-  and mean.
-- `interfaces.py` — `Interface`: a domain two others meet along, with a *presentation*
-  of it per side, which is the domain parametrized by that side's own map, a facet piece
-  or a face of a box. The atlas `UnionDomain` says it is not. `Side` is the interface as
+  side, `restrict(u, gamma.embedding("-"))`, and `jump`/`avg` are the two sides'
+  difference and mean.
+- `interfaces.py` — `Interface`: a domain two others meet along, with an *image* of it
+  per side, which is the domain parametrized by that side's own map, a facet piece or a
+  face of a box. The atlas `UnionDomain` says it is not. `Embedding` is the interface as
   one side presents it, a domain in its own right that a restriction or an
-  `OutwardNormal` takes; its `chart_point` is where a point of the interface sits in the
+  `OutwardNormal` takes; its `transition` is where a point of the interface sits in the
   side's own region, the integral's variable on the primary side and the chart
   transition `ψ₋⁻¹(ψ₊(X))` on any other, written as a `PreimagePoint` of an `ImagePoint`
-  with the side's map named by the side (`SideParametrization`). An interface of unions
-  is `MadeOfPieces`, one pair of pieces at a time. There is no second spelling: UFL's
-  `dS` is a mesh's facets presented twice, and a mesh meeting a submesh of its entities
-  is the entities presented by each, a mixed-domain form being each field restricted to
-  its side. `PreimageParametrization` is a side's map in general, `φ⁻¹ ∘ T ∘ ψ_Γ`, whose
-  value is a preimage and whose Jacobian is the chain rule, for a side that is a facet
-  of nothing (mortar, a periodic boundary with `T` the shift, a well through cells); a
-  presentation built from it carries `Γ` (`CarriesADomain`) and needs no transition. The
-  protocols the geometry and the integrals ask of a side are in `domains.py`, since this
-  module sits above `geometry.py`, and this class is here and not in
-  `parametrizations.py` because it is built from an image and a preimage.
+  with the side's map named by the side (`EmbeddingParametrization`). An interface of
+  unions is `MadeOfPieces`, one pair of pieces at a time. There is no second spelling:
+  UFL's `dS` is a mesh's facets presented twice, and a mesh meeting a submesh of its
+  entities is the entities presented by each, a mixed-domain form being each field
+  restricted to its side. `CoordinateRepresentation` is a side's map in general,
+  `φ⁻¹ ∘ T ∘ ψ_Γ`, whose value is a preimage and whose Jacobian is the chain rule, for a
+  side that is a facet of nothing (mortar, a periodic boundary with `T` the shift, a
+  well through cells); an image built from it carries `Γ` (`CarriesADomain`) and needs
+  no transition. The protocols the geometry and the integrals ask of a side are in
+  `domains.py`, since this module sits above `geometry.py`, and this class is here and
+  not in `parametrizations.py` because it is built from an image and a preimage.
 - `legacy.py` — the legacy UFL spellings (`dx`, `ds`, `dS`, their `(3)` forms, `jump`,
   `avg` and `facet_normal`), which infer the domain and insert the restrictions to build
   the native form. A side is named by `plus(u)`/`minus(u)`, a placeholder the measure

@@ -27,7 +27,7 @@ from uflx.expressions import AbstractExpression
 from uflx.functions import AbstractFunction
 from uflx.geometry import AbstractGeometricQuantity, VolumeElement
 from uflx.graphs import Graph, GraphNode, as_graph, generate_graph
-from uflx.interfaces import Interface, Side
+from uflx.interfaces import Embedding, Interface
 from uflx.restrictions import Restriction, evaluate_at
 from uflx.variables import (
     AbstractVariable,
@@ -242,7 +242,7 @@ class Integral(AbstractIntegral):
                 # Labels are taken off first: a label says which entities a
                 # consumer means and nothing about the fields on them, so a
                 # function on a domain is a function on any selection of it.
-                if not _is_on_or_a_side_of(node.function_space.domain, domain):
+                if not _is_on_or_an_embedding_of(node.function_space.domain, domain):
                     raise ValueError(
                         f"Cannot integrate a function on {node.function_space.domain!r} "
                         f"over {domain!r}. A function reaches another domain only "
@@ -263,7 +263,7 @@ class Integral(AbstractIntegral):
         for node in as_graph(evaluated):
             if node in restricted or not isinstance(node, AbstractGeometricQuantity):
                 continue
-            if node.variable is None and not _is_on_or_a_side_of(node.domain, domain):
+            if node.variable is None and not _is_on_or_an_embedding_of(node.domain, domain):
                 raise ValueError(
                     f"Cannot read a quantity of {node.domain!r} over {domain!r}. A "
                     f"quantity of another domain reaches this one through a map, as a "
@@ -485,7 +485,7 @@ def _bare(domain: AbstractDomain) -> AbstractDomain:
     return domain
 
 
-def _is_on_or_a_side_of(where: AbstractDomain, domain: AbstractDomain) -> bool:
+def _is_on_or_an_embedding_of(where: AbstractDomain, domain: AbstractDomain) -> bool:
     """Whether a field or quantity of one domain is read in an integral over another.
 
     Labels are taken off first, a label saying which entities a consumer
@@ -495,7 +495,7 @@ def _is_on_or_a_side_of(where: AbstractDomain, domain: AbstractDomain) -> bool:
     """
     if _bare(where) == _bare(domain):
         return True
-    return isinstance(where, Side) and _bare(where.interface) == _bare(domain)
+    return isinstance(where, Embedding) and _bare(where.interface) == _bare(domain)
 
 
 def _onto_piece(
@@ -509,8 +509,8 @@ def _onto_piece(
     """
     if where == domain:
         return piece
-    if isinstance(where, Side) and where.interface == domain and isinstance(piece, Interface):
-        return piece.side(where.label)
+    if isinstance(where, Embedding) and where.interface == domain and isinstance(piece, Interface):
+        return piece.embedding(where.label)
     return None
 
 

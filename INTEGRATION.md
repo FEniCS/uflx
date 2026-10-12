@@ -104,9 +104,9 @@ The `+`/`-` of UFL is not part of the measure either. It is a *restriction of a 
 which is a pullback along one side's inclusion map, and it lives in the integrand.
 
 So a codimension and a boundary flag become operators on domains —
-`sub_entities_of(omega, codim)` and `interface(gamma, sides)` — returning domains that
-then need only the one measure. That is the home for a mesh-relative query, and it makes
-the derived domain an object carrying a parametrization, a metric, a normal and a
+`sub_entities_of(omega, codim)` and `interface(gamma, embeddings)` — returning domains
+that then need only the one measure. That is the home for a mesh-relative query, and it
+makes the derived domain an object carrying a parametrization, a metric, a normal and a
 measure like any other.
 
 The derived domain is named for the sub-entities it is parametrized by and not for a
@@ -211,17 +211,17 @@ the reference facet, so `|det Dτ| = 1`: the two sides induce *the same* density
 which is why one measure serves both. This is a two-map atlas with a genuine transition
 map, and it is the one place in UFLx where an atlas is earned rather than decorative.
 
-`Interface` is that atlas: a domain `Γ` and, per side, a *presentation* of it, which is
-`Γ` parametrized by that side's own map. A presentation is a piece as `sub_entities_of`
-already builds them, or a face of a box, so an interface of two cells and an interface
-of two regions are one construction. The transition map is never an object. The point of
-the `-` side's chart that `X` corresponds to is `ψ₋⁻¹(ψ₊(X))`, written literally as the
+`Interface` is that atlas: a domain `Γ` and, per side, an *image* of it, which is `Γ`
+parametrized by that side's own map. An image is a piece as `sub_entities_of` already
+builds them, or a face of a box, so an interface of two cells and an interface of two
+regions are one construction. The transition map is never an object. The point of the
+`-` side's chart that `X` corresponds to is `ψ₋⁻¹(ψ₊(X))`, written literally as the
 preimage through `ψ₋` of the image through `ψ₊`, both of which exist already; the
 preimage is the terminal the surrounding library evaluates, as a facet permutation here
 and by point location below. No derivative of `τ` is ever wanted, a restriction being
 the pullback of a function and the measure being `Γ`'s. The two sides of one mesh share
-one `φ`, so `ψ₋` is named by its side (`SideParametrization`), which is to a map what a
-labelled domain is to a domain: identity and nothing geometric.
+one `φ`, so `ψ₋` is named by its side (`EmbeddingParametrization`), which is to a map
+what a labelled domain is to a domain: identity and nothing geometric.
 
 **Non-matching: `Γ` is its own domain.** Mortar coupling, a Lagrange multiplier on a
 contact surface, two independently meshed subdomains. `Γ` is a facet of neither side and
@@ -238,11 +238,11 @@ is pushed forward by `Γ`'s own parametrization and pulled back through each sid
 Read in that order, UFL's `+`/`-` is the special case in which `φ₊⁻¹ ∘ ψ_Γ` is known
 combinatorially and so costs nothing. In general the map of a side written in charts is
 `ι̂_s = φ_s⁻¹ ∘ T_s ∘ ψ_Γ`, from `Γ`'s region into a cell's coordinates, and
-`PreimageParametrization` is that map: its value is the preimage, the terminal again,
+`CoordinateRepresentation` is that map: its value is the preimage, the terminal again,
 and its Jacobian is the chain rule in closed form. `T_s` is a map the user states, the
 identity of sets unless said, which is what makes a periodic boundary an interface whose
-other side is a translation away. A presentation built from it,
-`composed_domain(composed_domain(region, PreimageParametrization(Γ, φ_s, T_s)), φ_s)`,
+other side is a translation away. An image built from it,
+`composed_domain(composed_domain(region, CoordinateRepresentation(Γ, φ_s, T_s)), φ_s)`,
 has the shape a facet of a mesh has and is read the same way, and being parametrized
 from `Γ`'s own region it needs no chart transition. The matching case rested on three
 assumptions, that `ι̂_s` lands in a facet, that `ι_s` is the inclusion of sets, and that
@@ -277,17 +277,17 @@ Built, as `ds` and `dS`:
    carrying the measure, the restrictions and the geometric quantities onto it, and runs
    before the cell type split. Pulling back then multiplies the piece's volume element
    into the integrand, which is the factor an exterior facet integral picks up.
-1. **A presentation per side.** `Interface(Γ, sides)` is §5's atlas, and the facets of a
+1. **An image per side.** `Interface(Γ, embeddings)` is §5's atlas, and the facets of a
    mesh presented twice, `interface(facets, (("+", facets), ("-", facets)))`, is `dS`.
    There is no second spelling of it. A restriction names a side,
-   `restrict(u, Γ.side("-"))`, and reads the field at that side's chart point through
-   that side's inclusion; `jump` and `avg` are the two restrictions' difference and
-   mean. An interface of unions fans out over pairs of pieces, which is what identifies
-   a kernel, and the pull back is onto the parameter region of the domain's one
-   parametrization, so an interface needs no special case there. A mesh and a submesh of
-   its entities meet the same way, with no spelling of their own: the entities presented
-   by the mesh as `sub_entities_of(mesh, codim)` and by the submesh as
-   `sub_entities_of(submesh, 0)`, at codimension zero as much as one, with the map
+   `restrict(u, Γ.embedding("-"))`, and reads the field at that side's chart point
+   through that side's inclusion; `jump` and `avg` are the two restrictions' difference
+   and mean. An interface of unions fans out over pairs of pieces, which is what
+   identifies a kernel, and the pull back is onto the parameter region of the domain's
+   one parametrization, so an interface needs no special case there. A mesh and a
+   submesh of its entities meet the same way, with no spelling of their own: the
+   entities presented by the mesh as `sub_entities_of(mesh, codim)` and by the submesh
+   as `sub_entities_of(submesh, 0)`, at codimension zero as much as one, with the map
    between the two meshes' entities as the chart transition. A form mixing fields on
    both is each field restricted to its side.
 1. **The outward normal.** `OutwardNormal(side)` is §4's transport rule: the reference

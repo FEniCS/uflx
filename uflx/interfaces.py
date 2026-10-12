@@ -13,13 +13,13 @@ because both terms are fields on the one ``Gamma``. There is one
 integration domain, one measure, and two maps named in the integrand.
 INTEGRATION.md section 5 is the argument.
 
-In the vocabulary here, a presentation of ``Gamma`` from one side is a
+In the vocabulary here, an image of ``Gamma`` from one side is a
 piece: a domain in a chart of that side's domain, carried by that
 domain's own map. A facet of a cell mapped on by the cell's map is one,
 and so is a face of a box. An interface is a domain and its
-presentations, each named by a side, that are declared to cover one
+images, each named by a side, that are declared to cover one
 set. That is the atlas a union of pieces is not: a union's pieces make
-no claim to be related, where the sides of an interface are two charts
+no claim to be related, where the embeddings of an interface are two charts
 of one set with a transition map between them.
 
 The transition map is never written as an object. The point of a side's
@@ -28,25 +28,25 @@ parameter region that a point ``X`` of the interface corresponds to is
 the interface's parametrization and a preimage through the side's, and
 both of those exist already. The preimage is a terminal the surrounding
 library evaluates: combinatorially, as a facet permutation, when the
-interface is a facet of both sides' cells, and by point location when it
+interface is a facet of both embeddings' cells, and by point location when it
 is not. No derivative of it is ever needed, since a restriction is the
 pullback of a function and the measure is the interface's own.
 
-The two sides of one mesh are parametrized by one map, structurally, so a
+The two embeddings of one mesh are parametrized by one map, structurally, so a
 preimage through the ``-`` side's map would not say which side it was
-through. A side's parametrization is therefore its presentation's map
-named by the side, :class:`SideParametrization`, which is to a map what
+through. A side's parametrization is therefore its image's map
+named by the side, :class:`EmbeddingParametrization`, which is to a map what
 a labelled domain is to a domain: identity and nothing geometric.
 
 None of that needs the interface to be a facet of either side. The map
 ``iota_s`` written in charts is ``phi_s^-1 . T_s . psi_Gamma``, from the
 interface's region into a cell's coordinates, and a facet inclusion is
 the case where that is affine and an entity can write it down. In
-general it is :class:`PreimageParametrization`: its value is a preimage,
+general it is :class:`CoordinateRepresentation`: its value is a preimage,
 the terminal again, and its Jacobian is the chain rule in closed form.
 ``T_s`` is a map the user states, the identity of sets unless said, which
 is what makes a periodic boundary an interface whose other side is a
-translation away. A presentation built from it is parametrized from the
+translation away. An image built from it is parametrized from the
 interface's own region, so there is no chart transition to take. The
 class lives here and not in `uflx.parametrizations` because it is built
 from an image and a preimage, which `uflx.geometry` holds.
@@ -78,7 +78,7 @@ from uflx.points import AbstractPoint, Point
 from uflx.variables import AbstractVariable
 
 
-class PreimageParametrization(AbstractParametrization):
+class CoordinateRepresentation(AbstractParametrization):
     """A domain carried into a cell's coordinates, ``phi^-1 . T . psi``.
 
     The map of an interface's side written in charts, in general: a
@@ -211,12 +211,12 @@ class PreimageParametrization(AbstractParametrization):
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"PreimageParametrization({self._domain!r}, {self._through!r}, {self._by!r})"
+        return f"CoordinateRepresentation({self._domain!r}, {self._through!r}, {self._by!r})"
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
-            isinstance(other, PreimageParametrization)
+            isinstance(other, CoordinateRepresentation)
             and self._domain == other._domain
             and self._through == other._through
             and self._by == other._by
@@ -224,19 +224,19 @@ class PreimageParametrization(AbstractParametrization):
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.PreimageParametrization", self._domain, self._through, self._by))
+        return hash(("uflx.CoordinateRepresentation", self._domain, self._through, self._by))
 
 
-class SideParametrization(AbstractParametrization):
-    """A presentation's map, named by the side it presents.
+class EmbeddingParametrization(AbstractParametrization):
+    """An image's map, named by the side it presents.
 
     Delegates everything to the map it names. What it adds is identity:
-    the two sides of one mesh are parametrized by one map, so a preimage
+    the two embeddings of one mesh are parametrized by one map, so a preimage
     through the ``-`` side's map has to say which side it is through,
     and this is how it says.
     """
 
-    def __init__(self, parametrization: AbstractParametrization, side: Side):
+    def __init__(self, parametrization: AbstractParametrization, side: Embedding):
         """Initialise.
 
         Args:
@@ -252,7 +252,7 @@ class SideParametrization(AbstractParametrization):
         return self._parametrization
 
     @property
-    def side(self) -> Side:
+    def embedding(self) -> Embedding:
         """The side naming it."""
         return self._side
 
@@ -286,28 +286,31 @@ class SideParametrization(AbstractParametrization):
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"SideParametrization({self._parametrization!r}, {self._side!r})"
+        return f"EmbeddingParametrization({self._parametrization!r}, {self._side!r})"
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
-            isinstance(other, SideParametrization)
+            isinstance(other, EmbeddingParametrization)
             and self._parametrization == other._parametrization
             and self._side == other._side
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.SideParametrization", self._parametrization, self._side))
+        return hash(("uflx.EmbeddingParametrization", self._parametrization, self._side))
 
 
-class Side(AbstractParametrizedDomain):
-    """An interface as one of its sides presents it.
+class Embedding(AbstractParametrizedDomain):
+    """One of the maps an interface is given with, ``iota_s``, together with its image.
 
-    The same set as the interface, parametrized by the side's own
-    presentation. A field on the side's domain is restricted to the
-    interface through this, and the normal pointing out of that domain is
-    a quantity of this. Implements :class:`uflx.domains.PresentsAnInterface`.
+    An embedding of the interface into one of the domains it lies
+    between: the same set as the interface, parametrized as that domain
+    parametrizes it, which is its image. A field on that domain is
+    pulled back to the interface along this, and the normal pointing out
+    of that domain is a quantity of this. The language takes the user's
+    word that the map is an embedding, as it takes a mesh's cells.
+    Implements :class:`uflx.domains.EmbedsAnInterface`.
     """
 
     def __init__(self, interface: Interface, label: Any):
@@ -333,34 +336,34 @@ class Side(AbstractParametrizedDomain):
         return self._label
 
     @property
-    def presentation(self) -> AbstractParametrizedDomain:
+    def image(self) -> AbstractParametrizedDomain:
         """The interface as this side's domain presents it."""
-        return self._interface.presentation(self._label)
+        return self._interface.image(self._label)
 
     @property
     def geometric_dimension(self) -> int:
-        """The coordinates the presentation is named in."""
-        return self.presentation.geometric_dimension
+        """The coordinates the image is named in."""
+        return self.image.geometric_dimension
 
     @property
     def topological_dimension(self) -> int | None:
-        """The presentation's topological dimension."""
-        return self.presentation.topological_dimension
+        """The image's topological dimension."""
+        return self.image.topological_dimension
 
     @property
     def parametrizations(self) -> tuple[AbstractParametrization, ...]:
-        """The presentation's maps, each named by this side."""
+        """The image's maps, each named by this side."""
         return tuple(
-            SideParametrization(parametrization, self)
-            for parametrization in self.presentation.parametrizations
+            EmbeddingParametrization(parametrization, self)
+            for parametrization in self.image.parametrizations
         )
 
-    def chart_point(self, variable: AbstractVariable) -> AbstractVariable:
+    def transition(self, variable: AbstractVariable) -> AbstractVariable:
         """Where in this side's parameter region a point of the interface is.
 
         The variable itself where this is the interface's primary side,
-        the one whose presentation the domain is, since then the regions
-        are one, and where the presentation carries the domain, since
+        the one whose image the domain is, since then the regions
+        are one, and where the image carries the domain, since
         then the transition is inside its map. Otherwise
         the chart transition, ``psi_s^-1(psi_Gamma(X))``: the point
         carried onto the interface by its parametrization and pulled back
@@ -382,7 +385,7 @@ class Side(AbstractParametrizedDomain):
         domain = self._interface.domain
         if variable.domain not in {p.source for p in domain.parametrizations}:
             return variable
-        if self._label == self._interface.primary or _carried_by(self.presentation) == domain:
+        if self._label == self._interface.primary or _carried_by(self.image) == domain:
             return variable
         parametrizations = self.parametrizations
         if len(parametrizations) != 1:
@@ -396,36 +399,36 @@ class Side(AbstractParametrizedDomain):
 
     def __repr__(self) -> str:
         """Representation."""
-        return f"Side({self._interface!r}, {self._label!r})"
+        return f"Embedding({self._interface!r}, {self._label!r})"
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
-            isinstance(other, Side)
+            isinstance(other, Embedding)
             and self._interface == other._interface
             and self._label == other._label
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.Side", self._interface, self._label))
+        return hash(("uflx.Embedding", self._interface, self._label))
 
 
 class Interface(AbstractParametrizedDomain):
-    """A domain two others meet along, with a presentation of it from each side.
+    """A domain two others meet along, with an image of it from each side.
 
     The domain is what is integrated over: its parametrization gives the
     measure, the metric and the unsigned normal direction. Where the
-    interface is a facet of both sides' cells, it is one side's
-    presentation, and the other induces the same density, the two
+    interface is a facet of both embeddings' cells, it is one side's
+    image, and the other induces the same density, the two
     differing by an isometry of the reference facet.
 
-    The sides are ordered, and the first is first: ``jump`` subtracts the
-    second from it. The primary side is the first whose presentation is
+    The embeddings are ordered, and the first is first: ``jump`` subtracts the
+    second from it. The primary side is the first whose image is
     the domain itself, and is read at the integral's own point; every
     other side is read through the chart transition, a second side with
-    the same presentation included, since that is the interface of a
-    mesh with itself and its two sides are two cells.
+    the same image included, since that is the interface of a
+    mesh with itself and its two embeddings are two cells.
 
     Implements :class:`uflx.domains.MadeOfPieces`: an interface of unions
     of pieces, which the facets of a mesh are, is integrated over as the
@@ -435,39 +438,41 @@ class Interface(AbstractParametrizedDomain):
     def __init__(
         self,
         domain: AbstractParametrizedDomain,
-        sides: tuple[tuple[Any, AbstractParametrizedDomain], ...],
+        embeddings: tuple[tuple[Any, AbstractParametrizedDomain], ...],
     ):
         """Initialise.
 
         Args:
             domain: The domain integrated over
-            sides: A label and a presentation of the domain per side, in
+            embeddings: A label and an image of the domain per side, in
                 order
 
-        A presentation need not be named in the domain's coordinates: a
+        An image need not be named in the domain's coordinates: a
         side's map may take the domain somewhere else first, as a
-        periodic boundary's does, so what the sides share is the domain
+        periodic boundary's does, so what the embeddings share is the domain
         and not an ambient space.
 
         Raises:
-            ValueError: If there are fewer than two sides, two share a
-                label, or a presentation is of a different topological
+            ValueError: If there are fewer than two embeddings, two share a
+                label, or an image is of a different topological
                 dimension
         """
-        if len(sides) < 2:
-            raise ValueError("An interface is where two domains meet, so it has two sides.")
-        labels = [label for label, _ in sides]
+        if len(embeddings) < 2:
+            raise ValueError("An interface is where two domains meet, so it has two embeddings.")
+        labels = [label for label, _ in embeddings]
         if len(set(labels)) != len(labels):
-            raise ValueError(f"The sides of an interface are told apart by label, not {labels}.")
-        for label, presentation in sides:
-            if presentation.topological_dimension != domain.topological_dimension:
+            raise ValueError(
+                f"The embeddings of an interface are told apart by label, not {labels}."
+            )
+        for label, image in embeddings:
+            if image.topological_dimension != domain.topological_dimension:
                 raise ValueError(
-                    f"Side {label!r} has topological dimension "
-                    f"{presentation.topological_dimension} where {domain!r} has "
+                    f"Embedding {label!r} has topological dimension "
+                    f"{image.topological_dimension} where {domain!r} has "
                     f"{domain.topological_dimension}."
                 )
         self._domain = domain
-        self._sides = sides
+        self._embeddings = embeddings
 
     @property
     def domain(self) -> AbstractParametrizedDomain:
@@ -476,37 +481,37 @@ class Interface(AbstractParametrizedDomain):
 
     @property
     def labels(self) -> tuple[Any, ...]:
-        """The sides' labels, in order."""
-        return tuple(label for label, _ in self._sides)
+        """The embeddings' labels, in order."""
+        return tuple(label for label, _ in self._embeddings)
 
     @property
     def primary(self) -> Any:
-        """The side the domain is the presentation of, or None if it is its own.
+        """The side the domain is the image of, or None if it is its own.
 
-        The first side whose presentation is the domain. One whose domain
-        is none of its sides' is the general interface, read on from every
+        The first side whose image is the domain. One whose domain
+        is none of its embeddings' is the general interface, read on from every
         side through the chart transition.
         """
-        for label, presentation in self._sides:
-            if presentation == self._domain:
+        for label, image in self._embeddings:
+            if image == self._domain:
                 return label
         return None
 
-    def presentation(self, label: Any) -> AbstractParametrizedDomain:
+    def image(self, label: Any) -> AbstractParametrizedDomain:
         """The domain as one side presents it.
 
         Args:
             label: Which side
 
         Returns:
-            That side's presentation
+            That side's image
         """
-        for side, presentation in self._sides:
+        for side, image in self._embeddings:
             if side == label:
-                return presentation
+                return image
         raise ValueError(f"{self!r} has no side {label!r}.")
 
-    def side(self, label: Any) -> Side:
+    def embedding(self, label: Any) -> Embedding:
         """One side of this interface.
 
         Args:
@@ -515,12 +520,12 @@ class Interface(AbstractParametrizedDomain):
         Returns:
             That side, as a domain
         """
-        return Side(self, label)
+        return Embedding(self, label)
 
     @property
-    def sides(self) -> tuple[Side, ...]:
-        """The sides, in order."""
-        return tuple(Side(self, label) for label in self.labels)
+    def embeddings(self) -> tuple[Embedding, ...]:
+        """The embeddings, in order."""
+        return tuple(Embedding(self, label) for label in self.labels)
 
     @property
     def geometric_dimension(self) -> int:
@@ -539,17 +544,17 @@ class Interface(AbstractParametrizedDomain):
 
     @property
     def pieces(self) -> tuple[AbstractParametrizedDomain, ...]:
-        """One interface per combination of the sides' pieces.
+        """One interface per combination of the embeddings' pieces.
 
         The primary side follows the domain's piece, and so does a piece
         that carries it, pairing with no other. Combinations whose pieces
         start from different regions are left out, a triangle's facet
-        being no interface with a tetrahedron's: the sides of one
+        being no interface with a tetrahedron's: the embeddings of one
         interface are charted from one region. An interface with no
         pieces to combine is its own one piece.
         """
         if not isinstance(self._domain, MadeOfPieces) and not any(
-            isinstance(presentation, MadeOfPieces) for _, presentation in self._sides
+            isinstance(image, MadeOfPieces) for _, image in self._embeddings
         ):
             return (self,)
         pieces: list[AbstractParametrizedDomain] = []
@@ -558,8 +563,8 @@ class Interface(AbstractParametrizedDomain):
             choices = [
                 (gamma,)
                 if label == primary
-                else [p for p in _pieces_of(presentation) if _carried_by(p) in (None, gamma)]
-                for label, presentation in self._sides
+                else [p for p in _pieces_of(image) if _carried_by(p) in (None, gamma)]
+                for label, image in self._embeddings
             ]
             for combination in product(*choices):
                 regions = {
@@ -574,31 +579,31 @@ class Interface(AbstractParametrizedDomain):
 
     def __repr__(self) -> str:
         """Representation."""
-        sides = ", ".join(f"({label!r}, {presentation!r})" for label, presentation in self._sides)
-        return f"Interface({self._domain!r}, ({sides}))"
+        embeddings = ", ".join(f"({label!r}, {image!r})" for label, image in self._embeddings)
+        return f"Interface({self._domain!r}, ({embeddings}))"
 
     def __eq__(self, other) -> bool:
         """Check for equality."""
         return (
             isinstance(other, Interface)
             and self._domain == other._domain
-            and self._sides == other._sides
+            and self._embeddings == other._embeddings
         )
 
     def __hash__(self) -> int:
         """Hash."""
-        return hash(("uflx.Interface", self._domain, self._sides))
+        return hash(("uflx.Interface", self._domain, self._embeddings))
 
 
-def _carried_by(presentation: AbstractParametrizedDomain) -> AbstractParametrizedDomain | None:
-    """The domain a presentation's maps carry, where they all carry one.
+def _carried_by(image: AbstractParametrizedDomain) -> AbstractParametrizedDomain | None:
+    """The domain an image's maps carry, where they all carry one.
 
-    The map of a presentation built from a :class:`PreimageParametrization`
+    The map of an image built from a :class:`CoordinateRepresentation`
     is that followed by the cell's own, so the carrier is the inner map
     of a composition.
     """
     carried: set[AbstractParametrizedDomain | None] = set()
-    for parametrization in presentation.parametrizations:
+    for parametrization in image.parametrizations:
         inner = parametrization
         while isinstance(inner, ComposedParametrization):
             inner = inner.inner
@@ -617,15 +622,15 @@ def _pieces_of(domain: AbstractParametrizedDomain) -> tuple[AbstractParametrized
 
 def interface(
     domain: AbstractParametrizedDomain,
-    sides: tuple[tuple[Any, AbstractParametrizedDomain], ...],
+    embeddings: tuple[tuple[Any, AbstractParametrizedDomain], ...],
 ) -> Interface:
-    """Create the interface a domain is, presented from each of its sides.
+    """Create the interface a domain is, presented from each of its embeddings.
 
     Args:
         domain: The domain integrated over
-        sides: A label and a presentation of the domain per side, in order
+        embeddings: A label and an image of the domain per side, in order
 
     Returns:
         That interface
     """
-    return Interface(domain, sides)
+    return Interface(domain, embeddings)

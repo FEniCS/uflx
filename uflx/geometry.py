@@ -10,8 +10,8 @@ from uflx.domains import (
     AbstractCoordinateDomain,
     AbstractParametrization,
     AbstractParametrizedDomain,
+    EmbedsAnInterface,
     EntityDomain,
-    PresentsAnInterface,
     StatesAnOutwardNormal,
     unlabelled,
 )
@@ -475,8 +475,8 @@ class AbstractGeometricQuantity(AbstractExpression):
             return self
         if len(_parametrizations_out_of(self._domain, source)) == 0:
             return self
-        if isinstance(self._domain, PresentsAnInterface):
-            variable = self._domain.chart_point(variable)
+        if isinstance(self._domain, EmbedsAnInterface):
+            variable = self._domain.transition(variable)
         return self._rebuilt(self._domain, variable)
 
 
@@ -779,11 +779,11 @@ class OutwardNormal(AbstractGeometricQuantity):
     def _presentation(self) -> AbstractParametrizedDomain:
         """The facet this points out of, which a side presents."""
         domain = self._domain
-        if isinstance(domain, PresentsAnInterface):
-            domain = domain.presentation
-        presentation = unlabelled(domain)
-        assert isinstance(presentation, AbstractParametrizedDomain)
-        return presentation
+        if isinstance(domain, EmbedsAnInterface):
+            domain = domain.image
+        image = unlabelled(domain)
+        assert isinstance(image, AbstractParametrizedDomain)
+        return image
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry.
@@ -792,14 +792,14 @@ class OutwardNormal(AbstractGeometricQuantity):
             ValueError: If the domain is not a facet of a cell, or has not
                 been told where it is read
         """
-        presentation = self._presentation
-        if isinstance(presentation, StatesAnOutwardNormal):
-            return Vector([RealScalar(c) for c in presentation.outward_normal])
-        inner, cell, cell_map = sub_entity_in_cell(presentation)
-        sub_entity = included_sub_entity(presentation)
+        image = self._presentation
+        if isinstance(image, StatesAnOutwardNormal):
+            return Vector([RealScalar(c) for c in image.outward_normal])
+        inner, cell, cell_map = sub_entity_in_cell(image)
+        sub_entity = included_sub_entity(image)
         if sub_entity is None or sub_entity[0] != cell.topological_dimension - 1:
             raise ValueError(
-                f"{presentation!r} is not a facet of {cell}, so there is no out of the "
+                f"{image!r} is not a facet of {cell}, so there is no out of the "
                 f"cell across it. The normal of a domain presented some other way is "
                 f"UnitNormal of it, with the sign a side names."
             )
