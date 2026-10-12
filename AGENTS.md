@@ -70,9 +70,12 @@ prints one level of arguments and anything deeper as `ClassName(...)`, so it sta
 line however large the graph. `uflx.graphs.describe(value, depth)` prints more levels.
 A value's `successors` are the values among its arguments. A space, a mesh or a variable
 is a node like any other, so `replace` can substitute it.
-Avoid defining `__eq__`, `__hash__`, `__repr__` or `successors` on a class at all costs. Any other
-identity is one that rebuilding a node can silently change. Consumer classes such
-as a Basix cell or element inherit the rule. [DESIGN_CHOICES.md](DESIGN_CHOICES.md) says
+A class that defines `__eq__`, `__ne__`, `__hash__`, `successors` or `fingerprint` is
+refused when it is defined, and a stored list, set or dict when a value is built. Avoid
+defining `__repr__`. Any other identity is one that rebuilding a node can silently change.
+The first value of each class must rebuild from its `init_args` to itself, and
+`uflx.testing`, imported in both conftests, checks every value a test builds. Consumer
+classes such as a Basix cell or element inherit the rule. [DESIGN_CHOICES.md](DESIGN_CHOICES.md) says
 how to store the arguments.
 
 Expression trees (the symbolic core) are not plain Python object graphs — they are

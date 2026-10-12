@@ -12,7 +12,7 @@ from collections.abc import Callable, Hashable, Iterable, Mapping
 from collections.abc import Set as AbstractSet
 from enum import Enum
 from hashlib import blake2b
-from typing import Any, Protocol, TypeVar, cast, runtime_checkable
+from typing import Any, ClassVar, Protocol, TypeVar, cast, runtime_checkable
 
 import networkx as nx
 
@@ -28,13 +28,56 @@ class _Interning(ABCMeta):
     """
 
     _values: weakref.WeakValueDictionary[Any, Any] = weakref.WeakValueDictionary()
+    _rebuilt: ClassVar[set[type]] = set()
+    check_every_value: ClassVar[bool] = False
+    _checking: ClassVar[bool] = False
 
     def __call__(cls: type[_T], *args: Any, **kwargs: Any) -> _T:
-        """Build a value or return the equal one already built."""
+        """Build a value or return the equal one already built.
+
+        The first value of each class is rebuilt from its ``init_args``
+        and must come back as the same object. This catches a class that
+        stores or reads back its arguments wrongly, once per class. Every
+        value is checked while ``check_every_value`` is set, as
+        :mod:`uflx.testing` does.
+
+        Raises:
+            TypeError: If the first value of a class does not rebuild to
+                itself.
+        """
         value = super().__call__(*args, **kwargs)
         # Fingerprint first so that an argument that cannot be digested is refused with a reason.
         value.fingerprint
-        return _Interning._values.setdefault((cls, _interning_key(value.init_args)), value)
+        value = _Interning._values.setdefault((cls, _interning_key(value.init_args)), value)
+        if not _Interning._checking and (
+            _Interning.check_every_value or cls not in _Interning._rebuilt
+        ):
+            _Interning._rebuilt.add(cls)
+            # A rebuild builds values too, and they need no check of their own.
+            _Interning._checking = True
+            try:
+                _check_rebuilds(value)
+            finally:
+                _Interning._checking = False
+        return value
+
+
+def _check_rebuilds(value: Any) -> None:
+    """Check that a value rebuilt from its ``init_args`` is the same object."""
+    cls = type(value)
+    try:
+        rebuilt = cls(*value.init_args)
+    except TypeError as error:
+        raise TypeError(
+            f"{cls.__qualname__} cannot be rebuilt from its init_args {describe(value)}. "
+            f"Store every constructor argument as _name, or make init_args match the constructor."
+        ) from error
+    if rebuilt is not value:
+        raise TypeError(
+            f"{cls.__qualname__} rebuilt from its init_args is {describe(rebuilt)}, "
+            f"not {describe(value)}. Store every constructor argument as _name in the form "
+            f"it is compared in."
+        )
 
 
 def _interning_key(value: Any) -> Any:
@@ -73,9 +116,15 @@ class Immutable(metaclass=_Interning):
     value from the same class and arguments as a live one returns that
     one. Equal values are the same object and equality is ``is``. Hash
     and repr also come from here. ``init_args`` is read back from
-    the attributes the constructor stores its arguments in. A class
-    should avoid defining ``__eq__``, ``__hash__`` or ``__repr__`` itself.
-    Any other identity is one that rebuilding a node can silently change.
+    the attributes the constructor stores its arguments in.
+
+    A subclass, in UFLx or in a consumer, gets these checks at runtime.
+    Defining ``__eq__``, ``__ne__``, ``__hash__``, ``successors`` or
+    ``fingerprint`` is refused when the class is defined. An argument
+    that is a list, a set, a dict or an object known only by its address
+    is refused when a value is built. The first value of each class must
+    rebuild from its ``init_args`` to itself. :mod:`uflx.testing` checks
+    every value a test suite builds.
     """
 
     _hash: int
@@ -164,22 +213,31 @@ class Immutable(metaclass=_Interning):
         return type(self), self.init_args
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Wrap the class's own ``__init__`` to freeze and ``__hash__`` to keep.
+        """Refuse a class that defines its own identity, and wrap its ``__init__`` to freeze.
 
-        Only methods defined in the class body are wrapped. An inherited
-        method was already wrapped in its parent. Only the outermost
-        ``__init__`` freezes, so an ``__init__`` that calls its parent's
-        can still set attributes afterwards. The names of the
+        Only an ``__init__`` defined in the class body is wrapped. An
+        inherited one was already wrapped in its parent. Only the
+        outermost ``__init__`` freezes, so an ``__init__`` that calls its
+        parent's can still set attributes afterwards. The names of the
         constructor's arguments are recorded here for ``init_args``.
+
+        Raises:
+            TypeError: If the class body defines a method that would give
+                the class an identity other than its ``init_args``.
         """
         super().__init_subclass__(**kwargs)
+        for name in ("__eq__", "__ne__", "__hash__", "successors", "fingerprint"):
+            # Defining __eq__ alone sets __hash__ to None in the class body.
+            if name in cls.__dict__ and not (name == "__hash__" and cls.__dict__[name] is None):
+                raise TypeError(
+                    f"{cls.__qualname__} defines {name}. A value's identity comes from its "
+                    f"init_args alone, so a class defines none of __eq__, __ne__, __hash__, "
+                    f"successors or fingerprint."
+                )
         init = cls.__dict__.get("__init__")
         if init is not None:
             setattr(cls, "__init__", _freezing(init))
             cls._init_parameters = _parameters_of(cls, init)
-        hash_ = cls.__dict__.get("__hash__")
-        if hash_ is not None:
-            setattr(cls, "__hash__", _kept(hash_))
 
     def __setattr__(self, name: str, value: Any) -> None:
         """Set an attribute during construction only."""
@@ -225,20 +283,24 @@ def digest(*parts: str | bytes) -> bytes:
 def fingerprint(value: Any) -> bytes:
     """Digest a value or an argument the same way in every process.
 
-    A value is digested by its class and arguments. A tuple or list is
-    digested item by item in order. Any other object is digested by its
-    class and its own repr, or its own hash if it has no repr of its own.
-    Either must be the same in every process.
+    A value is digested by its class and arguments. A tuple is digested
+    item by item in order. Any other object is digested by its class and
+    its own repr, or its own hash if it has no repr of its own. Either
+    must be the same in every process.
 
     Raises:
-        TypeError: If an object is a set or a mapping, or has neither its
-            own repr nor its own hash.
+        TypeError: If an object is a list, a set or a mapping, or has
+            neither its own repr nor its own hash.
     """
     if isinstance(value, Immutable):
         return value.fingerprint
-    if isinstance(value, tuple | list):
-        return digest(type(value).__name__, *map(fingerprint, value))
+    if isinstance(value, tuple):
+        return digest("tuple", *map(fingerprint, value))
     cls = type(value)
+    if isinstance(value, list):
+        raise TypeError(
+            "A list can change after the value holding it is built. Store a tuple instead."
+        )
     if isinstance(value, AbstractSet | Mapping):
         raise TypeError(
             f"{_qualified_name(cls)} prints in an order that differs between processes "
@@ -257,7 +319,7 @@ def fingerprint(value: Any) -> bytes:
 def _values_in(argument: Any) -> Iterable[Immutable]:
     if isinstance(argument, Immutable):
         yield argument
-    elif isinstance(argument, tuple | list):
+    elif isinstance(argument, tuple):
         for item in argument:
             yield from _values_in(item)
 
@@ -346,21 +408,6 @@ def _freezing(init: Callable[..., None]) -> Callable[..., None]:
             object.__setattr__(self, "_frozen", True)
 
     return freezing_init
-
-
-def _kept(hash_: Callable[[Any], int]) -> Callable[[Any], int]:
-    """Wrap ``__hash__`` to compute it once and keep it on the instance."""
-
-    @functools.wraps(hash_)
-    def kept_hash(self: Any) -> int:
-        try:
-            return self.__dict__["_hash"]
-        except KeyError:
-            value = hash_(self)
-            object.__setattr__(self, "_hash", value)
-            return value
-
-    return kept_hash
 
 
 class NodeOrder(Enum):

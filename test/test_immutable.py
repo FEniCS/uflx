@@ -114,8 +114,8 @@ def test_a_repr_does_not_grow_with_its_graph():
     assert repr(e) == "Sum((Product(...), Neg(...)))"
 
 
-def test_no_class_in_uflx_defines_its_own_identity():
-    """Every value in UFLx is compared, hashed and printed by its init_args alone."""
+def test_no_class_in_uflx_prints_itself():
+    """Guards against a handwritten repr in UFLx drifting from the value's init_args."""
     import importlib
     import pkgutil
 
@@ -131,7 +131,7 @@ def test_no_class_in_uflx_defines_its_own_identity():
 
     for cls in subclasses(Immutable):
         if cls.__module__.startswith("uflx."):
-            for method in ("__eq__", "__hash__", "__repr__", "__str__", "successors"):
+            for method in ("__repr__", "__str__"):
                 assert method not in vars(cls), (cls, method)
 
 
@@ -204,8 +204,9 @@ class _Opaque:
         (_Opaque(), "prints and hashes by its address"),
         (frozenset({"left", "right"}), "Store a tuple instead"),
         ({"left": 1, "right": 2}, "Store a tuple instead"),
+        (["left", "right"], "Store a tuple instead"),
     ],
-    ids=["address", "frozenset", "dict"],
+    ids=["address", "frozenset", "dict", "list"],
 )
 def test_an_argument_that_prints_differently_between_processes_is_refused(argument, message):
     """Guards against hashing by an address or by an order that differs between processes."""
@@ -213,10 +214,43 @@ def test_an_argument_that_prints_differently_between_processes_is_refused(argume
         hash(_Holder(argument))
 
 
-def test_labels_in_a_tuple_or_list_are_hashed_in_order():
+def test_labels_in_a_tuple_are_hashed_in_order():
     """Guards against two differently ordered sequences of labels hashing alike."""
     assert hash(_Holder(("left", "right"))) != hash(_Holder(("right", "left")))
-    assert hash(_Holder(["left", "right"])) == hash(_Holder(["left", "right"]))
+
+
+@pytest.mark.parametrize("name", ["__eq__", "__ne__", "__hash__", "successors", "fingerprint"])
+def test_a_class_that_defines_its_own_identity_is_refused(name):
+    """Guards against a consumer's class giving itself an identity other than its init_args."""
+    with pytest.raises(TypeError, match=f"defines {name}"):
+        type("Custom", (Immutable,), {name: lambda self: None})
+
+
+def test_a_class_whose_init_args_lose_an_argument_is_refused():
+    """Guards against a class whose values cannot be rebuilt from their init_args."""
+
+    class Lossy(Immutable):
+        def __init__(self, a, b):
+            self._a = a
+            self._b = b
+
+        @property
+        def init_args(self):
+            return (self._a,)
+
+    with pytest.raises(TypeError, match="cannot be rebuilt from its init_args"):
+        Lossy(1, 2)
+
+
+def test_a_class_that_alters_its_argument_is_refused():
+    """Guards against a constructor whose stored argument rebuilds to a different value."""
+
+    class Shifting(Immutable):
+        def __init__(self, n):
+            self._n = n + 1
+
+    with pytest.raises(TypeError, match="rebuilt from its init_args is"):
+        Shifting(1)
 
 
 def _shared(levels):

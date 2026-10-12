@@ -30,10 +30,11 @@ itself. A value built from the same class and arguments as a live one is that on
 Equality is `is`. A new mixin is for a rule of that kind, one
 that holds of everything. Code shared between a few classes is a function.
 
-Avoid defining `__eq__`, `__hash__` or `__repr__` on a class at all costs. An identity
-other than the arguments is one that rebuilding a node can silently change, and equality
-that reaches outside the class breaks hashing. A class that seems to need one is usually
-missing an argument or keeping one it should not. A handwritten `__repr__` drifts from
+A class that defines `__eq__`, `__ne__`, `__hash__`, `successors` or `fingerprint` is
+refused when it is defined. An identity other than the arguments is one that rebuilding a
+node can silently change, and equality that reaches outside the class breaks hashing. A
+class that seems to need one is usually missing an argument or keeping one it should not.
+Avoid defining `__repr__` too. A handwritten `__repr__` drifts from
 what the value is, and nothing may depend on one. A class writes its own only when an
 argument prints as an address, as a wrapped Basix element does. The mixin's prints one level
 of arguments and anything deeper as `ClassName(...)`, so it stays short however large a
@@ -51,8 +52,10 @@ constructor of its own has no arguments. Five rules follow.
 - Store only what is hashable and compared exactly, all the way down. A tolerance is not
   transitive, so it cannot decide which values are equal. An array is kept as nested
   tuples of its entries.
-- Store a sequence, such as several labels, as a tuple. A set or a dict prints in an order
-  that depends on the hash seed or on how it was built, so it is refused.
+- Store a sequence, such as several labels, as a tuple. A constructor may take a list but
+  stores `tuple(items)`. A list can change after the value is built. A set or a dict
+  prints in an order that depends on the hash seed or on how it was built. Each is
+  refused.
 - Store only what prints or hashes the same in every process. A hash is a digest of the
   arguments, and MPI ranks must agree on it whatever their hash seeds. An object that
   prints and hashes by its address is refused.
@@ -61,6 +64,13 @@ A derived value, such as a lookup table built from an argument, goes under a nam
 own. A constructor that takes `*args`, `**kwargs` or keyword-only arguments cannot be
 called with a tuple, so its class defines `init_args` itself. So does a class that stores
 an argument in a way the rules above do not cover, and it says why in a comment.
+
+These rules are checked at runtime, so a consumer's class follows them too. A class that
+defines its own identity is refused when it is defined. A list, set, dict or object known
+only by its address is refused when a value is built. The first value of each class is
+rebuilt from its `init_args` and must come back as the same object. A test suite checks
+every value it builds by adding `pytest_plugins = ["uflx.testing"]` to its top-level
+`conftest.py`. The rule below on sets of strings is the only one not checked.
 
 An algorithm must do the same thing on every MPI rank, and each rank has its own hash
 seed. Python salts the hash of a string and of bytes. An enum member hashes by its name
