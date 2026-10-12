@@ -152,7 +152,7 @@ def test_parametrization_may_block_an_identity_map(lagrange_element):
     assert domain.topological_dimension == 2
 
 
-def in_the_plane(matrix, offset):
+def _in_the_plane(matrix, offset):
     """A domain of the plane, being the reference interval mapped into it."""
     source = entity_domain(Interval())
     return composed_domain(source, AffineParametrization(source, RD(2), matrix, offset))
@@ -161,8 +161,8 @@ def in_the_plane(matrix, offset):
 def test_a_union_takes_the_dimensions_of_its_pieces():
     """Named in the pieces' coordinates, of the pieces' topological dimension."""
     pieces = [
-        in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)),
-        in_the_plane(((0.0,), (1.0,)), (0.0, 0.0)),
+        _in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)),
+        _in_the_plane(((0.0,), (1.0,)), (0.0, 0.0)),
     ]
 
     union = union_domain(pieces)
@@ -174,7 +174,7 @@ def test_a_union_takes_the_dimensions_of_its_pieces():
 
 def test_a_union_of_pieces_of_different_dimension_has_no_topological_dimension():
     """As a domain of mixed cell types has none: there is no one answer."""
-    union = union_domain([in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)), entity_domain(Triangle())])
+    union = union_domain([_in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)), entity_domain(Triangle())])
 
     assert union.topological_dimension is None
     assert union.geometric_dimension == 2
@@ -196,7 +196,7 @@ def test_a_union_is_told_apart_by_its_pieces():
     over it were split onto one piece, which is where a consumer needs
     it, so the pieces carry it instead.
     """
-    pieces = [in_the_plane(((1.0,), (0.0,)), (0.0, 0.0))]
+    pieces = [_in_the_plane(((1.0,), (0.0,)), (0.0, 0.0))]
     marked = [labelled_domain(piece, 3) for piece in pieces]
 
     assert union_domain(pieces) == union_domain(pieces)
@@ -208,7 +208,7 @@ def test_a_union_is_told_apart_by_its_pieces():
 
 def test_a_labelled_domain_differs_only_in_identity():
     """Same cells, same parametrizations, same coordinates, told apart by the label."""
-    domain = in_the_plane(((1.0,), (0.0,)), (0.0, 0.0))
+    domain = _in_the_plane(((1.0,), (0.0,)), (0.0, 0.0))
 
     marked = labelled_domain(domain, "inflow")
 
@@ -234,8 +234,8 @@ def test_a_union_holds_every_pieces_parametrization():
     point it is read at.
     """
     pieces = [
-        in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)),
-        in_the_plane(((0.0,), (1.0,)), (0.0, 0.0)),
+        _in_the_plane(((1.0,), (0.0,)), (0.0, 0.0)),
+        _in_the_plane(((0.0,), (1.0,)), (0.0, 0.0)),
     ]
     interval = entity_domain(Interval())
 

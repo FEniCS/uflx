@@ -350,6 +350,92 @@ class ComposesADomain(Protocol):
         """The map applied to that domain's own coordinates."""
 
 
+@runtime_checkable
+class MadeOfPieces(Protocol):
+    """A domain integrated over as the sum over its pieces.
+
+    A union is one, each piece a parametrized domain in its own right,
+    and so is an interface of unions, each piece a pair of them. An
+    integral over such a domain is split into one integral per piece
+    before anything is pulled back, since a piece is what names one
+    parametrization.
+    """
+
+    @property
+    def pieces(self) -> tuple[AbstractParametrizedDomain, ...]:
+        """The domains this one is integrated over as a sum of."""
+
+
+@runtime_checkable
+class EmbedsAnInterface(Protocol):
+    """A domain that is one side of an interface.
+
+    An interface is a domain two others meet along, and a side is that
+    domain presented from one of them: the same set, parametrized by the
+    one domain's own map. A field on that domain is read on the
+    interface through the side, and a quantity of the side -- the normal
+    pointing out of it -- is read at the point of the side's own
+    parameter region that the interface's point corresponds to, which
+    ``transition`` gives. :class:`uflx.interfaces.Embedding` is the
+    implementation; this is what the geometry and the integrals ask of
+    it without naming it.
+    """
+
+    @property
+    def interface(self) -> AbstractParametrizedDomain:
+        """The interface this is a side of."""
+
+    @property
+    def image(self) -> AbstractParametrizedDomain:
+        """The interface as this side's domain presents it."""
+
+    def transition(self, variable: AbstractVariable) -> AbstractVariable:
+        """Where in this side's parameter region a point of the interface is.
+
+        Args:
+            variable: A point of a parameter region of the interface
+
+        Returns:
+            The point of this side's parameter region that lands on it,
+            or the variable itself where this side's region is the
+            interface's own
+        """
+
+
+@runtime_checkable
+class StatesAnOutwardNormal(Protocol):
+    """A domain that says which way is out of the domain it bounds.
+
+    A face of a box knows from its own description: the held coordinate
+    increases out of the box at its upper end. Nothing is computed and no
+    orientation is left open, so :class:`uflx.geometry.OutwardNormal`
+    takes such a domain at its word rather than transporting a reference
+    normal it does not have.
+    """
+
+    @property
+    def outward_normal(self) -> tuple[float, ...]:
+        """The direction out of the bounded domain, as numbers."""
+
+
+@runtime_checkable
+class CarriesADomain(Protocol):
+    """A map that carries a whole domain somewhere, rather than a region of coordinates.
+
+    A map out of a coordinate domain is what a parametrization is, and
+    most say nothing about where their coordinates came from. One that
+    is a domain's own parametrization followed by something, as
+    :class:`uflx.interfaces.CoordinateRepresentation` is, starts from that
+    domain in all but name, and says so, which is how an interface knows
+    a side is presented through its own domain and needs no chart
+    transition.
+    """
+
+    @property
+    def carries(self) -> AbstractParametrizedDomain:
+        """The domain this map carries."""
+
+
 class IdentityParametrization(AbstractParametrization):
     """The map that leaves a coordinate domain's points where they are."""
 
@@ -601,6 +687,81 @@ class EntityDomain(AbstractCoordinateDomain, AbstractCellularDomain):
         return hash(("uflx.EntityDomain", self._entity))
 
 
+class LabelledParametrization(AbstractParametrization):
+    """A map and the label it is told apart by.
+
+    To a map what :class:`LabelledDomain` is to a domain: everything
+    geometric is the map's, and what changes is identity. Two sides of
+    one mesh are parametrized by one map, structurally, so a preimage
+    through one side's map says which side only if the map does, and
+    this is how it does.
+    """
+
+    def __init__(self, parametrization: AbstractParametrization, label: Any):
+        """Initialise.
+
+        Args:
+            parametrization: The map being named
+            label: Anything hashable it is told apart by
+        """
+        self._parametrization = parametrization
+        self._label = label
+
+    @property
+    def parametrization(self) -> AbstractParametrization:
+        """The map being named."""
+        return self._parametrization
+
+    @property
+    def label(self) -> Any:
+        """What it is told apart by."""
+        return self._label
+
+    @property
+    def source(self) -> AbstractCoordinateDomain:
+        """The map's source."""
+        return self._parametrization.source
+
+    @property
+    def target(self) -> AbstractCoordinateDomain:
+        """The map's target."""
+        return self._parametrization.target
+
+    def value(self, point: AbstractVariable) -> AbstractExpression:
+        """The map's value."""
+        return self._parametrization.value(point)
+
+    def jacobian(self, point: AbstractVariable) -> AbstractExpression:
+        """The map's Jacobian."""
+        return self._parametrization.jacobian(point)
+
+    @property
+    def is_affine(self) -> bool:
+        """Whether the map is affine."""
+        return self._parametrization.is_affine
+
+    @property
+    def is_identity(self) -> bool:
+        """Whether the map is the identity."""
+        return self._parametrization.is_identity
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"LabelledParametrization({self._parametrization!r}, {self._label!r})"
+
+    def __eq__(self, other) -> bool:
+        """Check for equality."""
+        return (
+            isinstance(other, LabelledParametrization)
+            and self._parametrization == other._parametrization
+            and self._label == other._label
+        )
+
+    def __hash__(self) -> int:
+        """Hash."""
+        return hash(("uflx.LabelledParametrization", self._parametrization, self._label))
+
+
 class LabelledDomain(AbstractCellularDomain):
     """A domain and the label a consumer selects it by.
 
@@ -722,6 +883,21 @@ def labelled_domain(domain: AbstractCellularDomain, label: Any) -> LabelledDomai
     return LabelledDomain(domain, label)
 
 
+def labelled_parametrization(
+    parametrization: AbstractParametrization, label: Any
+) -> LabelledParametrization:
+    """Create a map told apart from another by a label.
+
+    Args:
+        parametrization: The map being named
+        label: Anything hashable it is told apart by
+
+    Returns:
+        The same map, told apart by that label
+    """
+    return LabelledParametrization(parametrization, label)
+
+
 def unlabelled(domain: AbstractDomain) -> AbstractDomain:
     """The domain a selection selects from, or the domain itself.
 
@@ -738,3 +914,65 @@ def unlabelled(domain: AbstractDomain) -> AbstractDomain:
     while isinstance(domain, LabelledDomain):
         domain = domain.domain
     return domain
+
+
+def pieces_of(domain: AbstractParametrizedDomain) -> tuple[AbstractParametrizedDomain, ...]:
+    """The pieces a domain is integrated over as a sum of, or the domain as its own one.
+
+    A domain not made of pieces is its own one piece, and so is one that
+    says so by answering itself, as an interface of one piece a side does.
+
+    Args:
+        domain: Any parametrized domain
+
+    Returns:
+        Its pieces, or ``(domain,)``
+    """
+    if isinstance(domain, MadeOfPieces):
+        pieces = domain.pieces
+        if pieces != (domain,):
+            return pieces
+    return (domain,)
+
+
+def parameter_regions(domain: AbstractParametrizedDomain) -> set[AbstractCoordinateDomain]:
+    """The regions a domain is parametrized from.
+
+    Args:
+        domain: Any parametrized domain
+
+    Returns:
+        The sources of its parametrizations
+    """
+    return {parametrization.source for parametrization in domain.parametrizations}
+
+
+def parametrization_out_of(
+    domain: AbstractParametrizedDomain, region: AbstractCoordinateDomain
+) -> AbstractParametrization:
+    """The one parametrization of a domain that starts from a region.
+
+    A domain holds its parametrizations rather than keying them by their
+    region, since several may share one. Needing exactly one is what
+    evaluating a quantity at a point asks for, so it is asked here.
+
+    Args:
+        domain: The domain
+        region: The region a point lies in
+
+    Returns:
+        The parametrization out of it
+
+    Raises:
+        ValueError: If the domain has no parametrization out of that
+            region, or several, so that a point there names no one map
+    """
+    found = [p for p in domain.parametrizations if p.source == region]
+    if len(found) == 0:
+        raise ValueError(f"{domain!r} has no parametrization out of {region!r}.")
+    if len(found) > 1:
+        raise ValueError(
+            f"{domain!r} has {len(found)} parametrizations out of {region!r}, so a point "
+            f"there names no one map. Split the integral by piece first."
+        )
+    return found[0]

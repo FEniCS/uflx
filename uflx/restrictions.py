@@ -37,6 +37,15 @@ What that leaves out is not a nested restriction. A field living on a
 facet -- a multiplier on one -- restricted to that facet's own boundary
 is a single map out of the domain it lives on, like any other, since the
 facet is where the field is.
+
+On an interface the map is named by a side. ``restrict(u, gamma.embedding("-"))``
+is ``iota_-^* u``, the field read at the point of the ``-`` side's chart
+that the interface's point corresponds to, carried through that side's
+inclusion. The ``+`` and ``-`` of UFL are two such restrictions, and
+``jump`` and ``avg`` are their difference and their mean. The side's map
+need not be an inclusion of a facet: a side presented through a
+preimage reads the field at the point of whichever cell the interface's
+point lands in, and the restriction does not know the difference.
 """
 
 from __future__ import annotations
@@ -46,18 +55,16 @@ from typing import Any
 from uflx.algorithms import replace
 from uflx.domains import (
     AbstractCellularDomain,
-    AbstractParametrization,
     AbstractParametrizedDomain,
-    ComposesADomain,
-    EntityDomain,
-    UnionDomain,
-    unlabelled,
+    EmbedsAnInterface,
+    pieces_of,
 )
-from uflx.entities import AbstractEntity
-from uflx.expressions import AbstractExpression
+from uflx.expressions import AbstractExpression, RealScalar
 from uflx.functions import extract_domain
 from uflx.geometry import ImagePoint
 from uflx.graphs import GraphNode, as_graph
+from uflx.interfaces import Embedding, Interface
+from uflx.parametrizations import sub_entity_in_cell
 from uflx.variables import AbstractVariable, ReadAtAVariable
 
 
@@ -97,9 +104,10 @@ class Restriction(AbstractExpression):
     """A field read at the point a domain's parametrization gives it, ``iota^* u``.
 
     The domain restricted to is a piece of a sub-entity domain, or the
-    union of such pieces before an integral over it has been split. Until
-    it is one piece there is no one inclusion to read the field through,
-    so a union answers nothing about its parametrization and the pull back refuses.
+    union of such pieces before an integral over it has been split, or a
+    side of an interface presented by either. Until it is one piece there
+    is no one inclusion to read the field through, so a union answers
+    nothing about its parametrization and the pull back refuses.
     """
 
     def __init__(
@@ -130,11 +138,16 @@ class Restriction(AbstractExpression):
                 f"one. Restricting along the composition is what this would be: take "
                 f"the sub-entities of the cell, with sub_entities_of(domain, codim)."
             )
+        if isinstance(domain, Interface):
+            raise ValueError(
+                f"{domain!r} is reached from either of its sides, and a field is read "
+                f"through one of them. Name it: restrict(u, interface.embedding(label))."
+            )
         field_domain = extract_domain(field)
         if not isinstance(field_domain, AbstractCellularDomain):
             raise ValueError(f"{field_domain!r} has no cells to include a sub-entity into.")
-        for piece in _pieces_of(domain):
-            _, cell, cell_map = _inclusion_of(piece)
+        for piece in _pieces_read_through(domain):
+            _, cell, cell_map = sub_entity_in_cell(piece)
             if cell not in field_domain.cell_types or cell_map != field_domain.parametrization(
                 cell
             ):
@@ -171,8 +184,11 @@ class Restriction(AbstractExpression):
         Always, where a function or a quantity stops saying once it has
         been positioned: a restriction is the map, so the field under it
         being on another domain is the whole point rather than a
-        disagreement.
+        disagreement. Through a side it is read on the interface, which
+        is what makes a jump an expression on one domain.
         """
+        if isinstance(self._domain, EmbedsAnInterface):
+            return self._domain.interface
         return self._domain
 
     @property
@@ -222,7 +238,8 @@ class Restriction(AbstractExpression):
 
         The restriction's own point lies in the reference sub-entity's
         coordinates, and the inclusion carries it into the cell's, where
-        the field's basis is defined.
+        the field's basis is defined. Through a side of an interface the
+        point is first carried into that side's own chart.
 
         Raises:
             ValueError: If this restriction has not been told where it is
@@ -230,14 +247,19 @@ class Restriction(AbstractExpression):
         """
         if self._variable is None:
             raise ValueError("This restriction has not been told where it is read.")
-        if isinstance(self._domain, UnionDomain):
+        pieces = _pieces_read_through(self._domain)
+        if len(pieces) != 1:
             raise ValueError(
                 f"{self._domain!r} has a parametrization per piece. Split the "
                 f"integral by piece first."
             )
-        inclusion, _, _ = _inclusion_of(self._domain)
+        (piece,) = pieces
+        inclusion, _, _ = sub_entity_in_cell(piece)
         (sub_entity,) = inclusion.cell_types
-        return ImagePoint(self._variable.to_entity_coordinates(sub_entity), inclusion)
+        point = self._variable.to_entity_coordinates(sub_entity)
+        if isinstance(self._domain, EmbedsAnInterface):
+            point = self._domain.transition(point)
+        return ImagePoint(point, inclusion)
 
     def pull_back_to_entity(self, node_map: dict[GraphNode, GraphNode]) -> GraphNode:
         """Read the pulled back field at the included point.
@@ -255,41 +277,17 @@ class Restriction(AbstractExpression):
         return f"Restriction({self._field!r}, {self._domain!r}, {self._variable!r})"
 
 
-def _pieces_of(domain: AbstractParametrizedDomain) -> tuple[AbstractParametrizedDomain, ...]:
-    """The pieces of a union, or the domain itself when it is one piece."""
-    if isinstance(domain, UnionDomain):
-        return domain.pieces
-    return (domain,)
-
-
-def _inclusion_of(
+def _pieces_read_through(
     domain: AbstractParametrizedDomain,
-) -> tuple[AbstractCellularDomain, AbstractEntity, AbstractParametrization]:
-    """Read a piece as a sub-entity sitting in a cell, mapped on by the cell's own map.
+) -> tuple[AbstractParametrizedDomain, ...]:
+    """The pieces a field is read through.
 
-    A sub-entity sitting in a cell is a domain whose points are named in
-    that cell's coordinates, which is what its coordinate domain says.
-
-    Args:
-        domain: One piece of the domain a field is restricted to
-
-    Returns:
-        The domain it is parametrized from, the cell its points are named in,
-        and the map applied to it
-
-    Raises:
-        ValueError: If the piece is not a sub-entity of a cell mapped on
+    An embedding of an interface reads through the pieces of its image,
+    that being the domain the field is on.
     """
-    composite = unlabelled(domain)
-    if not isinstance(composite, ComposesADomain):
-        raise ValueError(f"{domain!r} is not a sub-entity of a cell, mapped on.")
-    inner = composite.inner_domain
-    cell_map = composite.outer_map
-    sits_in = inner.coordinate_domain
-    if not isinstance(sits_in, EntityDomain):
-        raise ValueError(f"{inner!r} is named in {sits_in!r}, not in a cell's coordinates.")
-    (cell,) = sits_in.cell_types
-    return inner, cell, cell_map
+    if isinstance(domain, EmbedsAnInterface):
+        domain = domain.image
+    return pieces_of(domain)
 
 
 def restrict(field: AbstractExpression, domain: AbstractParametrizedDomain) -> Restriction:
@@ -297,9 +295,54 @@ def restrict(field: AbstractExpression, domain: AbstractParametrizedDomain) -> R
 
     Args:
         field: The field being restricted
-        domain: The domain it is restricted to
+        domain: The domain it is restricted to, or a side of an interface
+            presented by one
 
     Returns:
         The field read at the point that domain's parametrization gives
     """
     return Restriction(field, domain)
+
+
+def _two_sides(interface: Interface) -> tuple[Embedding, Embedding]:
+    """The two sides of an interface, in order."""
+    sides = interface.embeddings
+    if len(sides) != 2:
+        raise ValueError(
+            f"{interface!r} has {len(sides)} sides, so which two to take is not said. "
+            f"Write the restrictions out."
+        )
+    first, second = sides
+    return first, second
+
+
+def jump(field: AbstractExpression, interface: Interface) -> AbstractExpression:
+    """The jump of a field across an interface, first side less second.
+
+    ``iota_+^* u - iota_-^* u``, two restrictions of one field. A field
+    on each side of an interface between two domains is two fields, and
+    their difference is written as the two restrictions it is.
+
+    Args:
+        field: A field on both sides' domain
+        interface: The interface, of two sides
+
+    Returns:
+        The difference of the field's restrictions to the two sides
+    """
+    first, second = _two_sides(interface)
+    return restrict(field, first) - restrict(field, second)
+
+
+def avg(field: AbstractExpression, interface: Interface) -> AbstractExpression:
+    """The average of a field across an interface.
+
+    Args:
+        field: A field on both sides' domain
+        interface: The interface, of two sides
+
+    Returns:
+        Half the sum of the field's restrictions to the two sides
+    """
+    first, second = _two_sides(interface)
+    return RealScalar(0.5) * (restrict(field, first) + restrict(field, second))

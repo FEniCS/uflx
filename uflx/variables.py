@@ -26,10 +26,11 @@ from itertools import count
 from typing import Any, Protocol, runtime_checkable
 
 from uflx.domains import (
-    AbstractCellularDomain,
     AbstractCoordinateDomain,
     AbstractDomain,
+    AbstractParametrizedDomain,
     EntityDomain,
+    parameter_regions,
 )
 from uflx.entities import AbstractEntity
 from uflx.expressions import AbstractExpression
@@ -84,7 +85,13 @@ class AbstractVariable(AbstractExpression):
         return isinstance(self.domain, EntityDomain)
 
     def to_entity_coordinates(self, cell: AbstractEntity) -> AbstractVariable:
-        """Make a version of this variable in the given cell's coordinates."""
+        """Make a version of this variable in the given cell's coordinates.
+
+        One already there is itself, a named point of a cell being as good
+        a place to read a field as a variable standing for one.
+        """
+        if self.domain == EntityDomain(cell):
+            return self
         raise ValueError("Cannot pull this variable back to a cell's coordinates.")
 
     def component(self, *indices: int) -> AbstractExpression:
@@ -231,20 +238,25 @@ class Variable(AbstractVariable):
         return (self._domain, self._label)
 
     @property
-    def _cell_types(self) -> tuple[AbstractEntity, ...]:
-        """The cell types of this variable's domain.
+    def _regions(self) -> set[AbstractCoordinateDomain]:
+        """The parameter regions this variable's domain is parametrized from.
+
+        A cell's coordinate domain is one, which is where a variable goes
+        when an integral is pulled back onto that cell. The domain need
+        not be made of cells to have one, an interface over a facet
+        being parametrized from the reference facet as the facet is.
 
         Raises:
-            ValueError: If the domain is not made of cells
+            ValueError: If the domain is not parametrized at all
         """
-        if not isinstance(self._domain, AbstractCellularDomain):
+        if not isinstance(self._domain, AbstractParametrizedDomain):
             raise ValueError(
                 f"{self._domain!r} is not made of cells, so a point of it is in no "
                 f"cell's coordinates."
             )
-        return self._domain.cell_types
+        return parameter_regions(self._domain)
 
-    def to_domain_coordinates(self, domain: AbstractCellularDomain) -> Variable:
+    def to_domain_coordinates(self, domain: AbstractParametrizedDomain) -> Variable:
         """Make a version of this variable in a domain's own coordinates.
 
         Args:
@@ -268,7 +280,7 @@ class Variable(AbstractVariable):
             ValueError: If the cell is not a cell type of this variable's
                 domain
         """
-        if cell not in self._cell_types:
+        if EntityDomain(cell) not in self._regions:
             raise ValueError(
                 f"Cannot pull back to {cell}, which is not a cell type of this variable's domain."
             )

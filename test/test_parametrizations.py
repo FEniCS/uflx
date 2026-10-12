@@ -403,12 +403,12 @@ def space_scaling():
     return LinearMap(((3.0, 0.0, 0.0), (0.0, 3.0, 0.0), (0.0, 0.0, 3.0)))
 
 
-def arc_length_element(y: float) -> float:
+def _arc_length_element(y: float) -> float:
     """The arc length element of y -> (y, y^2), whose tangent is (1, 2y)."""
     return math.sqrt(1.0 + 4.0 * y * y)
 
 
-def area_element(u: float, v: float) -> float:
+def _area_element(u: float, v: float) -> float:
     """The area element of (u, v) -> (u, v, u^2 + v^2).
 
     The graph of a function has ``sqrt(1 + |grad f|^2)``, and here
@@ -417,29 +417,29 @@ def area_element(u: float, v: float) -> float:
     return math.sqrt(1.0 + 4.0 * u * u + 4.0 * v * v)
 
 
-def on_the_interval(y: float) -> Point:
+def _on_the_interval(y: float) -> Point:
     """A point of an interval's coordinate domain."""
     return Point([RealScalar(y)], entity_domain(Interval()))
 
 
-def on_the_triangle(u: float, v: float) -> Point:
+def _on_the_triangle(u: float, v: float) -> Point:
     """A point of a triangle's coordinate domain."""
     return Point([RealScalar(u), RealScalar(v)], entity_domain(Triangle()))
 
 
-def columns_of(quantity, rows: int, cols: int) -> list[list[float]]:
+def _columns_of(quantity, rows: int, cols: int) -> list[list[float]]:
     """Read a matrix valued quantity column by column, as numbers."""
     matrix = _as_dense_matrix(quantity.expand_geometry())
     return [[matrix.component(i, j).as_float() for i in range(rows)] for j in range(cols)]
 
 
-def entries_of(quantity, rows: int, cols: int) -> list[list[float]]:
+def _entries_of(quantity, rows: int, cols: int) -> list[list[float]]:
     """Read a matrix valued quantity row by row, as numbers."""
     matrix = _as_dense_matrix(quantity.expand_geometry())
     return [[matrix.component(i, j).as_float() for j in range(cols)] for i in range(rows)]
 
 
-def flat(matrix: list[list[float]]) -> list[float]:
+def _flat(matrix: list[list[float]]) -> list[float]:
     """Flatten a matrix, pytest.approx not comparing nested sequences."""
     return [entry for row in matrix for entry in row]
 
@@ -672,17 +672,17 @@ def test_the_volume_element_of_a_curve_is_its_arc_length_element(curve, y):
     integral over the curve picks up is the length the map gives a unit
     length of the interval, which is the norm of its one tangent.
     """
-    point = on_the_interval(y)
+    point = _on_the_interval(y)
 
     jacobian = _as_dense_matrix(Jacobian(curve, point).expand_geometry())
     tangent = [jacobian.component(i, 0).as_float() for i in range(2)]
     metric = MetricTensor(curve, point).expand_geometry()
 
     assert VolumeElement(curve, point).expand_geometry().as_float() == pytest.approx(
-        arc_length_element(y)
+        _arc_length_element(y)
     )
-    assert math.sqrt(sum(c * c for c in tangent)) == pytest.approx(arc_length_element(y))
-    assert math.sqrt(metric.component(0, 0).as_float()) == pytest.approx(arc_length_element(y))
+    assert math.sqrt(sum(c * c for c in tangent)) == pytest.approx(_arc_length_element(y))
+    assert math.sqrt(metric.component(0, 0).as_float()) == pytest.approx(_arc_length_element(y))
 
     with pytest.raises(ValueError, match="has no determinant"):
         JacobianDeterminant(curve, point).expand_geometry()
@@ -700,7 +700,7 @@ def test_an_ambient_isometry_leaves_a_curves_measure_alone(curve, isometry, requ
     is the whole of what a density discards.
     """
     isometry = request.getfixturevalue(isometry)
-    point = on_the_interval(0.25)
+    point = _on_the_interval(0.25)
     moved = composed_domain(curve, isometry)
 
     assert VolumeElement(moved, point).expand_geometry().as_float() == pytest.approx(
@@ -724,11 +724,11 @@ def test_an_ambient_scaling_scales_a_curves_measure(curve, scaling):
     The metric picks up c^2, being quadratic in the map, and the measure
     picks up c^tdim, which on a curve is c itself.
     """
-    point = on_the_interval(0.25)
+    point = _on_the_interval(0.25)
     scaled = composed_domain(curve, scaling)
 
     assert VolumeElement(scaled, point).expand_geometry().as_float() == pytest.approx(
-        3.0 * arc_length_element(0.25)
+        3.0 * _arc_length_element(0.25)
     )
     assert MetricTensor(scaled, point).expand_geometry().component(
         0, 0
@@ -747,7 +747,7 @@ def test_composing_twice_applies_the_maps_in_turn(curve, rotation):
     maps, and the point of the plane they land on is the parabola's point
     rotated.
     """
-    point = on_the_interval(0.25)
+    point = _on_the_interval(0.25)
     rotated = composed_domain(curve, rotation)
     (cell,) = rotated.cell_types
 
@@ -799,17 +799,17 @@ def test_the_volume_element_of_a_surface_is_its_area_element(surface, u, v):
     determinant of a two by two metric is taken as a number and not only
     as the right shape.
     """
-    point = on_the_triangle(u, v)
-    metric = entries_of(MetricTensor(surface, point), 2, 2)
+    point = _on_the_triangle(u, v)
+    metric = _entries_of(MetricTensor(surface, point), 2, 2)
 
     assert VolumeElement(surface, point).expand_geometry().as_float() == pytest.approx(
-        area_element(u, v)
+        _area_element(u, v)
     )
-    assert flat(metric) == pytest.approx(
+    assert _flat(metric) == pytest.approx(
         [1.0 + 4.0 * u * u, 4.0 * u * v, 4.0 * u * v, 1.0 + 4.0 * v * v]
     )
     determinant = metric[0][0] * metric[1][1] - metric[0][1] * metric[1][0]
-    assert math.sqrt(determinant) == pytest.approx(area_element(u, v))
+    assert math.sqrt(determinant) == pytest.approx(_area_element(u, v))
 
     with pytest.raises(ValueError, match="has no determinant"):
         JacobianDeterminant(surface, point).expand_geometry()
@@ -822,12 +822,12 @@ def test_the_normal_of_a_surface_is_the_graphs_gradient_formula(surface, u, v):
     Three minors rather than a curve's two, and the middle one is the
     negated term, which is where an alternating sign is easiest to lose.
     """
-    point = on_the_triangle(u, v)
+    point = _on_the_triangle(u, v)
     normal = [UnitNormal(surface, point).component(i).as_float() for i in range(3)]
-    tangents = columns_of(Jacobian(surface, point), 3, 2)
+    tangents = _columns_of(Jacobian(surface, point), 3, 2)
 
     assert normal == pytest.approx(
-        [-2.0 * u / area_element(u, v), -2.0 * v / area_element(u, v), 1.0 / area_element(u, v)]
+        [-2.0 * u / _area_element(u, v), -2.0 * v / _area_element(u, v), 1.0 / _area_element(u, v)]
     )
     assert sum(c * c for c in normal) == pytest.approx(1.0)
     for tangent in tangents:
@@ -840,10 +840,10 @@ def test_the_tangential_projector_keeps_a_surfaces_tangent_plane(surface):
     Its rank is the topological dimension, which for a projection is its
     trace, so on a surface in space the trace is two and not three.
     """
-    point = on_the_triangle(0.25, 0.5)
-    projector = entries_of(TangentialProjector(surface, point), 3, 3)
+    point = _on_the_triangle(0.25, 0.5)
+    projector = _entries_of(TangentialProjector(surface, point), 3, 3)
     normal = [UnitNormal(surface, point).component(i).as_float() for i in range(3)]
-    tangents = columns_of(Jacobian(surface, point), 3, 2)
+    tangents = _columns_of(Jacobian(surface, point), 3, 2)
 
     def apply(matrix, vector):
         return [sum(row[k] * vector[k] for k in range(3)) for row in matrix]
@@ -865,10 +865,10 @@ def test_the_pseudo_inverse_inverts_a_surface_map_on_its_tangent_plane(surface):
     first is an identity. Taking the second for one is the manifold
     mistake worth a number rather than a shape.
     """
-    point = on_the_triangle(0.25, 0.5)
-    jacobian = entries_of(Jacobian(surface, point), 3, 2)
-    pseudo_inverse = entries_of(JacobianInverse(surface, point), 2, 3)
-    projector = entries_of(TangentialProjector(surface, point), 3, 3)
+    point = _on_the_triangle(0.25, 0.5)
+    jacobian = _entries_of(Jacobian(surface, point), 3, 2)
+    pseudo_inverse = _entries_of(JacobianInverse(surface, point), 2, 3)
+    projector = _entries_of(TangentialProjector(surface, point), 3, 3)
 
     on_the_cell = [
         [sum(pseudo_inverse[i][k] * jacobian[k][j] for k in range(3)) for j in range(2)]
@@ -879,8 +879,8 @@ def test_the_pseudo_inverse_inverts_a_surface_map_on_its_tangent_plane(surface):
         for i in range(3)
     ]
 
-    assert flat(on_the_cell) == pytest.approx([1.0, 0.0, 0.0, 1.0])
-    assert flat(in_space) == pytest.approx(flat(projector))
+    assert _flat(on_the_cell) == pytest.approx([1.0, 0.0, 0.0, 1.0])
+    assert _flat(in_space) == pytest.approx(_flat(projector))
 
 
 @pytest.mark.parametrize("isometry", ["space_rotation", "space_reflection"])
@@ -892,14 +892,14 @@ def test_an_ambient_isometry_leaves_a_surfaces_measure_alone(surface, isometry, 
     determinant.
     """
     isometry = request.getfixturevalue(isometry)
-    point = on_the_triangle(0.25, 0.5)
+    point = _on_the_triangle(0.25, 0.5)
     moved = composed_domain(surface, isometry)
 
     assert VolumeElement(moved, point).expand_geometry().as_float() == pytest.approx(
-        area_element(0.25, 0.5)
+        _area_element(0.25, 0.5)
     )
-    assert flat(entries_of(MetricTensor(moved, point), 2, 2)) == pytest.approx(
-        flat(entries_of(MetricTensor(surface, point), 2, 2))
+    assert _flat(_entries_of(MetricTensor(moved, point), 2, 2)) == pytest.approx(
+        _flat(_entries_of(MetricTensor(surface, point), 2, 2))
     )
 
     normal = [UnitNormal(surface, point).component(i).as_float() for i in range(3)]
@@ -917,15 +917,15 @@ def test_an_ambient_scaling_scales_a_surfaces_measure(surface, space_scaling):
     metric picking up c^2 in each of its two directions and the area
     element being the square root of their determinant.
     """
-    point = on_the_triangle(0.25, 0.5)
+    point = _on_the_triangle(0.25, 0.5)
     scaled = composed_domain(surface, space_scaling)
 
     assert scaled.topological_dimension == 2
     assert VolumeElement(scaled, point).expand_geometry().as_float() == pytest.approx(
-        3.0**2 * area_element(0.25, 0.5)
+        3.0**2 * _area_element(0.25, 0.5)
     )
-    assert flat(entries_of(MetricTensor(scaled, point), 2, 2)) == pytest.approx(
-        [9.0 * e for e in flat(entries_of(MetricTensor(surface, point), 2, 2))]
+    assert _flat(_entries_of(MetricTensor(scaled, point), 2, 2)) == pytest.approx(
+        [9.0 * e for e in _flat(_entries_of(MetricTensor(surface, point), 2, 2))]
     )
 
     normal = [UnitNormal(surface, point).component(i).as_float() for i in range(3)]

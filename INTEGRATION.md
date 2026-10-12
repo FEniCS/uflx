@@ -2,7 +2,8 @@
 
 What integration means in UFLx, written against differential geometry rather than finite
 element usage. A design note: it argues for the model, where `LANGUAGE.md` states it.
-Arguments against the alternatives are in the notes at the end.
+Arguments against the alternatives are in the notes at the end, and the vocabulary is
+Lee's, cited there.
 
 ## 1. What an integral is
 
@@ -104,10 +105,10 @@ The `+`/`-` of UFL is not part of the measure either. It is a *restriction of a 
 which is a pullback along one side's inclusion map, and it lives in the integrand.
 
 So a codimension and a boundary flag become operators on domains —
-`sub_entities_of(omega, codim)`, and an `interface_of(omega_plus, omega_minus)` still to
-come — returning domains that then need only the one measure. That is the home for a
-mesh-relative query, and it makes the derived domain an object carrying a
-parametrization, a metric, a normal and a measure like any other.
+`sub_entities_of(omega, codim)` and `interface(gamma, embeddings)` — returning domains
+that then need only the one measure. That is the home for a mesh-relative query, and it
+makes the derived domain an object carrying a parametrization, a metric, a normal and a
+measure like any other.
 
 The derived domain is named for the sub-entities it is parametrized by and not for a
 boundary. Which facets it has — those with one adjacent cell, those with two, those a
@@ -209,9 +210,19 @@ same reference facet, `ψ± = φ± ∘ ι̂±`, differing by a reparametrization
 facet, `ψ₊ = ψ₋ ∘ τ`, fixed by the two cells' vertex orderings. `τ` is an isometry of
 the reference facet, so `|det Dτ| = 1`: the two sides induce *the same* density on `Γ`,
 which is why one measure serves both. This is a two-map atlas with a genuine transition
-map, and it is the one place in UFLx where an atlas is earned rather than decorative. It
-also wants a map per `(cell type, side)`, where
-`AbstractParametrizedDomain.parametrization` is keyed on cell type alone.
+map, and it is the one place in UFLx where an atlas is earned rather than decorative.
+
+`Interface` is that atlas: a domain `Γ` and, per side, an *image* of it, which is `Γ`
+parametrized by that side's own map. An image is a piece as `sub_entities_of` already
+builds them, or a face of a box, so an interface of two cells and an interface of two
+regions are one construction. The transition map is never an object. The point of the
+`-` side's chart that `X` corresponds to is `ψ₋⁻¹(ψ₊(X))`, written literally as the
+preimage through `ψ₋` of the image through `ψ₊`, both of which exist already; the
+preimage is the terminal the surrounding library evaluates, as a facet permutation here
+and by point location below. No derivative of `τ` is ever wanted, a restriction being
+the pullback of a function and the measure being `Γ`'s. The two sides of one mesh share
+one `φ`, so `ψ₋` is named by its side (`LabelledParametrization`), which is to a map
+what a labelled domain is to a domain: identity and nothing geometric.
 
 **Non-matching: `Γ` is its own domain.** Mortar coupling, a Lagrange multiplier on a
 contact surface, two independently meshed subdomains. `Γ` is a facet of neither side and
@@ -226,11 +237,26 @@ is part of the question. So the general interface needs no new geometry: a point
 is pushed forward by `Γ`'s own parametrization and pulled back through each side's.
 
 Read in that order, UFL's `+`/`-` is the special case in which `φ₊⁻¹ ∘ ψ_Γ` is known
-combinatorially and so costs nothing.
+combinatorially and so costs nothing. In general the map of a side written in charts is
+`ι̂_s = φ_s⁻¹ ∘ T_s ∘ ψ_Γ`, from `Γ`'s region into a cell's coordinates, and
+`CoordinateRepresentation` is that map: its value is the preimage, the terminal again,
+and its Jacobian is the chain rule in closed form. `T_s` is a map the user states, the
+identity of sets unless said, which is what makes a periodic boundary an interface whose
+other side is a translation away. An image built from it,
+`composed_domain(composed_domain(region, coordinate_representation(Γ, φ_s, T_s)), φ_s)`,
+has the shape a facet of a mesh has and is read the same way, and being parametrized
+from `Γ`'s own region it needs no chart transition. The matching case rested on three
+assumptions, that `ι̂_s` lands in a facet, that `ι_s` is the inclusion of sets, and that
+each piece of `Γ` meets one cell per side; this drops the first two. The third is where
+a supermesh lives, as the pieces of `Γ`, a union whose membership is external as a
+mesh's cells are, and the language says nothing about it. An interface immersed in one
+mesh, both sides carried by the same map, has sides that are one, and the jump of a
+field on that mesh vanishes node for node, which is right: without an enriched space
+there is no jump across a line through a cell.
 
 ## 6. What is built, and what is not
 
-Built, as `ds`:
+Built, as `ds` and `dS`:
 
 1. **The derived domain of facets.** `AbstractEntity.sub_entity_inclusion(dim, index)`
    is the reference geometry UFLx cannot supply, so the entity's definer supplies it and
@@ -252,20 +278,32 @@ Built, as `ds`:
    carrying the measure, the restrictions and the geometric quantities onto it, and runs
    before the cell type split. Pulling back then multiplies the piece's volume element
    into the integrand, which is the factor an exterior facet integral picks up.
+1. **An image per side.** `Interface(Γ, embeddings)` is §5's atlas, and the facets of a
+   mesh presented twice, `interface(facets, (("+", facets), ("-", facets)))`, is `dS`.
+   There is no second spelling of it. A restriction names a side,
+   `restrict(u, Γ.embedding("-"))`, and reads the field at that side's chart point
+   through that side's inclusion; `jump` and `avg` are the two restrictions' difference
+   and mean. An interface of unions fans out over pairs of pieces, which is what
+   identifies a kernel, and the pull back is onto the parameter region of the domain's
+   one parametrization, so an interface needs no special case there. A mesh and a
+   submesh of its entities meet the same way, with no spelling of their own: the
+   entities presented by the mesh as `sub_entities_of(mesh, codim)` and by the submesh
+   as `sub_entities_of(submesh, 0)`, at codimension zero as much as one, with the map
+   between the two meshes' entities as the chart transition. A form mixing fields on
+   both is each field restricted to its side.
+1. **The outward normal.** `OutwardNormal(side)` is §4's transport rule: the reference
+   facet's outward normal, which the entity supplies as `facet_outward_normal`, carried
+   by the cell map's inverse transpose at the side's cell point. It needs no orientation
+   of `Γ`, is outward under a reflection, and `ν₊ = -ν₋` is checked rather than defined.
+   `UnitNormal` stays as the direction a domain of codimension one has on its own.
 
 Not built:
 
-1. **A parametrization per side**, generalising `parametrization(cell)`. This is `dS` in
-   both cases of §5, and it subsumes `+`/`-`. The restriction it needs is the one above,
-   told which side.
-1. **Orientation carried on a restriction**, giving a signed normal and a statable
-   divergence theorem. Without it the facet normal is a direction with no outwardness,
-   as `test_a_facets_normal_is_normal_but_not_outward` records.
 1. **Pull back off a cell.** Change of variables onto a parametrization's parameter
    region is meaningful for any parametrized domain — the identity for `R^d` and for a
-   region, the inclusion for a face — but the variable it hands the integrand is a
-   cell's, so `on_cell_type` and `pull_back_to_entity` require a cellular domain and
-   say so.
+   region, the inclusion for a face — and `pull_back_to_entity` now asks for that
+   region, but the variable it hands the integrand is still a cell's, so a region
+   refuses. An interface of two boxes builds and has its normals, and stops there.
 1. **A measure over a domain of topological dimension zero**, which is the counting
    measure a sub-entity domain of full codimension would give. The empty Gram
    determinant is one, but the empty matrix its Jacobian needs cannot be built, as
@@ -318,14 +356,28 @@ Acceptance criteria, as tests rather than prose to agree with.
 - **The facet geometry is the cell's geometry, asked for.** The inclusion an entity
   supplies gives the same facet lengths as the one `test_boundaries.py` writes by hand.
   `test_the_measure_of_a_facet_is_its_length` in `test_facet_domains.py`.
-- **One integral, two domains.** `inner(ι₊* u₊ − ι₋* u₋, v) * dx(interface)` builds, and
-  the two restrictions are distinguishable in the graph.
+- **One integral, two domains.** `inner(jump(u, Γ), v) * dx(Γ)` builds, the two
+  restrictions are distinguishable in the graph, and pulling it back gives one kernel
+  per pair of facets, the `-` side read at the chart transition.
+  `test_the_jump_is_a_difference_of_restrictions_on_one_domain` and
+  `test_pulling_an_interface_integral_back_gives_one_kernel_per_pair`.
 - **The jump is side-symmetric in the measure.** Pulling the interface integral back
   through either side's parametrization gives the same density factor.
+  `test_the_jump_is_side_symmetric_in_the_measure`.
 - **The divergence theorem is statable.** `∫ div(u) dx(omega)` and
-  `∫ inner(restrict(u, facets), n) dx(facets)` are both expressible, with `n`'s sign
-  fixed by the facet's inclusion rather than by a consumer's convention. Both sides
-  build and pull back; the sign is what is still open.
+  `∫ inner(restrict(u, facets), OutwardNormal(facets)) dx(facets)` are both expressible,
+  with the normal's sign fixed by the cell it points out of rather than by a consumer's
+  convention, and the two sides of an interface have opposite ones.
+  `test_the_outward_normals_of_the_two_sides_are_opposite`.
+- **Two regions meet as two cells do.** Two boxes sharing a face make an `Interface`
+  with the one measure and two outward normals, and no cell anywhere in it.
+  `test_two_boxes_meet_along_a_face_with_no_cells_anywhere`.
+- **A side need not be a facet.** A periodic boundary's other side is a translation
+  away, checked to the number; two meshes couple through a multiplier on an interface
+  mesh of its own; a line of intervals runs through tetrahedra.
+  `test_a_periodic_boundary_is_an_interface_whose_other_side_is_a_translation_away`,
+  `test_a_mortar_coupling_of_two_meshes_through_a_multiplier` and
+  `test_a_well_in_three_dimensions_is_an_interface_of_codimension_two`.
 
 ## Notes
 
@@ -365,3 +417,27 @@ Acceptance criteria, as tests rather than prose to agree with.
    one that costs nothing, and making `dS` a measure kind hardcodes it into the
    vocabulary. That leaves no room for the non-matching case, which is the one that
    needs the language's help and which UFL cannot express at all.
+
+## References
+
+The vocabulary is taken from John M. Lee's two textbooks, so that a word here means what
+it means there.
+
+- J. M. Lee, *Introduction to Smooth Manifolds*, 2nd ed., Graduate Texts in Mathematics
+  218, Springer, 2012. Charts, atlases and transition maps (ch. 1), which an `Interface`
+  is two of with a transition between them; the *coordinate representation* of a smooth
+  map, `F̂ = ψ ∘ F ∘ φ⁻¹` (ch. 2), which `CoordinateRepresentation` is for the map of an
+  embedding; immersions and embeddings (ch. 4) and embedded submanifolds (ch. 5), which
+  an `Embedding` is taken to be on the user's word; restricting maps to submanifolds
+  (ch. 5), which is what `Restriction` is named for; outward-pointing vectors along a
+  boundary (ch. 5) and the boundary orientation they induce (ch. 15), which
+  `OutwardNormal` writes as a unit vector; pullbacks of covector fields and of forms
+  (ch. 11 and 14), which a value map is; Riemannian metrics and the metric a submanifold
+  inherits (ch. 13) and the Riemannian volume form (ch. 15), which `MetricTensor` and
+  `VolumeElement` are; and integration of forms, change of variables as the pullback of
+  a form, Stokes's theorem with the boundary carrying the induced orientation,
+  integration on Riemannian manifolds and densities (ch. 16), which §1 and §4 restate.
+- J. M. Lee, *Introduction to Riemannian Manifolds*, 2nd ed., Graduate Texts in
+  Mathematics 176, Springer, 2018. The unit normal and the second fundamental form of a
+  hypersurface, in the chapter on Riemannian submanifolds, of which `UnitNormal` is the
+  first and nothing yet is the second.

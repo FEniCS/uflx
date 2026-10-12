@@ -49,7 +49,7 @@ facet_lengths = (1.0, 1.0, math.sqrt(2.0))
 outward_normals = ((0.0, -1.0), (-1.0, 0.0), (1.0 / math.sqrt(2.0), 1.0 / math.sqrt(2.0)))
 
 
-def facet_inclusion(facet: int) -> AffineParametrization:
+def _facet_inclusion(facet: int) -> AffineParametrization:
     """The inclusion of the reference interval into facet ``facet`` of a triangle.
 
     Affine, taking 0 to the facet's first vertex and 1 to its second, so
@@ -74,7 +74,7 @@ def cell():
 @pytest.fixture
 def facets():
     """The three facets of the reference triangle, each a domain of its own."""
-    return [composed_domain(entity_domain(Interval()), facet_inclusion(k)) for k in range(3)]
+    return [composed_domain(entity_domain(Interval()), _facet_inclusion(k)) for k in range(3)]
 
 
 @pytest.fixture
@@ -104,18 +104,18 @@ def scaling():
     return AffineParametrization(RD(2), RD(2), ((3.0, 0.0), (0.0, 3.0)), (0.0, 0.0))
 
 
-def tangent_of(domain, point) -> list[float]:
+def _tangent_of(domain, point) -> list[float]:
     """The one tangent of a domain of topological dimension one, as numbers."""
     jacobian = _as_dense_matrix(Jacobian(domain, point).expand_geometry())
     return [jacobian.component(i, 0).as_float() for i in range(2)]
 
 
-def normal_of(domain, point) -> list[float]:
+def _normal_of(domain, point) -> list[float]:
     """A domain's unit normal, as numbers."""
     return [UnitNormal(domain, point).component(i).as_float() for i in range(2)]
 
 
-def measure_of(domain, point) -> float:
+def _measure_of(domain, point) -> float:
     """A domain's volume element, as a number."""
     return VolumeElement(domain, point).expand_geometry().as_float()
 
@@ -153,11 +153,11 @@ def test_the_measure_of_a_facet_is_its_length(facets, on_the_facet, k):
     """
     facet = facets[k]
 
-    assert measure_of(facet, on_the_facet) == pytest.approx(facet_lengths[k])
+    assert _measure_of(facet, on_the_facet) == pytest.approx(facet_lengths[k])
     assert MetricTensor(facet, on_the_facet).expand_geometry().component(0, 0).as_float() == (
         pytest.approx(facet_lengths[k] ** 2)
     )
-    assert math.sqrt(sum(c * c for c in tangent_of(facet, on_the_facet))) == pytest.approx(
+    assert math.sqrt(sum(c * c for c in _tangent_of(facet, on_the_facet))) == pytest.approx(
         facet_lengths[k]
     )
 
@@ -169,7 +169,7 @@ def test_the_measure_of_the_cell_itself_is_one(cell, in_the_cell):
     an integral picks up, and integrating one over the reference triangle
     is what gives the half.
     """
-    assert measure_of(cell, in_the_cell) == pytest.approx(1.0)
+    assert _measure_of(cell, in_the_cell) == pytest.approx(1.0)
 
 
 @pytest.mark.parametrize("k", range(3))
@@ -190,10 +190,12 @@ def test_a_facets_normal_is_normal_but_not_outward(facets, on_the_facet, k):
     Fixing this is what an orientation would be for.
     """
     facet = facets[k]
-    normal = normal_of(facet, on_the_facet)
+    normal = _normal_of(facet, on_the_facet)
 
     assert sum(c * c for c in normal) == pytest.approx(1.0)
-    assert sum(a * b for a, b in zip(normal, tangent_of(facet, on_the_facet))) == pytest.approx(0.0)
+    assert sum(a * b for a, b in zip(normal, _tangent_of(facet, on_the_facet))) == pytest.approx(
+        0.0
+    )
 
     agreement = sum(a * b for a, b in zip(normal, outward_normals[k]))
     assert abs(agreement) == pytest.approx(1.0)
@@ -208,7 +210,7 @@ def test_the_normals_of_a_cells_facets_do_not_all_point_the_same_way_out(facets,
     something says which side of each facet its cell is on.
     """
     agreements = [
-        sum(a * b for a, b in zip(normal_of(facet, on_the_facet), outward_normals[k]))
+        sum(a * b for a, b in zip(_normal_of(facet, on_the_facet), outward_normals[k]))
         for k, facet in enumerate(facets)
     ]
 
@@ -225,7 +227,7 @@ def test_a_facets_projector_is_the_identity_less_its_normal(facets, on_the_facet
     """
     facet = facets[k]
     projector = _as_dense_matrix(TangentialProjector(facet, on_the_facet).expand_geometry())
-    normal = normal_of(facet, on_the_facet)
+    normal = _normal_of(facet, on_the_facet)
 
     expected = [
         [(1.0 if i == j else 0.0) - normal[i] * normal[j] for j in range(2)] for i in range(2)
@@ -248,12 +250,12 @@ def test_scaling_a_cell_scales_its_area_by_c_squared_and_its_facets_by_c(
     """
     scaled_cell = composed_domain(cell, scaling)
 
-    assert measure_of(scaled_cell, in_the_cell) == pytest.approx(3.0**2 * 1.0)
+    assert _measure_of(scaled_cell, in_the_cell) == pytest.approx(3.0**2 * 1.0)
 
     for k, facet in enumerate(facets):
         scaled_facet = composed_domain(facet, scaling)
 
-        assert measure_of(scaled_facet, on_the_facet) == pytest.approx(3.0**1 * facet_lengths[k])
+        assert _measure_of(scaled_facet, on_the_facet) == pytest.approx(3.0**1 * facet_lengths[k])
 
 
 @pytest.mark.parametrize("k", range(3))
@@ -266,17 +268,17 @@ def test_a_facets_normal_follows_the_cofactor_rule(facets, on_the_facet, stretch
     """
     facet = facets[k]
     moved = composed_domain(facet, stretch)
-    normal = normal_of(facet, on_the_facet)
+    normal = _normal_of(facet, on_the_facet)
 
     carried = [sum(a * c for a, c in zip(row, normal)) for row in stretch_matrix]
     inverse_transpose = [normal[0] / 2.0, normal[1] / 1.0]
     length = math.sqrt(sum(c * c for c in inverse_transpose))
     expected = [c / length for c in inverse_transpose]
 
-    assert normal_of(moved, on_the_facet) == pytest.approx(expected)
+    assert _normal_of(moved, on_the_facet) == pytest.approx(expected)
     if k == 2:
         # The hypotenuse's normal is not along an axis, so the two rules differ.
-        assert normal_of(moved, on_the_facet) != pytest.approx(carried)
+        assert _normal_of(moved, on_the_facet) != pytest.approx(carried)
 
 
 def test_reparametrizing_a_facet_keeps_its_measure_and_flips_its_normal(facets, on_the_facet):
@@ -296,9 +298,9 @@ def test_reparametrizing_a_facet_keeps_its_measure_and_flips_its_normal(facets, 
         ),
     )
 
-    assert measure_of(backwards, on_the_facet) == pytest.approx(facet_lengths[2])
-    assert normal_of(backwards, on_the_facet) == pytest.approx(
-        [-c for c in normal_of(facets[2], on_the_facet)]
+    assert _measure_of(backwards, on_the_facet) == pytest.approx(facet_lengths[2])
+    assert _normal_of(backwards, on_the_facet) == pytest.approx(
+        [-c for c in _normal_of(facets[2], on_the_facet)]
     )
 
 
@@ -339,4 +341,4 @@ def test_the_measure_of_a_point_is_the_counting_measure():
     )
     origin = Point([], entity_domain(PointEntity()))
 
-    assert measure_of(end, origin) == pytest.approx(1.0)
+    assert _measure_of(end, origin) == pytest.approx(1.0)

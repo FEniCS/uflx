@@ -71,10 +71,11 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
 
 - `entities.py` — `AbstractEntity`: topological mesh entities (point/interval/
   triangle/.../hexahedron), defined recursively via their sub-entities.
-  `sub_entity_inclusion` is the one piece of reference geometry an entity is asked for —
-  the map carrying a sub-entity's coordinates into the cell's — since the combinatorics
-  say which vertices a facet has and not where they are. Its default raises; a consumer
-  supplies it.
+  `sub_entity_inclusion` and `facet_outward_normal` are the two pieces of reference
+  geometry an entity is asked for — the map carrying a sub-entity's coordinates into the
+  cell's, and which way is out of the cell across a facet — since the combinatorics say
+  which vertices a facet has and not where they are, nor which side the interior is on.
+  Their defaults raise; a consumer supplies them.
 - `finite_elements.py` — `AbstractFiniteElement` / `AbstractMappedFiniteElement`: what
   basis functions look like on a cell; depends on `entities` and `maps`.
 - `maps.py` — `AbstractValueMap` (e.g. `IdentityValueMap`): push-forward/pull-back of
@@ -160,11 +161,37 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   quantity or a restriction, each built before there is a point and told later. A field
   is read through one map and never two: restricting along the composition is what a
   second restriction would be, so a sub-entity of a sub-entity is reached with
-  `sub_entities_of` at the cell's codimension.
-- `legacy.py` — the legacy UFL spellings (`ds`, `ds(3)`, `dx`, `dx(2)`, and `dS` and
-  `facet_normal` saying why they cannot be built), which infer the domain and insert the
-  restrictions to build the native form. Opt in by importing it; nothing in `uflx`
-  imports it, since inference is what INTEGRATION.md note 2 argues against.
+  `sub_entities_of` at the cell's codimension. On an interface the map is named by a
+  side, `restrict(u, gamma.embedding("-"))`, and `jump`/`avg` are the two sides'
+  difference and mean.
+- `interfaces.py` — `Interface`: a domain two others meet along, with an *image* of it
+  per side, which is the domain parametrized by that side's own map, a facet piece or a
+  face of a box. The atlas `UnionDomain` says it is not. `Embedding` is the interface as
+  one side presents it, a domain in its own right that a restriction or an
+  `OutwardNormal` takes; its `transition` is where a point of the interface sits in the
+  side's own region, the integral's variable on the primary side and the chart
+  transition `ψ₋⁻¹(ψ₊(X))` on any other, written as a `PreimagePoint` of an `ImagePoint`
+  with the side's map named by the side (`LabelledParametrization`). An interface of
+  unions is `MadeOfPieces`, one pair of pieces at a time. There is no second spelling:
+  UFL's `dS` is a mesh's facets presented twice, and a mesh meeting a submesh of its
+  entities is the entities presented by each, a mixed-domain form being each field
+  restricted to its side. `CoordinateRepresentation` is a side's map in general,
+  `φ⁻¹ ∘ T ∘ ψ_Γ`, whose value is a preimage and whose Jacobian is the chain rule, for a
+  side that is a facet of nothing (mortar, a periodic boundary with `T` the shift, a
+  well through cells); an image built from it carries `Γ` (`CarriesADomain`) and needs
+  no transition. The protocols the geometry and the integrals ask of a side are in
+  `domains.py`, since this module sits above `geometry.py`, and this class is here and
+  not in `parametrizations.py` because it is built from an image and a preimage.
+- `legacy.py` — the legacy UFL spellings (`dx`, `ds`, `dS`, their `(3)` forms, `jump`,
+  `avg` and `facet_normal`), which infer the domain and insert the restrictions to build
+  the native form. A side is named by `plus(u)`/`minus(u)`, a placeholder the measure
+  resolves once it has built the interface.
+  `add_plus_minus_restriction(AbstractExpression)` puts a `__call__` on the class named
+  so UFL's `u("+")` works, the one place anything reaches into the core's classes, done
+  on request and naming the class rather than on import so that import order decides
+  nothing and the change is written where it is made; `remove_plus_minus_restriction`
+  undoes it, and a type checker accepts only `plus(u)`. Opt in by importing it; nothing
+  in `uflx` imports it, since inference is what INTEGRATION.md note 2 argues against.
 - `integrals.py` — `Measure`, a domain paired with the density on it, built by
   `dx(domain)`; `Integral` (`expr * measure`), which takes its domain from its measure;
   and `IntegralSum`, which adding integrals gives. An integral over a domain of several
@@ -173,11 +200,13 @@ e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` extension):
   the measure onto the restricted domain. `split_by_piece` is the same fan out over the
   pieces of a union, run first since a piece names one parametrization and so one cell
   type. `IntegralSum` splits its own terms both ways, since the pull back walks a sum
-  leaves first and so reaches each integral with no chance to split it on the way. There
-  is no `ds` or `dS`: an exterior facet integral is this measure over
-  `sub_entities_of(mesh, 1)` with the fields restricted, which
-  [INTEGRATION.md](INTEGRATION.md) §3 argues for, and an interior one waits on a
-  parametrization per side, which §6 lists.
+  leaves first and so reaches each integral with no chance to split it on the way. The
+  pull back is onto the parameter region of the domain's one parametrization, which is
+  what lets an interface pull back like a facet. There is no `ds` or `dS`: an exterior
+  facet integral is this measure over `sub_entities_of(mesh, 1)` with the fields
+  restricted, and an interior one is it over the interface of those facets with
+  themselves, `interface(facets, (("+", facets), ("-", facets)))`, with the fields
+  restricted to its sides, which [INTEGRATION.md](INTEGRATION.md) §3 and §5 argue for.
 
 Symbolic (Gateaux) differentiation and expression/integral transformation between domain
 configurations are the two core transformation procedures UFLx provides on top of this

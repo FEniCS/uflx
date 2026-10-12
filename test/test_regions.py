@@ -307,18 +307,18 @@ def brick():
     return Box(((0.0, 2.0), (0.0, 3.0), (0.0, 5.0)))
 
 
-def point_in(region: AbstractCoordinateDomain, *coordinates: float) -> Point:
+def _point_in(region: AbstractCoordinateDomain, *coordinates: float) -> Point:
     """A point of a region, named by its coordinates."""
     return Point([RealScalar(c) for c in coordinates], region)
 
 
-def entries_of(quantity, rows: int, cols: int) -> list[float]:
+def _entries_of(quantity, rows: int, cols: int) -> list[float]:
     """Read a matrix valued quantity as a flat list of numbers."""
     matrix = _as_dense_matrix(quantity.expand_geometry())
     return [matrix.component(i, j).as_float() for i in range(rows) for j in range(cols)]
 
 
-def normal_of(domain, point) -> list[float]:
+def _normal_of(domain, point) -> list[float]:
     """A domain's unit normal, as numbers."""
     gdim = domain.geometric_dimension
     return [UnitNormal(domain, point).component(i).as_float() for i in range(gdim)]
@@ -342,18 +342,18 @@ def test_a_regions_own_parametrization_is_the_identity(rectangle):
     one over the region, which is a quadrature's business and not a
     domain's.
     """
-    point = point_in(rectangle, 0.5, 1.5)
+    point = _point_in(rectangle, 0.5, 1.5)
 
     (parametrization,) = rectangle.parametrizations
     assert parametrization.is_identity
     assert VolumeElement(rectangle, point).expand_geometry().as_float() == pytest.approx(1.0)
-    assert entries_of(MetricTensor(rectangle, point), 2, 2) == pytest.approx([1.0, 0.0, 0.0, 1.0])
+    assert _entries_of(MetricTensor(rectangle, point), 2, 2) == pytest.approx([1.0, 0.0, 0.0, 1.0])
 
 
 def test_a_quantity_at_a_point_of_the_wrong_region_has_no_map_to_read(rectangle):
     """Geometry at a point of a region this domain has no parametrization out of."""
     with pytest.raises(ValueError, match="has no parametrization out of"):
-        VolumeElement(rectangle, point_in(RD(2), 0.5, 1.5)).expand_geometry()
+        VolumeElement(rectangle, _point_in(RD(2), 0.5, 1.5)).expand_geometry()
 
 
 def test_a_face_is_a_domain_of_codimension_one(rectangle):
@@ -375,7 +375,7 @@ def test_a_faces_parametrization_puts_the_held_coordinate_back(rectangle):
     assert region.bounds == ((0.0, 3.0),)
     assert face.held_at == 2.0
 
-    coordinates = SpatialCoordinate(face, point_in(region, 1.5)).expand_geometry()
+    coordinates = SpatialCoordinate(face, _point_in(region, 1.5)).expand_geometry()
 
     assert [coordinates.component(i).as_float() for i in range(2)] == pytest.approx([2.0, 1.5])
 
@@ -390,7 +390,7 @@ def test_the_measure_of_a_face_is_one_its_region_carrying_the_length(rectangle):
     knowing which convention is in play.
     """
     for face in rectangle.faces:
-        point = point_in(face.parameter_region, 1.0)
+        point = _point_in(face.parameter_region, 1.0)
 
         assert VolumeElement(face, point).expand_geometry().as_float() == pytest.approx(1.0)
         assert Jacobian(face, point).value_shape == (2, 1)
@@ -440,17 +440,17 @@ def test_opposite_faces_are_indistinguishable_to_the_normal(gdim):
     for axis in range(gdim):
         lower, upper = box.face(axis, False), box.face(axis, True)
         region = lower.parameter_region
-        point = point_in(region, *[0.5] * region.geometric_dimension)
+        point = _point_in(region, *[0.5] * region.geometric_dimension)
 
         assert lower.parameter_region == upper.parameter_region
-        assert entries_of(Jacobian(lower, point), gdim, gdim - 1) == pytest.approx(
-            entries_of(Jacobian(upper, point), gdim, gdim - 1)
+        assert _entries_of(Jacobian(lower, point), gdim, gdim - 1) == pytest.approx(
+            _entries_of(Jacobian(upper, point), gdim, gdim - 1)
         )
-        assert normal_of(lower, point) == pytest.approx(normal_of(upper, point))
+        assert _normal_of(lower, point) == pytest.approx(_normal_of(upper, point))
 
         assert lower.outward_normal == pytest.approx([-c for c in upper.outward_normal])
         agreements = [
-            sum(a * b for a, b in zip(normal_of(face, point), face.outward_normal))
+            sum(a * b for a, b in zip(_normal_of(face, point), face.outward_normal))
             for face in (lower, upper)
         ]
         assert sorted(agreements) == pytest.approx([-1.0, 1.0])
@@ -464,9 +464,9 @@ def test_a_faces_normal_is_still_normal_to_it(rectangle, axis):
     minus the outward one and never anything else.
     """
     face = rectangle.face(axis, upper=False)
-    point = point_in(face.parameter_region, 1.0)
+    point = _point_in(face.parameter_region, 1.0)
 
-    normal = normal_of(face, point)
+    normal = _normal_of(face, point)
     jacobian = _as_dense_matrix(Jacobian(face, point).expand_geometry())
     tangent = [jacobian.component(i, 0).as_float() for i in range(2)]
 
@@ -482,9 +482,9 @@ def test_a_faces_projector_is_the_identity_less_its_normal(brick):
     projector being quadratic in the normal and so blind to its sign.
     """
     face = brick.face(axis=2, upper=True)
-    point = point_in(face.parameter_region, 0.5, 1.0)
+    point = _point_in(face.parameter_region, 0.5, 1.0)
 
-    projector = entries_of(TangentialProjector(face, point), 3, 3)
+    projector = _entries_of(TangentialProjector(face, point), 3, 3)
     stated = face.outward_normal
     expected = [
         (1.0 if i == j else 0.0) - stated[i] * stated[j] for i in range(3) for j in range(3)
@@ -502,22 +502,22 @@ def test_r_d_is_parametrized_by_itself(rectangle):
     the difference between it and a box.
     """
     space = RD(2)
-    point = point_in(space, 0.5, 1.5)
+    point = _point_in(space, 0.5, 1.5)
 
     assert [parametrization.source for parametrization in space.parametrizations] == [space]
     (parametrization,) = space.parametrizations
     assert parametrization.is_identity
     assert VolumeElement(space, point).expand_geometry().as_float() == pytest.approx(1.0)
-    assert entries_of(MetricTensor(space, point), 2, 2) == pytest.approx([1.0, 0.0, 0.0, 1.0])
+    assert _entries_of(MetricTensor(space, point), 2, 2) == pytest.approx([1.0, 0.0, 0.0, 1.0])
 
     with pytest.raises(ValueError, match="has no parametrization out of"):
-        VolumeElement(space, point_in(rectangle, 0.5, 1.5)).expand_geometry()
+        VolumeElement(space, _point_in(rectangle, 0.5, 1.5)).expand_geometry()
 
 
 @pytest.mark.parametrize("dim", [1, 2, 3])
 def test_a_measure_on_r_d_is_the_lebesgue_one(dim):
     """A measure needs a parametrization and not a cell, and R^d has one."""
-    point = point_in(RD(dim), *[0.5] * dim)
+    point = _point_in(RD(dim), *[0.5] * dim)
     measure = dx(RD(dim))
 
     assert measure.domain == RD(dim)
@@ -609,7 +609,7 @@ def test_a_regions_coordinate_can_be_read_at_an_integrals_variable():
     assert isinstance(integral, Integral)
 
     expanded = expand_geometry(integral.integrand)
-    substituted = simplify(replace(expanded, {integral.variable: point_in(RD(2), 0.3, 0.4)}))
+    substituted = simplify(replace(expanded, {integral.variable: _point_in(RD(2), 0.3, 0.4)}))
 
     assert isinstance(substituted, AbstractExpression)
     assert substituted.as_float() == pytest.approx(0.25)

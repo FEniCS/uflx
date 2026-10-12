@@ -38,6 +38,26 @@ note 3 says, so `ds(3)` integrates over the facets labelled 3 --
 a kernel afterwards. Which entities a consumer marked 3 is the
 consumer's, as its cells are; UFLx records only that a selection was
 meant and which one.
+
+`dS` infers the mesh the same way and integrates over the interface of
+its facets with its facets. A side is named by `plus(u)` and `minus(u)`,
+and `jump`, `avg` and `facet_normal` are built on those with UFL's
+signatures. A marked side is a placeholder until the measure knows the
+interface, which is the inference again: which interface `u("+")` means
+is read off the measure it ends up under, and nothing in `uflx` does
+that for a field.
+
+UFL's own spelling, `u("+")`, needs an expression node to be callable,
+which the core's are not. `add_plus_minus_restriction(AbstractExpression)` makes
+them so, putting a `__call__` on the class named that builds the same
+marker, and `remove_plus_minus_restriction(AbstractExpression)` takes it off
+again. That reaches into a core class rather than adding names beside
+it, which is why it is a call the user makes, naming the class, and not
+a side effect of importing this module: what a class does should not
+depend on which modules happen to have been imported first, and which
+class is changed should be written down where it is changed. A narrower
+class, `Coefficient` say, is a smaller change. `plus(u)` is the spelling
+a type checker accepts.
 """
 
 from __future__ import annotations
@@ -51,12 +71,14 @@ from uflx.domains import (
     UnionDomain,
     labelled_domain,
 )
-from uflx.expressions import AbstractExpression
+from uflx.expressions import AbstractExpression, RealScalar
 from uflx.functions import AbstractFunction
-from uflx.geometry import AbstractGeometricQuantity
+from uflx.geometry import AbstractGeometricQuantity, OutwardNormal
 from uflx.graphs import GraphNode, NodeOrder, as_graph
 from uflx.integrals import Integral
 from uflx.integrals import dx as measure_of
+from uflx.interfaces import Interface
+from uflx.operators import inner
 from uflx.parametrizations import sub_entities_of
 from uflx.restrictions import restrict
 
@@ -78,6 +100,155 @@ class ExteriorFacets(NamedTuple):
     """
 
     subdomain_id: Any = None
+
+
+class InteriorFacets(NamedTuple):
+    """What a legacy interior facet measure means, as a domain's label."""
+
+    subdomain_id: Any = None
+
+
+class SideMarker(AbstractExpression):
+    """A subtree marked as read on one side, before the interface is known.
+
+    What `plus(u)` builds. It stands where a restriction will: the
+    measure that ends up over it builds the interface and replaces it
+    with the restriction to that interface's side, so until then it
+    carries the values of what it marks and nothing else.
+    """
+
+    def __init__(self, expression: AbstractExpression, side: str):
+        """Initialise.
+
+        Args:
+            expression: What is marked
+            side: Which side, ``"+"`` or ``"-"``
+
+        Raises:
+            ValueError: If the side is neither, or the expression is
+                marked already
+        """
+        if side not in ("+", "-"):
+            raise ValueError(f"A side is '+' or '-', not {side!r}.")
+        if any(isinstance(node, SideMarker) for node in as_graph(expression)):
+            raise ValueError(f"{expression!r} is marked with a side already.")
+        self._expression = expression
+        self._side = side
+
+    @property
+    def expression(self) -> AbstractExpression:
+        """What is marked."""
+        return self._expression
+
+    @property
+    def side(self) -> str:
+        """Which side."""
+        return self._side
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The marked expression's shape."""
+        return self._expression.value_shape
+
+    @property
+    def successors(self) -> set[GraphNode]:
+        """The successors of this node."""
+        return {self._expression}
+
+    @property
+    def init_args(self) -> tuple[Any, ...]:
+        """The arguments used to initialise this object."""
+        return self._expression, self._side
+
+    def component(self, *indices: int) -> AbstractExpression:
+        """Get a component of the expression."""
+        return SideMarker(self._expression.component(*indices), self._side)
+
+    def __repr__(self) -> str:
+        """Representation."""
+        return f"SideMarker({self._expression!r}, {self._side!r})"
+
+
+def _restrict_to_side(self: AbstractExpression, side: str) -> SideMarker:
+    """`u("+")` as UFL writes it, once `add_plus_minus_restriction` has made a call mean it."""
+    if not isinstance(side, str):
+        raise ValueError(
+            f"An expression is called with a side, '+' or '-', not with {side!r}. "
+            f"Evaluating one at a point is not what calling it means here."
+        )
+    return SideMarker(self, side)
+
+
+def _own_call(cls: type) -> Any:
+    """What a class itself says calling it means, if anything."""
+    return vars(cls).get("__call__")
+
+
+def add_plus_minus_restriction(cls: type[AbstractExpression]) -> None:
+    """Make `u("+")` mean `plus(u)` for the given kind of expression node.
+
+    Puts a `__call__` on the class named, so the change is written down
+    where it is made rather than being a side effect of importing this
+    module, and is as wide as the caller chooses: `AbstractExpression`
+    for everything, `Coefficient` for coefficients alone. Doing it twice
+    is fine.
+
+    Args:
+        cls: The class whose instances are to be callable with a side
+
+    Raises:
+        ValueError: If the class is not a kind of expression, or is
+            callable already for some other reason, which this would
+            silently override
+    """
+    if not isinstance(cls, type) or not issubclass(cls, AbstractExpression):
+        raise ValueError(f"{cls!r} is not a kind of expression, so a side cannot be read of it.")
+    if _own_call(cls) is _restrict_to_side:
+        return
+    if any("__call__" in vars(base) for base in cls.__mro__ if base is not object):
+        raise ValueError(f"{cls.__name__} is callable already, so a side cannot claim it.")
+    cls.__call__ = _restrict_to_side
+
+
+def remove_plus_minus_restriction(cls: type[AbstractExpression]) -> None:
+    """Take the `__call__` that `add_plus_minus_restriction` put on the given class off again.
+
+    Nothing to do where it was never put on, and a `__call__` from
+    anywhere else is left alone.
+
+    Args:
+        cls: The class `add_plus_minus_restriction` was given
+    """
+    if _own_call(cls) is _restrict_to_side:
+        del cls.__call__
+
+
+def plus(expression: AbstractExpression) -> SideMarker:
+    """`u("+")` as UFL writes it: mark an expression as read on the ``+`` side."""
+    return SideMarker(expression, "+")
+
+
+def minus(expression: AbstractExpression) -> SideMarker:
+    """`u("-")` as UFL writes it: mark an expression as read on the ``-`` side."""
+    return SideMarker(expression, "-")
+
+
+def jump(v: AbstractExpression, n: AbstractExpression | None = None) -> AbstractExpression:
+    """`jump` as UFL writes it.
+
+    ``v("+") - v("-")``, or with a normal ``v("+") n("+") + v("-") n("-")``,
+    the product being an inner product where ``v`` is not a scalar.
+    """
+    if n is None:
+        return plus(v) - minus(v)
+    if v.value_shape == ():
+        return plus(v) * plus(n) + minus(v) * minus(n)
+    return inner(plus(v), plus(n)) + inner(minus(v), minus(n))
+
+
+def avg(v: AbstractExpression) -> AbstractExpression:
+    """`avg` as UFL writes it: ``(v("+") + v("-")) / 2``."""
+    return RealScalar(0.5) * (plus(v) + minus(v))
 
 
 def _inferred_domain(integrand: AbstractExpression) -> AbstractCellularDomain:
@@ -251,6 +422,9 @@ class ExteriorFacetMeasure(CellMeasure):
             return NotImplemented
         facets = self.facets_for(integrand)
         domain = self.domain_of(integrand)
+        # The normal is read off the facets, so it is retargeted first and
+        # then stops the fields around it being restricted as one subtree.
+        integrand = _retarget_normals(integrand, domain, facets)
         integral = _restrict_fields(integrand, domain, facets) * measure_of(facets)
         assert isinstance(integral, Integral)
         return integral
@@ -261,28 +435,85 @@ class ExteriorFacetMeasure(CellMeasure):
 
 
 class InteriorFacetMeasure(CellMeasure):
-    """`dS` as UFL writes it, which cannot be built yet."""
+    """`dS` as UFL writes it: an interior facet measure over the interface it infers.
+
+    The integral it builds is the one measure over the interface the
+    mesh's facets make with themselves, with every side marked by `plus`
+    or `minus` read on the interface through that side. Call it to mark a
+    subdomain, as `dS(3)`, which labels the facets of both sides.
+
+    A field on the mesh that is not marked is refused, as UFL refuses an
+    unrestricted field under `dS`, since a field reaches the interface
+    only through a side.
+    """
 
     def __call__(
         self, subdomain_id: Any = None, domain: AbstractCellularDomain | None = None
     ) -> InteriorFacetMeasure:
-        """Get this measure over a marked part of the interface."""
+        """Get this measure over a marked part of the interface, or over a named domain."""
+        if isinstance(subdomain_id, AbstractParametrizedDomain):
+            raise ValueError("The legacy dS takes a subdomain id. Write dS(domain=...).")
         return InteriorFacetMeasure(subdomain_id, domain or self._domain)
 
-    def __rmul__(self, integrand: AbstractExpression) -> Integral:
-        """Refuse, saying what an interface integral needs.
+    def interface_for(self, integrand: AbstractExpression) -> Interface:
+        """The interface an integrand of this measure is over."""
+        facets = sub_entities_of(self.domain_of(integrand), 1, InteriorFacets(self._subdomain_id))
+        return Interface(facets, (("+", facets), ("-", facets)))
 
-        Raises:
-            NotImplementedError: Always
-        """
-        raise NotImplementedError(
-            "An interface needs a parametrization per side, which a union of pieces does not "
-            "express. See INTEGRATION.md section 5."
-        )
+    def __rmul__(self, integrand: AbstractExpression) -> Integral:
+        """Right multiply by an expression to form an integral over the interface."""
+        if not isinstance(integrand, AbstractExpression):
+            return NotImplemented
+        interface = self.interface_for(integrand)
+        domain = self.domain_of(integrand)
+        integral = _resolve_sides(integrand, domain, interface) * measure_of(interface)
+        assert isinstance(integral, Integral)
+        return integral
 
     def __repr__(self) -> str:
         """Representation."""
         return f"InteriorFacetMeasure({self._subdomain_id!r}, {self._domain!r})"
+
+
+def _retarget_normals(
+    integrand: AbstractExpression,
+    domain: AbstractCellularDomain,
+    onto: AbstractParametrizedDomain,
+) -> AbstractExpression:
+    """Read the placeholder normal of a mesh off the domain it is a normal to."""
+    retargeted: dict[GraphNode, GraphNode] = {
+        node: node.on_domain(onto)
+        for node in as_graph(integrand)
+        if isinstance(node, OutwardNormal) and node.domain == domain
+    }
+    if len(retargeted) == 0:
+        return integrand
+    replaced = replace(integrand, retargeted)
+    assert isinstance(replaced, AbstractExpression)
+    return replaced
+
+
+def _resolve_sides(
+    integrand: AbstractExpression, domain: AbstractCellularDomain, interface: Interface
+) -> AbstractExpression:
+    """Replace each marked subtree by what it marks, read through the interface's side.
+
+    The normal of the mesh becomes the normal out of that side, and
+    every field in the subtree is restricted to the side, as a facet
+    measure restricts them to the facets.
+    """
+    resolved: dict[GraphNode, GraphNode] = {}
+    for node in as_graph(integrand):
+        if not isinstance(node, SideMarker):
+            continue
+        side = interface.embedding(node.side)
+        marked = _retarget_normals(node.expression, domain, side)
+        resolved[node] = _restrict_fields(marked, domain, side)
+    if len(resolved) == 0:
+        return integrand
+    replaced = replace(integrand, resolved)
+    assert isinstance(replaced, AbstractExpression)
+    return replaced
 
 
 dx = CellMeasure()
@@ -291,25 +522,20 @@ dS = InteriorFacetMeasure()
 
 
 def facet_normal(domain: AbstractCellularDomain) -> AbstractGeometricQuantity:
-    """`FacetNormal` as UFL writes it, which cannot be built yet.
+    """`FacetNormal` as UFL writes it: the outward normal, read off the mesh.
 
-    UFL's facet normal is the *outward* one. UFLx gives a facet a unit
-    normal across it with no sign, since nothing yet says which side of
-    the facet its cell is on, so there is no honest drop-in.
-
-    What it costs is small and INTEGRATION.md section 4 says what:
-    outwardness is about the interior and not about orientation, so a
-    reference facet's outward normal plus transport by `J^-T` gives the
-    outward one even under a reflection. Basix holds the reference
-    normals already.
+    A normal is a quantity of the domain it is a normal to, which is a
+    domain of facets and not the mesh, so this is a placeholder: the
+    outward normal of the mesh's cells, which `ds` reads off the facets
+    and `dS` reads off the side it is marked with, as `plus(n)`. The
+    native spelling is `OutwardNormal(sub_entities_of(mesh, 1))`, or
+    `OutwardNormal(interface.embedding("+"))`.
 
     Args:
-        domain: The domain whose facets are integrated over
+        domain: The mesh whose cells the normal points out of
 
-    Raises:
-        NotImplementedError: Always
+    Returns:
+        The outward normal, to be retargeted by the measure it ends up
+        under
     """
-    raise NotImplementedError(
-        "An outward normal needs an orientation, which nothing carries yet. "
-        "UnitNormal(sub_entities_of(domain, 1)) is the normal without a sign."
-    )
+    return OutwardNormal(domain)

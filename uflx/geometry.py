@@ -7,14 +7,19 @@ from typing import Any, Protocol, Self, runtime_checkable
 
 from uflx.algorithms import replace
 from uflx.domains import (
-    AbstractCellularDomain,
     AbstractCoordinateDomain,
     AbstractParametrization,
     AbstractParametrizedDomain,
+    EmbedsAnInterface,
     EntityDomain,
+    StatesAnOutwardNormal,
+    parameter_regions,
+    parametrization_out_of,
+    unlabelled,
 )
-from uflx.expressions import AbstractExpression, Sqrt, expression_sum
+from uflx.expressions import AbstractExpression, RealScalar, Sqrt, expression_sum
 from uflx.graphs import GraphNode, as_graph
+from uflx.parametrizations import included_sub_entity, sub_entity_in_cell
 from uflx.points import AbstractPoint, Point
 from uflx.tensors import Identity, Matrix, Vector
 from uflx.variables import AbstractVariable
@@ -28,20 +33,14 @@ class ExpandableGeometry(Protocol):
         """Expand geometry."""
 
 
-def _parametrizations_out_of(
-    domain: AbstractParametrizedDomain, source: AbstractCoordinateDomain
-) -> tuple[AbstractParametrization, ...]:
-    """The domain's parametrizations that start from the given region.
+def inverse_jacobian(parametrization: AbstractParametrization, point: AbstractVariable) -> Matrix:
+    """A map's Jacobian at a point, written out and inverted.
 
-    A domain holds its parametrizations rather than keying them by their region,
-    since several may share one. Needing exactly one is what evaluating a
-    quantity at a point asks for, so it is asked here.
+    The pseudo-inverse where the map is not square. Written out rather
+    than left as a quantity, so that expanding reaches the bottom in one
+    go.
     """
-    return tuple(
-        parametrization
-        for parametrization in domain.parametrizations
-        if parametrization.source == source
-    )
+    return _as_dense_matrix(parametrization.jacobian(point)).compute_inverse()
 
 
 def _as_dense_matrix(jacobian: AbstractExpression) -> Matrix:
@@ -70,8 +69,9 @@ class ImagePoint(AbstractPoint):
     that, having no map to compose from.
 
     It takes the domain rather than the map because the point it starts
-    from already lies in a cell's coordinate domain, and so names the
-    cell whose map carries it. Contrast :class:`PreimagePoint`.
+    from already lies in a parameter region of the domain, a cell's
+    coordinate domain or a region of R^d, and so names the map that
+    carries it. Contrast :class:`PreimagePoint`.
 
     Where it lands is the domain's coordinate domain, which is the
     ambient one for a mesh and the cell's own for a sub-entity of a
@@ -79,19 +79,24 @@ class ImagePoint(AbstractPoint):
     of one of its facets.
     """
 
-    def __init__(self, point: AbstractVariable, domain: AbstractCellularDomain):
+    def __init__(self, point: AbstractVariable, domain: AbstractParametrizedDomain):
         """Initialise.
 
         Args:
-            point: The point in the entity's coordinates
+            point: The point in a parameter region of the domain
             domain: The domain to push the point forward onto
 
         Raises:
-            ValueError: If the point is not in a cell's coordinates
+            ValueError: If the domain has no parametrization out of the
+                point's region
         """
-        if not isinstance(point.domain, EntityDomain):
+        source = point.domain
+        if not isinstance(source, AbstractCoordinateDomain) or source not in parameter_regions(
+            domain
+        ):
             raise ValueError(
-                f"A point is pushed forward from a cell's coordinates, not from {point.domain!r}."
+                f"A point is pushed forward from a cell's coordinates, or from another "
+                f"region {domain!r} is parametrized from, not from {source!r}."
             )
         self._point = point
         self._parametrized_domain = domain
@@ -102,7 +107,7 @@ class ImagePoint(AbstractPoint):
         return self._point
 
     @property
-    def parametrized_domain(self) -> AbstractCellularDomain:
+    def parametrized_domain(self) -> AbstractParametrizedDomain:
         """The domain this point is pushed forward onto."""
         return self._parametrized_domain
 
@@ -110,13 +115,16 @@ class ImagePoint(AbstractPoint):
     def parametrization(self) -> AbstractParametrization:
         """The map this point is pushed forward through.
 
-        The point already lies in a cell's coordinate domain, so it names
-        the cell whose map carries it.
+        The point lies in a parameter region of the domain, so it names
+        the map out of that region.
+
+        Raises:
+            ValueError: If several of the domain's maps start from that
+                region, so the point names no one of them
         """
         source = self._point.domain
-        assert isinstance(source, EntityDomain)
-        (cell,) = source.cell_types
-        return self._parametrized_domain.parametrization(cell)
+        assert isinstance(source, AbstractCoordinateDomain)
+        return parametrization_out_of(self._parametrized_domain, source)
 
     @property
     def domain(self) -> AbstractCoordinateDomain:
@@ -340,17 +348,7 @@ class AbstractGeometricQuantity(AbstractExpression):
             raise ValueError(
                 f"This quantity is evaluated at a point of a coordinate domain, not of {source!r}."
             )
-        parametrizations = _parametrizations_out_of(self.domain, source)
-        if len(parametrizations) == 0:
-            raise ValueError(f"{self.domain!r} has no parametrization out of {source!r}.")
-        if len(parametrizations) > 1:
-            raise ValueError(
-                f"{self.domain!r} has {len(parametrizations)} parametrizations out "
-                f"of {source!r}, so a point there names no one map. Split the integral "
-                f"by piece first."
-            )
-        (parametrization,) = parametrizations
-        return parametrization
+        return parametrization_out_of(self.domain, source)
 
     @property
     def _jacobian(self) -> Jacobian:
@@ -446,13 +444,17 @@ class AbstractGeometricQuantity(AbstractExpression):
 
         The variable stands for a point of one of this domain's parameter
         regions, so one in any other coordinates is not this quantity's to
-        take.
+        take. A quantity of a side of an interface is read at the point
+        of the side's own chart that the interface's point corresponds
+        to.
         """
         source = variable.domain
         if not isinstance(source, AbstractCoordinateDomain):
             return self
-        if len(_parametrizations_out_of(self._domain, source)) == 0:
+        if source not in parameter_regions(self._domain):
             return self
+        if isinstance(self._domain, EmbedsAnInterface):
+            variable = self._domain.transition(variable)
         return self._rebuilt(self._domain, variable)
 
 
@@ -720,6 +722,82 @@ class UnitNormal(AbstractGeometricQuantity):
         return Vector([c / norm for c in components])
 
 
+def _normalised(components: list[AbstractExpression]) -> Vector:
+    """A vector scaled to unit length."""
+    norm = Sqrt(expression_sum(c * c for c in components))
+    return Vector([c / norm for c in components])
+
+
+class OutwardNormal(AbstractGeometricQuantity):
+    """The unit normal pointing out of a domain along a facet of it.
+
+    The outward conormal of a manifold with boundary, which needs no
+    orientation: outwardness is about which side of the facet the
+    interior lies on, and the map carries interior to interior. So the
+    reference facet's outward normal, which the cell supplies, transported
+    by the cell map's inverse transpose, is outward even under a
+    reflection, where the cross product of the mapped facet's own
+    Jacobian is not. INTEGRATION.md section 4 is the argument. On a
+    manifold the pseudo-inverse gives the conormal within the surface.
+
+    Hand it a facet of a cell mapped on by the cell's own map, or a side
+    of an interface presented by one, and it is the normal out of that
+    cell. A domain that states its own outward normal, as a face of a box
+    does, is taken at its word. :class:`UnitNormal` is the direction a
+    domain of codimension one has on its own, with no cell to be out of,
+    and the two agree up to sign.
+    """
+
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression."""
+        return (self._domain.geometric_dimension,)
+
+    @property
+    def _image(self) -> AbstractParametrizedDomain:
+        """The facet this points out of, which an embedding presents as its image."""
+        domain = self._domain
+        if isinstance(domain, EmbedsAnInterface):
+            domain = domain.image
+        image = unlabelled(domain)
+        assert isinstance(image, AbstractParametrizedDomain)
+        return image
+
+    def expand_geometry(self) -> AbstractExpression:
+        """Expand geometry.
+
+        Raises:
+            ValueError: If the domain is not a facet of a cell, or has not
+                been told where it is read
+        """
+        image = self._image
+        if isinstance(image, StatesAnOutwardNormal):
+            return Vector([RealScalar(c) for c in image.outward_normal])
+        inner, cell, cell_map = sub_entity_in_cell(image)
+        sub_entity = included_sub_entity(image)
+        if sub_entity is None or sub_entity[0] != cell.topological_dimension - 1:
+            raise ValueError(
+                f"{image!r} is not a facet of {cell}, so there is no out of the "
+                f"cell across it. The normal of a domain presented some other way is "
+                f"UnitNormal of it, with the sign a side names."
+            )
+        _, index = sub_entity
+        if self._variable is None:
+            raise ValueError("This normal has not been told where it is read.")
+        reference = [RealScalar(c) for c in cell.facet_outward_normal(index)]
+        # Expanding has to reach the bottom in one go, so the included point
+        # is written out, for a map whose Jacobian reads its coordinates.
+        included = ImagePoint(self._variable, inner).expand_geometry()
+        assert isinstance(included, AbstractVariable)
+        inverse_transpose = inverse_jacobian(cell_map, included).transpose()
+        rows, cols = inverse_transpose.value_shape
+        transported = [
+            expression_sum(inverse_transpose.component(i, j) * reference[j] for j in range(cols))
+            for i in range(rows)
+        ]
+        return _normalised(transported)
+
+
 class JacobianDeterminant(AbstractGeometricQuantity):
     """The signed determinant of a square Jacobian.
 
@@ -768,8 +846,8 @@ class JacobianInverse(AbstractGeometricQuantity):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = _as_dense_matrix(self._jacobian.expand_geometry())
-        return j.compute_inverse()
+        assert self.variable is not None
+        return inverse_jacobian(self.parametrization, self.variable)
 
     def simplified_matrix_product(self, other: GraphNode) -> GraphNode | None:
         """Return a single expression representing the simplified matrix product.
@@ -816,8 +894,8 @@ class JacobianInverseTranspose(AbstractGeometricQuantity):
 
     def expand_geometry(self) -> AbstractExpression:
         """Expand geometry."""
-        j = _as_dense_matrix(self._jacobian.expand_geometry())
-        return j.compute_inverse().transpose()
+        assert self.variable is not None
+        return inverse_jacobian(self.parametrization, self.variable).transpose()
 
     def simplified_matrix_product(self, other: GraphNode) -> GraphNode | None:
         """Return a single expression representing the simplified matrix product.

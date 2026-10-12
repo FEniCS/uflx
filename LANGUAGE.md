@@ -220,13 +220,44 @@ inner(restrict(grad(u), facets), UnitNormal(facets)) * dx(facets)
 Pulling that back gives one integral per facet over the reference facet, each carrying
 that facet's volume element as its density. No part of it is a facet measure.
 
-An interface is not constructible yet: it needs a parametrization per side. The `+`/`-`
-restriction below belongs to the integrand either way, being a field pulled back along
-one side's inclusion, and not to the measure.
+An interface is a domain with an image of it per side: `interface(gamma, embeddings)`. A
+mesh's interior facets are its facets presented twice, once per side, and the facets two
+meshes share are each mesh's facets as a side. The `+`/`-` of UFL is a restriction to a
+side, a field pulled back along that side's inclusion, and belongs to the integrand and
+not to the measure:
 
-`uflx.legacy` offers UFL's spellings -- a measure with no domain, and fields written
-unrestricted -- by inferring the domain and inserting the restrictions. It is for code
-being moved onto UFLx and not part of the language, which states its domain.
+```python
+facets = sub_entities_of(mesh, 1)
+gamma = interface(facets, (("+", facets), ("-", facets)))
+inner(jump(grad(u), gamma), OutwardNormal(gamma.embedding("+"))) * restrict(
+    v, gamma.embedding("+")
+) * dx(gamma)
+```
+
+Pulling that back gives one integral per pair of facets over the reference facet, the
+`-` side read at the point of its own facet that the chart transition gives.
+
+A side need not be a facet of anything. `coordinate_representation(gamma, phi, T)` is a
+side's map in general, `gamma` carried into a cell's coordinates by `phi⁻¹ ∘ T ∘ ψ`,
+with `T` a stated map or the identity of sets; a periodic boundary is the facets on one
+side and, on the other, those facets carried into the translated cells:
+
+```python
+left = sub_entities_of(mesh, 1, "left")
+shifted = composed_domain(
+    composed_domain(entity_domain(Interval()), coordinate_representation(left, phi, shift)), phi
+)
+gamma = interface(left, (("left", left), ("right", shifted)))
+```
+
+A mesh and a submesh of its entities meet as an interface too, the entities presented by
+each, and a form mixing a field on each restricts each to its side:
+
+```python
+facets = sub_entities_of(mesh, 1)
+gamma = interface(facets, (("mesh", facets), ("boundary", sub_entities_of(boundary, 0))))
+restrict(u, gamma.embedding("mesh")) * restrict(mu, gamma.embedding("boundary")) * dx(gamma)
+```
 
 ### Integrals
 
@@ -238,7 +269,7 @@ Examples:
 v * f * dx(mesh)
 inner(grad(v), grad(u)) * dx(mesh)
 restrict(v, facets) * g * dx(facets)  # an exterior facet integral, facets as above
-jump(v) * dS  # once an interface domain exists
+jump(v, gamma) * dx(gamma)  # an interior facet integral, gamma as above
 ```
 
 A valid integral has a scalar-valued integrand with no unresolved free indices.
@@ -283,17 +314,17 @@ The language is small, but it is typed.
 - Spatial derivatives require a spatial domain.
 - Facet quantities such as a normal are read off the domain they are a normal to, so a
   facet's normal is `UnitNormal(sub_entities_of(mesh, 1))`, and a normal is only defined
-  in codimension one.
+  in codimension one. The outward one needs the cell it points out of, which a facet of
+  a mesh or a side of an interface names: `OutwardNormal(gamma.embedding("+"))`.
 - A field on one domain is read on another through a restriction, `restrict(u, facets)`,
   which is the pullback of the field along that domain's parametrization.
-- Interior-facet expressions may use side restrictions:
+- Interior-facet expressions restrict to a side of the interface:
   ```python
-  u("+")
-  u("-")
+  restrict(u, gamma.embedding("+"))
+  restrict(u, gamma.embedding("-"))
   ```
-  which are that same restriction along one side's inclusion, once a domain has a
-  parametrization per side.
-- Operators such as `jump` and `avg` are shorthand for combinations of such
+  which is that same restriction along one side's inclusion.
+- `jump(u, gamma)` and `avg(u, gamma)` are shorthand for combinations of such
   restrictions.
 - An integral is valid only when the final integrand is scalar and has no free indices.
 - A form is valid when all of its integrals are valid and their domains, arguments, and

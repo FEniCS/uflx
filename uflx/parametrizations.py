@@ -33,6 +33,7 @@ from uflx.domains import (
     AbstractParametrizedDomain,
     ComposesADomain,
     EntityDomain,
+    IdentityParametrization,
     IncludesASubEntity,
     LabelledDomain,
     UnionDomain,
@@ -207,8 +208,14 @@ class ComposedParametrization(AbstractParametrization):
 
     @property
     def is_identity(self) -> bool:
-        """A composition of identities is the identity."""
-        return self._inner.is_identity and self._outer.is_identity
+        """A composition of identities is the identity, where it lands where it starts.
+
+        An identity on a cell's coordinates followed by the identity of
+        R^d leaves every coordinate alone and is still no identity: it
+        relabels the cell's coordinates as ambient ones, which is what
+        places a reference cell in the plane.
+        """
+        return self._inner.is_identity and self._outer.is_identity and self.source == self.target
 
     def __repr__(self) -> str:
         """Representation."""
@@ -668,6 +675,44 @@ def included_sub_entity(domain: AbstractParametrizedDomain) -> tuple[int, int] |
     return sub_entity
 
 
+def sub_entity_in_cell(
+    domain: AbstractParametrizedDomain,
+) -> tuple[AbstractCellularDomain, AbstractEntity, AbstractParametrization]:
+    """Read a piece as a sub-entity sitting in a cell, mapped on by the cell's own map.
+
+    A sub-entity sitting in a cell is a domain whose points are named in
+    that cell's coordinates, which is what its coordinate domain says.
+    This is how a restriction asks which cell a field is read through,
+    and how an outward normal asks which cell it points out of.
+
+    Args:
+        domain: One piece of a sub-entity domain, labelled or not
+
+    Returns:
+        The domain it is parametrized from, the cell its points are named in,
+        and the map applied to it
+
+    Raises:
+        ValueError: If the piece is not a sub-entity of a cell mapped on
+    """
+    composite = unlabelled(domain)
+    if not isinstance(composite, ComposesADomain):
+        raise ValueError(f"{domain!r} is not a sub-entity of a cell, mapped on.")
+    assert isinstance(composite, AbstractCellularDomain)
+    lands_in = composite.coordinate_domain
+    if isinstance(lands_in, EntityDomain):
+        # A sub-entity of a reference cell, whose own map is the identity.
+        (cell,) = lands_in.cell_types
+        return composite, cell, IdentityParametrization(lands_in)
+    inner = composite.inner_domain
+    cell_map = composite.outer_map
+    sits_in = inner.coordinate_domain
+    if not isinstance(sits_in, EntityDomain):
+        raise ValueError(f"{inner!r} is named in {sits_in!r}, not in a cell's coordinates.")
+    (cell,) = sits_in.cell_types
+    return inner, cell, cell_map
+
+
 def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> AbstractCellularDomain:
     """Create the domain one sub-entity of an entity is.
 
@@ -694,6 +739,9 @@ def sub_entity_domain(cell: AbstractEntity, dim: int, index: int) -> AbstractCel
         raise ValueError(f"{cell} has no sub-entities of dimension {dim}.")
     if index < 0 or index >= cell.sub_entity_count(dim):
         raise ValueError(f"{cell} has no sub-entity {index} of dimension {dim}.")
+    if dim == cell.topological_dimension:
+        # The cell's own inclusion is the identity, which no entity need be asked for.
+        return EntityDomain(cell)
     sub_entity = cell.sub_entities(dim)[index]
     return composed_domain(EntityDomain(sub_entity), cell.sub_entity_inclusion(dim, index))
 

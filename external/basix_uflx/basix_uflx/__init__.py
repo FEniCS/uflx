@@ -131,6 +131,19 @@ class BasixCell(uflx.entities.AbstractEntity):
             source, lands_in, matrix, offset, dim, index
         )
 
+    def facet_outward_normal(self, index: int) -> tuple[float, ...]:
+        """Get the unit normal pointing out of this cell across one of its facets.
+
+        Basix holds these for every reference cell.
+
+        Args:
+            index: Which facet.
+
+        Returns:
+            The outward unit normal, in this cell's coordinates.
+        """
+        return tuple(float(c) for c in basix.cell.facet_outward_normals(self._basix_cell)[index])
+
     def __hash__(self):
         return hash(("basix.uflx", f"{self!r}"))
 

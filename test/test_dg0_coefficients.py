@@ -17,7 +17,7 @@ from uflx.tensors import zero
 from uflx.variables import Variable
 
 
-def assert_zero(expression, shape):
+def _assert_zero(expression, shape):
     """Check every scalar component and ensure no coefficient remains."""
     assert expression.value_shape == shape
     for index in product(*(range(n) for n in shape)):
@@ -52,20 +52,20 @@ def test_dg0_value_and_gradient(lagrange_element, cell, dim, geometry_degree):
     reconstructed = reconstruct_node(c, {})
     assert isinstance(reconstructed, Coefficient)
     assert reconstructed.is_cellwise_constant
-    assert_zero(grad(c), (dim,))
-    assert_zero(pull_back_to_entity(Grad(c)), (dim,))
+    _assert_zero(grad(c), (dim,))
+    _assert_zero(pull_back_to_entity(Grad(c)), (dim,))
     entity_space = function_space(EntityDomain(space.elements[0].cell), space.elements[0])
     reference = Coefficient(entity_space)
-    assert_zero(EntityGrad(reference).expand_geometry(), (dim,))
+    _assert_zero(EntityGrad(reference).expand_geometry(), (dim,))
     for i in range(dim):
-        assert_zero(c.diff(i), ())
-        assert_zero(reference.diff(i), ())
+        _assert_zero(c.diff(i), ())
+        _assert_zero(reference.diff(i), ())
     gradient_form = inner(grad(c), grad(v)) * dx(domain)
     assert not any(isinstance(n, Coefficient) for n in as_graph(gradient_form))
     # Replacement must retain the new coefficient's constancy on reconstruction.
     variable = Coefficient(v.function_space)
     replaced = replace(Grad(variable), {variable: c})
-    assert_zero(pull_back_to_entity(replaced), (dim,))
+    _assert_zero(pull_back_to_entity(replaced), (dim,))
     with pytest.raises(ValueError):
         c.diff(dim)
 
@@ -116,7 +116,7 @@ def test_unknown_mapping_is_not_constant(lagrange_element):
     entity_space = function_space(EntityDomain(space.elements[0].cell), space.elements[0])
     reference = Coefficient(entity_space)
     assert reference.is_cellwise_constant
-    assert_zero(EntityGrad(reference).expand_geometry(), (2,))
+    _assert_zero(EntityGrad(reference).expand_geometry(), (2,))
     assert not BlockedValueMap(UnknownMap(), (2,)).preserves_constant_values
     assert BlockedValueMap(IdentityValueMap(), (2,)).preserves_constant_values
 
@@ -124,7 +124,7 @@ def test_unknown_mapping_is_not_constant(lagrange_element):
 @pytest.mark.parametrize("shape", [(), (2,), (2, 3), (2, 2, 2)])
 def test_shaped_zero(shape):
     """Zero gradients and derivatives preserve all value axes."""
-    assert_zero(zero(shape), shape)
+    _assert_zero(zero(shape), shape)
 
 
 @pytest.mark.parametrize("shape", [(2,), (2, 2)])
@@ -141,12 +141,12 @@ def test_blocked_constant_derivatives(lagrange_element, shape):
     space = function_space(domain, BlockedElement(scalar.cell, 0, shape))
     c = Coefficient(space)
     assert c.is_cellwise_constant
-    assert_zero(grad(c), (*shape, 2))
-    assert_zero(pull_back_to_entity(Grad(c)), (*shape, 2))
-    assert_zero(c.diff(0), shape)
+    _assert_zero(grad(c), (*shape, 2))
+    _assert_zero(pull_back_to_entity(Grad(c)), (*shape, 2))
+    _assert_zero(c.diff(0), shape)
     entity_space = function_space(EntityDomain(space.elements[0].cell), space.elements[0])
     reference = Coefficient(entity_space)
-    assert_zero(EntityGrad(reference).expand_geometry(), (*shape, 2))
+    _assert_zero(EntityGrad(reference).expand_geometry(), (*shape, 2))
 
 
 def test_unknown_degree_and_multielement_space(lagrange_element):
