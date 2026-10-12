@@ -1,7 +1,9 @@
 """Test that everything in a graph is built once, never changed and hashed once."""
 
+import collections
 import copy
 import decimal
+import enum
 import os
 import pickle
 import subprocess
@@ -179,20 +181,76 @@ class _Opaque:
     pass
 
 
+class _Point(collections.namedtuple("_Point", "x y")):
+    pass
+
+
+class _Colour(enum.IntEnum):
+    RED = 1
+
+
+class _Shade(enum.IntEnum):
+    RED = 1
+
+
 @pytest.mark.parametrize(
-    "argument, message",
+    "argument",
     [
-        (_Opaque(), "prints and hashes by its address"),
-        (frozenset({"left", "right"}), "Store a tuple instead"),
-        ({"left": 1, "right": 2}, "Store a tuple instead"),
-        (["left", "right"], "Store a tuple instead"),
+        _Opaque(),
+        frozenset({"left", "right"}),
+        {"left": 1, "right": 2},
+        ["left", "right"],
+        lambda x: x,
+        decimal.Decimal("1.0"),
+        np.int64(3),
+        np.float64(1.0),
+        _Point(1, 2),
     ],
-    ids=["address", "frozenset", "dict", "list"],
+    ids=[
+        "address",
+        "frozenset",
+        "dict",
+        "list",
+        "lambda",
+        "decimal",
+        "numpy-int",
+        "numpy-float",
+        "namedtuple",
+    ],
 )
-def test_an_argument_that_prints_differently_between_processes_is_refused(argument, message):
-    """Guards against hashing by an address or by an order that differs between processes."""
-    with pytest.raises(TypeError, match=message):
-        hash(_Holder(argument))
+def test_an_argument_of_any_other_type_is_refused(argument):
+    """Guards against accepting an argument whose description could differ between processes."""
+    with pytest.raises(TypeError, match="cannot be an argument of a value"):
+        _Holder(argument)
+
+
+@pytest.mark.parametrize(
+    "first, second",
+    [
+        (1, 1.0),
+        (True, 1),
+        (0.0, -0.0),
+        (1.0, 1 + 0j),
+        (0j, complex(-0.0, 0.0)),
+        (_Colour.RED, _Shade.RED),
+        (_Colour.RED, 1),
+    ],
+    ids=[
+        "int-float",
+        "bool-int",
+        "signed-zero",
+        "float-complex",
+        "complex-signed-zero",
+        "enums",
+        "enum-int",
+    ],
+)
+def test_accepted_arguments_that_print_differently_stay_apart(first, second):
+    """Guards against interning merging accepted arguments that are equal but not the same."""
+    kept = _Holder(first)
+    built = _Holder(second)
+    assert built is not kept
+    assert built.init_args == (second,)
 
 
 def test_labels_in_a_tuple_are_hashed_in_order():
@@ -311,22 +369,6 @@ def test_numbers_that_print_differently_stay_apart(first, second):
     built = RealScalar(second)
     assert built is not kept
     assert repr(built) == f"RealScalar({second!r})"
-
-
-@pytest.mark.parametrize(
-    "first, second",
-    [
-        (decimal.Decimal("1.0"), decimal.Decimal("1.00")),
-        (np.int64(3), np.int32(3)),
-    ],
-    ids=["decimal", "numpy-widths"],
-)
-def test_arguments_that_print_differently_stay_apart(first, second):
-    """Guards against interning merging arguments that the hash tells apart."""
-    kept = _Holder(first)
-    built = _Holder(second)
-    assert built is not kept
-    assert repr(built) == f"_Holder({second!r})"
 
 
 def test_the_table_keeps_nothing_alive():

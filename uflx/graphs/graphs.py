@@ -7,8 +7,7 @@ import inspect
 import weakref
 from abc import ABCMeta
 from collections import deque
-from collections.abc import Callable, Hashable, Iterable, Mapping
-from collections.abc import Set as AbstractSet
+from collections.abc import Callable, Hashable, Iterable
 from enum import Enum
 from hashlib import blake2b
 from typing import Any, ClassVar, Protocol, TypeVar, cast, runtime_checkable
@@ -89,15 +88,15 @@ def _interning_key(value: Any) -> Any:
     """Key an argument by what its fingerprint digests.
 
     A value is already interned and keys as itself. Any other argument
-    keys as its type name and its repr, or its hash if it has no repr of
-    its own. Interning and hashing then always agree. Arguments that are
+    keys as the description its fingerprint digests. Interning and
+    hashing then always agree. Arguments that are
     equal but print differently stay apart, such as ``1`` and ``1.0`` or
     ``0.0`` and ``-0.0``. Otherwise a value would print and generate code
     as whichever was built first, and its hash would depend on it too.
     """
     if isinstance(value, Immutable):
         return value
-    if isinstance(value, tuple):
+    if type(value) is tuple:
         return ("tuple", *map(_interning_key, value))
     return _leaf(value)
 
@@ -140,9 +139,9 @@ class Immutable(metaclass=_Interning):
     Defining ``__eq__``, ``__ne__``, ``__hash__``, ``__repr__``,
     ``__str__``, ``__copy__``, ``__deepcopy__``, ``successors`` or
     ``fingerprint``, in the class or in a mixin it inherits, is refused
-    when the class is defined. An argument
-    that is a list, a set, a dict or an object known only by its address
-    is refused when a value is built. The first value of each class must
+    when the class is defined. An argument other than a UFLx value, a
+    tuple, ``None``, a ``bool``, ``int``, ``float``, ``complex`` or
+    ``str``, or an enum member is refused when a value is built. The first value of each class must
     rebuild from its ``init_args`` to itself. :mod:`uflx.testing` checks
     every value a test suite builds.
     """
@@ -312,45 +311,45 @@ def fingerprint(value: Any) -> bytes:
     """Digest a value or an argument the same way in every process.
 
     A value is digested by its class and arguments. A tuple is digested
-    item by item in order. Any other object is digested by its class and
-    its own repr, or its own hash if it has no repr of its own. Either
-    must be the same in every process.
+    item by item in order. ``None``, a ``bool``, an ``int``, a ``float``,
+    a ``complex`` or a ``str`` is digested by its type and repr, and an
+    enum member by its enum and name.
 
     Raises:
-        TypeError: If an object is a list, a set or a mapping, or has
-            neither its own repr nor its own hash.
+        TypeError: If an argument is of any other type.
     """
     if isinstance(value, Immutable):
         return value.fingerprint
-    if isinstance(value, tuple):
+    if type(value) is tuple:
         return digest("tuple", *map(fingerprint, value))
     return digest(*_leaf(value))
+
+
+_PLAIN = (type(None), bool, int, float, complex, str)
 
 
 def _leaf(value: Any) -> tuple[str, str]:
     """Describe an argument that is neither a value nor a tuple, as fingerprint and interning do.
 
+    An argument is a UFLx value, a tuple, ``None``, a ``bool``, an
+    ``int``, a ``float``, a ``complex``, a ``str`` or an enum member.
+    These print the same in every process however they were built, so
+    nothing else is accepted. The type is matched exactly, so a numpy
+    scalar is refused.
+
     Raises:
-        TypeError: If the argument is a list, a set or a mapping, or has
-            neither its own repr nor its own hash.
+        TypeError: If the argument is of any other type.
     """
     cls = type(value)
-    if isinstance(value, list):
-        raise TypeError(
-            "A list can change after the value holding it is built. Store a tuple instead."
-        )
-    if isinstance(value, AbstractSet | Mapping):
-        raise TypeError(
-            f"{_qualified_name(cls)} prints in an order that differs between processes "
-            f"or between equal values. Store a tuple instead."
-        )
-    if cls.__repr__ is not object.__repr__:
-        return _qualified_name(cls), repr(value)
-    if cls.__hash__ is not None and cls.__hash__ is not object.__hash__:
-        return _qualified_name(cls), str(hash(value))
+    if cls in _PLAIN:
+        return cls.__name__, repr(value)
+    if isinstance(value, Enum):
+        return _qualified_name(cls), value.name
     raise TypeError(
-        f"{_qualified_name(cls)} prints and hashes by its address, so it cannot be "
-        f"digested the same way in every process. Give it a repr or a hash."
+        f"{_qualified_name(cls)} cannot be an argument of a value. An argument is a UFLx "
+        f"value, a tuple, None, a bool, int, float, complex or str, or an enum member. Convert "
+        f"anything else in the constructor, such as tuple(items), int(degree) or "
+        f"np.dtype(dtype).name."
     )
 
 
@@ -398,8 +397,6 @@ def _describe_argument(value: Any, depth: int) -> str:
     if isinstance(value, tuple):
         items = [_describe_argument(i, depth) for i in value]
         return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
-    if isinstance(value, list):
-        return f"[{', '.join(_describe_argument(i, depth) for i in value)}]"
     if isinstance(value, Immutable):
         return describe(value, depth)
     return repr(value)

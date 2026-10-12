@@ -45,22 +45,21 @@ graph is behind it. `uflx.graphs.describe` takes a depth for when more is wanted
 `init_args` is read back from the constructor. Each argument `name` is stored as
 `self._name`, and the mixin reads those attributes in the order of the constructor's
 signature. A read-only property exposes one that should be public. A class with no
-constructor of its own has no arguments. Five rules follow.
+constructor of its own has no arguments. Four rules follow.
 
 - Store an argument in the form it should be compared in, such as a tuple rather than a
   list. Then `type(v)(*v.init_args)` rebuilds `v`, which `reconstruct_node` relies on.
 - Store every argument. Two values with equal `init_args` are the same value, so
   anything left out is lost.
-- Store only what is hashable and compared exactly, all the way down. A tolerance is not
-  transitive, so it cannot decide which values are equal. An array is kept as nested
-  tuples of its entries.
-- Store a sequence, such as several labels, as a tuple. A constructor may take a list but
-  stores `tuple(items)`. A list can change after the value is built. A set or a dict
-  prints in an order that depends on the hash seed or on how it was built. Each is
-  refused.
-- Store only what prints or hashes the same in every process. A hash is a digest of the
-  arguments, and MPI ranks must agree on it whatever their hash seeds. An object that
-  prints and hashes by its address is refused.
+- Store only UFLx values, tuples, `None`, `bool`, `int`, `float`, `complex`, `str` and
+  enum members, all the way down. Anything else is refused when a value is built. These
+  print the same in every process however they were built, and a hash is a digest of
+  what they print, so MPI ranks agree on it whatever their hash seeds. The type is
+  matched exactly, so a numpy scalar is refused too.
+- Convert anything else in the constructor. A sequence such as several labels is stored
+  as `tuple(items)`, a numpy integer as `int(n)`, a dtype as `np.dtype(dtype).name`, and
+  an array as nested tuples of its entries. A tolerance is not transitive, so it cannot
+  decide which values are equal, and an array is compared exactly.
 
 A derived value, such as a lookup table built from an argument, goes under a name of its
 own. A constructor that takes `*args`, `**kwargs` or keyword-only arguments cannot be
@@ -68,11 +67,11 @@ called with a tuple, so its class defines `init_args` itself. So does a class th
 an argument in a way the rules above do not cover, and it says why in a comment.
 
 These rules are checked at runtime, so a consumer's class follows them too. A class that
-defines its own identity is refused when it is defined. A list, set, dict or object known
-only by its address is refused when a value is built. The first value of each class is
-rebuilt from its `init_args` and must come back as the same object. A test suite checks
-every value it builds by adding `pytest_plugins = ["uflx.testing"]` to its top-level
-`conftest.py`. The rule below on sets of strings is the only one not checked.
+defines its own identity is refused when it is defined. An argument of any other type is
+refused when a value is built. The first value of each class is rebuilt from its
+`init_args` and must come back as the same object. A test suite checks every value it
+builds by adding `pytest_plugins = ["uflx.testing"]` to its top-level `conftest.py`. The
+rule below on sets of strings is the only one not checked.
 
 An algorithm must do the same thing on every MPI rank, and each rank has its own hash
 seed. Python salts the hash of a string and of bytes. An enum member hashes by its name

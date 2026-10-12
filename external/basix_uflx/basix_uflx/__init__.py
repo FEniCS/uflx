@@ -240,7 +240,7 @@ class QuadratureElement(AbstractFiniteElement):
         self._cell = cell
         self._reference_map = reference_map
         self._degree = len(self._points) if degree is None else degree
-        self._dtype = np.dtype(dtype)
+        self._dtype = np.dtype(dtype).name
 
     @property
     def cell(self) -> uflx.entities.AbstractEntity:

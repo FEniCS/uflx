@@ -72,12 +72,12 @@ prints more levels. A value's `successors` are the values among its arguments. A
 a mesh or a variable is a node like any other, so `replace` can substitute it. A class
 that defines `__eq__`, `__ne__`, `__hash__`, `__repr__`, `__str__`, `__copy__`,
 `__deepcopy__`, `successors` or `fingerprint`, or inherits one from a mixin, is refused
-when it is defined, and a stored list, set or dict when a value is built. Any other
-identity is one that rebuilding a node can silently change. The first value of each
-class must rebuild from its `init_args` to itself, and `uflx.testing`, imported in both
-conftests, checks every value a test builds. Consumer classes such as a Basix cell or
-element inherit the rule. [DESIGN_CHOICES.md](DESIGN_CHOICES.md) says how to store the
-arguments.
+when it is defined, and an argument that is not a value, a tuple, a plain scalar, a
+string or an enum member when a value is built. Any other identity is one that
+rebuilding a node can silently change. The first value of each class must rebuild from
+its `init_args` to itself, and `uflx.testing`, imported in both conftests, checks every
+value a test builds. Consumer classes such as a Basix cell or element inherit the rule.
+[DESIGN_CHOICES.md](DESIGN_CHOICES.md) says how to store the arguments.
 
 Expression trees (the symbolic core) are not plain Python object graphs — they are
 backed by an explicit DAG in `uflx/graphs/` (`Graph` subclasses `networkx.DiGraph`;
