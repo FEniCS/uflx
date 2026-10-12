@@ -6,7 +6,7 @@ import functools
 import inspect
 import weakref
 from abc import ABCMeta
-from collections import Counter, deque
+from collections import deque
 from collections.abc import Callable, Hashable, Iterable
 from enum import Enum
 from hashlib import blake2b
@@ -368,32 +368,24 @@ def describe(value: Immutable, depth: int = 1) -> str:
         The class name and arguments, such as
         ``Product((Coefficient(...), TestFunction(...)))``.
     """
-    return _describe(value, depth, {})
-
-
-def _describe(value: Any, depth: int, labels: dict[Any, int]) -> str:
-    """Print a value for :func:`describe`, with an argument's label after its class name."""
     try:
         arguments = value.init_args
     except TypeError:
         return object.__repr__(value)
     if depth <= 0 and not _has_plain_arguments(arguments):
         return f"{type(value).__name__}(...)"
-    described = ", ".join(_describe_argument(a, depth - 1, labels) for a in arguments)
-    return f"{type(value).__name__}({described})"
+    return (
+        f"{type(value).__name__}({', '.join(_describe_argument(a, depth - 1) for a in arguments)})"
+    )
 
 
-def _describe_argument(value: Any, depth: int, labels: dict[Any, int]) -> str:
+def _describe_argument(value: Any, depth: int) -> str:
     """Print one argument of a value for :func:`describe`."""
     if isinstance(value, tuple):
-        items = [_describe_argument(i, depth, labels) for i in value]
+        items = [_describe_argument(i, depth) for i in value]
         return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
     if isinstance(value, Immutable):
-        described = _describe(value, depth, labels)
-        if value in labels:
-            name = type(value).__name__
-            return f"{name}[{labels[value]}]{described[len(name) :]}"
-        return described
+        return describe(value, depth)
     return repr(value)
 
 
@@ -451,30 +443,37 @@ def print_node(graph: Graph, node: GraphNode, indentation: int = 0):
     """Print a graph using the node as the root node.
 
     Each line is a value and the lines below it are its arguments in
-    order. A value gets a number such as ``[3]`` when a line above
-    shortens it to ``Name[3](...)`` or when it has several parents.
-    Every argument with a number shows it. A value with several parents
-    prints in full the first time and as its number alone after that.
-    The output is one line per edge however much the graph shares.
+    order. Every value below the root has a number such as ``[3]``, and
+    an argument that is a value prints as its number. A value prints in
+    full the first time and as its number alone after that. The output
+    is one line per edge however much the graph shares.
     """
     walk = list(_walk_arguments(node))
-    visits = Counter(value for value, _, _ in walk)
-    labels: dict[Any, int] = {}
+    labels: dict[Any, str] = {}
     for value, _, _ in walk:
-        if value not in labels and (visits[value] > 1 or not _has_plain_arguments(value.init_args)):
-            labels[value] = len(labels) + 1
+        labels.setdefault(value, f"[{len(labels) + 1}]")
     indent = "    " * indentation
-    print(indent + _describe(node, 1, labels))
+    print(indent + _numbered(node, labels))
     printed = set()
     for value, prefix, is_last in walk:
-        line = indent + prefix + ("└── " if is_last else "├── ")
-        label = f"[{labels[value]}]" if value in labels else ""
+        line = indent + prefix + ("└── " if is_last else "├── ") + labels[value]
         if value in printed:
-            print(line + label)
-            continue
-        printed.add(value)
-        described = _describe(value, 1, labels)
-        print(line + (f"{label} {described}" if label else described))
+            print(line)
+        else:
+            printed.add(value)
+            print(f"{line} {_numbered(value, labels)}")
+
+
+def _numbered(value: GraphNode, labels: dict[Any, str]) -> str:
+    """Print a value as its class and arguments, with each value among them as its number."""
+
+    def argument(a: Any) -> str:
+        if isinstance(a, tuple):
+            items = [argument(i) for i in a]
+            return f"({items[0]},)" if len(items) == 1 else f"({', '.join(items)})"
+        return labels[a] if isinstance(a, Immutable) else repr(a)
+
+    return f"{type(value).__name__}({', '.join(argument(a) for a in value.init_args)})"
 
 
 def _walk_arguments(node: GraphNode) -> Iterable[tuple[Any, str, bool]]:
