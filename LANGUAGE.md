@@ -37,8 +37,9 @@ minimal concepts and relations necessary for writing a wide range of
 variational forms as code for subsequent compilation.
 
 A UFLx program is ordinary Python code that constructs symbolic objects and
-connects them through a graph. The primary result is usually a `Form`, such as
-a bilinear form, linear form, or functional.
+connects them through a graph. The primary result is usually a Form, such as a
+bilinear form, linear form, or functional. Python code will be used to motivate
+examples but concrete implementation is out of scope.
 
 UFLx does not handle concrete data or algorithms; e.g. actual meshes, boundary
 markers, numerical values of coefficients, or assembly procedures. Those belong
@@ -67,10 +68,13 @@ external library must provide.
 - UFLx should be deterministic on the same machine using the same byte-code.
 - Performance is *important* and so any data structures and algorithms in the
   core should be carefully chosen and tested for scalability.
+- The minimal language should only need a relatively small number of object
+  kinds. When designing the language, consider whether objects can be composed,
+  rather than extended.
+- Explicit is better than implicit.
+- Boilerplate and error-prone patterns should be minimised.
 
 ## The minimal object model
-
-The minimal language needs only a small number of object kinds.
 
 ### The base object
 
@@ -82,7 +86,8 @@ the graph. No information is held outside of the graph.
 
 Objects must satisfy the following rules:
 
-1. All construction arguments must be deeply immutable values.
+1. All construction arguments must be deeply immutable values - this excludes
+   a `set` of `lists`, for example.
 1. All construction arguments must be compared by type and value, so that `1`,
    `1.0` and `True` are distinct and every value is equal to itself. They must
    have a hash that is deterministic across processes.
@@ -119,8 +124,11 @@ and reconstruct every object that depends on it, up to the root of the graph.
 
 The above design implies that construction arguments should be small and cheap
 to hash and compare, and the graph implementation must be performant. The hash
-should be computed once and stored as derived state, so that hashing a graph is
-not quadratic in its size.
+should be computed once and stored as derived state.
+
+## Differential geometry
+
+
 
 ### Finite elements
 
