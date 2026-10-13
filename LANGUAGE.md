@@ -1,14 +1,21 @@
 # Minimal UFLx language definition
 
-This note describes the smallest useful language model behind UFLx. It intentionally avoids implementation details, compiler algorithms, and broad redesign ideas.
+This note describes the smallest useful language model behind UFLx. It
+intentionally avoids implementation details, compiler algorithms, and broad
+redesign ideas.
 
 ## 1. What UFLx is
 
-UFLx is a symbolic language embedded in Python for writing finite-element variational forms.
+UFLx is a symbolic language embedded in Python for writing finite-element
+variational forms.
 
-A UFLx program is ordinary Python code that constructs symbolic objects. The important result is usually a `Form`, such as a bilinear form, linear form, or functional.
+A UFLx program is ordinary Python code that constructs symbolic objects. The
+important result is usually a `Form`, such as a bilinear form, linear form, or
+functional.
 
-UFLx is not a full PDE language. It does not own the actual mesh, boundary markers, numerical values of coefficients, or assembly procedure. Those belong to the surrounding problem-solving environment, such as DOLFIN or DOLFINx.
+UFLx is not a full PDE language. It does not own the actual mesh, boundary
+markers, numerical values of coefficients, or assembly procedure. Those belong
+to the surrounding problem-solving environment, such as DOLFIN or DOLFINx.
 
 In one sentence:
 
@@ -37,11 +44,13 @@ P1 = FiniteElement(family="Lagrange", cell=triangle, degree=1, shape=())
 vP2 = FiniteElement(family="Lagrange", cell=triangle, degree=2, shape=(2,))
 ```
 
-The element describes what kind of discrete field is being represented. It does not store actual coefficient values.
+The element describes what kind of discrete field is being represented. It does
+not store actual coefficient values.
 
 ### Domains
 
-A domain is the integration domain of a form. For a minimal language definition, a domain only needs to provide:
+A domain is the integration domain of a form. For a minimal language
+definition, a domain only needs to provide:
 
 - topological dimension,
 - geometric dimension,
@@ -51,12 +60,16 @@ The actual mesh is still external to UFLx.
 
 ### Function spaces
 
-A function space defines a finite-dimensional space of functions. There are three types of function spaces:
+A function space defines a finite-dimensional space of functions. There are
+three types of function spaces:
+
 1. standard finite-element spaces, defined by a domain and an element,
-2. constant function spaces, defined by a shape and a scalar type,
-3. non-finite-element function spaces, defined by domain, shape and scalar type, but no element.
+1. constant function spaces, defined by a shape and a scalar type,
+1. non-finite-element function spaces, defined by domain, shape and scalar
+   type, but no element.
 
 Examples:
+
 ```python
 V = FunctionSpace(domain=domain, element=element)  # standard finite-element space
 C = FunctionSpace(shape=(2,), scalar_type="real")  # constant function space
@@ -65,7 +78,8 @@ N = FunctionSpace(
 )  # non-finite-element function space
 ```
 
-In older UFL examples, `Argument` and `Coefficient` are sometimes created directly from an element. This is not allowed.
+In older UFL examples, `Argument` and `Coefficient` are sometimes created
+directly from an element. This is not allowed.
 
 ### Terminals
 
@@ -75,13 +89,26 @@ The essential terminals are:
 
 - `Argument`, representing an arbitrary basis function of a function space,
 
-   It has a `number` attribute to represent the position of the `Argument` in the form. For example, consider a bilinear form `a(u, v)`. The `Argument` representing `u` has `number=1`, and the `Argument` representing `v` has `number=0`.
+  It has a `number` attribute to represent the position of the `Argument` in
+  the form. For example, consider a bilinear form `a(u, v)`. The `Argument`
+  representing `u` has `number=1`, and the `Argument` representing `v` has
+  `number=0`.
 
-   > Experimental (API breaking) note: Existence of an `Argument` and a `Coefficient` is rooted deep into the legacy UFL. However, more useful concept would be to only allow for `Function` terminals, which can represent both known and unknown functions. It would be a responsibility of the user, when creating a form, to define which of the `Function` terminals are to be considered as "arguments" and which not. This would be much closer to a mathematical notation and would solve many user error of having to treat `Argument` and `Coefficient` differently.
+  > Experimental (API breaking) note: Existence of an `Argument` and a
+  > `Coefficient` is rooted deep into the legacy UFL. However, more useful
+  > concept would be to only allow for `Function` terminals, which can
+  > represent both known and unknown functions. It would be a responsibility of
+  > the user, when creating a form, to define which of the `Function` terminals
+  > are to be considered as "arguments" and which not. This would be much
+  > closer to a mathematical notation and would solve many user error of having
+  > to treat `Argument` and `Coefficient` differently.
 
 - `Coefficient`, representing a known function in a function space,
+
 - literals such as numbers,
-- and geometric quantities such as coordinates, normals, Jacobians, cell diameter, facet area, etc.
+
+- and geometric quantities such as coordinates, normals, Jacobians, cell
+  diameter, facet area, etc.
 
 Example:
 
@@ -91,17 +118,23 @@ u = Argument(function_space=V, name="u", number=1)
 f = Coefficient(function_space=V, name="f")
 ```
 
-> Legacy note: There is no `Constant` in UFLx as a means to represent literal value which is not known at compile time.
+> Legacy note: There is no `Constant` in UFLx as a means to represent literal
+> value which is not known at compile time.
 
-UFLx supports named symbolic terminals. This allows for better error messages and better postprocessing of expressions. In addition, it improves the stability of the expression tree.
+UFLx supports named symbolic terminals. This allows for better error messages
+and better postprocessing of expressions. In addition, it improves the
+stability of the expression tree.
 
-> Legacy note: In legacy UFL, symbolic objects do not have names. It requires expensive and error prone renumbering of terminals in expressions before lowering and code generation.
+> Legacy note: In legacy UFL, symbolic objects do not have names. It requires
+> expensive and error prone renumbering of terminals in expressions before
+> lowering and code generation.
 
 ### Expressions
 
 An expression is either a terminal or an operator applied to other expressions.
 
-Examples of operators are addition, multiplication, indexing, `grad`, `div`, `dot`, `inner`, `jump`, and `avg`.
+Examples of operators are addition, multiplication, indexing, `grad`, `div`,
+`dot`, `inner`, `jump`, and `avg`.
 
 Expressions are symbolic. They are not evaluated when they are created.
 
@@ -114,7 +147,8 @@ A minimal expression carries these static properties:
 - continuity information,
 - (possibly) physical dimension.
 
-These properties are enough to reject many meaningless expressions before lowering or code generation.
+These properties are enough to reject many meaningless expressions before
+lowering or code generation.
 
 ### Measures
 
@@ -152,11 +186,15 @@ A valid integral has a scalar-valued integrand with no unresolved free indices.
 
 ### Forms
 
-A form is a multi-linear functional $a(u, v, w, \ldots): U \times V \times W \times \ldots \to \{\mathbb{R}, \mathbb C\}$.
+A form is a multi-linear functional $a(u, v, w, \\ldots): U \\times V \\times W
+\\times \\ldots \\to {\\mathbb{R}, \\mathbb C}$.
 
 Arguments determine the arity of a form.
 
-> Legacy note: In contrast to the legacy UFL, in UFLx a form does not need to be defined as a sum of integrals. For example, the following is a valid UFLx form: `a = (u * dx) * (v * dx)`, or `a = PointEvaluation(u, (0.5, 0.5)) * PointEvaluation(v, (0.5, 0.5))`.
+> Legacy note: In contrast to the legacy UFL, in UFLx a form does not need to
+> be defined as a sum of integrals. For example, the following is a valid UFLx
+> form: `a = (u * dx) * (v * dx)`, or
+> `a = PointEvaluation(u, (0.5, 0.5)) * PointEvaluation(v, (0.5, 0.5))`.
 
 Examples:
 
@@ -166,30 +204,39 @@ L = v * f * dx
 F = a - L
 ```
 
-> Experimental (API breaking) note: Similar to the `Argument` and `Coefficient` terminals, the `Form` in the legacy UFL is defined implicitly, by the presence of `Argument` terminals. In UFLx, a `Form` could be an explicit object that can be created by the user, e.g.
+> Experimental (API breaking) note: Similar to the `Argument` and `Coefficient`
+> terminals, the `Form` in the legacy UFL is defined implicitly, by the
+> presence of `Argument` terminals. In UFLx, a `Form` could be an explicit
+> object that can be created by the user, e.g.
 
 ```python
 a = Form(inner(grad(v), grad(u)) * dx, arguments=[u, v])
 ```
 
-
 ## 3. Minimal validity rules
 
 The language is small, but it is typed.
 
-- Addition and subtraction require compatible shapes and compatible free indices.
-- Multiplication follows scalar, tensor, matrix-vector, matrix-matrix, and indexed-expression rules.
-- Tensor contractions such as `dot` and `inner` require compatible tensor shapes.
+- Addition and subtraction require compatible shapes and compatible free
+  indices.
+- Multiplication follows scalar, tensor, matrix-vector, matrix-matrix, and
+  indexed-expression rules.
+- Tensor contractions such as `dot` and `inner` require compatible tensor
+  shapes.
 - Spatial derivatives require a spatial domain.
-- Facet quantities such as `FacetNormal` are only meaningful in facet integration contexts.
+- Facet quantities such as `FacetNormal` are only meaningful in facet
+  integration contexts.
 - Interior-facet expressions may use side restrictions:
-    ```python
-    u("+")
-    u("-")
-    ```
-- Operators such as `jump` and `avg` are shorthand for combinations of such restrictions.
-- An integral is valid only when the final integrand is scalar and has no free indices.
-- A form is valid when all of its integrals are valid and their domains, arguments, and coefficients are mutually consistent.
+  ```python
+  u("+")
+  u("-")
+  ```
+- Operators such as `jump` and `avg` are shorthand for combinations of such
+  restrictions.
+- An integral is valid only when the final integrand is scalar and has no free
+  indices.
+- A form is valid when all of its integrals are valid and their domains,
+  arguments, and coefficients are mutually consistent.
 
 ## 4. What transformation procedures does the UFLx core provide
 
@@ -197,20 +244,30 @@ There are two key transformation procedures that the UFLx core provides:
 
 1. Automatic/symbolic differentiation.
 
-   Similar to UFL, UFLx provides a symbolic differentiation via a directional (Gateaux) derivative. The derivative of an Expression, Integral or a Form is lazy/eagerly evaluated. That means the derivative is stored as an expression tree operator, and the actual differentiation is performed when the derivative is used in a context where it needs to be evaluated, such as lowering or code generation.
+   Similar to UFL, UFLx provides a symbolic differentiation via a directional
+   (Gateaux) derivative. The derivative of an Expression, Integral or a Form is
+   lazy/eagerly evaluated. That means the derivative is stored as an expression
+   tree operator, and the actual differentiation is performed when the
+   derivative is used in a context where it needs to be evaluated, such as
+   lowering or code generation.
 
    Example:
 
    ```python
     a = inner(grad(v), grad(u)) * dx
     da = derivative(a, u, du)
-    ```
+   ```
 
-2. Expression and integral transformation between different configurations.
+1. Expression and integral transformation between different configurations.
 
-   > Legacy note: In legacy UFL, there is a very central perspective on the configuration of where objects are defined. Usually, all expressions are defined in the physical configuration, and UFL applies pullbacks to the entire expression tree.
+   > Legacy note: In legacy UFL, there is a very central perspective on the
+   > configuration of where objects are defined. Usually, all expressions are
+   > defined in the physical configuration, and UFL applies pullbacks to the
+   > entire expression tree.
 
-   In UFLx, configuration where expressions are defined are a consequence of the domain. Since the domain is part of the Expression's static attributes, it is propagated through the expression tree based on the language rules.
+   In UFLx, configuration where expressions are defined are a consequence of
+   the domain. Since the domain is part of the Expression's static attributes,
+   it is propagated through the expression tree based on the language rules.
 
    TODO.
 
@@ -229,7 +286,8 @@ The minimal language includes:
 - integrals,
 - and forms.
 
-This is enough to describe ordinary weak forms such as mass, stiffness, elasticity, Stokes, mixed Poisson, and DG forms.
+This is enough to describe ordinary weak forms such as mass, stiffness,
+elasticity, Stokes, mixed Poisson, and DG forms.
 
 ## 6. What does not belong to the minimal language
 
@@ -246,13 +304,19 @@ The following are not primitive language concepts:
 - expression simplification strategy,
 - code generation.
 
-These are consumers or transformations of the symbolic language, not the core language itself.
+These are consumers or transformations of the symbolic language, not the core
+language itself.
 
 ## 7. Extensibility of the attributes
 
-> Legacy note: In legacy UFL, the set of static attributes is fixed and hardcoded. This led to many language features being hacked in (e.g. complex numbers support, dual spaces, etc.).
+> Legacy note: In legacy UFL, the set of static attributes is fixed and
+> hardcoded. This led to many language features being hacked in (e.g. complex
+> numbers support, dual spaces, etc.).
 
-In UFLx, the set of static attributes is extensible. This allows for cleaner language extensions in the future, such as support for physical dimensions, dual spaces, error estimates, custom quadrature rules, custom integrability/continuity rules, etc.
+In UFLx, the set of static attributes is extensible. This allows for cleaner
+language extensions in the future, such as support for physical dimensions,
+dual spaces, error estimates, custom quadrature rules, custom
+integrability/continuity rules, etc.
 
 ## 8. Examples
 
@@ -272,4 +336,3 @@ f = Coefficient(V, name="f")
 a = inner(grad(v), grad(u)) * dx
 L = v * f * dx
 ```
-
