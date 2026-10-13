@@ -1,29 +1,126 @@
-# Minimal UFLx language definition
+# Core UFLx language definition
 
-This note describes the smallest useful language model behind UFLx. It
-intentionally avoids implementation details, compiler algorithms, and broad
-redesign ideas.
+This note describes the smallest core language behind UFLx. It intentionally
+avoids implementation details, compiler algorithms, and broad redesign ideas.
+It assumes knowledge of differentiable geometry and functional analysis. Some
+advanced differential geometry concepts are explained in more detail.
 
-## 1. What UFLx is
+This document is aimed at users and developers with extensive knowledge of
+domain specific languages for variational forms (e.g. UFL, ).
 
-UFLx is a symbolic language embedded in Python for writing finite-element
-variational forms.
-
-A UFLx program is ordinary Python code that constructs symbolic objects. The
-important result is usually a `Form`, such as a bilinear form, linear form, or
-functional.
-
-UFLx is not a full PDE language. It does not own the actual mesh, boundary
-markers, numerical values of coefficients, or assembly procedure. Those belong
-to the surrounding problem-solving environment, such as DOLFIN or DOLFINx.
+## What UFLx is and isn't
 
 In one sentence:
 
-> UFLx is a typed symbolic expression language for finite-element forms.
+> UFLx is a typed symbolic language writing variational forms.
 
-## 2. The minimal object model
+UFLx is a symbolic language embedded in Python for writing variational forms.
+
+The UFLx core language (henceforth core) should not use finite element or
+numerical analysis terminology - differential geometry and functional analysis
+(and their fascinating intersection), without finite element (numerical
+analysis) concepts, should be all that should is required.
+
+Finite element and numerical analysis concepts, when necessary, will be added
+on top of the core, or provided by external libraries (Basix being the
+'in-house' example). Basix and DOLFINx and their assumptions should not be
+visible in the core.
+
+The core requires an understanding of modern differential geometry and
+functional analysis. UFLx will then provide higher-level functionality based on
+this core which mimics the 'easier' interface presented by other competing
+packages.
+
+UFLx is not a symbolic language for reasoning about problems in functional
+analysis or differential geometry. Hence, the core should only contain the
+minimal concepts and relations necessary for writing a wide range of
+variational forms as code for subsequent compilation.
+
+A UFLx program is ordinary Python code that constructs symbolic objects and
+connects them through a graph. The primary result is usually a `Form`, such as
+a bilinear form, linear form, or functional.
+
+UFLx does not handle concrete data or algorithms; e.g. actual meshes, boundary
+markers, numerical values of coefficients, or assembly procedures. Those belong
+to the surrounding problem-solving environment, such as DOLFINx, Firedrake,
+FIAT and Basix. UFLx instead provides a specified set of leaf nodes which the
+external library must provide.
+
+## Basic principles
+
+- All core object definitions should be closely related to their strict
+  mathematical definition.
+- Extra definitions, properties or terminology outside of the established
+  mathematical fields noted must be avoided, in particular ideas from more
+  applied fields such as mechanics and engineering-oriented computational
+  sciences.
+- Strictness and expressivity, not brevity, is key in the core - brevity can be
+  added later with higher-level APIs.
+- The mathematical fields provide a rich foundation for writing variational
+  problems in a uniform way across geometric dimensions, i.e. 'special cases'
+  for particular dimensions do not exist, and so should not exist in the core.
+- The core should not contain any algorithm that is designed to produce
+  convenient output for form compilers.
+
+## Basic implementation principles
+
+- UFLx should be deterministic on the same machine using the same byte-code.
+- Performance is *important* and so any data structures and algorithms in the
+  core should be carefully chosen and tested for scalability.
+
+## The minimal object model
 
 The minimal language needs only a small number of object kinds.
+
+### The base object
+
+The base object in UFLx must be extended by all objects that are included in
+the graph. The graph is a directed acyclic graph (DAG).
+
+Everything needed to define the variational problem must be recoverable from
+the graph. No information is held outside of the graph.
+
+Objects must satisfy the following rules:
+
+1. All construction arguments must be deeply immutable values.
+1. All construction arguments must be compared by type and value, so that `1`,
+   `1.0` and `True` are distinct and every value is equal to itself. They must
+   have a hash that is deterministic across processes.
+1. An object must be reconstructible from its class and construction arguments,
+   and the reconstructed object must be equal to the original.
+1. No attribute may be assigned, reassigned or deleted after construction,
+   except to cache state derived according to rule 5.
+1. Any state beyond the construction arguments must be derived from the class
+   and construction arguments.
+1. Construction must depend only on the construction arguments, not on global
+   state.
+1. Any ordering of objects must come from a total order that is deterministic
+   across processes.
+1. The edges of an object must be exactly the base objects among its
+   construction arguments, in order.
+1. Equality (`==`) must be structural and return a `bool`. It does not decide
+   mathematical equivalence, so $a + b$ and $b + a$ are equal only if
+   construction normalises them to equal construction arguments.
+
+Hence two objects are equal if and only if they have the same class and equal
+construction arguments.
+
+Because objects are immutable, they need only be validated once, when they are
+constructed. Every object that exists is therefore valid.
+
+Terminal names are construction arguments, so two terminals with the same name
+and function space are equal (see [Terminals](#terminals)).
+
+The base object should help consumers follow these rules, but should not
+prevent downstream users from working around them.
+
+An object cannot be changed. To obtain a modified object, construct a new one
+and reconstruct every object that depends on it, up to the root of the graph.
+
+The above design implies that construction arguments should be small and cheap
+to hash and compare, and the graph implementation must be performant. The hash
+should be computed once and stored as derived state, so that hashing a graph is
+not quadratic in its size.
 
 ### Finite elements
 
