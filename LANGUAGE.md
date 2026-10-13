@@ -138,6 +138,50 @@ the root of the graph.
 The above design implies that construction arguments should be small and cheap
 to hash and compare, and the graph implementation must be performant.
 
+### Class hierarchy
+
+Every object in the graph extends `Base`. The classes defined in this document
+form the following hierarchy:
+
+```
+Base
+├── AbstractExpression
+│   ├── AbstractScalar                    literals, no set
+│   │   ├── Integer
+│   │   ├── Rational
+│   │   ├── RealScalar
+│   │   └── ComplexScalar
+│   ├── Coordinate                        terminal, X on P
+│   ├── Tensor                            built from scalar entries
+│   ├── Indexed                           full indexing only
+│   ├── UnaryOperator
+│   │   ├── Gradient                      grad, on coordinate domains only
+│   │   ├── Transpose
+│   │   ├── Determinant
+│   │   └── SquareRoot
+│   └── BinaryOperator
+│       ├── Sum                           +
+│       ├── Product                       *
+│       ├── Power                         **
+│       └── MatrixProduct                 @
+│
+└── AbstractDomain                        parameter_domain(D), mapping(D)
+    ├── AbstractCoordinateDomain          stores n, mapping is X
+    │   └── RD                            R^n
+    └── ParameterisedDomain               stores P and ψ, mapping is ψ
+```
+
+The edges of the graph point from an object to the objects that the object
+stores, and never back:
+
+```
+ParameterisedDomain ──► P (AbstractCoordinateDomain)
+        │
+        └─────────────► ψ (AbstractExpression) ──► ... ──► Coordinate ──► P
+
+Gradient ──► f        Indexed ──► expression        Tensor ──► entries
+```
+
 ## The lowest objects
 
 ### Expressions
