@@ -6,7 +6,7 @@ It assumes knowledge of differentiable geometry and functional analysis. Some
 advanced differential geometry concepts are explained in more detail.
 
 This document is aimed at users and developers with extensive knowledge of
-domain specific languages for variational forms (e.g. UFL, ).
+domain specific languages for variational forms (e.g. UFL, ngsolve).
 
 ## What UFLx is and isn't
 
@@ -41,11 +41,11 @@ connects them through a graph. The primary result is usually a Form, such as a
 bilinear form, linear form, or functional. Python code will be used to motivate
 examples but concrete implementation is out of scope.
 
-UFLx does not handle concrete data or algorithms; e.g. actual meshes, boundary
-markers, numerical values of coefficients, or assembly procedures. Those belong
-to the surrounding problem-solving environment, such as DOLFINx, Firedrake,
-FIAT and Basix. UFLx instead provides a specified set of leaf nodes which the
-external library must provide.
+UFLx does not handle concrete data or numerical algorithms; e.g. actual meshes,
+boundary markers, numerical values of coefficients, or assembly procedures.
+Those belong to the surrounding problem-solving environment, such as DOLFINx,
+Firedrake, FIAT and Basix. UFLx instead provides a specified set of leaf nodes
+which the external library must provide.
 
 ## Basic principles
 
@@ -118,12 +118,6 @@ Objects must satisfy the following rules:
 
 Hence two objects are equal if and only if the two objects have the same class
 and equal construction arguments.
-
-May be necessary:
-
-1. No attribute may be assigned, reassigned or deleted after construction,
-   except to cache state derived according to the rule beginning (any state
-   beyond...).
 
 To satisfy the above, the base object must only accept a small curated set of
 types.
@@ -227,6 +221,16 @@ class AbstractExpression(Base, ABC):
         # Calls the free function arithmetic.power.
         ...
 
+    def __getitem__(self, indices: object) -> AbstractExpression:
+        """Index."""
+        # Calls the free function indexed.
+        ...
+
+    def __iter__(self) -> NoReturn:
+        """Raise TypeError, because expressions are not iterable."""
+        # Without __iter__, Python iterates through __getitem__.
+        ...
+
 # arithmetic.py
 
 # A free function
@@ -278,12 +282,109 @@ Integer(2) + Integer(3) != Integer(5)
 Integer(2) + Integer(3) == Sum(Integer(2), Integer(3))
 ```
 
+#### Conversion of Python values with `as_literal` and `as_expression`
+
+>>> LLM generated content.
+
+Two free functions convert Python values into expressions. The free function
+`as_literal` converts a Python number into a literal. The free function
+`as_expression` accepts either an `AbstractExpression` or a Python number.
+
+Every user-facing free function and every operator overload applies
+`as_expression` to each operand or entry that the function accepts as an
+expression. Class constructors apply neither `as_literal` nor `as_expression`.
+Class constructors accept only the types that the class stores.
+
+##### `as_literal`
+
+The free function `as_literal(value)` converts a Python number into an
+`AbstractScalar` literal. The function `as_literal` dispatches on the exact
+type of `value`, not on subclasses of the type:
+
+| `type(value)`        | Result                                                          |
+| -------------------- | --------------------------------------------------------------- |
+| `int`                | `Integer(value)`                                                |
+| `fractions.Fraction` | `Rational(value.numerator, value.denominator)`                  |
+| `float`              | `RealScalar(value)`                                             |
+| `complex`            | `ComplexScalar(RealScalar(value.real), RealScalar(value.imag))` |
+
+The function `as_literal` raises:
+
+- `TypeError` for every other type. The rejected types include:
+  - every `AbstractExpression`, including literals;
+  - `bool`, although `bool` is a subclass of `int`;
+  - every other subclass of `int`, `float`, `complex` or `Fraction`;
+  - NumPy scalars;
+  - `str` and `tuple`.
+- `ValueError` for a `float` that is not finite, and for a `complex` with a
+  real or imaginary part that is not finite.
+
+Exact type dispatch keeps the result of `as_literal` deterministic. Base rule 2
+compares construction arguments by type and value, so `True` and `1` must not
+convert to the same literal. A NaN is not equal to itself, so a NaN cannot be a
+construction argument.
+
+The function `as_literal` preserves the Python type and the value of `value`
+exactly:
+
+- `as_literal(1)` is `Integer(1)` and `as_literal(1.0)` is `RealScalar(1.0)`,
+  so `as_literal(1) != as_literal(1.0)`.
+- `as_literal(-0.0)` is `RealScalar(-0.0)`, and `RealScalar(-0.0)` is not equal
+  to `RealScalar(0.0)`.
+- `as_literal(1j)` is `ComplexScalar(RealScalar(0.0), RealScalar(1.0))`. The
+  zero real part is kept.
+- `as_literal(Fraction(2, 4))` is `Rational(1, 2)`, because Python normalises
+  `Fraction(2, 4)` to `Fraction(1, 2)` before `as_literal` sees the value.
+
+The function `as_literal` performs no folding and no simplification.
+
+##### `as_expression`
+
+The free function `as_expression(value)` returns `value` unchanged if `value`
+is an `AbstractExpression`. Otherwise the function `as_expression` returns
+`as_literal(value)`, and raises the errors of `as_literal`.
+
+The function `as_expression` is the only place where a value is checked for
+being an `AbstractExpression` before conversion. The function `as_expression`
+is idempotent, so `as_expression(as_expression(v)) == as_expression(v)` for
+every accepted `v`.
+
+The functions `as_literal` and `as_expression` convert a single value. Neither
+function converts a `tuple`. Free functions that accept nested `tuple`s, such
+as `tensor`, apply `as_expression` to each entry.
+
 ### Operators
 
 ```UnaryOperator(AbstractExpression)```
 ```BinaryOperator(AbstractExpression)```
 
 Downstream basic ops are relatively obvious.
+
+### Basic operators
+
+Concrete subclasses of `UnaryOperator` needed for the first example. Each class
+stores one expression, which is the only edge, and derives the set of that
+expression. Each free function applies `as_expression`, raises `ValueError` for
+a wrong value shape and performs no simplification.
+
+| Class         | Free function | Argument shape | Result shape |
+| ------------- | ------------- | -------------- | ------------ |
+| `Transpose`   | `transpose`   | `(m, n)`       | `(n, m)`     |
+| `Determinant` | `determinant` | `(n, n)`       | `()`         |
+| `SquareRoot`  | `square_root` | `()`           | `()`         |
+
+Concrete subclasses of `BinaryOperator` needed for the first example. Each
+class stores two expressions, which are the two edges in order. The set is the
+set of the operands. Operands with a set must have the same set. Each free
+function applies `as_expression` to both operands, raises `ValueError` for
+wrong value shapes and performs no simplification.
+
+| Class           | Free function    | Overload | Operand shapes     | Result shape |
+| --------------- | ---------------- | -------- | ------------------ | ------------ |
+| `Sum`           | `add`            | `+`      | `s`, `s`           | `s`          |
+| `Product`       | `multiply`       | `*`      | `()`, `()`         | `()`         |
+| `Power`         | `power`          | `**`     | `()`, `()`         | `()`         |
+| `MatrixProduct` | `matrix_product` | `@`      | `(m, k)`, `(k, n)` | `(m, n)`     |
 
 ## Differential geometry
 
@@ -296,77 +397,409 @@ kinds of structure on the domain:
 - geometric structure, which is the metric of the domain and the measure
   induced by the metric.
 
-### Domains
+### AbstractDomain
 
 An abstract base class for domains `AbstractDomain`.
 
-Abstractly defined by:
+Defined by:
+
 - The ambient dimension n of the Euclidean space R^n whose coordinates name the
   points of this domain (geometric dimension). 
-- the topological dimension, which is the maximum dimension of the domains
+- The topological dimension, which is the maximum dimension of the domains
   cells (standard Lebesgue definition). 
 
 Examples:
 - A domain consisting of triangle and interval domain has topological dimension
   2.
-- A sphere in R^3 has a geometric dimension 3 and topological dimension 2.
+- A sphere in $R^3$ has a geometric dimension 3 and topological dimension 2.
+
+Every `AbstractDomain` $D$ with topological dimension $k$ and geometric
+dimension $n$ provides two free functions:
+
+- `parameter_domain(D)`, an `AbstractCoordinateDomain` $P$ of dimension $k$.
+- `mapping(D)`, an `AbstractExpression` $\psi$ on $P$ with value shape `(n,)`.
+  The mapping $\psi$ maps each point of $P$ to a point of $D$, and the image
+  $\psi(P)$ is $D$.
+
+The mapping of $D$ gives the coordinates in $R^n$ of the points of $D$. The
+geometry of $D$ is derived from the mapping (see
+[Geometry of a domain](#geometry-of-a-domain)).
 
 ### AbstractCoordinateDomain
 
-An abstract base class for coordinate domains `AbstractCoordinateDomain`, a
+An abstract base class for coordinate domains `AbstractCoordinateDomain`, and a
 subclass of `AbstractDomain`.
 
-A coordinate domain is a subset of R^n with non-empty interior in R^n. Hence
-the topological dimension of a coordinate domain equals the geometric dimension
-n.
+A coordinate domain is a subset of $R^n$ with non-empty interior in $R^n$.
+Hence the topological dimension of a coordinate domain equals the geometric
+dimension $n$. The main purpose of this class over `AbstractDomain` is to
+enforce that the topological dimension equals the geometric dimension.
 
-The purpose of this class over `AbstractDomain` is to enforce that the
-topological dimension equals the geometric dimension.
+Every concrete `AbstractCoordinateDomain` $P$ stores:
 
-Abstractly defined by:
+- The dimension $n$, provided by the property `dimension`.
 
-- The dimension n, which is both the geometric dimension and the topological
-  dimension (in).
-- The ambient domain R^n of the coordinate domain. R^n is itself a coordinate
-  domain, and the ambient domain of R^n is R^n (in).
+An `AbstractCoordinateDomain` $P$ derives:
 
-Examples:
-
-- A reference cell in R^n and R^n itself are coordinate domains.
-- The facets of a reference cell in R^n are not coordinate domains as subsets
-  of R^n.
-
-### AbstractParameterizedDomain
-
-An abstract class for parameterised domains, a subclass of `AbstractDomain`.
-
-> An `AbstractCoordinateDomain` could also be a `AbstractParameterisedDomain`
-> that is parameterised by the Identity.
-
-A parameterised domain is the image $\psi(P)$ of a coordinate domain $P \subset
-R^k$ under a map $\psi \to R^n$ with $k \le n$.
-
-`AbstractCoordinateDomain` is defined by:
-
-- The parameter domain $P$, which is an `AbstractCoordinateDomain` (in).
-- The map $\psi : P \to R^n$ (in).
-- The geometric dimension $n$ of the ambient space (in).
-- The topological dimension $k$, taken from $P$ (implied).
-
-For the purposes of this discussion $\psi$ is a vector-valued expression
-(something that is an `Expression`) on $P$.
+- The geometric dimension and the topological dimension, which are both $n$.
+- The ambient domain `ambient_domain(P)`, which is `RD(n)`.
+- The coordinate function `coordinate(P)` (see [Coordinate](#coordinate)).
+- The parameter domain `parameter_domain(P)`, which is $P$.
+- The mapping `mapping(P)`, which is the identity map `coordinate(P)`.
 
 Examples:
 
-- 
-- A finite element cell map. 
+- A reference cell in $R^n$ and $R^n$ itself are coordinate domains.
+- A facet of a reference cell in $R^n$ is *not* a coordinate domain, because the
+  facet has empty interior in $R^n$. The facet is the image of a reference cell
+  in $R^{n-1}$ under a map, so the facet is a parameterised domain (defined
+  below).
 
+### RD
+
+A concrete subclass of `AbstractCoordinateDomain` for the whole of $R^n$.
+
+`RD(n)` stores the dimension $n$, an `int` with $n \ge 0$. The integer $n$ is
+not a base object, so `RD(n)` has no edges in the graph. `RD(m) == RD(n)` if
+and only if $m = n$. Everything else comes from `AbstractCoordinateDomain`, so
+`ambient_domain(RD(n)) == RD(n)`.
+
+Example:
+
+- `RD(2)` is the parameter domain of the paraboloid example below.
+
+### Coordinate
+
+A concrete subclass of `AbstractExpression` for the coordinate function of a
+coordinate domain.
+
+Every concrete coordinate domain $P$ provides a coordinate function
+`Coordinate(P)`, obtained with the free function `coordinate(P)`. The
+coordinate function $X$ of $P$ is the terminal expression that maps each point
+of $P$ to the n-tuple of that point:
+
+$X : P \to R^n$, $X(p) = p$.
+
+The coordinate function $X$ is a function on $P$, not a point of $P$.
+Evaluating $X$ at a point $p$ of $P$ gives the n-tuple of $p$.
+
+`Coordinate(P)` stores the coordinate domain $P$, which is the only edge.
+`Coordinate(P)` derives the value shape `(n,)` and the set $P$. Two coordinate
+functions are equal if and only if the two coordinate domains are equal.
+
+Only coordinate domains provide a coordinate function. The coordinates of the
+points of any other domain are given by `mapping` (see
+[AbstractDomain](#abstractdomain)), which is built from the coordinate function
+of the parameter domain.
+
+Examples:
+
+- `coordinate(RD(3))` is `Coordinate(RD(3))`, with value shape `(3,)` and the
+  set `RD(3)`.
+- `coordinate(RD(3)) == coordinate(RD(3))` is `True`, and
+  `coordinate(RD(2)) == coordinate(RD(3))` is `False`.
+- In the paraboloid example, `X = coordinate(RD(2))` has value shape `(2,)`.
+
+### Tensor
+
+A concrete subclass of `AbstractExpression` that builds a tensor-valued
+expression from scalar expressions.
+
+`Tensor(entries)` stores:
+
+- The entries, a nested `tuple` of scalar `AbstractExpression`s. The nesting
+  depth $r \ge 1$ is the rank of the tensor.
+
+The nested `tuple` must be rectangular. Every `tuple` at the same depth must
+have the same length, and every length must be at least 1. Every entry must
+have value shape `()`.
+
+`Tensor(entries)` derives:
+
+- The value shape `(n_0, ..., n_{r-1})`, where $n_i$ is the length of every
+  `tuple` at depth $i$.
+- The set of the tensor. The set of the tensor is the set of the entries. All
+  entries with a set must have the same set. If no entry has a set, the tensor
+  has no set.
+
+The edges of `Tensor(entries)` are the entries in row-major order, so the
+entry `entries[i_0]...[i_{r-1}]` comes before every later entry in
+lexicographic order of the indices $(i_0, \ldots, i_{r-1})$.
+
+Construction performs no simplification. For example,
+`vector((Integer(1) + Integer(1),)) != vector((2,))`.
+
+The free function `tensor(entries)` applies `as_expression` to every entry and
+returns `Tensor(entries)`. The free functions `vector` and `matrix` are
+`tensor` restricted to nesting depth 1 and nesting depth 2, and raise
+`ValueError` for any other nesting depth.
+
+Examples:
+
+- `vector((1, 2))` has value shape `(2,)` and no set.
+- `matrix(((1, 0), (0, 1)))` has value shape `(2, 2)` and no set. The entries
+  are `Integer`s.
+- `matrix(((1.0, 0.0), (0.0, 1.0)))` has `RealScalar` entries, so
+  `matrix(((1, 0), (0, 1))) != matrix(((1.0, 0.0), (0.0, 1.0)))`.
+- `matrix(((1, 2),))` has value shape `(1, 2)`.
+- `tensor((((1,),),))` has value shape `(1, 1, 1)`.
+
+### Indexed
+
+>>> LLM generated content.
+
+A concrete subclass of `AbstractExpression` that selects one component of a
+tensor-valued expression.
+
+`Indexed(expression, indices)` stores:
+
+- The expression, an `AbstractExpression` of rank $r \ge 1$. The expression is
+  the only edge of `Indexed(expression, indices)`.
+- The indices, a `tuple` of $r$ `int`s.
+
+Indexing is full indexing only. The number of indices must equal the rank $r$
+of the expression, and each index $i_j$ must satisfy $0 \le i_j < n_j$, where
+`(n_0, ..., n_{r-1})` is the value shape of the expression.
+
+`Indexed(expression, indices)` derives the value shape `()` and the set of the
+expression.
+
+The free function `indexed(expression, indices)` accepts a single `int` $i$,
+which the free function converts into the `tuple` `(i,)`, or a `tuple` of
+`int`s, and returns `Indexed(expression, indices)`. The overload
+`expression[indices]` calls `indexed`, so `X[0]` and `A[0, 1]` are
+`indexed(X, 0)` and `indexed(A, (0, 1))`. The free function `indexed` raises:
+
+| Error        | Cause                                                        |
+| ------------ | ------------------------------------------------------------ |
+| `TypeError`  | An index whose type is not exactly `int`, such as `bool`.    |
+| `TypeError`  | An expression with value shape `()`.                         |
+| `IndexError` | A number of indices that differs from the rank.              |
+| `IndexError` | A negative index, or an index $i_j \ge n_j$.                 |
+
+A negative index is rejected rather than converted, so the stored indices are
+always the indices that the user wrote. Expressions are not iterable (see
+`AbstractExpression.__iter__`).
+
+Construction performs no simplification. For example, `vector((a, b))[0]` is
+`Indexed(Tensor((a, b)), (0,))` and is not equal to `a`.
+
+Partial indexing, slicing and free indices are not part of `Indexed`.
+
+Examples:
+
+- For the coordinate function $X$ of `RD(3)`, `X[2]` has value shape `()`.
+- For `A = matrix(((1, 2), (3, 4)))`, `A[1, 0]` has value shape `()`, and
+  `A[1]` raises `IndexError`.
+- `X[-1]` and `X[True]` raise errors.
+- For the coordinate function $X$ of `RD(2)`, `Tensor((X[0], X[1])) != X`,
+  because construction performs no simplification.
+- `vector((1 - X[0], X[0]))` has value shape `(2,)` and the set `RD(2)`.
+- `matrix(((X[0], X[1]),))` has value shape `(1, 2)`.
+- In the paraboloid example, the height `X[0]**2 + X[1]**2` is an expression
+  on `RD(2)` with value shape `()`.
+
+### Gradient
+
+> LLM generated content.
+
+A concrete subclass of `UnaryOperator` for the gradient of an expression $f$
+on a coordinate domain $P$ of dimension $n$. The gradient of $f$ is the
+derivative of $f$ with respect to the coordinate function $X$ of $P$.
+
+`Gradient(f)` stores $f$, which is the only edge. The set of $f$ must be an
+`AbstractCoordinateDomain` $P$. `Gradient(f)` derives the value shape
+`f.value_shape + (n,)` and the set $P$.
+
+The free function `grad(f)` applies `as_expression` to $f$ and returns
+`Gradient(f)`. The free function raises `ValueError` if $f$ has no set, or if
+the set of $f$ is not a coordinate domain.
+
+`Gradient` is lazy. Construction does not evaluate the derivative. A later pass
+evaluates the derivative with the standard rules, including `grad(X)` $= I$
+and a zero derivative for every literal.
+
+The gradient on a parameterised domain is not a primitive. The gradient on a
+parameterised domain is a composite of `grad` on the parameter domain and the
+geometry of the parameterised domain (see
+[Geometry of a domain](#geometry-of-a-domain)).
+
+Examples, with `X = coordinate(RD(2))`:
+
+- `grad(X)` has value shape `(2, 2)`. A later pass evaluates `grad(X)` to the
+  identity.
+- `grad(X[0]**2 + X[1]**2)` has value shape `(2,)`. A later pass evaluates the
+  gradient to $(2 X_0, 2 X_1)$.
+- `grad(1)` raises `ValueError`, because the literal `Integer(1)` has no set.
+
+### ParameterisedDomain
+
+A concrete subclass of `AbstractDomain` for parameterised domains.
+
+A parameterised domain $D$ is the image $\psi(P)$ of a coordinate domain
+$P \subset R^k$ under a map $\psi : P \to R^n$.
+
+`ParameterisedDomain(P, psi)` stores:
+
+- The parameter domain $P$, an `AbstractCoordinateDomain` of dimension $k$,
+  returned by `parameter_domain(D)`.
+- The mapping $\psi$, an `AbstractExpression` on $P$ with value shape `(n,)`,
+  returned by `mapping(D)`. The mapping $\psi$ is built from the coordinate
+  function $X$ of $P$.
+
+$P$ and $\psi$ are the two edges, in that order.
+
+`ParameterisedDomain(P, psi)` derives:
+
+- The topological dimension $k$, which is the dimension of $P$.
+- The geometric dimension $n$, which is taken from the value shape `(n,)` of
+  $\psi$. The geometric dimension is derived, not stored, so the geometric
+  dimension cannot disagree with the value shape of $\psi$.
+- The ambient domain `ambient_domain(D)`, which is `RD(n)`.
+
+A parameterised domain does not provide a coordinate function.
+
+The free function `parameterised_domain(P, psi)` applies `as_expression` to
+$\psi$ and returns `ParameterisedDomain(P, psi)`. The free function raises
+`ValueError` if $\psi$ does not have rank 1, if $\psi$ has a set other than
+$P$, or if $k > n$.
+
+A coordinate domain is *not* a parameterised domain. `AbstractCoordinateDomain`
+and `ParameterisedDomain` are both subclasses of `AbstractDomain`. Both classes
+provide `parameter_domain` and `mapping`.
+
+Examples:
+
+- The hypotenuse of the reference triangle is a parameterised domain with
+  $k = 1$ and $n = 2$. $P$ is the reference interval in $R^1$, and
+  $\psi(X) = (1 - X_0, X_0)$.
+- `parameterised_domain(RD(2), vector((X[0], X[1], X[0]**2 + X[1]**2)))`, with
+  `X = coordinate(RD(2))`, is the paraboloid, with $k = 2$ and $n = 3$.
+  `ambient_domain` of the paraboloid is `RD(3)`.
+- A physical triangle in $R^2$ is a parameterised domain with $k = n = 2$. $P$
+  is a reference triangle, and $\psi$ is the affine map from $P$ onto the
+  physical triangle. See the affinely mapped triangle example.
+
+### Geometry of a domain
+
+The geometry of every domain $D$, coordinate or parameterised, comes from the
+mapping $\psi$ = `mapping(D)` on the parameter domain $P$ =
+`parameter_domain(D)` of dimension $k$:
+
+| Free function        | Definition                       | Value shape |
+| -------------------- | -------------------------------- | ----------- |
+| `jacobian(D)`        | $J$ = `grad(mapping(D))`         | `(n, k)`    |
+| `metric(D)`          | $g$ = `transpose(J) @ J`         | `(k, k)`    |
+| `measure_density(D)` | `square_root(determinant(g))`    | `()`        |
+
+The Jacobian, metric and measure density are lazy expressions. Construction
+performs no simplification.
+
+For a coordinate domain, the mapping is the coordinate function $X$. The
+general rules give $J$ = `grad(X)` $= I$, $g = I$ and a measure density of 1,
+so a coordinate domain needs no special case.
+
+### Example: a paraboloid
+
+The paraboloid over `RD(2)` collects the examples of the sections above.
+
+```python
+# AbstractCoordinateDomain: RD(2), no edges.
+P = RD(2)
+
+# AbstractExpression: Coordinate(RD(2)), value shape (2,).
+X = coordinate(P)
+
+# AbstractExpression: Tensor((Indexed(X, (0,)), Indexed(X, (1,)), Sum(...))),
+# value shape (3,).
+psi = vector((X[0], X[1], X[0]**2 + X[1]**2))
+
+# AbstractDomain: ParameterisedDomain(RD(2), psi), k = 2, n = 3.
+D = parameterised_domain(P, psi)
+
+# AbstractExpression: Gradient(psi), value shape (3, 2).
+J = jacobian(D)
+
+# AbstractExpression: MatrixProduct(Transpose(J), J), value shape (2, 2).
+g = metric(D)
+
+# AbstractExpression: SquareRoot(Determinant(g)), value shape ().
+rho = measure_density(D)
+```
+
+Every object in the example is lazy.
+
+Note that at this stage we do not need the concept of a `Point` as we have not
+evaluated anything at a `Point` so far.
+
+### Example: an affinely mapped triangle
+
+The physical triangle with vertices $v_0 = (1, 0)$, $v_1 = (3, 1)$ and
+$v_2 = (2, 3)$ is the image of a reference triangle under an affine map.
+
+Important point is that there is no topology here, just geometry.
+
+$\{p \in R^n : p_i \ge 0 \text{ for every } i, \ \sum_i p_i \le 1\}$
+
+as a concrete `AbstractCoordinateDomain`. A concrete coordinate domain provides
+only the dimension $n$. Everything else comes from `AbstractCoordinateDomain`.
+
+```python
+class UnitSimplex(AbstractCoordinateDomain):
+    def __init__(self, n: int):
+        if n < 0:
+            raise ValueError("Dimension must be non-negative.")
+        super().__init__(n)
+        self._n = n
+
+    @property
+    def dimension(self) -> int:
+        return self._n
+```
+
+`UnitSimplex(2)` is the reference triangle with vertices $(0, 0)$, $(1, 0)$ and
+$(0, 1)$. The affine map from `UnitSimplex(2)` onto the physical triangle is
+
+$$\psi(X) = v_0 + X_0 (v_1 - v_0) + X_1 (v_2 - v_0)
+= (1 + 2 X_0 + X_1, X_0 + 3 X_1).$$
+
+```python
+# AbstractCoordinateDomain: UnitSimplex(2), no edges.
+T = UnitSimplex(2)
+
+# AbstractExpression: Coordinate(UnitSimplex(2)), value shape (2,).
+X = coordinate(T)
+
+# AbstractExpression: Tensor(..., ...), value shape (2,).
+psi = vector((1 + 2 * X[0] + X[1], X[0] + 3 * X[1]))
+
+# AbstractDomain: ParameterisedDomain(UnitSimplex(2), psi), k = n = 2.
+K = parameterised_domain(T, psi)
+
+# AbstractExpression: Gradient(psi), value shape (2, 2).
+J = jacobian(K)
+
+# AbstractExpression: SquareRoot(Determinant(MatrixProduct(Transpose(J), J))),
+# value shape ().
+rho = measure_density(K)
+```
+
+A later pass evaluates the Jacobian to the constant matrix
+
+$$J = \begin{pmatrix} 2 & 1 \\ 1 & 3 \end{pmatrix},$$
+
+so $\det J = 5$ and $\sqrt{\det g} = |\det J| = 5$. The area of the physical
+triangle is $5$ times the area $1/2$ of the reference triangle.
+
+The physical triangle is a parameterised domain with $k = n$, not a coordinate
+domain, although the physical triangle has non-empty interior in $R^2$. The
+class records how the domain is built.
 
 ### Cells
 
-A domain is divided into finitely many cells. A cell is a piece of the domain
-with the same dimension as the domain, and with the shape of a ball up to
-continuous deformation. Two cells meet only on the boundaries of the two cells.
+A domain can be divided into finitely many cells. A cell is a piece of the
+domain with the same dimension as the domain. Two cells meet only on the
+boundaries of the two cells.
 
 A facet is a piece of the boundary of a cell, one dimension lower than the
 cell. A facet in the boundary of one cell is an exterior facet. A facet shared
@@ -374,6 +807,8 @@ by two cells is an interior facet.
 
 Cells and facets are topological. Defining cells and facets does not require a
 metric.
+
+# JSH worked to here.
 
 ### Finite elements
 
