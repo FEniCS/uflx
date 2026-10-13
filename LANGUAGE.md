@@ -90,8 +90,8 @@ Objects must satisfy the following rules:
    `tuple` of `list`s is not allowed.
 1. All construction arguments must be compared by type and value, so that `1`,
    `1.0` and `True` are distinct, `0.0` and `-0.0` are also distinct, and every
-   value is equal to itself. They must have a hash that is deterministic across
-   processes.
+   value is equal to itself. Every construction argument must have a hash that
+   is deterministic across processes.
 1. An object must be reconstructible from its class and construction arguments,
    and the reconstructed object must be equal to the original.
 1. No attribute may be assigned, reassigned or deleted after construction,
@@ -104,27 +104,28 @@ Objects must satisfy the following rules:
    across processes.
 1. The edges of an object must be exactly the base objects among its
    construction arguments, in order.
-1. Equality (`==`) must be structural and return a `bool`. It does not decide
-   mathematical equivalence, so $a + b$ and $b + a$ are equal only if
-   construction normalises them to equal construction arguments.
+1. Equality (`==`) must be structural and return a `bool`. Equality does not
+   decide mathematical equivalence, so $a + b$ and $b + a$ are equal only if
+   construction normalises $a + b$ and $b + a$ to equal construction arguments.
 
-Hence two objects are equal if and only if they have the same class and equal
-construction arguments.
+Hence two objects are equal if and only if the two objects have the same class
+and equal construction arguments.
 
 To satisfy the above, the base object must only accept a small curated set of
 types.
 
-Because objects are immutable, they need only be validated once, when they are
-constructed. Every object that exists is therefore valid.
+Because objects are immutable, an object need only be validated once, at
+construction. Every object that exists is therefore valid.
 
 Terminal names are construction arguments, so two terminals with the same name
 and function space are equal (see [Terminals](#terminals)).
 
 The base object should help consumers follow these rules, but should not
-prevent downstream users from working around them.
+prevent downstream users from working around these rules.
 
-An object cannot be changed. To obtain a modified object, construct a new one
-and reconstruct every object that depends on it, up to the root of the graph.
+An object cannot be changed. To obtain a modified object, construct a new
+object and reconstruct every object that depends on the original object, up to
+the root of the graph.
 
 The above design implies that construction arguments should be small and cheap
 to hash and compare, and the graph implementation must be performant. The hash
@@ -133,10 +134,13 @@ should be computed once and stored as derived state.
 ## Differential geometry
 
 We begin with differential geometry because the function spaces and operators
-of UFLx are defined on a domain. They require the structure of that domain,
-such as its measure, metric, orientation and boundary.
+of UFLx are defined on a domain. The function spaces and operators require two
+kinds of structure on the domain:
 
-
+- topological structure, which is the dimension, boundary, orientation and
+  decomposition into cells of the domain,
+- geometric structure, which is the metric of the domain and the measure
+  induced by the metric.
 
 ### Finite elements
 
