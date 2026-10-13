@@ -73,10 +73,19 @@ external library must provide.
   rather than extended.
 - Explicit is better than implicit.
 - Boilerplate and error-prone patterns should be minimised.
+- Free functions should be preferred over class members. Class members should
+  immediately call free functions wherever possible. Free functions maximise
+  the chance of code re-use and are easier to reason about.
+- A parent class should avoid returning a subclass.
+- Simplifications and rewriting should be avoided at all costs during user
+  graph construction, maintaining the user's intent. Only later algorithmic
+  passes should re-write. A good example is `(a + b) + c` in floating point
+  arithmetic. The user may have very good reason to have `(a + b)` performed
+  before adding the answer to `c`!
 
 ## The minimal object model
 
-### The base object
+### The base object `Base`
 
 The base object in UFLx must be extended by all objects that are included in
 the graph. The graph is a directed acyclic graph (DAG).
@@ -92,14 +101,13 @@ Objects must satisfy the following rules:
    `1.0` and `True` are distinct, `0.0` and `-0.0` are also distinct, and every
    value is equal to itself. Every construction argument must have a hash that
    is deterministic across processes.
-1. An object must be reconstructible from its class and construction arguments,
-   and the reconstructed object must be equal to the original.
-1. No attribute may be assigned, reassigned or deleted after construction,
-   except to cache state derived according to rule 5.
-1. Any state beyond the construction arguments must be derived from the class
-   and construction arguments.
 1. Construction must depend only on the construction arguments, not on global
    state.
+1. An object must be reconstructible from its class and construction arguments,
+   and the reconstructed object must be equal to the original.
+1. Any results produced by the class after construction must be a result of
+   only the class and the construction arguments.
+1. The state of the class must be immutable after construction.
 1. Any ordering of objects must come from a total order that is deterministic
    across processes.
 1. The edges of an object must be exactly the base objects among its
@@ -110,6 +118,12 @@ Objects must satisfy the following rules:
 
 Hence two objects are equal if and only if the two objects have the same class
 and equal construction arguments.
+
+May be necessary:
+
+1. No attribute may be assigned, reassigned or deleted after construction,
+   except to cache state derived according to the rule beginning (any state
+   beyond...).
 
 To satisfy the above, the base object must only accept a small curated set of
 types.
@@ -128,8 +142,148 @@ object and reconstruct every object that depends on the original object, up to
 the root of the graph.
 
 The above design implies that construction arguments should be small and cheap
-to hash and compare, and the graph implementation must be performant. The hash
-should be computed once and stored as derived state.
+to hash and compare, and the graph implementation must be performant.
+
+## The lowest objects
+
+### Expressions
+
+An expression denotes an array-valued function defined on a set of the
+expression. An expression with no set denotes a single array. An
+expression can be real or complex valued.
+
+#### `AbstractExpression`
+
+This base class is sketched in pseudo-code according to the principles outlined
+above. Later classes will not be sketched in detail.
+
+```
+# expressions.py
+class AbstractExpression(Base, ABC):
+    """Abstract base class for expressions."""
+    @abstractmethod
+    @property
+    def value_shape(self) -> tuple[int, ...]:
+        """The value shape of the expression"
+
+    # Operator overloading must be in the class.
+    def __add__(self, other: object) -> AbstractExpression:
+        """Add."""
+        # Calls the free function arithmetic.add.
+        ...
+
+    def __radd__(self, other: object) -> AbstractExpression:
+        """Add."""
+        # Calls the free function arithmetic.add.
+        ...
+
+    def __sub__(self, other: object) -> AbstractExpression:
+        """Subtract."""
+        # Calls the free function arithmetic.subtract.
+        ...
+
+    def __rsub__(self, other: object) -> AbstractExpression:
+        """Subtract."""
+        # Calls the free function arithmetic.subtract.
+        ...
+
+    def __mul__(self, other: object) -> AbstractExpression:
+        """Multiply."""
+        # Calls the free function arithmetic.multiply.
+        ...
+
+    def __rmul__(self, other: object) -> AbstractExpression:
+        """Multiply."""
+        # Calls the free function arithmetic.multiply.
+        ...
+
+    def __matmul__(self, other: object) -> AbstractExpression:
+        """Matrix multiply."""
+        # Calls the free function arithmetic.matrix_product.
+        ...
+
+    def __truediv__(self, other: object) -> AbstractExpression:
+        """Divide."""
+        # Calls the free function arithmetic.divide.
+        ...
+
+    def __rtruediv__(self, other: object) -> AbstractExpression:
+        """Divide."""
+        # Calls the free function arithmetic.divide.
+        ...
+
+    def __neg__(self) -> AbstractExpression:
+        """Negate."""
+        # Calls the free function arithmetic.negate.
+        ...
+
+    def __abs__(self) -> AbstractExpression:
+        """Absolute value."""
+        # Calls the free function arithmetic.absolute.
+        ...
+
+    def __pow__(self, power: object) -> AbstractExpression:
+        """Raise to an integer power."""
+        # Calls the free function arithmetic.power.
+        ...
+
+# arithmetic.py
+
+# A free function
+def add(first: AbstractExpression, second: AbstractExpression) -> AbstractExpression:
+    """Add two expressions.
+
+    Args:
+        first: The first summand.
+        second: The second summand.
+
+    Returns:
+        The sum of the two expressions.
+
+    Raises:
+        ValueError: If the value shapes of the summands differ.
+    """
+    # Checks on value_shape
+    return Sum((first, second))
+```
+
+#### Members vs free functions principles
+
+### Literals
+
+A literal is a number written down in an expression, e.g. `Integer(2) * u`. A
+literal's value is part of the expression itself.
+
+> Literals are Expressions, but they do not depend on a set (no domain).
+
+Base:
+
+```
+AbstractScalar(AbstractExpression)
+```
+
+Concrete:
+
+```
+Integer(2)
+Rational(2, 4)
+RealScalar(3.5)
+ComplexScalar(RealScalar(3.0), RealScalar(4.0))
+```
+
+Literals should not fold on construction, e.g.
+
+```
+Integer(2) + Integer(3) != Integer(5)
+Integer(2) + Integer(3) == Sum(Integer(2), Integer(3))
+```
+
+### Operators
+
+```UnaryOperator(AbstractExpression)```
+```BinaryOperator(AbstractExpression)```
+
+Obvious.
 
 ## Differential geometry
 
@@ -141,6 +295,19 @@ kinds of structure on the domain:
   decomposition into cells of the domain,
 - geometric structure, which is the metric of the domain and the measure
   induced by the metric.
+
+### Cells
+
+A domain is divided into finitely many cells. A cell is a piece of the domain
+with the same dimension as the domain, and with the shape of a ball up to
+continuous deformation. Two cells meet only on the boundaries of the two cells.
+
+A facet is a piece of the boundary of a cell, one dimension lower than the
+cell. A facet in the boundary of one cell is an exterior facet. A facet shared
+by two cells is an interior facet.
+
+Cells and facets are topological. Defining cells and facets does not require a
+metric.
 
 ### Finite elements
 
