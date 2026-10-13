@@ -86,11 +86,12 @@ the graph. No information is held outside of the graph.
 
 Objects must satisfy the following rules:
 
-1. All construction arguments must be deeply immutable values - this excludes
-   a `set` of `lists`, for example.
+1. All construction arguments must be deeply immutable values. For example, a
+   `tuple` of `list`s is not allowed.
 1. All construction arguments must be compared by type and value, so that `1`,
-   `1.0` and `True` are distinct and every value is equal to itself. They must
-   have a hash that is deterministic across processes.
+   `1.0` and `True` are distinct, `0.0` and `-0.0` are also distinct, and every
+   value is equal to itself. They must have a hash that is deterministic across
+   processes.
 1. An object must be reconstructible from its class and construction arguments,
    and the reconstructed object must be equal to the original.
 1. No attribute may be assigned, reassigned or deleted after construction,
@@ -110,6 +111,9 @@ Objects must satisfy the following rules:
 Hence two objects are equal if and only if they have the same class and equal
 construction arguments.
 
+To satisfy the above, the base object must only accept a small curated set of
+types.
+
 Because objects are immutable, they need only be validated once, when they are
 constructed. Every object that exists is therefore valid.
 
@@ -127,6 +131,10 @@ to hash and compare, and the graph implementation must be performant. The hash
 should be computed once and stored as derived state.
 
 ## Differential geometry
+
+We begin with differential geometry because the function spaces and operators
+of UFLx are defined on a domain. They require the structure of that domain,
+such as its measure, metric, orientation and boundary.
 
 
 
