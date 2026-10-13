@@ -283,7 +283,7 @@ Integer(2) + Integer(3) == Sum(Integer(2), Integer(3))
 ```UnaryOperator(AbstractExpression)```
 ```BinaryOperator(AbstractExpression)```
 
-Obvious.
+Downstream basic ops are relatively obvious.
 
 ## Differential geometry
 
@@ -295,6 +295,72 @@ kinds of structure on the domain:
   decomposition into cells of the domain,
 - geometric structure, which is the metric of the domain and the measure
   induced by the metric.
+
+### Domains
+
+An abstract base class for domains `AbstractDomain`.
+
+Abstractly defined by:
+- The ambient dimension n of the Euclidean space R^n whose coordinates name the
+  points of this domain (geometric dimension). 
+- the topological dimension, which is the maximum dimension of the domains
+  cells (standard Lebesgue definition). 
+
+Examples:
+- A domain consisting of triangle and interval domain has topological dimension
+  2.
+- A sphere in R^3 has a geometric dimension 3 and topological dimension 2.
+
+### AbstractCoordinateDomain
+
+An abstract base class for coordinate domains `AbstractCoordinateDomain`, a
+subclass of `AbstractDomain`.
+
+A coordinate domain is a subset of R^n with non-empty interior in R^n. Hence
+the topological dimension of a coordinate domain equals the geometric dimension
+n.
+
+The purpose of this class over `AbstractDomain` is to enforce that the
+topological dimension equals the geometric dimension.
+
+Abstractly defined by:
+
+- The dimension n, which is both the geometric dimension and the topological
+  dimension (in).
+- The ambient domain R^n of the coordinate domain. R^n is itself a coordinate
+  domain, and the ambient domain of R^n is R^n (in).
+
+Examples:
+
+- A reference cell in R^n and R^n itself are coordinate domains.
+- The facets of a reference cell in R^n are not coordinate domains as subsets
+  of R^n.
+
+### AbstractParameterizedDomain
+
+An abstract class for parameterised domains, a subclass of `AbstractDomain`.
+
+> An `AbstractCoordinateDomain` could also be a `AbstractParameterisedDomain`
+> that is parameterised by the Identity.
+
+A parameterised domain is the image $\psi(P)$ of a coordinate domain $P \subset
+R^k$ under a map $\psi \to R^n$ with $k \le n$.
+
+`AbstractCoordinateDomain` is defined by:
+
+- The parameter domain $P$, which is an `AbstractCoordinateDomain` (in).
+- The map $\psi : P \to R^n$ (in).
+- The geometric dimension $n$ of the ambient space (in).
+- The topological dimension $k$, taken from $P$ (implied).
+
+For the purposes of this discussion $\psi$ is a vector-valued expression
+(something that is an `Expression`) on $P$.
+
+Examples:
+
+- 
+- A finite element cell map. 
+
 
 ### Cells
 
