@@ -251,8 +251,6 @@ def add(first: AbstractExpression, second: AbstractExpression) -> AbstractExpres
     return Sum((first, second))
 ```
 
-#### Members vs free functions principles
-
 ### Literals
 
 A literal is a number written down in an expression, e.g. `Integer(2) * u`. A
@@ -297,6 +295,8 @@ Class constructors accept only the types that the class stores.
 
 ##### `as_literal`
 
+>>> Syntax nicety, but quite nice for users...
+
 The free function `as_literal(value)` converts a Python number into an
 `AbstractScalar` literal. The function `as_literal` dispatches on the exact
 type of `value`, not on subclasses of the type:
@@ -339,6 +339,8 @@ exactly:
 The function `as_literal` performs no folding and no simplification.
 
 ##### `as_expression`
+
+>> Syntax nicety, but quite nice for users...
 
 The free function `as_expression(value)` returns `value` unchanged if `value`
 is an `AbstractExpression`. Otherwise the function `as_expression` returns
@@ -403,7 +405,7 @@ An abstract base class for domains `AbstractDomain`.
 
 Defined by:
 
-- The ambient dimension n of the Euclidean space R^n whose coordinates name the
+- The ambient dimension $n$ of the Euclidean space $R^n$ whose coordinates name the
   points of this domain (geometric dimension). 
 - The topological dimension, which is the maximum dimension of the domains
   cells (standard Lebesgue definition). 
@@ -476,12 +478,12 @@ coordinate domain.
 Every concrete coordinate domain $P$ provides a coordinate function
 `Coordinate(P)`, obtained with the free function `coordinate(P)`. The
 coordinate function $X$ of $P$ is the terminal expression that maps each point
-of $P$ to the n-tuple of that point:
+of $P$ to the $n$-tuple of that point:
 
 $X : P \to R^n$, $X(p) = p$.
 
 The coordinate function $X$ is a function on $P$, not a point of $P$.
-Evaluating $X$ at a point $p$ of $P$ gives the n-tuple of $p$.
+Evaluating $X$ at a point $p$ of $P$ gives the $n$-tuple of $p$.
 
 `Coordinate(P)` stores the coordinate domain $P$, which is the only edge.
 `Coordinate(P)` derives the value shape `(n,)` and the set $P$. Two coordinate
@@ -971,8 +973,9 @@ A valid integral has a scalar-valued integrand with no unresolved free indices.
 
 ### Forms
 
-A form is a multi-linear functional $a(u, v, w, \\ldots): U \\times V \\times W
-\\times \\ldots \\to {\\mathbb{R}, \\mathbb C}$.
+A form is a multi-linear functional
+$a(u, v, w, \ldots) : U \times V \times W \times \ldots \to \mathbb{R}$ or
+$\mathbb{C}$.
 
 Arguments determine the arity of a form.
 
