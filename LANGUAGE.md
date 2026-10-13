@@ -187,35 +187,38 @@ Gradient ──► f        Indexed ──► expression        Tensor ──►
 Free functions are not objects in the graph. A free function builds or returns
 objects in the graph. Operator overloads call the free functions.
 
-| Group                | Free function                  | Overload  | Returns                                |
-| -------------------- | ------------------------------ | --------- | -------------------------------------- |
-| Conversion           | `as_literal(value)`            |           | `AbstractScalar`                       |
-|                      | `as_expression(value)`         |           | `AbstractExpression`                   |
-| Tensors and indexing | `tensor(entries)`              |           | `Tensor`                               |
-|                      | `vector(entries)`              |           | `Tensor` of rank 1                     |
-|                      | `matrix(entries)`              |           | `Tensor` of rank 2                     |
-|                      | `indexed(f, indices)`          | `f[i]`    | `Indexed`                              |
-| Arithmetic           | `add(f, g)`                    | `+`       | `Sum`                                  |
-|                      | `subtract(f, g)`               | `-`       | not yet specified                      |
-|                      | `multiply(f, g)`               | `*`       | `Product`                              |
-|                      | `divide(f, g)`                 | `/`       | not yet specified                      |
-|                      | `negate(f)`                    | unary `-` | not yet specified                      |
-|                      | `absolute(f)`                  | `abs`     | not yet specified                      |
-|                      | `power(f, g)`                  | `**`      | `Power`                                |
-|                      | `matrix_product(f, g)`         | `@`       | `MatrixProduct`                        |
-| Tensor algebra       | `transpose(f)`                 |           | `Transpose`                            |
-|                      | `determinant(f)`               |           | `Determinant`                          |
-| Elementary functions | `square_root(f)`               |           | `SquareRoot`                           |
-| Differentiation      | `grad(f)`                      |           | `Gradient`                             |
-|                      | `derivative(a, u, du)`         |           | Gateaux derivative, see section 4      |
-| Domains              | `parameterised_domain(P, psi)` |           | `ParameterisedDomain`                  |
-|                      | `ambient_domain(D)`            |           | `RD(n)`                                |
-|                      | `parameter_domain(D)`          |           | `AbstractCoordinateDomain`             |
-|                      | `mapping(D)`                   |           | `AbstractExpression` with shape `(n,)` |
-|                      | `coordinate(P)`                |           | `Coordinate`                           |
-| Geometry             | `jacobian(D)`                  |           | `Gradient` of `mapping(D)`             |
-|                      | `metric(D)`                    |           | `MatrixProduct` of $J^T$ and $J$       |
-|                      | `measure_density(D)`           |           | `SquareRoot` of the determinant of $g$ |
+| Group                | Free function                  | Overload  | Takes                                                       | Returns                                |
+| -------------------- | ------------------------------ | --------- | ----------------------------------------------------------- | -------------------------------------- |
+| Conversion           | `as_literal(value)`            |           | `int`, `Fraction`, `float` or `complex`                     | `AbstractScalar`                       |
+|                      | `as_expression(value)`         |           | an `AbstractExpression` or a value accepted by `as_literal` | `AbstractExpression`                   |
+| Tensors and indexing | `tensor(entries)`              |           | nested `tuple` of scalar entries                            | `Tensor`                               |
+|                      | `vector(entries)`              |           | flat `tuple` of scalar entries                              | `Tensor` of rank 1                     |
+|                      | `matrix(entries)`              |           | `tuple` of `tuple`s of scalar entries                       | `Tensor` of rank 2                     |
+|                      | `indexed(f, indices)`          | `f[i]`    | `f` of rank $r \ge 1$, an `int` or a `tuple` of $r$ `int`s  | `Indexed`                              |
+| Arithmetic           | `add(f, g)`                    | `+`       | `f` and `g` of equal shape                                  | `Sum`                                  |
+|                      | `subtract(f, g)`               | `-`       | `f` and `g` of equal shape                                  | not yet specified                      |
+|                      | `multiply(f, g)`               | `*`       | scalar `f` and `g`                                          | `Product`                              |
+|                      | `divide(f, g)`                 | `/`       | not yet specified                                           | not yet specified                      |
+|                      | `negate(f)`                    | unary `-` | `f`                                                         | not yet specified                      |
+|                      | `absolute(f)`                  | `abs`     | not yet specified                                           | not yet specified                      |
+|                      | `power(f, g)`                  | `**`      | scalar `f` and `g`                                          | `Power`                                |
+|                      | `matrix_product(f, g)`         | `@`       | `f` of shape `(m, k)`, `g` of shape `(k, n)`                | `MatrixProduct`                        |
+| Tensor algebra       | `transpose(f)`                 |           | `f` of shape `(m, n)`                                       | `Transpose`                            |
+|                      | `determinant(f)`               |           | `f` of shape `(n, n)`                                       | `Determinant`                          |
+| Elementary functions | `square_root(f)`               |           | scalar `f`                                                  | `SquareRoot`                           |
+| Differentiation      | `grad(f)`                      |           | `f` on a coordinate domain                                  | `Gradient`                             |
+|                      | `derivative(a, u, du)`         |           | see section 4                                               | Gateaux derivative                     |
+| Domains              | `parameterised_domain(P, psi)` |           | coordinate domain `P`, `psi` on `P` of rank 1               | `ParameterisedDomain`                  |
+|                      | `ambient_domain(D)`            |           | domain `D`                                                  | `RD(n)`                                |
+|                      | `parameter_domain(D)`          |           | domain `D`                                                  | `AbstractCoordinateDomain`             |
+|                      | `mapping(D)`                   |           | domain `D`                                                  | `AbstractExpression` with shape `(n,)` |
+|                      | `coordinate(P)`                |           | coordinate domain `P`                                       | `Coordinate`                           |
+| Geometry             | `jacobian(D)`                  |           | domain `D`                                                  | `Gradient` of `mapping(D)`             |
+|                      | `metric(D)`                    |           | domain `D`                                                  | `MatrixProduct` of $J^T$ and $J$       |
+|                      | `measure_density(D)`           |           | domain `D`                                                  | `SquareRoot` of the determinant of $g$ |
+
+Expression arguments pass through `as_expression`, so Python numbers are
+accepted wherever an expression is.
 
 ## The lowest objects
 
