@@ -1320,6 +1320,8 @@ The physical triangle is a parameterised domain with $k = n$, not a coordinate
 domain, although the physical triangle has non-empty interior in $R^2$. The
 class records how the domain is built.
 
+## Topology of domains
+
 ### Cells
 
 A domain can be divided into finitely many cells. A cell is a piece of the
@@ -1332,6 +1334,93 @@ by two cells is an interior facet.
 
 Cells and facets are topological. Defining cells and facets does not require a
 metric.
+
+## Target language
+
+> The following is LLM generated. It should be updated and inspected as the
+> language progresses and can be used for formal proofs later.
+
+The target language states, without reference to UFLx, which mathematical
+expressions the core can write. The core is complete if every well-typed
+expression of the target language translates to an object of the core with the
+same meaning.
+
+### Target grammar
+
+A target expression $e$ has a shape $s$, a set (a coordinate domain $P$, or
+none), a scalar type (real or complex), and free indices.
+
+$$
+\begin{aligned}
+e \;::=\;\; & c && \text{literal: } n,\ p/q,\ r,\ r + \mathrm{i}\, r' \\
+  \mid\;\; & \ell && \text{a scalar leaf from } \Sigma \\
+  \mid\;\; & X_P && \text{the coordinate function of } P \\
+  \mid\;\; & e_1 + e_2 \;\mid\; e_1 e_2 \;\mid\; e_1 / e_2 \;\mid\; e_1^{e_2} && \text{arithmetic} \\
+  \mid\;\; & \sqrt{e} \;\mid\; \lvert e \rvert \;\mid\; \det e && \\
+  \mid\;\; & \nabla e && \text{gradient} \\
+  \mid\;\; & [e_1, \ldots, e_m] && \text{tensor from entries} \\
+  \mid\;\; & e_{a_1 \ldots a_r} && a_j \text{ an integer or an index symbol} \\
+  \mid\;\; & [e]_{i_1 \ldots i_m} && \text{the tensor whose } (i_1, \ldots, i_m) \text{ component is } e \\
+  \mid\;\; & \textstyle\sum_{i_1 \ldots i_m} e && \text{sum over index symbols} \\[4pt]
+D \;::=\;\; & P && \text{a coordinate domain: } \mathbb{R}^n \text{, or a leaf from } \Sigma \\
+  \mid\;\; & \psi(P) && \psi \text{ an expression on } P \text{ of shape } (n,)
+\end{aligned}
+$$
+
+### Core grammar
+
+The node classes of the core form the abstract syntax of UFLx:
+
+```
+Expression ::= Integer | Rational | RealScalar | ComplexScalar
+             | <leaf subclass of AbstractScalar>
+             | Coordinate(CoordinateDomain)
+             | Sum(Expression, Expression) | Product(Expression, Expression)
+             | Division(Expression, Expression) | Power(Expression, Expression)
+             | SquareRoot(Expression) | Absolute(Expression)
+             | Determinant(Expression) | Gradient(Expression)
+             | Tensor(entries) | Indexed(Expression, indices)
+             | ComponentTensor(Expression, indices) | IndexSum(Expression, indices)
+             | AnnotatedExpression(Expression, annotation)
+
+Domain     ::= CoordinateDomain
+             | ParameterisedDomain(CoordinateDomain, Expression)
+             | AnnotatedDomain(Domain, annotation)
+
+CoordinateDomain ::= RD(n) | <leaf subclass of AbstractCoordinateDomain>
+```
+
+### Translation
+
+Each row gives the condition under which a target expression is well typed, and
+the node class that the target expression translates to. The condition of each
+row is exactly the condition that the constructor of the node class checks.
+
+| Target expression             | Well typed when                                                                   | Shape                | Node class                          |
+| ----------------------------- | --------------------------------------------------------------------------------- | -------------------- | ----------------------------------- |
+| $n$, $p/q$, $r$               | $q \ne 0$, $r$ finite                                                             | $()$                 | `Integer`, `Rational`, `RealScalar` |
+| $r + \mathrm{i}\, r'$         | $r$, $r'$ finite                                                                  | $()$                 | `ComplexScalar`                     |
+| $\ell$                        | always                                                                            | from the leaf        | the leaf class                      |
+| $X_P$                         | always                                                                            | $(n,)$               | `Coordinate`                        |
+| $e_1 + e_2$                   | equal shapes, equal free indices, compatible sets                                 | $s$                  | `Sum`                               |
+| $e_1 e_2$                     | one operand scalar, compatible sets                                               | $s$                  | `Product`                           |
+| $e_1 / e_2$                   | $e_2$ scalar, compatible sets                                                     | $s$                  | `Division`                          |
+| $e_1^{e_2}$                   | both scalar, compatible sets                                                      | $()$                 | `Power`                             |
+| $\sqrt{e}$, $\lvert e \rvert$ | $e$ scalar                                                                        | $()$                 | `SquareRoot`, `Absolute`            |
+| $\det e$                      | shape $(m, m)$                                                                    | $()$                 | `Determinant`                       |
+| $\nabla e$                    | the set of $e$ is a coordinate domain of dimension $k$                            | $s + (k,)$           | `Gradient`                          |
+| $[e_1, \ldots, e_m]$          | entries scalar, rectangular, $m \ge 1$, compatible sets                           | $(m, \ldots)$        | `Tensor`                            |
+| $e_{a_1 \ldots a_r}$          | $r$ equals the rank, $0 \le a_j < n_j$, no index symbol repeated or already free | $()$                 | `Indexed`                           |
+| $[e]_{i_1 \ldots i_m}$        | $e$ scalar, $m \ge 1$, indices distinct and free in $e$                           | extents of the $i_j$ | `ComponentTensor`                   |
+| $\sum_{i_1 \ldots i_m} e$     | $e$ scalar, $m \ge 1$, indices distinct and free in $e$                           | $()$                 | `IndexSum`                          |
+| $\psi(P)$                     | $\psi$ on $P$, shape $(n,)$, no free indices, $k \le n$                           | a domain             | `ParameterisedDomain`               |
+
+"Compatible sets" means that every operand with a set has the same set.
+
+Every other construction of the core is a definition in terms of the rows
+above. For example, $-e$ is $(-1)\, e$, $A^T$ is $[A_{kl}]_{lk}$, and $AB$ is
+$[\sum_k A_{ik} B_{kj}]_{ij}$. An annotation has no counterpart in the target
+language, because an annotation does not change the meaning of an object.
 
 # JSH worked to here.
 
