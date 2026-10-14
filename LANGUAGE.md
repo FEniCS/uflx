@@ -72,6 +72,14 @@ external library provides the concrete data behind the leaf nodes.
   kinds. When designing the language, consider whether objects can be composed,
   rather than extended. Consider what could be layered on top of the core.
 
+- Only leaves are subclassed. A leaf is an object that the core cannot build
+  from other objects, such as the coordinate domain `RD(n)` or a function whose
+  values an external library supplies. An object built from other objects is a
+  single class of the core or a free function that returns objects of the core,
+  never a subclass. For example, every domain is a `ParameterisedDomain`, and an
+  affinely mapped triangle is a free function that returns a
+  `ParameterisedDomain`.
+
 - A property reads and a free function builds. Data that an object stores, or
   derives from the class and the construction arguments of the object, is a
   property of the object, such as `value_shape` of an expression or
@@ -238,8 +246,7 @@ Base
 ├── AbstractCoordinateDomain              parameter space, stores n
 │   └── RD                                R^n
 │
-└── AbstractDomain                        parameter_domain, parameterisation, ambient_domain
-    └── ParameterisedDomain               stores P, ψ and Q
+└── ParameterisedDomain                   stores P, ψ and Q
 ```
 
 ### Free functions
@@ -272,12 +279,12 @@ objects in the graph. Operator overloads call the free functions.
 |                       | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                   | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`           |
 | Differentiation       | [`gradient(f, P)`](#gradient)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`       | `Gradient`                                                          |
 | Parameterised domains | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression`  | `ParameterisedDomain`                                               |
-| Geometry              | [`jacobian(D)`](#geometry)                                      |                               | `D: AbstractDomain`                                          | `AnnotatedExpression`: `Gradient` of `D.parameterisation`           |
-|                       | [`metric(D)`](#geometry)                                        |                               | `D: AbstractDomain`                                          | `AnnotatedExpression`: `transpose(J) @ J`                           |
-|                       | [`measure_density(D)`](#geometry)                               |                               | `D: AbstractDomain`                                          | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$       |
-| Composition           | [`compose(f, D)`](#composition)                                 |                               | `f: AbstractExpression`, `D: AbstractDomain`                 | `Composition`                                                       |
+| Geometry              | [`jacobian(D)`](#geometry)                                      |                               | `D: ParameterisedDomain`                                     | `AnnotatedExpression`: `Gradient` of `D.parameterisation`           |
+|                       | [`metric(D)`](#geometry)                                        |                               | `D: ParameterisedDomain`                                     | `AnnotatedExpression`: `transpose(J) @ J`                           |
+|                       | [`measure_density(D)`](#geometry)                               |                               | `D: ParameterisedDomain`                                     | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$       |
+| Composition           | [`compose(f, D)`](#composition)                                 |                               | `f: AbstractExpression`, `D: ParameterisedDomain`            | `Composition`                                                       |
 | Integration           | [`lebesgue_integral(f, P)`](#lebesgueintegral)                  |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`       | `LebesgueIntegral`                                                  |
-|                       | [`integrate(f, D)`](#integrate)                                 |                               | `f: AbstractExpression`, `D: AbstractDomain`                 | `AnnotatedExpression`: `LebesgueIntegral` over `D.parameter_domain` |
+|                       | [`integrate(f, D)`](#integrate)                                 |                               | `f: AbstractExpression`, `D: ParameterisedDomain`            | `AnnotatedExpression`: `LebesgueIntegral` over `D.parameter_domain` |
 
 Every overload in the table is a method of `AbstractExpression` (see
 [`AbstractExpression`](#abstractexpression)). No other class defines
@@ -304,21 +311,20 @@ rules in the section of the concrete class.
 
 > LLM generated table.
 
-| Class                                                | Stored properties                                        | Derived properties                                       |
-| ---------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
-| `AbstractExpression`                                 |                                                          | `value_shape`, `free_indices`, `scalar_type`, `set`      |
-| `Integer`, `Float`                                   | `value`                                                  |                                                          |
-| `Coordinate`                                         | `domain`                                                 |                                                          |
-| `Tensor`                                             | `entries`                                                |                                                          |
-| `Indexed`, `ComponentTensor`, `IndexSum`             | `expression`, `indices`                                  |                                                          |
-| `AnnotatedExpression`                                | `expression`, `annotation`                               |                                                          |
-| `Gradient`, `LebesgueIntegral`, `Composition`        | `expression`, `domain`                                   |                                                          |
-| `Absolute`, `Conjugate`, `SquareRoot`, `Determinant` | `operand`                                                |                                                          |
-| `Sum`, `Product`, `Division`, `Power`                | `first`, `second`                                        |                                                          |
-| `Index`                                              | `label`                                                  |                                                          |
-| `AbstractDomain`                                     |                                                          | `parameter_domain`, `parameterisation`, `ambient_domain` |
-| `AbstractCoordinateDomain`                           | `dimension`, in every concrete subclass such as `RD`     |                                                          |
-| `ParameterisedDomain`                                | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                          |
+| Class                                                | Stored properties                                        | Derived properties                                  |
+| ---------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------- |
+| `AbstractExpression`                                 |                                                          | `value_shape`, `free_indices`, `scalar_type`, `set` |
+| `Integer`, `Float`                                   | `value`                                                  |                                                     |
+| `Coordinate`                                         | `domain`                                                 |                                                     |
+| `Tensor`                                             | `entries`                                                |                                                     |
+| `Indexed`, `ComponentTensor`, `IndexSum`             | `expression`, `indices`                                  |                                                     |
+| `AnnotatedExpression`                                | `expression`, `annotation`                               |                                                     |
+| `Gradient`, `LebesgueIntegral`, `Composition`        | `expression`, `domain`                                   |                                                     |
+| `Absolute`, `Conjugate`, `SquareRoot`, `Determinant` | `operand`                                                |                                                     |
+| `Sum`, `Product`, `Division`, `Power`                | `first`, `second`                                        |                                                     |
+| `Index`                                              | `label`                                                  |                                                     |
+| `AbstractCoordinateDomain`                           | `dimension`, in every concrete subclass such as `RD`     |                                                     |
+| `ParameterisedDomain`                                | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                     |
 
 ## Extending the core
 
@@ -339,12 +345,12 @@ The core supports four kinds of extension:
 
 > LLM generated table, could be made more concise.
 
-| Kind of extension             | Examples                                               | Section                                     |
-| ----------------------------- | ------------------------------------------------------ | ------------------------------------------- |
-| New questions asked of a form | Physical units, polynomial degree, linearity checks    | [New questions](#new-questions)             |
-| New subclasses                | Elements and functions from Basix, new kinds of domain | [New subclasses](#new-subclasses)           |
-| New operations                | Trace, external operators                              | [New operations](#new-operations)           |
-| New transformations           | Pull-back, Gateaux derivative                          | [New transformations](#new-transformations) |
+| Kind of extension             | Examples                                                  | Section                                     |
+| ----------------------------- | --------------------------------------------------------- | ------------------------------------------- |
+| New questions asked of a form | Physical units, polynomial degree, linearity checks       | [New questions](#new-questions)             |
+| New subclasses                | Elements and functions from Basix, new coordinate domains | [New subclasses](#new-subclasses)           |
+| New operations                | Trace, external operators                                 | [New operations](#new-operations)           |
+| New transformations           | Pull-back, Gateaux derivative                             | [New transformations](#new-transformations) |
 
 A property that the rules of the core depend on is part of the core, not an
 extension. For example, the scalar type is part of the core, because
@@ -386,9 +392,13 @@ expression has inconsistent units.
 
 Every abstract class is a contract. The contract states what a subclass
 provides, so that every transformation of the core handles the subclass
-through the abstract class alone. A downstream library may subclass any
-abstract class by fulfilling the contract, without changing the core. A
-contract is part of the class, never a global registry. For example, a
+through the abstract class alone. A downstream library may subclass an
+abstract class by fulfilling the contract, without changing the core. Only
+leaves are subclassed (see
+[Basic implementation principles](#basic-implementation-principles)). An
+operation built from other expressions is not a subclass but a free function
+or a language extension (see [New operations](#new-operations)). A contract is
+part of the class, never a global registry. For example, a
 downstream subclass of `AbstractCoordinateDomain`, such as `UnitSimplex` in the
 [affinely mapped triangle](#example-an-affinely-mapped-triangle), provides the
 dimension, and every transformation of the core handles the coordinate
@@ -409,22 +419,25 @@ annotation.
 
 ### New operations
 
-A downstream library adds a new operation in one of two ways:
+A downstream library builds a new operation from existing node classes, as a
+free function. A free function above the core may read value shapes to choose
+the composition (see
+[Basic implementation principles](#basic-implementation-principles)), and
+annotates the result. For example:
 
-- Builds the operation from existing node classes, as a free function. A free
-  function above the core may read value shapes to choose the composition (see
-  [Basic implementation principles](#basic-implementation-principles)). For
-  example, `scale(a, T)` reads the rank of `T` and returns
+- `scale(a, T)` reads the rank of `T` and returns
   `component_tensor(a * T[i, j], (i, j))` for a matrix, annotated with
   `("scale", a, T)`.
-- Defines the operation as a node class of the library, together with a pass
-  that replaces every node of that class by node classes of the core. The
-  library runs the pass before differentiation or any other transformation of
-  the core. For example, a node class `Trace` is replaced by the sum of the
-  diagonal entries of the matrix. The pass reads the value shape of the matrix
-  to choose the entries.
+- `trace(A)` reads the extent $n$ of `A` and returns the sum of the diagonal
+  entries `A[0, 0] + ... + A[n - 1, n - 1]`, annotated with `("trace", A)`.
 
-An operation that fits neither way needs a language extension. A language
+A library node class that a pass replaces by node classes of the core gives
+nothing that the free function does not give, and no transformation of the
+core handles the node class before the replacement. So the free function is
+the only way to add an operation that is a composition.
+
+An operation that is not a composition of node classes of the core needs a
+language extension. A language
 extension adds node classes and tells every transformation of the core how to
 handle the new node classes. Every transformation of the core must still
 produce only node classes of the core or of the language extension. For
@@ -689,36 +702,16 @@ kinds of structure on the domain:
 
 ### Domains
 
-#### AbstractDomain
+A domain $D$ is the image $\psi(P)$ of a coordinate domain $P$ under a
+parameterisation $\psi$ into a coordinate domain $Q$. The core has one class of
+domain, [`ParameterisedDomain`](#parameteriseddomain), which stores $P$, $\psi$
+and $Q$.
 
-An abstract base class for domains `AbstractDomain`.
-
-Every `AbstractDomain` $D$ has:
-
-- The ambient coordinate domain $Q$, an `AbstractCoordinateDomain` whose
-  coordinates name the points of $D$. The dimension $n$ of $Q$ is the
-  geometric dimension of $D$.
-- The parameter domain $P$, an `AbstractCoordinateDomain`. The dimension $k$
-  of $P$ is the topological dimension of $D$.
-- The parameterisation $\psi$, an `AbstractExpression` on $P$ or a constant,
-  with value shape `(n,)`. The parameterisation $\psi$ maps each point of $P$
-  to a point of $Q$, and the image $\psi(P)$ is $D$.
-
-The three are the properties `ambient_domain`, `parameter_domain` and
-`parameterisation`. The geometric dimension is `D.ambient_domain.dimension`,
-and the topological dimension is `D.parameter_domain.dimension`.
-
-Example:
-
-- A sphere in $R^3$ has geometric dimension 3, topological dimension 2 and the
-  ambient coordinate domain `RD(3)`.
-
-$Q$ is usually `RD(n)`. A domain in a smaller $Q$, such as an edge of the unit
-triangle in the unit triangle, can be composed with an expression on $Q$ (see
-[Composition](#composition)).
-
-The geometry of $D$ is derived from the parameterisation (see
-[Geometry](#geometry)).
+A particular kind of domain, such as an affinely mapped triangle or a point, is
+a free function that returns a `ParameterisedDomain`, not a subclass. Every
+kind of domain is a fixed composition of $P$, $\psi$ and $Q$, so every kind of
+domain is a free function (see
+[Basic implementation principles](#basic-implementation-principles)).
 
 #### AbstractCoordinateDomain
 
@@ -728,10 +721,14 @@ A coordinate domain is a subset of $R^n$ with non-empty interior in $R^n$ whose
 points are named by the coordinates of the points themselves. A coordinate
 domain is a parameter space. A coordinate domain is the parameter domain of a
 domain, the ambient coordinate domain of a domain, and the set of an
-expression. A coordinate domain is not an
-`AbstractDomain`. The domain whose points are the points of a coordinate domain
+expression. A coordinate domain is not a
+`ParameterisedDomain`. The domain whose points are the points of a coordinate domain
 $P$ is `parameterised_domain(P, coordinate(P), P)` (see
 [ParameterisedDomain](#parameteriseddomain)).
+
+A new coordinate domain, such as a reference cell, is a subclass of
+`AbstractCoordinateDomain`, because the core cannot build the set from smaller
+objects.
 
 Every concrete `AbstractCoordinateDomain` $P$ stores:
 
@@ -771,7 +768,7 @@ $X : P \to R^n$, $X(p) = p$.
 
 Only coordinate domains provide a coordinate function. The coordinates of the
 points of a domain are given by the parameterisation of the domain (see
-[AbstractDomain](#abstractdomain)), which is built from the coordinate function
+[ParameterisedDomain](#parameteriseddomain)), which is built from the coordinate function
 of the parameter domain.
 
 Examples:
@@ -1068,24 +1065,26 @@ Examples, with `X = coordinate(RD(2))`:
 
 ## Geometry of domains
 
-### Parameterised domains
+### ParameterisedDomain
 
-#### ParameterisedDomain
+A concrete subclass of `Base`, and the only class of domain in the core.
 
-A concrete subclass of `AbstractDomain` for parameterised domains.
+The domain $D$ = `ParameterisedDomain(P, psi, Q)` stores:
 
-A parameterised domain $D$ is the image $\psi(P)$ of a coordinate domain
-$P \subset R^k$ under a parameterisation $\psi : P \to Q$, with $Q \subset R^n$
-a coordinate domain.
-
-`ParameterisedDomain(P, psi, Q)` stores:
-
-- The parameter domain $P$, an `AbstractCoordinateDomain` of dimension $k$.
+- The parameter domain $P$, an `AbstractCoordinateDomain`, returned by the
+  property `parameter_domain`. The dimension $k$ of $P$ is the topological
+  dimension of $D$.
 - The parameterisation $\psi$, an `AbstractExpression` on $P$ with value shape
-  `(n,)`. The parameterisation $\psi$ is built from the coordinate function
-  $X$ of $P$, or is a constant with no set.
-- The ambient coordinate domain $Q$, an `AbstractCoordinateDomain` of dimension
-  $n$.
+  `(n,)`, returned by the property `parameterisation`. The parameterisation
+  $\psi$ is built from the coordinate function $X$ of $P$, or is a constant
+  with no set. The parameterisation $\psi$ maps each point of $P$ to a point of
+  $Q$, and the image $\psi(P)$ is $D$.
+- The ambient coordinate domain $Q$, an `AbstractCoordinateDomain`, returned by
+  the property `ambient_domain`. The coordinates of $Q$ name the points of $D$.
+  The dimension $n$ of $Q$ is the geometric dimension of $D$.
+
+The 'geometric dimension' is `D.ambient_domain.dimension`, and the 'topological
+dimension' is `D.parameter_domain.dimension`.
 
 Construction raises `TypeError` if $P$ or $Q$
 is not an `AbstractCoordinateDomain`. Construction raises `ValueError` if
@@ -1094,8 +1093,15 @@ $\psi$ has a set other than $P$, if $\psi$ has free indices, if $\psi$ is
 complex, or if $k > n$. Construction does not check that $\psi(P)$ lies in
 $Q$.
 
+$Q$ is usually `RD(n)`. A domain in a smaller $Q$, such as an edge of the unit
+triangle in the unit triangle, can be composed with an expression on $Q$ (see
+[Composition](#composition)). The geometry of $D$ is derived from the
+parameterisation (see [Geometry](#geometry)).
+
 Examples:
 
+- A sphere in $R^3$ has geometric dimension 3, topological dimension 2 and the
+  ambient coordinate domain `RD(3)`.
 - With `T = UnitSimplex(2)`, `parameterised_domain(T, coordinate(T), T)` is the
   unit triangle as a domain, with $k = n = 2$.
 - The hypotenuse of the unit triangle is a parameterised domain with $k = 1$
@@ -1148,7 +1154,7 @@ X = coordinate(P)
 # value shape (3,).
 psi = tensor((X[0], X[1], X[0]**Integer(2) + X[1]**Integer(2)))
 
-# AbstractDomain: ParameterisedDomain(RD(2), psi, RD(3)), k = 2, n = 3.
+# ParameterisedDomain(RD(2), psi, RD(3)), k = 2, n = 3.
 D = parameterised_domain(P, psi, RD(3))
 
 # AbstractExpression: AnnotatedExpression(Gradient(psi, P), ("jacobian", D)),
@@ -1209,7 +1215,7 @@ X = coordinate(T)
 one, two, three = Integer(1), Integer(2), Integer(3)
 psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
 
-# AbstractDomain: ParameterisedDomain(UnitSimplex(2), psi, RD(2)), k = n = 2.
+# ParameterisedDomain(UnitSimplex(2), psi, RD(2)), k = n = 2.
 K = parameterised_domain(T, psi, RD(2))
 
 # AbstractExpression: AnnotatedExpression(Gradient(psi, T), ("jacobian", K)),
@@ -1245,7 +1251,7 @@ type follow the general rule.
 
 The second operand is a domain, not an expression, because a domain states $Q$.
 Construction raises `ValueError` unless $f$ has no set or the set of $f$ is
-$Q$. Construction raises `TypeError` if $D$ is not an `AbstractDomain`.
+$Q$. Construction raises `TypeError` if $D$ is not a `ParameterisedDomain`.
 
 `Composition` is lazy. An expansion pass moves a `Composition` towards the
 leaves and replaces `Composition(Coordinate(S), D)` by $\psi$. A `Composition`
