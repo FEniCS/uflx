@@ -245,7 +245,7 @@ Base
 │   ├── IndexSum                          sums over bound indices
 │   ├── AnnotatedExpression               Annotation mixin, identity
 │   ├── Gradient                          derivative with respect to X of P
-│   ├── Integral                          Lebesgue integral over P, no set
+│   ├── LebesgueIntegral                  Lebesgue integral over P, no set
 │   ├── AbstractUnaryOperator
 │   │   ├── Determinant
 │   │   ├── SquareRoot
@@ -272,38 +272,38 @@ objects in the graph. Operator overloads call the free functions.
 
 > LLM generated table.
 
-| Group                 | Free function                                           | `AbstractExpression` overload | Takes                                                                | Returns                                                       |
-| --------------------- | ------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Arithmetic            | [`add(f, g)`](#arithmetic)                              | `+`                           | `f, g: AbstractExpression`                                           | `Sum`                                                         |
-|                       | [`subtract(f, g)`](#arithmetic)                         | `-`                           | `f, g: AbstractExpression`                                           | `AnnotatedExpression`: `Sum` of `f` and `negate(g)`           |
-|                       | [`multiply(f, g)`](#arithmetic)                         | `*`                           | `f, g: AbstractExpression`                                           | `Product`                                                     |
-|                       | [`divide(f, g)`](#arithmetic)                           | `/`                           | `f, g: AbstractExpression`                                           | `Division`                                                    |
-|                       | [`negate(f)`](#arithmetic)                              | unary `-`                     | `f: AbstractExpression`                                              | `AnnotatedExpression`: `Product` of `Integer(-1)` and `f`     |
-|                       | [`absolute(f)`](#arithmetic)                            | `abs`                         | `f: AbstractExpression`                                              | `Absolute`                                                    |
-|                       | [`power(f, g)`](#arithmetic)                            | `**`                          | `f, g: AbstractExpression`                                           | `Power`                                                       |
-| Elementary functions  | [`square_root(f)`](#elementary-functions)               |                               | `f: AbstractExpression`                                              | `SquareRoot`                                                  |
-| Domains               | [`ambient_domain(D)`](#abstractdomain)                  |                               | `D: AbstractDomain`                                                  | `RD(n)`                                                       |
-|                       | [`parameterisation(D)`](#abstractdomain)                |                               | `D: AbstractDomain`                                                  | `AbstractExpression` with shape `(n,)`                        |
-|                       | [`coordinate(P)`](#coordinate)                          |                               | `P: AbstractCoordinateDomain`                                        | `Coordinate`                                                  |
-| Tensors and indexing  | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple` (nested, of `AbstractExpression`)                   | `Tensor`                                                      |
-|                       | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple[AbstractExpression, ...]`                            | `Tensor` of rank 1                                            |
-|                       | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple[tuple[AbstractExpression, ...], ...]`                | `Tensor` of rank 2                                            |
-|                       | [`indexed(f, indices)`](#indexed)                       | `f[i]`                        | `f: AbstractExpression`, `indices: tuple[int \| Index, ...]`         | `Indexed`                                                     |
-| Index notation        | [`index(label)`](#index)                                |                               | `label: str \| tuple`                                                | `Index`                                                       |
-|                       | [`indices(*labels)`](#index)                            |                               | `*labels: str \| tuple`                                              | `tuple` of `Index`                                            |
-|                       | [`component_tensor(f, indices)`](#componenttensor)      |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                | `ComponentTensor`                                             |
-|                       | [`index_sum(f, indices)`](#indexsum)                    |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                | `IndexSum`                                                    |
-| Annotation            | [`annotate(x, name, *arguments)`](#annotation)          |                               | `x: AbstractExpression \| AbstractDomain`, `name: str`, `*arguments` | `AnnotatedExpression` or `AnnotatedDomain`                    |
-| Tensor algebra        | [`determinant(f)`](#determinant)                        |                               | `f: AbstractExpression`                                              | `Determinant`                                                 |
-|                       | [`transpose(f)`](#transpose-and-matrix-product)         |                               | `f: AbstractExpression`                                              | `AnnotatedExpression`: `ComponentTensor`                      |
-|                       | [`matrix_product(f, g)`](#transpose-and-matrix-product) | `@`                           | `f, g: AbstractExpression`                                           | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`     |
-| Differentiation       | [`grad(f)`](#gradient)                                  |                               | `f: AbstractExpression`                                              | `Gradient`                                                    |
-| Parameterised domains | [`parameterised_domain(P, psi)`](#parameteriseddomain)  |                               | `P: AbstractCoordinateDomain`, `psi: AbstractExpression`             | `ParameterisedDomain`                                         |
-| Geometry              | [`jacobian(D)`](#geometry)                              |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `Gradient` of `parameterisation(D)`    |
-|                       | [`metric(D)`](#geometry)                                |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `transpose(J) @ J`                     |
-|                       | [`measure_density(D)`](#geometry)                       |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$ |
-| Integration           | [`integral(f, P)`](#integral)                           |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`               | `Integral`                                                    |
-|                       | [`integrate(f, D)`](#integrate)                         |                               | `f: AbstractExpression`, `D: AbstractDomain`                         | `AnnotatedExpression`: `Integral` over `D.parameter_domain`   |
+| Group                 | Free function                                           | `AbstractExpression` overload | Takes                                                                | Returns                                                             |
+| --------------------- | ------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Arithmetic            | [`add(f, g)`](#arithmetic)                              | `+`                           | `f, g: AbstractExpression`                                           | `Sum`                                                               |
+|                       | [`subtract(f, g)`](#arithmetic)                         | `-`                           | `f, g: AbstractExpression`                                           | `AnnotatedExpression`: `Sum` of `f` and `negate(g)`                 |
+|                       | [`multiply(f, g)`](#arithmetic)                         | `*`                           | `f, g: AbstractExpression`                                           | `Product`                                                           |
+|                       | [`divide(f, g)`](#arithmetic)                           | `/`                           | `f, g: AbstractExpression`                                           | `Division`                                                          |
+|                       | [`negate(f)`](#arithmetic)                              | unary `-`                     | `f: AbstractExpression`                                              | `AnnotatedExpression`: `Product` of `Integer(-1)` and `f`           |
+|                       | [`absolute(f)`](#arithmetic)                            | `abs`                         | `f: AbstractExpression`                                              | `Absolute`                                                          |
+|                       | [`power(f, g)`](#arithmetic)                            | `**`                          | `f, g: AbstractExpression`                                           | `Power`                                                             |
+| Elementary functions  | [`square_root(f)`](#elementary-functions)               |                               | `f: AbstractExpression`                                              | `SquareRoot`                                                        |
+| Domains               | [`ambient_domain(D)`](#abstractdomain)                  |                               | `D: AbstractDomain`                                                  | `RD(n)`                                                             |
+|                       | [`parameterisation(D)`](#abstractdomain)                |                               | `D: AbstractDomain`                                                  | `AbstractExpression` with shape `(n,)`                              |
+|                       | [`coordinate(P)`](#coordinate)                          |                               | `P: AbstractCoordinateDomain`                                        | `Coordinate`                                                        |
+| Tensors and indexing  | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple` (nested, of `AbstractExpression`)                   | `Tensor`                                                            |
+|                       | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple[AbstractExpression, ...]`                            | `Tensor` of rank 1                                                  |
+|                       | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple[tuple[AbstractExpression, ...], ...]`                | `Tensor` of rank 2                                                  |
+|                       | [`indexed(f, indices)`](#indexed)                       | `f[i]`                        | `f: AbstractExpression`, `indices: tuple[int \| Index, ...]`         | `Indexed`                                                           |
+| Index notation        | [`index(label)`](#index)                                |                               | `label: str \| tuple`                                                | `Index`                                                             |
+|                       | [`indices(*labels)`](#index)                            |                               | `*labels: str \| tuple`                                              | `tuple` of `Index`                                                  |
+|                       | [`component_tensor(f, indices)`](#componenttensor)      |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                | `ComponentTensor`                                                   |
+|                       | [`index_sum(f, indices)`](#indexsum)                    |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                | `IndexSum`                                                          |
+| Annotation            | [`annotate(x, name, *arguments)`](#annotation)          |                               | `x: AbstractExpression \| AbstractDomain`, `name: str`, `*arguments` | `AnnotatedExpression` or `AnnotatedDomain`                          |
+| Tensor algebra        | [`determinant(f)`](#determinant)                        |                               | `f: AbstractExpression`                                              | `Determinant`                                                       |
+|                       | [`transpose(f)`](#transpose-and-matrix-product)         |                               | `f: AbstractExpression`                                              | `AnnotatedExpression`: `ComponentTensor`                            |
+|                       | [`matrix_product(f, g)`](#transpose-and-matrix-product) | `@`                           | `f, g: AbstractExpression`                                           | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`           |
+| Differentiation       | [`grad(f)`](#gradient)                                  |                               | `f: AbstractExpression`                                              | `Gradient`                                                          |
+| Parameterised domains | [`parameterised_domain(P, psi)`](#parameteriseddomain)  |                               | `P: AbstractCoordinateDomain`, `psi: AbstractExpression`             | `ParameterisedDomain`                                               |
+| Geometry              | [`jacobian(D)`](#geometry)                              |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `Gradient` of `parameterisation(D)`          |
+|                       | [`metric(D)`](#geometry)                                |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `transpose(J) @ J`                           |
+|                       | [`measure_density(D)`](#geometry)                       |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$       |
+| Integration           | [`lebesgue_integral(f, P)`](#lebesgueintegral)          |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`               | `LebesgueIntegral`                                                  |
+|                       | [`integrate(f, D)`](#integrate)                         |                               | `f: AbstractExpression`, `D: AbstractDomain`                         | `AnnotatedExpression`: `LebesgueIntegral` over `D.parameter_domain` |
 
 Every overload in the table is a method of `AbstractExpression` (see
 [`AbstractExpression`](#abstractexpression)). No other class defines
@@ -326,27 +326,27 @@ rules in the section of the concrete class.
 
 > LLM generated table.
 
-| Class                      | Stored properties                       | Derived properties                                                 |
-| -------------------------- | --------------------------------------- | ------------------------------------------------------------------ |
-| `AbstractExpression`       |                                         | `value_shape`, `free_indices`, `scalar_type`, `set`                |
-| `Integer`, `RealScalar`    | `value`                                 |                                                                    |
-| `Rational`                 | `numerator`, `denominator`              |                                                                    |
-| `ComplexScalar`            | `real`, `imag`                          |                                                                    |
-| `Coordinate`               | `domain`                                |                                                                    |
-| `Tensor`                   | `entries`                               |                                                                    |
-| `Indexed`                  | `expression`, `indices`                 |                                                                    |
-| `ComponentTensor`          | `expression`, `indices`                 |                                                                    |
-| `IndexSum`                 | `expression`, `indices`                 |                                                                    |
-| `AnnotatedExpression`      | `expression`, `annotation`              |                                                                    |
-| `Gradient`, `Integral`     | `expression`, `domain`                  |                                                                    |
-| `AbstractUnaryOperator`    | `operand`                               |                                                                    |
-| `AbstractBinaryOperator`   | `first`, `second`                       |                                                                    |
-| `Index`                    | `label`                                 |                                                                    |
-| `AbstractDomain`           |                                         | `geometric_dimension`, `topological_dimension`, `parameter_domain` |
-| `AbstractCoordinateDomain` | `dimension`, in every concrete subclass | `parameter_domain`, which is the coordinate domain itself          |
-| `RD`                       | `dimension`                             |                                                                    |
-| `ParameterisedDomain`      | `parameter_domain`, `parameterisation`  |                                                                    |
-| `AnnotatedDomain`          | `domain`, `annotation`                  |                                                                    |
+| Class                          | Stored properties                       | Derived properties                                                 |
+| ------------------------------ | --------------------------------------- | ------------------------------------------------------------------ |
+| `AbstractExpression`           |                                         | `value_shape`, `free_indices`, `scalar_type`, `set`                |
+| `Integer`, `RealScalar`        | `value`                                 |                                                                    |
+| `Rational`                     | `numerator`, `denominator`              |                                                                    |
+| `ComplexScalar`                | `real`, `imag`                          |                                                                    |
+| `Coordinate`                   | `domain`                                |                                                                    |
+| `Tensor`                       | `entries`                               |                                                                    |
+| `Indexed`                      | `expression`, `indices`                 |                                                                    |
+| `ComponentTensor`              | `expression`, `indices`                 |                                                                    |
+| `IndexSum`                     | `expression`, `indices`                 |                                                                    |
+| `AnnotatedExpression`          | `expression`, `annotation`              |                                                                    |
+| `Gradient`, `LebesgueIntegral` | `expression`, `domain`                  |                                                                    |
+| `AbstractUnaryOperator`        | `operand`                               |                                                                    |
+| `AbstractBinaryOperator`       | `first`, `second`                       |                                                                    |
+| `Index`                        | `label`                                 |                                                                    |
+| `AbstractDomain`               |                                         | `geometric_dimension`, `topological_dimension`, `parameter_domain` |
+| `AbstractCoordinateDomain`     | `dimension`, in every concrete subclass | `parameter_domain`, which is the coordinate domain itself          |
+| `RD`                           | `dimension`                             |                                                                    |
+| `ParameterisedDomain`          | `parameter_domain`, `parameterisation`  |                                                                    |
+| `AnnotatedDomain`              | `domain`, `annotation`                  |                                                                    |
 
 ## Extending the core
 
@@ -1391,46 +1391,50 @@ class records how the domain is built.
 ## Integrating over the domain
 
 At this point we have everything we need to integrate a scalar or tensor-valued
-expression over a single domain. Note we do not need to introduce any
+expression over a single domain. Note we do not need to explicitly introduce any
 topological notions of the domain to build a basic integral.
 
-### Integral
+### LebesgueIntegral
 
 A domain $D$ with parameter domain $P \subset R^k$ and parameterisation $\psi$
 has the measure $\mu_D$ that $\psi$ induces from the Lebesgue measure
-$\lambda^k$ on $P$:
+$\mathrm{d}X$ on $P$:
 
 $$
-\int_D f \,\mathrm{d}\mu_D = \int_P f \sqrt{\det g} \,\mathrm{d}\lambda^k,
+\int_D f \,\mathrm{d}\mu_D = \int_P f \sqrt{\det g} \,\mathrm{d}X,
 \qquad g = J^T J, \qquad J = \nabla_P \psi,
 $$
 
-where $f$ is an expression on $P$ or a constant. $\sqrt{\det g}
-\,\mathrm{d}\lambda^k$ is the volume element of $D$, and $\sqrt{\det g}$ is
+where $f$ is an expression on $P$ or a constant. $\mathrm{d}X$ is the
+Lebesgue measure on $P$, in the coordinates $X$ of $P$. $\sqrt{\det g}
+\,\mathrm{d}X$ is the volume element of $D$, and $\sqrt{\det g}$ is
 `measure_density(D)`. The measure $\mu_D$ needs no orientation, because
 $\sqrt{\det g} \ge 0$.
 
-`Integral(f, P)` stores $f$ and $P$, which are the two edges, in that order.
-`Integral(f, P)` derives the value shape, the free indices and the scalar type
-of $f$. `Integral(f, P)` has no set.
+`LebesgueIntegral(f, P)` stores $f$ and $P$, which are the two edges, in that
+order. `LebesgueIntegral(f, P)` derives the value shape, the free indices and
+the scalar type of $f$. `LebesgueIntegral(f, P)` has no set.
 
 Construction raises `TypeError` if $P$ is not an `AbstractCoordinateDomain`,
 and raises `ValueError` if $f$ has a set other than $P$. An $f$ with no set is
 a constant on $P$.
 
-The free function `integral(f, P)` returns `Integral(f, P)`.
+The free function `lebesgue_integral(f, P)` returns `LebesgueIntegral(f, P)`.
 
-`Integral` is lazy. Construction does not evaluate the integral. A later pass
-might evaluate the integral, for example by quadrature.
+`LebesgueIntegral` is lazy. Construction does not evaluate the integral. A later
+pass might evaluate the integral, for example by quadrature.
 
-Note that an `Integral` is an expression, so integrals can be added, multiplied
-and used wherever an expression is accepted.
+Note that a `LebesgueIntegral` is an expression, so integrals can be added,
+multiplied and used wherever an expression is accepted.
+
+The naming is slightly pretentious for good reason here - the vast majority of
+users will want to use the `integrate` primitive below which takes a domain.
 
 ### integrate
 
 The free function `integrate(f, D)` integrates $f$ over any domain $D$ with the
 measure $\mu_D$. `integrate(f, D)` is
-`integral(f * measure_density(D), D.parameter_domain)`, annotated with
+`lebesgue_integral(f * measure_density(D), D.parameter_domain)`, annotated with
 `("integrate", f, D)`. The free function is the definition above, written as
 a fixed composition.
 
@@ -1439,7 +1443,7 @@ a fixed composition.
 With `T = UnitSimplex(2)`, `X = coordinate(T)`, and the physical triangle `K`
 of the affinely mapped triangle example:
 
-- `integral(X[0], T)` is $\int_T X_0 \,\mathrm{d}\lambda^2$. A later pass
+- `lebesgue_integral(X[0], T)` is $\int_T X_0 \,\mathrm{d}X$. A later pass
   evaluates the integral to $1/6$.
 - `integrate(Integer(1), K)` is the area of the physical triangle. The measure
   density of `K` is $\lvert \det J \rvert = 5$, so a later pass evaluates the
