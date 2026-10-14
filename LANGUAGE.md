@@ -31,15 +31,15 @@ functional analysis. UFLx will then provide higher-level functionality based on
 this core which mimics the 'easier' interface presented by other competing
 packages.
 
-UFLx is not a symbolic language for reasoning about problems in functional
+UFLx is *not* a symbolic language for reasoning about problems in functional
 analysis or differential geometry. Hence, the core should only contain the
 minimal concepts and relations necessary for writing a wide range of
-variational forms as code for subsequent compilation.
+variational forms as code for subsequent algorithmic transformation.
 
 A UFLx program is ordinary Python code that constructs symbolic objects and
 connects them through a graph. The primary result is usually a Form, such as a
 bilinear form, linear form, or functional. Python code will be used to motivate
-examples but concrete implementation is out of scope.
+examples but a full concrete implementation is out of scope.
 
 UFLx does not handle concrete data or numerical algorithms; e.g. actual meshes,
 boundary markers, numerical values of coefficients, or assembly procedures.
@@ -77,6 +77,8 @@ which the external library must provide.
   immediately call free functions wherever possible. Free functions maximise
   the chance of code re-use and are easier to reason about.
 - A parent class should avoid returning a subclass.
+- A concept gets its own node class if it can't be written as a fixed
+  composition of existing nodes, and the composition must be the same
 - Simplifications and rewriting should be avoided at all costs during user
   graph construction, maintaining the user's intent. Only later algorithmic
   passes should re-write. A good example is `(a + b) + c` in floating point
@@ -85,7 +87,7 @@ which the external library must provide.
 
 ## The minimal object model
 
-### The base object `Base`
+### The base object ``
 
 The base object in UFLx must be extended by all objects that are included in
 the graph. The graph is a directed acyclic graph (DAG).
@@ -99,8 +101,9 @@ Objects must satisfy the following rules:
    `tuple` of `list`s is not allowed.
 1. All construction arguments must be compared by type and value, so that `1`,
    `1.0` and `True` are distinct, `0.0` and `-0.0` are also distinct, and every
-   value is equal to itself. Every construction argument must have a hash that
-   is deterministic across processes.
+   value is equal (`==` or `is`, depending on implementation) to itself.
+1. Every construction argument must have an identity (hash) that is
+   deterministic across processes on the same machine.
 1. Construction must depend only on the construction arguments, not on global
    state.
 1. An object must be reconstructible from its class and construction arguments,
@@ -113,8 +116,8 @@ Objects must satisfy the following rules:
 1. The edges of an object must be exactly the base objects among its
    construction arguments, in order.
 1. Equality (`==`) must be structural and return a `bool`. Equality does not
-   decide mathematical equivalence, so $a + b$ and $b + a$ are equal only if
-   construction normalises $a + b$ and $b + a$ to equal construction arguments.
+   decide mathematical equivalence, so $a + b$ and $b + a$ are not equal.
+   Mathematical equivalencies are applied in later graph algorithms.
 
 Hence two objects are equal if and only if the two objects have the same class
 and equal construction arguments.
@@ -124,12 +127,6 @@ types.
 
 Because objects are immutable, an object need only be validated once, at
 construction. Every object that exists is therefore valid.
-
-Terminal names are construction arguments, so two terminals with the same name
-and function space are equal (see [Terminals](#terminals)).
-
-The base object should help consumers follow these rules, but should not
-prevent downstream users from working around these rules.
 
 An object cannot be changed. To obtain a modified object, construct a new
 object and reconstruct every object that depends on the original object, up to
@@ -141,7 +138,9 @@ to hash and compare, and the graph implementation must be performant.
 ### Class hierarchy
 
 Every object in the graph extends `Base`. The classes defined in this document
-form the following hierarchy:
+form the following hierarchy.
+
+> LLM generated graphs.
 
 ```
 Base
@@ -187,38 +186,38 @@ Gradient ──► f        Indexed ──► expression        Tensor ──►
 Free functions are not objects in the graph. A free function builds or returns
 objects in the graph. Operator overloads call the free functions.
 
-| Group                | Free function                  | Overload  | Takes                                                       | Returns                                |
-| -------------------- | ------------------------------ | --------- | ----------------------------------------------------------- | -------------------------------------- |
-| Conversion           | `as_literal(value)`            |           | `int`, `Fraction`, `float` or `complex`                     | `AbstractScalar`                       |
-|                      | `as_expression(value)`         |           | an `AbstractExpression` or a value accepted by `as_literal` | `AbstractExpression`                   |
-| Tensors and indexing | `tensor(entries)`              |           | nested `tuple` of scalar entries                            | `Tensor`                               |
-|                      | `vector(entries)`              |           | flat `tuple` of scalar entries                              | `Tensor` of rank 1                     |
-|                      | `matrix(entries)`              |           | `tuple` of `tuple`s of scalar entries                       | `Tensor` of rank 2                     |
-|                      | `indexed(f, indices)`          | `f[i]`    | `f` of rank $r \ge 1$, an `int` or a `tuple` of $r$ `int`s  | `Indexed`                              |
-| Arithmetic           | `add(f, g)`                    | `+`       | `f` and `g` of equal shape                                  | `Sum`                                  |
-|                      | `subtract(f, g)`               | `-`       | `f` and `g` of equal shape                                  | not yet specified                      |
-|                      | `multiply(f, g)`               | `*`       | scalar `f` and `g`                                          | `Product`                              |
-|                      | `divide(f, g)`                 | `/`       | not yet specified                                           | not yet specified                      |
-|                      | `negate(f)`                    | unary `-` | `f`                                                         | not yet specified                      |
-|                      | `absolute(f)`                  | `abs`     | not yet specified                                           | not yet specified                      |
-|                      | `power(f, g)`                  | `**`      | scalar `f` and `g`                                          | `Power`                                |
-|                      | `matrix_product(f, g)`         | `@`       | `f` of shape `(m, k)`, `g` of shape `(k, n)`                | `MatrixProduct`                        |
-| Tensor algebra       | `transpose(f)`                 |           | `f` of shape `(m, n)`                                       | `Transpose`                            |
-|                      | `determinant(f)`               |           | `f` of shape `(n, n)`                                       | `Determinant`                          |
-| Elementary functions | `square_root(f)`               |           | scalar `f`                                                  | `SquareRoot`                           |
-| Differentiation      | `grad(f)`                      |           | `f` on a coordinate domain                                  | `Gradient`                             |
-|                      | `derivative(a, u, du)`         |           | see section 4                                               | Gateaux derivative                     |
-| Domains              | `parameterised_domain(P, psi)` |           | coordinate domain `P`, `psi` on `P` of rank 1               | `ParameterisedDomain`                  |
-|                      | `ambient_domain(D)`            |           | domain `D`                                                  | `RD(n)`                                |
-|                      | `parameter_domain(D)`          |           | domain `D`                                                  | `AbstractCoordinateDomain`             |
-|                      | `mapping(D)`                   |           | domain `D`                                                  | `AbstractExpression` with shape `(n,)` |
-|                      | `coordinate(P)`                |           | coordinate domain `P`                                       | `Coordinate`                           |
-| Geometry             | `jacobian(D)`                  |           | domain `D`                                                  | `Gradient` of `mapping(D)`             |
-|                      | `metric(D)`                    |           | domain `D`                                                  | `MatrixProduct` of $J^T$ and $J$       |
-|                      | `measure_density(D)`           |           | domain `D`                                                  | `SquareRoot` of the determinant of $g$ |
+> LLM generated table.
 
-Expression arguments pass through `as_expression`, so Python numbers are
-accepted wherever an expression is.
+| Group                | Free function                  | Overload  | Takes                                                      | Returns                                |
+| -------------------- | ------------------------------ | --------- | ---------------------------------------------------------- | -------------------------------------- |
+| Tensors and indexing | `tensor(entries)`              |           | nested `tuple` of scalar entries                           | `Tensor`                               |
+|                      | `vector(entries)`              |           | flat `tuple` of scalar entries                             | `Tensor` of rank 1                     |
+|                      | `matrix(entries)`              |           | `tuple` of `tuple`s of scalar entries                      | `Tensor` of rank 2                     |
+|                      | `indexed(f, indices)`          | `f[i]`    | `f` of rank $r \ge 1$, an `int` or a `tuple` of $r$ `int`s | `Indexed`                              |
+| Arithmetic           | `add(f, g)`                    | `+`       | `f` and `g` of equal shape                                 | `Sum`                                  |
+|                      | `subtract(f, g)`               | `-`       | `f` and `g` of equal shape                                 | not yet specified                      |
+|                      | `multiply(f, g)`               | `*`       | scalar `f` and `g`                                         | `Product`                              |
+|                      | `divide(f, g)`                 | `/`       | not yet specified                                          | not yet specified                      |
+|                      | `negate(f)`                    | unary `-` | `f`                                                        | not yet specified                      |
+|                      | `absolute(f)`                  | `abs`     | not yet specified                                          | not yet specified                      |
+|                      | `power(f, g)`                  | `**`      | scalar `f` and `g`                                         | `Power`                                |
+|                      | `matrix_product(f, g)`         | `@`       | `f` of shape `(m, k)`, `g` of shape `(k, n)`               | `MatrixProduct`                        |
+| Tensor algebra       | `transpose(f)`                 |           | `f` of shape `(m, n)`                                      | `Transpose`                            |
+|                      | `determinant(f)`               |           | `f` of shape `(n, n)`                                      | `Determinant`                          |
+| Elementary functions | `square_root(f)`               |           | scalar `f`                                                 | `SquareRoot`                           |
+| Differentiation      | `grad(f)`                      |           | `f` on a coordinate domain                                 | `Gradient`                             |
+|                      | `derivative(a, u, du)`         |           | see section 4                                              | Gateaux derivative                     |
+| Domains              | `parameterised_domain(P, psi)` |           | coordinate domain `P`, `psi` on `P` of rank 1              | `ParameterisedDomain`                  |
+|                      | `ambient_domain(D)`            |           | domain `D`                                                 | `RD(n)`                                |
+|                      | `parameter_domain(D)`          |           | domain `D`                                                 | `AbstractCoordinateDomain`             |
+|                      | `mapping(D)`                   |           | domain `D`                                                 | `AbstractExpression` with shape `(n,)` |
+|                      | `coordinate(P)`                |           | coordinate domain `P`                                      | `Coordinate`                           |
+| Geometry             | `jacobian(D)`                  |           | domain `D`                                                 | `Gradient` of `mapping(D)`             |
+|                      | `metric(D)`                    |           | domain `D`                                                 | `MatrixProduct` of $J^T$ and $J$       |
+|                      | `measure_density(D)`           |           | domain `D`                                                 | `SquareRoot` of the determinant of $g$ |
+
+A Python `int` is accepted wherever an expression is (see
+[Python integers in expressions](#python-integers-in-expressions)).
 
 ## The lowest objects
 
@@ -355,6 +354,16 @@ RealScalar(3.5)
 ComplexScalar(RealScalar(3.0), RealScalar(4.0))
 ```
 
+Each literal constructor accepts only exact types and raises `TypeError` or
+`ValueError` otherwise:
+
+- `Integer(v)` takes an `int` $v$. A `bool` is rejected, although `bool` is a
+  subclass of `int`.
+- `Rational(p, q)` takes two `int`s $p$ and $q$ with $q \ne 0$.
+- `RealScalar(v)` takes a finite `float` $v$. NaN and infinities are rejected,
+  because a NaN is not equal to itself. `RealScalar(-0.0) != RealScalar(0.0)`.
+- `ComplexScalar(re, im)` takes two `RealScalar`s.
+
 Literals should not fold on construction, e.g.
 
 ```
@@ -362,80 +371,26 @@ Integer(2) + Integer(3) != Integer(5)
 Integer(2) + Integer(3) == Sum(Integer(2), Integer(3))
 ```
 
-#### Conversion of Python values with `as_literal` and `as_expression`
+#### Python integers in expressions
 
 >>> LLM generated content.
 
-Two free functions convert Python values into expressions. The free function
-`as_literal` converts a Python number into a literal. The free function
-`as_expression` accepts either an `AbstractExpression` or a Python number.
+Wherever an operator overload or a free function accepts an expression, the
+operator overload or free function also accepts a Python `int`, which becomes
+`Integer`. A `bool` is rejected with `TypeError`, although `bool` is a subclass
+of `int`. Class constructors never convert.
 
-Every user-facing free function and every operator overload applies
-`as_expression` to each operand or entry that the function accepts as an
-expression. Class constructors apply neither `as_literal` nor `as_expression`.
-Class constructors accept only the types that the class stores.
+Every other number must be written as a literal, such as `RealScalar(0.5)`,
+`Rational(1, 3)` or `ComplexScalar(RealScalar(0.0), RealScalar(1.0))`. A
+`float`, `complex`, `Fraction` or NumPy scalar is rejected with `TypeError`.
+Only `int` converts because only the conversion of `int` is unambiguous. The
+type of every other literal is a choice that the user makes explicitly.
 
-##### `as_literal`
+Examples, with `X = coordinate(RD(2))`:
 
->>> Syntax nicety, but quite nice for users...
-
-The free function `as_literal(value)` converts a Python number into an
-`AbstractScalar` literal. The function `as_literal` dispatches on the exact
-type of `value`, not on subclasses of the type:
-
-| `type(value)`        | Result                                                          |
-| -------------------- | --------------------------------------------------------------- |
-| `int`                | `Integer(value)`                                                |
-| `fractions.Fraction` | `Rational(value.numerator, value.denominator)`                  |
-| `float`              | `RealScalar(value)`                                             |
-| `complex`            | `ComplexScalar(RealScalar(value.real), RealScalar(value.imag))` |
-
-The function `as_literal` raises:
-
-- `TypeError` for every other type. The rejected types include:
-  - every `AbstractExpression`, including literals;
-  - `bool`, although `bool` is a subclass of `int`;
-  - every other subclass of `int`, `float`, `complex` or `Fraction`;
-  - NumPy scalars;
-  - `str` and `tuple`.
-- `ValueError` for a `float` that is not finite, and for a `complex` with a
-  real or imaginary part that is not finite.
-
-Exact type dispatch keeps the result of `as_literal` deterministic. Base rule 2
-compares construction arguments by type and value, so `True` and `1` must not
-convert to the same literal. A NaN is not equal to itself, so a NaN cannot be a
-construction argument.
-
-The function `as_literal` preserves the Python type and the value of `value`
-exactly:
-
-- `as_literal(1)` is `Integer(1)` and `as_literal(1.0)` is `RealScalar(1.0)`,
-  so `as_literal(1) != as_literal(1.0)`.
-- `as_literal(-0.0)` is `RealScalar(-0.0)`, and `RealScalar(-0.0)` is not equal
-  to `RealScalar(0.0)`.
-- `as_literal(1j)` is `ComplexScalar(RealScalar(0.0), RealScalar(1.0))`. The
-  zero real part is kept.
-- `as_literal(Fraction(2, 4))` is `Rational(1, 2)`, because Python normalises
-  `Fraction(2, 4)` to `Fraction(1, 2)` before `as_literal` sees the value.
-
-The function `as_literal` performs no folding and no simplification.
-
-##### `as_expression`
-
->> Syntax nicety, but quite nice for users...
-
-The free function `as_expression(value)` returns `value` unchanged if `value`
-is an `AbstractExpression`. Otherwise the function `as_expression` returns
-`as_literal(value)`, and raises the errors of `as_literal`.
-
-The function `as_expression` is the only place where a value is checked for
-being an `AbstractExpression` before conversion. The function `as_expression`
-is idempotent, so `as_expression(as_expression(v)) == as_expression(v)` for
-every accepted `v`.
-
-The functions `as_literal` and `as_expression` convert a single value. Neither
-function converts a `tuple`. Free functions that accept nested `tuple`s, such
-as `tensor`, apply `as_expression` to each entry.
+- `X[0]**2`, `2 * X[0]` and `1 - X[0]` are accepted.
+- `0.5 * X[0]` raises `TypeError`. `RealScalar(0.5) * X[0]` is accepted.
+- `vector((1, 2))` is `Tensor((Integer(1), Integer(2)))`.
 
 ### Operators
 
@@ -448,8 +403,8 @@ Downstream basic ops are relatively obvious.
 
 Concrete subclasses of `UnaryOperator` needed for the first example. Each class
 stores one expression, which is the only edge, and derives the set of that
-expression. Each free function applies `as_expression`, raises `ValueError` for
-a wrong value shape and performs no simplification.
+expression. Each free function accepts a Python `int` as the operand, raises
+`ValueError` for a wrong value shape and performs no simplification.
 
 | Class         | Free function | Argument shape | Result shape |
 | ------------- | ------------- | -------------- | ------------ |
@@ -460,8 +415,8 @@ a wrong value shape and performs no simplification.
 Concrete subclasses of `BinaryOperator` needed for the first example. Each
 class stores two expressions, which are the two edges in order. The set is the
 set of the operands. Operands with a set must have the same set. Each free
-function applies `as_expression` to both operands, raises `ValueError` for
-wrong value shapes and performs no simplification.
+function accepts Python `int`s as operands, raises `ValueError` for wrong value
+shapes and performs no simplification.
 
 | Class           | Free function    | Overload | Operand shapes     | Result shape |
 | --------------- | ---------------- | -------- | ------------------ | ------------ |
@@ -613,7 +568,7 @@ lexicographic order of the indices $(i_0, \ldots, i_{r-1})$.
 Construction performs no simplification. For example,
 `vector((Integer(1) + Integer(1),)) != vector((2,))`.
 
-The free function `tensor(entries)` applies `as_expression` to every entry and
+The free function `tensor(entries)` accepts Python `int`s as entries and
 returns `Tensor(entries)`. The free functions `vector` and `matrix` are
 `tensor` restricted to nesting depth 1 and nesting depth 2, and raise
 `ValueError` for any other nesting depth.
@@ -623,8 +578,10 @@ Examples:
 - `vector((1, 2))` has value shape `(2,)` and no set.
 - `matrix(((1, 0), (0, 1)))` has value shape `(2, 2)` and no set. The entries
   are `Integer`s.
-- `matrix(((1.0, 0.0), (0.0, 1.0)))` has `RealScalar` entries, so
-  `matrix(((1, 0), (0, 1))) != matrix(((1.0, 0.0), (0.0, 1.0)))`.
+- With `one = RealScalar(1.0)` and `zero = RealScalar(0.0)`,
+  `matrix(((one, zero), (zero, one)))` has `RealScalar` entries, so the matrix
+  is not equal to `matrix(((1, 0), (0, 1)))`.
+- `vector((0.5, 1))` raises `TypeError`.
 - `matrix(((1, 2),))` has value shape `(1, 2)`.
 - `tensor((((1,),),))` has value shape `(1, 1, 1)`.
 
@@ -695,8 +652,7 @@ derivative of $f$ with respect to the coordinate function $X$ of $P$.
 `AbstractCoordinateDomain` $P$. `Gradient(f)` derives the value shape
 `f.value_shape + (n,)` and the set $P$.
 
-The free function `grad(f)` applies `as_expression` to $f$ and returns
-`Gradient(f)`. The free function raises `ValueError` if $f$ has no set, or if
+The free function `grad(f)` returns `Gradient(f)`. The free function raises `ValueError` if $f$ has no set, or if
 the set of $f$ is not a coordinate domain.
 
 `Gradient` is lazy. Construction does not evaluate the derivative. A later pass
@@ -743,8 +699,8 @@ $P$ and $\psi$ are the two edges, in that order.
 
 A parameterised domain does not provide a coordinate function.
 
-The free function `parameterised_domain(P, psi)` applies `as_expression` to
-$\psi$ and returns `ParameterisedDomain(P, psi)`. The free function raises
+The free function `parameterised_domain(P, psi)` returns
+`ParameterisedDomain(P, psi)`. The free function raises
 `ValueError` if $\psi$ does not have rank 1, if $\psi$ has a set other than
 $P$, or if $k > n$.
 
