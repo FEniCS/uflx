@@ -67,13 +67,19 @@ external library provides the concrete data behind the leaf nodes.
 - The minimal language should only need a relatively small number of object
   kinds. When designing the language, consider whether objects can be composed,
   rather than extended. Consider what could be layered on top of the core.
-- Pure free functions should be strong preferred over classes. Class members,
-  where needed, should immediately call free functions wherever possible. Pure
-  free functions maximise the chance of code re-use and are easier to reason
-  about.
-- A parent class should not return a subclass. A method of a parent class that
-  needs a subclass calls a free function, and the free function constructs the
-  subclass.
+- A property reads and a free function builds. Data that an object stores, or
+  derives from the class and the construction arguments of the object, is a
+  property of the object, such as `value_shape` of an expression or
+  `parameter_domain` of a domain. A property never constructs an object. Any
+  operation that constructs objects is a pure free function, such as
+  `coordinate(P)`, `ambient_domain(D)` or `metric(D)`. A class method, where
+  needed, immediately calls a free function.
+- A parent class never constructs a subclass. A property of a parent class may
+  return an object whose class is a subclass, because the property only
+  returns an object that already exists. For example, `parameter_domain` of an
+  `AbstractDomain` returns an `AbstractCoordinateDomain`. A subclass may
+  narrow the return type of a property, for example `parameter_domain` of an
+  `AbstractCoordinateDomain` returns the coordinate domain itself.
 - A concept must be a free function, not a node class, if the free function can
   build the concept as one fixed composition of existing node classes applied to
   the arguments, *without inspecting the arguments to choose the composition*.
@@ -143,7 +149,8 @@ units.
 ### The base object `Base`
 
 The base object in UFLx must be extended by all objects that are included in
-the graph. The graph is a directed acyclic graph (DAG).
+the graph. The graph is a directed acyclic graph (DAG). An edge means "is
+defined from".
 
 Everything needed to define the variational problem must be recoverable from
 the graph. No information is held outside of the graph.
@@ -239,11 +246,11 @@ Base
 │   ├── AnnotatedExpression               Annotation mixin, identity
 │   ├── Gradient                          derivative with respect to X of P
 │   ├── Integral                          Lebesgue integral over P, no set
-│   ├── UnaryOperator
+│   ├── AbstractUnaryOperator
 │   │   ├── Determinant
 │   │   ├── SquareRoot
 │   │   └── Absolute
-│   └── BinaryOperator
+│   └── AbstractBinaryOperator
 │       ├── Sum                           +
 │       ├── Product                       *
 │       ├── Division                      /
@@ -251,7 +258,7 @@ Base
 │
 ├── Index                                 named by a label, not an expression
 │
-└── AbstractDomain                        parameter_domain, parameterisation, ambient_domain
+└── AbstractDomain                        dimensions, parameter_domain
     ├── AnnotatedDomain                   Annotation mixin, identity
     ├── AbstractCoordinateDomain          stores n, parameterisation is X
     │   └── RD                            R^n
@@ -276,7 +283,6 @@ objects in the graph. Operator overloads call the free functions.
 |                       | [`power(f, g)`](#arithmetic)                            | `**`                          | `f, g: AbstractExpression`                                           | `Power`                                                       |
 | Elementary functions  | [`square_root(f)`](#elementary-functions)               |                               | `f: AbstractExpression`                                              | `SquareRoot`                                                  |
 | Domains               | [`ambient_domain(D)`](#abstractdomain)                  |                               | `D: AbstractDomain`                                                  | `RD(n)`                                                       |
-|                       | [`parameter_domain(D)`](#abstractdomain)                |                               | `D: AbstractDomain`                                                  | `AbstractCoordinateDomain`                                    |
 |                       | [`parameterisation(D)`](#abstractdomain)                |                               | `D: AbstractDomain`                                                  | `AbstractExpression` with shape `(n,)`                        |
 |                       | [`coordinate(P)`](#coordinate)                          |                               | `P: AbstractCoordinateDomain`                                        | `Coordinate`                                                  |
 | Tensors and indexing  | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple` (nested, of `AbstractExpression`)                   | `Tensor`                                                      |
@@ -297,7 +303,7 @@ objects in the graph. Operator overloads call the free functions.
 |                       | [`metric(D)`](#geometry)                                |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `transpose(J) @ J`                     |
 |                       | [`measure_density(D)`](#geometry)                       |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$ |
 | Integration           | [`integral(f, P)`](#integral)                           |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`               | `Integral`                                                    |
-|                       | [`integrate(f, D)`](#integrate)                         |                               | `f: AbstractExpression`, `D: AbstractDomain`                         | `AnnotatedExpression`: `Integral` over `parameter_domain(D)`  |
+|                       | [`integrate(f, D)`](#integrate)                         |                               | `f: AbstractExpression`, `D: AbstractDomain`                         | `AnnotatedExpression`: `Integral` over `D.parameter_domain`   |
 
 Every overload in the table is a method of `AbstractExpression` (see
 [`AbstractExpression`](#abstractexpression)). No other class defines
@@ -307,6 +313,40 @@ carefully outside of standard mathematical meanings.
 The value-shape and other constraints on the arguments are stated in the section
 of each free function. A free function and an operator overload accept only the
 types in the "Takes" column.
+
+### Properties
+
+A stored property returns a construction argument. A derived property returns
+data derived from the class and the construction arguments. A concrete class
+has the derived properties of the abstract classes of the concrete class.
+
+A derived property listed for an abstract class is abstract, unless the table
+gives the value. Each concrete class implements an abstract property by the
+rules in the section of the concrete class.
+
+> LLM generated table.
+
+| Class                      | Stored properties                       | Derived properties                                                 |
+| -------------------------- | --------------------------------------- | ------------------------------------------------------------------ |
+| `AbstractExpression`       |                                         | `value_shape`, `free_indices`, `scalar_type`, `set`                |
+| `Integer`, `RealScalar`    | `value`                                 |                                                                    |
+| `Rational`                 | `numerator`, `denominator`              |                                                                    |
+| `ComplexScalar`            | `real`, `imag`                          |                                                                    |
+| `Coordinate`               | `domain`                                |                                                                    |
+| `Tensor`                   | `entries`                               |                                                                    |
+| `Indexed`                  | `expression`, `indices`                 |                                                                    |
+| `ComponentTensor`          | `expression`, `indices`                 |                                                                    |
+| `IndexSum`                 | `expression`, `indices`                 |                                                                    |
+| `AnnotatedExpression`      | `expression`, `annotation`              |                                                                    |
+| `Gradient`, `Integral`     | `expression`, `domain`                  |                                                                    |
+| `AbstractUnaryOperator`    | `operand`                               |                                                                    |
+| `AbstractBinaryOperator`   | `first`, `second`                       |                                                                    |
+| `Index`                    | `label`                                 |                                                                    |
+| `AbstractDomain`           |                                         | `geometric_dimension`, `topological_dimension`, `parameter_domain` |
+| `AbstractCoordinateDomain` | `dimension`, in every concrete subclass | `parameter_domain`, which is the coordinate domain itself          |
+| `RD`                       | `dimension`                             |                                                                    |
+| `ParameterisedDomain`      | `parameter_domain`, `parameterisation`  |                                                                    |
+| `AnnotatedDomain`          | `domain`, `annotation`                  |                                                                    |
 
 ## Extending the core
 
@@ -438,7 +478,10 @@ Every `AbstractExpression` derives the value shape, the free indices, the
 scalar type and the set of the expression.
 
 - The set is an `AbstractDomain`. The set is absent for an expression with no
-  set, such as a literal.
+  set, such as a literal. Unless a node class states otherwise, the set of a
+  node is the set of the edges of the node that are expressions with a set.
+  All such edges must have the same set, or construction raises `ValueError`.
+  A node with no such edge has no set.
 - The scalar type is real or complex. Unless a node class states otherwise, an
   expression is complex if and only if at least one edge is a complex
   expression. `ComplexScalar` is complex.
@@ -559,7 +602,8 @@ def add(
 ### Literals
 
 A literal is a number written down in an expression, e.g. `Integer(2) * u`. A
-literal's value is part of the expression itself.
+literal's value is part of the expression itself. Every literal has value shape
+`()`, no free indices and no set.
 
 Base:
 
@@ -614,17 +658,17 @@ Examples, with `X = coordinate(RD(2))`:
 
 ### Operators
 
-```UnaryOperator(AbstractExpression)```
-```BinaryOperator(AbstractExpression)```
+```AbstractUnaryOperator(AbstractExpression)```
+```AbstractBinaryOperator(AbstractExpression)```
 
 Downstream basic ops are relatively obvious.
 
 ### Arithmetic
 
-Concrete subclasses of `BinaryOperator`. Each class stores two expressions,
-which are the two edges in order. The set is the set of the operands. Operands
-with a set must have the same set, or construction raises `ValueError`.
-Construction raises `ValueError` for wrong value shapes.
+Concrete subclasses of `AbstractBinaryOperator`. Each class stores two
+expressions, which are the two edges in order. The set is the set of the
+operands. Operands with a set must have the same set, or construction raises
+`ValueError`. Construction raises `ValueError` for wrong value shapes.
 
 | Class      | Free function | Overload | Operand shapes           | Result shape |
 | ---------- | ------------- | -------- | ------------------------ | ------------ |
@@ -640,7 +684,7 @@ core does not have.
 The free indices of every operator follow the general rule of
 [Free indices](#free-indices).
 
-`Absolute` is a concrete subclass of `UnaryOperator`. The free function
+`Absolute` is a concrete subclass of `AbstractUnaryOperator`. The free function
 `absolute(f)`, with the overload `abs(f)`, takes a scalar and returns a scalar.
 For a complex argument, `Absolute` is the modulus. `Absolute` is real for
 every argument.
@@ -659,8 +703,8 @@ from `f / g` in floating-point arithmetic.
 
 ### Elementary functions (very incomplete)
 
-`SquareRoot` is a concrete subclass of `UnaryOperator`. The free function
-`square_root(f)` takes a scalar and returns a scalar. Like every unary
+`SquareRoot` is a concrete subclass of `AbstractUnaryOperator`. The free
+function `square_root(f)` takes a scalar and returns a scalar. Like every unary
 operator, `SquareRoot` stores one expression, which is the only edge, derives
 the set of that expression and performs no simplification.
 
@@ -691,16 +735,18 @@ Every `AbstractDomain` $D$ has:
   $R^n$ whose coordinates name the points of $D$.
 - The topological dimension $k$, which is the dimension of the parameter domain
   of $D$.
+- The parameter domain $P$, an `AbstractCoordinateDomain` of dimension $k$.
+
+The three are the properties `geometric_dimension`, `topological_dimension`
+and `parameter_domain`.
 
 Example:
 
 - A sphere in $R^3$ has geometric dimension 3 and topological dimension 2.
 
-Three free functions accept every `AbstractDomain` $D$ with topological
+Two free functions accept every `AbstractDomain` $D$ with topological
 dimension $k$ and geometric dimension $n$:
 
-- `parameter_domain(D)` returns an `AbstractCoordinateDomain` $P$ of dimension
-  $k$.
 - `parameterisation(D)` returns an `AbstractExpression` $\psi$ on $P$ with value
   shape `(n,)`. The parameterisation $\psi$ maps each point of $P$ to a point of
   $D$, and the image $\psi(P)$ is $D$.
@@ -727,14 +773,16 @@ Every concrete `AbstractCoordinateDomain` $P$ stores:
 
 - The dimension $n$, provided by the property `dimension`.
 
-An `AbstractCoordinateDomain` $P$ derives:
+An `AbstractCoordinateDomain` $P$ derives the properties:
 
-- The geometric dimension and the topological dimension, which are both $n$.
-- The ambient domain `ambient_domain(P)`, which is `RD(n)`.
-- The coordinate function `coordinate(P)` (see [Coordinate](#coordinate)).
-- The parameter domain `parameter_domain(P)`, which is $P$.
-- The parameterisation `parameterisation(P)`, which is the identity map
-  `coordinate(P)`.
+- `geometric_dimension` and `topological_dimension`, which are both $n$.
+- `parameter_domain`, which is $P$.
+
+For an `AbstractCoordinateDomain` $P$, the free functions return:
+
+- `ambient_domain(P)`, which is `RD(n)`.
+- `coordinate(P)`, the coordinate function (see [Coordinate](#coordinate)).
+- `parameterisation(P)`, which is the identity map `coordinate(P)`.
 
 Examples:
 
@@ -1066,8 +1114,10 @@ expression and drops the annotation.
 ### AnnotatedDomain
 
 `AnnotatedDomain(domain, annotation)` combines `Annotation` with
-`AbstractDomain`. `AnnotatedDomain` derives the dimensions, the parameter
-domain, the parameterisation and the ambient domain of the domain.
+`AbstractDomain`. `AnnotatedDomain` derives the properties
+`geometric_dimension`, `topological_dimension` and `parameter_domain` of the
+domain. `parameterisation` and `ambient_domain` return the results for the
+domain.
 
 An annotated domain is an `AbstractDomain` but not an
 `AbstractCoordinateDomain`, even when the domain is a coordinate domain. A
@@ -1085,11 +1135,11 @@ Examples:
 
 ### Determinant
 
-`Determinant` is a concrete subclass of `UnaryOperator`. The free function
-`determinant(f)` takes an expression of value shape `(n, n)` and returns a
-scalar. `Determinant` stores one expression, which is the only edge, and
-derives the set of that expression. The determinant of an expression of value
-shape `(n, n)` is a polynomial of degree $n$ in the entries, so no fixed
+`Determinant` is a concrete subclass of `AbstractUnaryOperator`. The free
+function `determinant(f)` takes an expression of value shape `(n, n)` and
+returns a scalar. `Determinant` stores one expression, which is the only edge,
+and derives the set of that expression. The determinant of an expression of
+value shape `(n, n)` is a polynomial of degree $n$ in the entries, so no fixed
 composition expresses the determinant, and `Determinant` is a node class.
 
 Construction raises `ValueError` if the expression does not have rank 2, or if
@@ -1178,7 +1228,7 @@ $P \subset R^k$ under a parameterisation $\psi : P \to R^n$.
 `ParameterisedDomain(P, psi)` stores:
 
 - The parameter domain $P$, an `AbstractCoordinateDomain` of dimension $k$,
-  returned by `parameter_domain(D)`.
+  returned by `D.parameter_domain`.
 - The parameterisation $\psi$, an `AbstractExpression` on $P$ with value shape
   `(n,)`, returned by `parameterisation(D)`. The parameterisation $\psi$ is
   built from the coordinate function $X$ of $P$, or is a constant with no
@@ -1218,11 +1268,11 @@ Examples:
 
 The geometry of every domain $D$, coordinate or parameterised, comes from the
 parameterisation $\psi$ = `parameterisation(D)` on the parameter domain $P$ =
-`parameter_domain(D)` of dimension $k$:
+`D.parameter_domain` of dimension $k$:
 
 | Free function        | Definition                                                 | Value shape |
 | -------------------- | ---------------------------------------------------------- | ----------- |
-| `jacobian(D)`        | $J$ = `Gradient(parameterisation(D), parameter_domain(D))` | `(n, k)`    |
+| `jacobian(D)`        | $J$ = `Gradient(parameterisation(D), D.parameter_domain)`  | `(n, k)`    |
 | `metric(D)`          | $g$ = `transpose(J) @ J`                                   | `(k, k)`    |
 | `measure_density(D)` | `square_root(determinant(g))`                              | `()`        |
 
@@ -1360,14 +1410,6 @@ where $f$ is an expression on $P$ or a constant. $\sqrt{\det g}
 `measure_density(D)`. The measure $\mu_D$ needs no orientation, because
 $\sqrt{\det g} \ge 0$.
 
-A concrete subclass of `AbstractExpression` for the integral of an expression
-$f$ over a coordinate domain $P$ of dimension $k$ with the Lebesgue measure
-$\lambda^k$:
-
-$$
-\mathrm{Integral}(f, P) = \int_P f \,\mathrm{d}\lambda^k.
-$$
-
 `Integral(f, P)` stores $f$ and $P$, which are the two edges, in that order.
 `Integral(f, P)` derives the value shape, the free indices and the scalar type
 of $f$. `Integral(f, P)` has no set.
@@ -1388,7 +1430,7 @@ and used wherever an expression is accepted.
 
 The free function `integrate(f, D)` integrates $f$ over any domain $D$ with the
 measure $\mu_D$. `integrate(f, D)` is
-`integral(f * measure_density(D), parameter_domain(D))`, annotated with
+`integral(f * measure_density(D), D.parameter_domain)`, annotated with
 `("integrate", f, D)`. The free function is the definition above, written as
 a fixed composition.
 
