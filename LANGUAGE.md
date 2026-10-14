@@ -250,11 +250,11 @@ Base
 │
 ├── Index                                 named by a label, not an expression
 │
-└── AbstractDomain                        parameter_domain, mapping, ambient_domain
+└── AbstractDomain                        parameter_domain, parameterisation, ambient_domain
     ├── AnnotatedDomain                   Annotation mixin, identity
-    ├── AbstractCoordinateDomain          stores n, mapping is X
+    ├── AbstractCoordinateDomain          stores n, parameterisation is X
     │   └── RD                            R^n
-    └── ParameterisedDomain               stores P and ψ, mapping is ψ
+    └── ParameterisedDomain               stores P and ψ, parameterisation is ψ
 ```
 
 ### Free functions
@@ -264,37 +264,37 @@ objects in the graph. Operator overloads call the free functions.
 
 > LLM generated table.
 
-| Group                 | Free function                                           | `AbstractExpression` overload | Takes                                                                        | Returns                                                       |
-| --------------------- | ------------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Arithmetic            | [`add(f, g)`](#arithmetic)                              | `+`                           | `f, g: AbstractExpression`                                                   | `Sum`                                                         |
-|                       | [`subtract(f, g)`](#arithmetic)                         | `-`                           | `f, g: AbstractExpression`                                                   | `AnnotatedExpression`: `Sum` of `f` and `negate(g)`           |
-|                       | [`multiply(f, g)`](#arithmetic)                         | `*`                           | `f, g: AbstractExpression`                                                   | `Product`                                                     |
-|                       | [`divide(f, g)`](#arithmetic)                           | `/`                           | `f, g: AbstractExpression`                                                   | `Division`                                                    |
-|                       | [`negate(f)`](#arithmetic)                              | unary `-`                     | `f: AbstractExpression`                                                      | `AnnotatedExpression`: `Product` of `Integer(-1)` and `f`     |
-|                       | [`absolute(f)`](#arithmetic)                            | `abs`                         | `f: AbstractExpression`                                                      | `Absolute`                                                    |
-|                       | [`power(f, g)`](#arithmetic)                            | `**`                          | `f, g: AbstractExpression`                                                   | `Power`                                                       |
-| Elementary functions  | [`square_root(f)`](#elementary-functions)               |                               | `f: AbstractExpression`                                                      | `SquareRoot`                                                  |
-| Domains               | [`ambient_domain(D)`](#abstractdomain)                  |                               | `D: AbstractDomain`                                                          | `RD(n)`                                                       |
-|                       | [`parameter_domain(D)`](#abstractdomain)                |                               | `D: AbstractDomain`                                                          | `AbstractCoordinateDomain`                                    |
-|                       | [`mapping(D)`](#abstractdomain)                         |                               | `D: AbstractDomain`                                                          | `AbstractExpression` with shape `(n,)`                        |
-|                       | [`coordinate(P)`](#coordinate)                          |                               | `P: AbstractCoordinateDomain`                                                | `Coordinate`                                                  |
-| Tensors and indexing  | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple` (nested, of `AbstractExpression`)                           | `Tensor`                                                      |
-|                       | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple[AbstractExpression, ...]`                                    | `Tensor` of rank 1                                            |
-|                       | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple[tuple[AbstractExpression, ...], ...]`                        | `Tensor` of rank 2                                            |
-|                       | [`indexed(f, indices)`](#indexed)                       | `f[i]`                        | `f: AbstractExpression`, `indices: tuple[int \| Index, ...]`                 | `Indexed`                                                     |
-| Index notation        | [`index(label)`](#index)                                |                               | `label: str \| tuple`                                                        | `Index`                                                       |
-|                       | [`indices(*labels)`](#index)                            |                               | `*labels: str \| tuple`                                                      | `tuple` of `Index`                                            |
-|                       | [`component_tensor(f, indices)`](#componenttensor)      |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                        | `ComponentTensor`                                             |
-|                       | [`index_sum(f, indices)`](#indexsum)                    |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                        | `IndexSum`                                                    |
-| Annotation            | [`annotate(x, name, *arguments)`](#annotation)          |                               | `x: AbstractExpression \| AbstractDomain`, `name: str`, `*arguments`         | `AnnotatedExpression` or `AnnotatedDomain`                    |
-| Tensor algebra        | [`determinant(f)`](#determinant)                        |                               | `f: AbstractExpression`                                                      | `Determinant`                                                 |
-|                       | [`transpose(f)`](#transpose-and-matrix-product)         |                               | `f: AbstractExpression`                                                      | `AnnotatedExpression`: `ComponentTensor`                      |
-|                       | [`matrix_product(f, g)`](#transpose-and-matrix-product) | `@`                           | `f, g: AbstractExpression`                                                   | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`     |
-| Differentiation       | [`grad(f)`](#gradient)                                  |                               | `f: AbstractExpression`                                                      | `Gradient`                                                    |
-| Parameterised domains | [`parameterised_domain(P, psi)`](#parameteriseddomain)  |                               | `P: AbstractCoordinateDomain`, `psi: AbstractExpression`                     | `ParameterisedDomain`                                         |
-| Geometry              | [`jacobian(D)`](#geometry)                              |                               | `D: AbstractDomain`                                                          | `AnnotatedExpression`: `Gradient` of `mapping(D)`             |
-|                       | [`metric(D)`](#geometry)                                |                               | `D: AbstractDomain`                                                          | `AnnotatedExpression`: `transpose(J) @ J`                     |
-|                       | [`measure_density(D)`](#geometry)                       |                               | `D: AbstractDomain`                                                          | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$ |
+| Group                 | Free function                                           | `AbstractExpression` overload | Takes                                                                | Returns                                                       |
+| --------------------- | ------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Arithmetic            | [`add(f, g)`](#arithmetic)                              | `+`                           | `f, g: AbstractExpression`                                           | `Sum`                                                         |
+|                       | [`subtract(f, g)`](#arithmetic)                         | `-`                           | `f, g: AbstractExpression`                                           | `AnnotatedExpression`: `Sum` of `f` and `negate(g)`           |
+|                       | [`multiply(f, g)`](#arithmetic)                         | `*`                           | `f, g: AbstractExpression`                                           | `Product`                                                     |
+|                       | [`divide(f, g)`](#arithmetic)                           | `/`                           | `f, g: AbstractExpression`                                           | `Division`                                                    |
+|                       | [`negate(f)`](#arithmetic)                              | unary `-`                     | `f: AbstractExpression`                                              | `AnnotatedExpression`: `Product` of `Integer(-1)` and `f`     |
+|                       | [`absolute(f)`](#arithmetic)                            | `abs`                         | `f: AbstractExpression`                                              | `Absolute`                                                    |
+|                       | [`power(f, g)`](#arithmetic)                            | `**`                          | `f, g: AbstractExpression`                                           | `Power`                                                       |
+| Elementary functions  | [`square_root(f)`](#elementary-functions)               |                               | `f: AbstractExpression`                                              | `SquareRoot`                                                  |
+| Domains               | [`ambient_domain(D)`](#abstractdomain)                  |                               | `D: AbstractDomain`                                                  | `RD(n)`                                                       |
+|                       | [`parameter_domain(D)`](#abstractdomain)                |                               | `D: AbstractDomain`                                                  | `AbstractCoordinateDomain`                                    |
+|                       | [`parameterisation(D)`](#abstractdomain)                |                               | `D: AbstractDomain`                                                  | `AbstractExpression` with shape `(n,)`                        |
+|                       | [`coordinate(P)`](#coordinate)                          |                               | `P: AbstractCoordinateDomain`                                        | `Coordinate`                                                  |
+| Tensors and indexing  | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple` (nested, of `AbstractExpression`)                   | `Tensor`                                                      |
+|                       | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple[AbstractExpression, ...]`                            | `Tensor` of rank 1                                            |
+|                       | [`tensor(entries)`](#tensor)                            |                               | `entries: tuple[tuple[AbstractExpression, ...], ...]`                | `Tensor` of rank 2                                            |
+|                       | [`indexed(f, indices)`](#indexed)                       | `f[i]`                        | `f: AbstractExpression`, `indices: tuple[int \| Index, ...]`         | `Indexed`                                                     |
+| Index notation        | [`index(label)`](#index)                                |                               | `label: str \| tuple`                                                | `Index`                                                       |
+|                       | [`indices(*labels)`](#index)                            |                               | `*labels: str \| tuple`                                              | `tuple` of `Index`                                            |
+|                       | [`component_tensor(f, indices)`](#componenttensor)      |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                | `ComponentTensor`                                             |
+|                       | [`index_sum(f, indices)`](#indexsum)                    |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                | `IndexSum`                                                    |
+| Annotation            | [`annotate(x, name, *arguments)`](#annotation)          |                               | `x: AbstractExpression \| AbstractDomain`, `name: str`, `*arguments` | `AnnotatedExpression` or `AnnotatedDomain`                    |
+| Tensor algebra        | [`determinant(f)`](#determinant)                        |                               | `f: AbstractExpression`                                              | `Determinant`                                                 |
+|                       | [`transpose(f)`](#transpose-and-matrix-product)         |                               | `f: AbstractExpression`                                              | `AnnotatedExpression`: `ComponentTensor`                      |
+|                       | [`matrix_product(f, g)`](#transpose-and-matrix-product) | `@`                           | `f, g: AbstractExpression`                                           | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`     |
+| Differentiation       | [`grad(f)`](#gradient)                                  |                               | `f: AbstractExpression`                                              | `Gradient`                                                    |
+| Parameterised domains | [`parameterised_domain(P, psi)`](#parameteriseddomain)  |                               | `P: AbstractCoordinateDomain`, `psi: AbstractExpression`             | `ParameterisedDomain`                                         |
+| Geometry              | [`jacobian(D)`](#geometry)                              |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `Gradient` of `parameterisation(D)`    |
+|                       | [`metric(D)`](#geometry)                                |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `transpose(J) @ J`                     |
+|                       | [`measure_density(D)`](#geometry)                       |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$ |
 
 Every overload in the table is a method of `AbstractExpression` (see
 [`AbstractExpression`](#abstractexpression)). No other class defines
@@ -694,12 +694,13 @@ dimension $k$ and geometric dimension $n$:
 
 - `parameter_domain(D)` returns an `AbstractCoordinateDomain` $P$ of dimension
   $k$.
-- `mapping(D)` returns an `AbstractExpression` $\psi$ on $P$ with value shape
-  `(n,)`. The mapping $\psi$ maps each point of $P$ to a point of $D$, and the
-  image $\psi(P)$ is $D$.
+- `parameterisation(D)` returns an `AbstractExpression` $\psi$ on $P$ with value
+  shape `(n,)`. The parameterisation $\psi$ maps each point of $P$ to a point of
+  $D$, and the image $\psi(P)$ is $D$.
 - `ambient_domain(D)` returns `RD(n)`.
 
-The geometry of $D$ is derived from the mapping (see [Geometry](#geometry)).
+The geometry of $D$ is derived from the parameterisation (see
+[Geometry](#geometry)).
 
 #### AbstractCoordinateDomain
 
@@ -725,7 +726,8 @@ An `AbstractCoordinateDomain` $P$ derives:
 - The ambient domain `ambient_domain(P)`, which is `RD(n)`.
 - The coordinate function `coordinate(P)` (see [Coordinate](#coordinate)).
 - The parameter domain `parameter_domain(P)`, which is $P$.
-- The mapping `mapping(P)`, which is the identity map `coordinate(P)`.
+- The parameterisation `parameterisation(P)`, which is the identity map
+  `coordinate(P)`.
 
 Examples:
 
@@ -764,7 +766,7 @@ $X : P \to R^n$, $X(p) = p$.
 `Coordinate(P)` derives the value shape `(n,)` and the set $P$.
 
 Only coordinate domains provide a coordinate function. The coordinates of the
-points of any other domain are given by `mapping` (see
+points of any other domain are given by `parameterisation` (see
 [AbstractDomain](#abstractdomain)), which is built from the coordinate function
 of the parameter domain.
 
@@ -1058,7 +1060,7 @@ expression and drops the annotation.
 
 `AnnotatedDomain(domain, annotation)` combines `Annotation` with
 `AbstractDomain`. `AnnotatedDomain` derives the dimensions, the parameter
-domain, the mapping and the ambient domain of the domain.
+domain, the parameterisation and the ambient domain of the domain.
 
 An annotated domain is an `AbstractDomain` but not an
 `AbstractCoordinateDomain`, even when the domain is a coordinate domain. A
@@ -1166,9 +1168,9 @@ $P \subset R^k$ under a map $\psi : P \to R^n$.
 
 - The parameter domain $P$, an `AbstractCoordinateDomain` of dimension $k$,
   returned by `parameter_domain(D)`.
-- The mapping $\psi$, an `AbstractExpression` on $P$ with value shape `(n,)`,
-  returned by `mapping(D)`. The mapping $\psi$ is built from the coordinate
-  function $X$ of $P$.
+- The parameterisation $\psi$, an `AbstractExpression` on $P$ with value shape
+  `(n,)`, returned by `parameterisation(D)`. The parameterisation $\psi$ is
+  built from the coordinate function $X$ of $P$.
 
 $P$ and $\psi$ are the two edges, in that order.
 
@@ -1201,18 +1203,18 @@ Examples:
 ### Geometry
 
 The geometry of every domain $D$, coordinate or parameterised, comes from the
-mapping $\psi$ = `mapping(D)` on the parameter domain $P$ =
+parameterisation $\psi$ = `parameterisation(D)` on the parameter domain $P$ =
 `parameter_domain(D)` of dimension $k$:
 
-| Free function        | Definition                       | Value shape |
-| -------------------- | -------------------------------- | ----------- |
-| `jacobian(D)`        | $J$ = `grad(mapping(D))`         | `(n, k)`    |
-| `metric(D)`          | $g$ = `transpose(J) @ J`         | `(k, k)`    |
-| `measure_density(D)` | `square_root(determinant(g))`    | `()`        |
+| Free function        | Definition                        | Value shape |
+| -------------------- | --------------------------------- | ----------- |
+| `jacobian(D)`        | $J$ = `grad(parameterisation(D))` | `(n, k)`    |
+| `metric(D)`          | $g$ = `transpose(J) @ J`          | `(k, k)`    |
+| `measure_density(D)` | `square_root(determinant(g))`     | `()`        |
 
-For a coordinate domain, the mapping is the coordinate function $X$. The
-general rules give $J$ = `grad(X)` $= I$, $g = I$ and a measure density of 1,
-so a coordinate domain needs no special case.
+For a coordinate domain, the parameterisation is the coordinate function $X$.
+The general rules give $J$ = `grad(X)` $= I$, $g = I$ and a measure density of
+1, so a coordinate domain needs no special case.
 
 ### Example: a paraboloid
 
