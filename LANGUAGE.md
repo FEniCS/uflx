@@ -237,8 +237,9 @@ Base
 │   ├── ComponentTensor                   binds indices to tensor axes
 │   ├── IndexSum                          sums over bound indices
 │   ├── AnnotatedExpression               Annotation mixin, identity
+│   ├── Gradient                          derivative with respect to X of P
+│   ├── Integral                          Lebesgue integral over P, no set
 │   ├── UnaryOperator
-│   │   ├── Gradient                      grad, on coordinate domains only
 │   │   ├── Determinant
 │   │   ├── SquareRoot
 │   │   └── Absolute
@@ -295,6 +296,8 @@ objects in the graph. Operator overloads call the free functions.
 | Geometry              | [`jacobian(D)`](#geometry)                              |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `Gradient` of `parameterisation(D)`    |
 |                       | [`metric(D)`](#geometry)                                |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `transpose(J) @ J`                     |
 |                       | [`measure_density(D)`](#geometry)                       |                               | `D: AbstractDomain`                                                  | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$ |
+| Integration           | [`integral(f, P)`](#integral)                           |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`               | `Integral`                                                    |
+|                       | [`integrate(f, D)`](#integrate)                         |                               | `f: AbstractExpression`, `D: AbstractDomain`                         | `AnnotatedExpression`: `Integral` over `parameter_domain(D)`  |
 
 Every overload in the table is a method of `AbstractExpression` (see
 [`AbstractExpression`](#abstractexpression)). No other class defines
@@ -629,6 +632,10 @@ Construction raises `ValueError` for wrong value shapes.
 | `Product`  | `multiply`    | `*`      | `()`, `s` or `s`, `()`   | `s`          |
 | `Division` | `divide`      | `/`      | `s`, `()`                | `s`          |
 | `Power`    | `power`       | `**`     | `()`, `()`               | `()`         |
+
+The exponent of `Power` has no set, or construction raises `ValueError`. The
+derivative of a power whose exponent has a set needs a logarithm, which the
+core does not have.
 
 The free indices of every operator follow the general rule of
 [Free indices](#free-indices).
@@ -1088,6 +1095,10 @@ composition expresses the determinant, and `Determinant` is a node class.
 Construction raises `ValueError` if the expression does not have rank 2, or if
 the two extents of the value shape differ.
 
+The determinant of an expression of value shape `(0, 0)` is 1, the empty
+product. The measure density of a point (the Lebesgue couting measure) relies
+on this value (see [Geometry](#geometry)).
+
 ### Transpose and matrix product
 
 Transpose and matrix product are free functions built with derived indices:
@@ -1121,26 +1132,25 @@ Examples, with a matrix `A` of value shape `(2, 2)`:
 
 > LLM generated content.
 
-A concrete subclass of `UnaryOperator` for the gradient of an expression $f$
-on a coordinate domain $P$ of dimension $k$. The gradient of $f$ is the
-derivative of $f$ with respect to the coordinate function $X$ of $P$.
+A concrete subclass of `AbstractExpression` for the gradient of an expression
+$f$ with respect to the coordinate function $X$ of a coordinate domain $P$ of
+dimension $k$.
 
-`Gradient(f)` stores $f$, which is the only edge. The set of $f$ must be an
-`AbstractCoordinateDomain` $P$. `Gradient(f)` derives the value shape
-`f.value_shape + (k,)` and the set $P$.
+`Gradient(f, P)` stores $f$ and $P$, which are the two edges, in that order.
+`Gradient(f, P)` derives the value shape `f.value_shape + (k,)` and the set
+$P$.
 
-The free function `grad(f)` returns `Gradient(f)`. Construction raises
-`ValueError` if $f$ has no set, or if the set of $f$ is not a coordinate
-domain.
+Construction raises `TypeError` if $P$ is not an `AbstractCoordinateDomain`,
+and raises `ValueError` if $f$ has a set other than $P$. An $f$ with no set is
+a constant on $P$, and the gradient of a constant is zero.
 
-Only `Coordinate` introduces a set, and `Coordinate` requires a plain
-coordinate domain. So every set in the core is currently an
-`AbstractCoordinateDomain`. The check that the set is a coordinate domain
-guards against future node classes that introduce other sets.
+The free function `grad(f)` returns `Gradient(f, P)`, with $P$ the set of $f$.
+If $f$ has no set, `grad(f)` passes no coordinate domain, and the constructor
+raises `TypeError`.
 
 `Gradient` is lazy. Construction does not evaluate the derivative. A later pass
 evaluates the derivative with the standard rules, including `grad(X)` $= I$
-and a zero derivative for every literal.
+and a zero derivative for every expression with no set.
 
 Differentiation on a parameterised domain is not a primitive. Differentiation
 on a parameterised domain will be a composite of `grad` on the parameter domain
@@ -1152,8 +1162,9 @@ Examples, with `X = coordinate(RD(2))`:
   identity.
 - `grad(X[0]**Integer(2) + X[1]**Integer(2))` has value shape `(2,)`. A later
   pass evaluates the gradient to $(2 X_0, 2 X_1)$.
-- `grad(Integer(1))` raises `ValueError`, because the literal `Integer(1)` has
-  no set.
+- `grad(Integer(1))` raises `TypeError`, because the literal `Integer(1)` has
+  no set. `Gradient(Integer(1), RD(2))` has value shape `(2,)`, and a later
+  pass evaluates the gradient to zero.
 
 ### Parameterised domains
 
@@ -1162,7 +1173,7 @@ Examples, with `X = coordinate(RD(2))`:
 A concrete subclass of `AbstractDomain` for parameterised domains.
 
 A parameterised domain $D$ is the image $\psi(P)$ of a coordinate domain
-$P \subset R^k$ under a map $\psi : P \to R^n$.
+$P \subset R^k$ under a parameterisation $\psi : P \to R^n$.
 
 `ParameterisedDomain(P, psi)` stores:
 
@@ -1170,7 +1181,8 @@ $P \subset R^k$ under a map $\psi : P \to R^n$.
   returned by `parameter_domain(D)`.
 - The parameterisation $\psi$, an `AbstractExpression` on $P$ with value shape
   `(n,)`, returned by `parameterisation(D)`. The parameterisation $\psi$ is
-  built from the coordinate function $X$ of $P$.
+  built from the coordinate function $X$ of $P$, or is a constant with no
+  set.
 
 $P$ and $\psi$ are the two edges, in that order.
 
@@ -1184,8 +1196,8 @@ $P$ and $\psi$ are the two edges, in that order.
 The free function `parameterised_domain(P, psi)` returns
 `ParameterisedDomain(P, psi)`. Construction raises `TypeError` if $P$ is not an
 `AbstractCoordinateDomain`. Construction raises `ValueError` if $\psi$ does not
-have rank 1, if the set of $\psi$ is not $P$, including a $\psi$ with no set,
-if $\psi$ has free indices, or if $k > n$.
+have rank 1, if $\psi$ has a set other than $P$, if $\psi$ has free indices,
+or if $k > n$.
 
 Examples:
 
@@ -1199,6 +1211,8 @@ Examples:
 - A physical triangle in $R^2$ is a parameterised domain with $k = n = 2$. $P$
   is the unit triangle, and $\psi$ is the affine map from $P$ onto the
   physical triangle. See the affinely mapped triangle example.
+- A point $p$ in $R^2$ is a parameterised domain with $k = 0$ and $n = 2$. $P$
+  is `RD(0)`, and $\psi$ is the constant `tensor((p0, p1))`, with no set.
 
 ### Geometry
 
@@ -1206,15 +1220,19 @@ The geometry of every domain $D$, coordinate or parameterised, comes from the
 parameterisation $\psi$ = `parameterisation(D)` on the parameter domain $P$ =
 `parameter_domain(D)` of dimension $k$:
 
-| Free function        | Definition                        | Value shape |
-| -------------------- | --------------------------------- | ----------- |
-| `jacobian(D)`        | $J$ = `grad(parameterisation(D))` | `(n, k)`    |
-| `metric(D)`          | $g$ = `transpose(J) @ J`          | `(k, k)`    |
-| `measure_density(D)` | `square_root(determinant(g))`     | `()`        |
+| Free function        | Definition                                                 | Value shape |
+| -------------------- | ---------------------------------------------------------- | ----------- |
+| `jacobian(D)`        | $J$ = `Gradient(parameterisation(D), parameter_domain(D))` | `(n, k)`    |
+| `metric(D)`          | $g$ = `transpose(J) @ J`                                   | `(k, k)`    |
+| `measure_density(D)` | `square_root(determinant(g))`                              | `()`        |
 
 For a coordinate domain, the parameterisation is the coordinate function $X$.
 The general rules give $J$ = `grad(X)` $= I$, $g = I$ and a measure density of
 1, so a coordinate domain needs no special case.
+
+For a point, $k = 0$. $J$ has value shape `(n, 0)`, $g$ has value shape
+`(0, 0)`, and the measure density is $\sqrt{1} = 1$. So the measure of a point
+is the measure at the point, and a point needs no special case either.
 
 ### Example: a paraboloid
 
@@ -1234,7 +1252,7 @@ psi = tensor((X[0], X[1], X[0]**Integer(2) + X[1]**Integer(2)))
 # AbstractDomain: ParameterisedDomain(RD(2), psi), k = 2, n = 3.
 D = parameterised_domain(P, psi)
 
-# AbstractExpression: AnnotatedExpression(Gradient(psi), ("jacobian", D)),
+# AbstractExpression: AnnotatedExpression(Gradient(psi, P), ("jacobian", D)),
 # value shape (3, 2).
 J = jacobian(D)
 
@@ -1248,8 +1266,8 @@ rho = measure_density(D)
 ```
 
 Construction of every object in the example performs no evaluation and no
-simplification. `J`, `g` and `rho` contain the lazy node `Gradient(psi)`, which
-a later pass evaluates.
+simplification. `J`, `g` and `rho` contain the lazy node `Gradient(psi, P)`,
+which a later pass evaluates.
 
 Note that at this stage we do not need the concept of a `Point` as we have not
 evaluated anything at a `Point` so far.
@@ -1300,7 +1318,7 @@ psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
 # AbstractDomain: ParameterisedDomain(UnitSimplex(2), psi), k = n = 2.
 K = parameterised_domain(T, psi)
 
-# AbstractExpression: AnnotatedExpression(Gradient(psi), ("jacobian", K)),
+# AbstractExpression: AnnotatedExpression(Gradient(psi, T), ("jacobian", K)),
 # value shape (2, 2).
 J = jacobian(K)
 
@@ -1319,6 +1337,88 @@ triangle is $5$ times the area $1/2$ of the unit triangle.
 The physical triangle is a parameterised domain with $k = n$, not a coordinate
 domain, although the physical triangle has non-empty interior in $R^2$. The
 class records how the domain is built.
+
+## Integrating over the domain
+
+At this point we have everything we need to integrate a scalar or tensor-valued
+expression over a single domain. Note we do not need to introduce any
+topological notions of the domain to build a basic integral.
+
+### Integral
+
+A domain $D$ with parameter domain $P \subset R^k$ and parameterisation $\psi$
+has the measure $\mu_D$ that $\psi$ induces from the Lebesgue measure
+$\lambda^k$ on $P$:
+
+$$
+\int_D f \,\mathrm{d}\mu_D = \int_P f \sqrt{\det g} \,\mathrm{d}\lambda^k,
+\qquad g = J^T J, \qquad J = \nabla_P \psi,
+$$
+
+where $f$ is an expression on $P$ or a constant. $\sqrt{\det g}
+\,\mathrm{d}\lambda^k$ is the volume element of $D$, and $\sqrt{\det g}$ is
+`measure_density(D)`. The measure $\mu_D$ needs no orientation, because
+$\sqrt{\det g} \ge 0$.
+
+A concrete subclass of `AbstractExpression` for the integral of an expression
+$f$ over a coordinate domain $P$ of dimension $k$ with the Lebesgue measure
+$\lambda^k$:
+
+$$
+\mathrm{Integral}(f, P) = \int_P f \,\mathrm{d}\lambda^k.
+$$
+
+`Integral(f, P)` stores $f$ and $P$, which are the two edges, in that order.
+`Integral(f, P)` derives the value shape, the free indices and the scalar type
+of $f$. `Integral(f, P)` has no set.
+
+Construction raises `TypeError` if $P$ is not an `AbstractCoordinateDomain`,
+and raises `ValueError` if $f$ has a set other than $P$. An $f$ with no set is
+a constant on $P$.
+
+The free function `integral(f, P)` returns `Integral(f, P)`.
+
+`Integral` is lazy. Construction does not evaluate the integral. A later pass
+might evaluate the integral, for example by quadrature.
+
+Note that an `Integral` is an expression, so integrals can be added, multiplied
+and used wherever an expression is accepted.
+
+### integrate
+
+The free function `integrate(f, D)` integrates $f$ over any domain $D$ with the
+measure $\mu_D$. `integrate(f, D)` is
+`integral(f * measure_density(D), parameter_domain(D))`, annotated with
+`("integrate", f, D)`. The free function is the definition above, written as
+a fixed composition.
+
+### Examples
+
+With `T = UnitSimplex(2)`, `X = coordinate(T)`, and the physical triangle `K`
+of the affinely mapped triangle example:
+
+- `integral(X[0], T)` is $\int_T X_0 \,\mathrm{d}\lambda^2$. A later pass
+  evaluates the integral to $1/6$.
+- `integrate(Integer(1), K)` is the area of the physical triangle. The measure
+  density of `K` is $\lvert \det J \rvert = 5$, so a later pass evaluates the
+  integral to $5/2$.
+- With `h = X[0]**Integer(2) + X[1]**Integer(2)` and
+  `S = parameterised_domain(T, tensor((X[0], X[1], h)))`,
+  `integrate(Integer(1), S)` is the area of the paraboloid over the unit
+  triangle. The measure density of `S` is $\sqrt{1 + 4 X_0^2 + 4 X_1^2}$.
+- With `c = RealScalar(0.5)` and
+  `p = parameterised_domain(RD(0), tensor((RealScalar(1.0), RealScalar(2.0))))`,
+  `integrate(c, p)` is `c`. The measure density of the point `p` is 1, and the
+  Lebesgue measure on $R^0$ is the counting measure at the single point of
+  $R^0$.
+- `integrate(X[0], K) * integrate(X[1], K)` is a product of two integrals, with
+  value shape `()` and no set.
+
+Integrating over a point works only for an expression with no set. An
+expression `f` on another coordinate domain `Q`, such as a function on a
+triangle that contains the point, must first be composed with the
+parameterisation of the point, giving $f \circ \psi$ on `RD(0)`. At this point
+in the document the core has no composition yet.
 
 ## Topology of domains
 
@@ -1357,7 +1457,8 @@ e \;::=\;\; & c && \text{literal: } n,\ p/q,\ r,\ r + \mathrm{i}\, r' \\
   \mid\;\; & X_P && \text{the coordinate function of } P \\
   \mid\;\; & e_1 + e_2 \;\mid\; e_1 e_2 \;\mid\; e_1 / e_2 \;\mid\; e_1^{e_2} && \text{arithmetic} \\
   \mid\;\; & \sqrt{e} \;\mid\; \lvert e \rvert \;\mid\; \det e && \\
-  \mid\;\; & \nabla e && \text{gradient} \\
+  \mid\;\; & \nabla_P e && \text{gradient with respect to } X_P \\
+  \mid\;\; & \textstyle\int_P e \,\mathrm{d}\lambda && \text{Lebesgue integral over } P \\
   \mid\;\; & [e_1, \ldots, e_m] && \text{tensor from entries} \\
   \mid\;\; & e_{a_1 \ldots a_r} && a_j \text{ an integer or an index symbol} \\
   \mid\;\; & [e]_{i_1 \ldots i_m} && \text{the tensor whose } (i_1, \ldots, i_m) \text{ component is } e \\
@@ -1378,7 +1479,8 @@ Expression ::= Integer | Rational | RealScalar | ComplexScalar
              | Sum(Expression, Expression) | Product(Expression, Expression)
              | Division(Expression, Expression) | Power(Expression, Expression)
              | SquareRoot(Expression) | Absolute(Expression)
-             | Determinant(Expression) | Gradient(Expression)
+             | Determinant(Expression) | Gradient(Expression, CoordinateDomain)
+             | Integral(Expression, CoordinateDomain)
              | Tensor(entries) | Indexed(Expression, indices)
              | ComponentTensor(Expression, indices) | IndexSum(Expression, indices)
              | AnnotatedExpression(Expression, annotation)
@@ -1396,24 +1498,25 @@ Each row gives the condition under which a target expression is well typed, and
 the node class that the target expression translates to. The condition of each
 row is exactly the condition that the constructor of the node class checks.
 
-| Target expression             | Well typed when                                                                   | Shape                | Node class                          |
-| ----------------------------- | --------------------------------------------------------------------------------- | -------------------- | ----------------------------------- |
-| $n$, $p/q$, $r$               | $q \ne 0$, $r$ finite                                                             | $()$                 | `Integer`, `Rational`, `RealScalar` |
-| $r + \mathrm{i}\, r'$         | $r$, $r'$ finite                                                                  | $()$                 | `ComplexScalar`                     |
-| $\ell$                        | always                                                                            | from the leaf        | the leaf class                      |
-| $X_P$                         | always                                                                            | $(n,)$               | `Coordinate`                        |
-| $e_1 + e_2$                   | equal shapes, equal free indices, compatible sets                                 | $s$                  | `Sum`                               |
-| $e_1 e_2$                     | one operand scalar, compatible sets                                               | $s$                  | `Product`                           |
-| $e_1 / e_2$                   | $e_2$ scalar, compatible sets                                                     | $s$                  | `Division`                          |
-| $e_1^{e_2}$                   | both scalar, compatible sets                                                      | $()$                 | `Power`                             |
-| $\sqrt{e}$, $\lvert e \rvert$ | $e$ scalar                                                                        | $()$                 | `SquareRoot`, `Absolute`            |
-| $\det e$                      | shape $(m, m)$                                                                    | $()$                 | `Determinant`                       |
-| $\nabla e$                    | the set of $e$ is a coordinate domain of dimension $k$                            | $s + (k,)$           | `Gradient`                          |
-| $[e_1, \ldots, e_m]$          | entries scalar, rectangular, $m \ge 1$, compatible sets                           | $(m, \ldots)$        | `Tensor`                            |
-| $e_{a_1 \ldots a_r}$          | $r$ equals the rank, $0 \le a_j < n_j$, no index symbol repeated or already free | $()$                 | `Indexed`                           |
-| $[e]_{i_1 \ldots i_m}$        | $e$ scalar, $m \ge 1$, indices distinct and free in $e$                           | extents of the $i_j$ | `ComponentTensor`                   |
-| $\sum_{i_1 \ldots i_m} e$     | $e$ scalar, $m \ge 1$, indices distinct and free in $e$                           | $()$                 | `IndexSum`                          |
-| $\psi(P)$                     | $\psi$ on $P$, shape $(n,)$, no free indices, $k \le n$                           | a domain             | `ParameterisedDomain`               |
+| Target expression              | Well typed when                                                                  | Shape                | Node class                          |
+| ------------------------------ | -------------------------------------------------------------------------------- | -------------------- | ----------------------------------- |
+| $n$, $p/q$, $r$                | $q \ne 0$, $r$ finite                                                            | $()$                 | `Integer`, `Rational`, `RealScalar` |
+| $r + \mathrm{i}\, r'$          | $r$, $r'$ finite                                                                 | $()$                 | `ComplexScalar`                     |
+| $\ell$                         | always                                                                           | from the leaf        | the leaf class                      |
+| $X_P$                          | always                                                                           | $(n,)$               | `Coordinate`                        |
+| $e_1 + e_2$                    | equal shapes, equal free indices, compatible sets                                | $s$                  | `Sum`                               |
+| $e_1 e_2$                      | one operand scalar, compatible sets                                              | $s$                  | `Product`                           |
+| $e_1 / e_2$                    | $e_2$ scalar, compatible sets                                                    | $s$                  | `Division`                          |
+| $e_1^{e_2}$                    | both scalar, $e_2$ has no set                                                    | $()$                 | `Power`                             |
+| $\sqrt{e}$, $\lvert e \rvert$  | $e$ scalar                                                                       | $()$                 | `SquareRoot`, `Absolute`            |
+| $\det e$                       | shape $(m, m)$                                                                   | $()$                 | `Determinant`                       |
+| $\nabla_P e$                   | $P$ of dimension $k$, $e$ has no set or the set $P$                              | $s + (k,)$           | `Gradient`                          |
+| $\int_P e \,\mathrm{d}\lambda$ | $e$ has no set or the set $P$                                                    | $s$, no set          | `Integral`                          |
+| $[e_1, \ldots, e_m]$           | entries scalar, rectangular, $m \ge 1$, compatible sets                          | $(m, \ldots)$        | `Tensor`                            |
+| $e_{a_1 \ldots a_r}$           | $r$ equals the rank, $0 \le a_j < n_j$, no index symbol repeated or already free | $()$                 | `Indexed`                           |
+| $[e]_{i_1 \ldots i_m}$         | $e$ scalar, $m \ge 1$, indices distinct and free in $e$                          | extents of the $i_j$ | `ComponentTensor`                   |
+| $\sum_{i_1 \ldots i_m} e$      | $e$ scalar, $m \ge 1$, indices distinct and free in $e$                          | $()$                 | `IndexSum`                          |
+| $\psi(P)$                      | $\psi$ on $P$, shape $(n,)$, no free indices, $k \le n$                          | a domain             | `ParameterisedDomain`               |
 
 "Compatible sets" means that every operand with a set has the same set.
 
