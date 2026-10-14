@@ -131,6 +131,26 @@ external library provides the concrete data behind the leaf nodes.
   what the pass builds. A pass may rewrite the graph, for example by
   simplifying.
 
+  A pass does one thing, such as differentiating or lowering. Passes compose,
+  and the user of the core chooses which passes run and in what order.
+
+Three kinds of code produce objects:
+
+| Kind                                                  | When the code runs                | Inspects arguments to choose what to build                | Validates                      |
+| ----------------------------------------------------- | --------------------------------- | --------------------------------------------------------- | ------------------------------ |
+| Constructor                                           | Whenever an object is made        | No, a constructor inspects arguments only to validate     | Yes, and only constructors do  |
+| Construction free function, such as `transpose`       | While the user builds the graph   | No, the free function builds one fixed composition        | No                             |
+| Pass, such as differentiation, lowering or `units`    | After construction                | Yes, and a pass may rewrite the graph                     | No                             |
+
+Every object that a free function or a pass returns comes from a constructor,
+so every object that a free function or a pass returns is valid. A call can
+still fail. A construction free function fails when a constructor rejects the
+arguments, for example `transpose` of a vector raises `IndexError` from the
+constructor of `Indexed`. A pass fails with `TypeError` for a node class that
+the pass has no rule for, or with an error of the pass, such as inconsistent
+units. Free functions and passes never check validity, because every object
+goes through a constructor.
+
 ## The minimal object model
 
 ### The base object `Base`
@@ -169,8 +189,7 @@ Objects must satisfy the following rules:
    object. This rule is a hard rule. A free function, including a free function
    that builds a composition, never validates. A free function never converts
    arguments. A free function only reads derived properties of arguments and
-   constructs objects. Only an operator overload converts arguments (see
-   [`AbstractExpression`](#abstractexpression)). An invalid argument is
+   constructs objects. An invalid argument is
    rejected by the constructor of the first object that the argument makes
    invalid.
 
@@ -287,17 +306,16 @@ functions.
 |                       | [`metric(D)`](#geometry)                                |                               | `D: AbstractDomain`                                                          | `AnnotatedExpression`: `transpose(J) @ J`                     |
 |                       | [`measure_density(D)`](#geometry)                       |                               | `D: AbstractDomain`                                                          | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$ |
 
-Every overload in the table is a method of `AbstractExpression`, together with
-the reflected method where one exists, such as `__add__` and `__radd__` for `+`
-(see [`AbstractExpression`](#abstractexpression)). No other class defines
+Every overload in the table is a method of `AbstractExpression` (see
+[`AbstractExpression`](#abstractexpression)). No other class defines
 arithmetic, matrix or indexing overloads. Overloading should be considered
 carefully outside of standard mathematical meanings.
 
 The value-shape and other constraints on the arguments are stated in the
-section of each free function. A free function accepts only the types in the
-"Takes" column. An operator overload also accepts a Python `int` wherever an
-expression is (see
-[Python integers in expressions](#python-integers-in-expressions)).
+section of each free function. A free function and an operator overload
+accept only the types in the "Takes" column. A Python number is never accepted
+in place of an expression (see
+[Numbers in expressions](#numbers-in-expressions)).
 
 ## Extending the core
 
@@ -309,7 +327,7 @@ to extend UFLx without changing the core.
 > so many language features were hacked in, for example complex numbers and
 > dual spaces.
 
-The core has a small, fixed set of node classes and an open set of passes. A
+The core has a small enough, fixed set of node classes and an open set of passes. A
 downstream library extends UFLx by adding passes, not by adding properties to
 the node classes of the core. A new pass needs one rule for each node class of
 the core and does not change the core.
@@ -436,23 +454,17 @@ scalar type and the set of the expression.
   expression is complex if and only if at least one edge is a complex
   expression. `ComplexScalar` is complex. `Absolute` is real.
 
-An operator overload accepts an operand that is an `AbstractExpression` or
-exactly an `int`. For any other operand type, the operator overload returns
-`NotImplemented`. Python then tries the reflected overload of the other operand
-and raises `TypeError` if neither overload accepts the operands. Returning
-`NotImplemented` is Python operator dispatch, not validation. For an accepted
-operand, the operator overload converts an `int` into `Integer`, calls the free
-function, and the constructor validates.
+An operator overload calls the free function with the operands unchanged, and
+the constructor validates. An operand that is not an `AbstractExpression`, such
+as the Python `int` in `X[0] + 2`, is rejected with `TypeError` by the
+constructor. `AbstractExpression` defines no reflected overloads, such as
+`__radd__`, so `2 + X[0]` also raises `TypeError`.
 
-> Needs discussing on how strict we want to be.
-
-`__getitem__` also converts. Python passes `f[i]` to `__getitem__` as the
-single entry `i`, and passes `f[i, j]` as the `tuple` `(i, j)`. `__getitem__`
-converts a single entry into a `tuple` of one entry and calls `indexed`.
-
-The operator overloads are the only place where UFLx converts arguments. Both
-conversions exist because of Python operator syntax. A free function called
-by name takes `Integer(2)`, not `2`, and takes `(i,)`, not `i`.
+`__getitem__` is the one exception. Python passes `f[i]` to `__getitem__` as
+the single entry `i`, and passes `f[i, j]` as the `tuple` `(i, j)`.
+`__getitem__` converts a single entry into a `tuple` of one entry and calls
+`indexed`. The conversion exists because of Python indexing syntax. The free
+function `indexed` called by name takes `(i,)`, not `i`.
 
 This base class is sketched in pseudo-code according to the principles outlined
 above. Later classes will not be sketched in detail.
@@ -482,51 +494,33 @@ class AbstractExpression(Base, ABC):
         """The set of the expression, or None for an expression with no set."""
 
     # Operator overloading must be in the class.
-    def __add__(self, other: object) -> AbstractExpression:
+    def __add__(self, other: AbstractExpression) -> AbstractExpression:
         """Add."""
-        if not isinstance(other, AbstractExpression) and type(other) is not int:
-            return NotImplemented
-        return add(self, _int_to_integer(other))
+        return add(self, other)
 
-    def __radd__(self, other: object) -> AbstractExpression:
-        """Add."""
-        # Calls add(other, self), keeping the order that the user wrote.
-        ...
 
-    def __sub__(self, other: object) -> AbstractExpression:
+    def __sub__(self, other: AbstractExpression) -> AbstractExpression:
         """Subtract."""
         # Calls the free function arithmetic.subtract.
         ...
 
-    def __rsub__(self, other: object) -> AbstractExpression:
-        """Subtract."""
-        # Calls subtract(other, self), keeping the order that the user wrote.
-        ...
 
-    def __mul__(self, other: object) -> AbstractExpression:
+    def __mul__(self, other: AbstractExpression) -> AbstractExpression:
         """Multiply."""
         # Calls the free function arithmetic.multiply.
         ...
 
-    def __rmul__(self, other: object) -> AbstractExpression:
-        """Multiply."""
-        # Calls multiply(other, self), keeping the order that the user wrote.
-        ...
 
-    def __matmul__(self, other: object) -> AbstractExpression:
+    def __matmul__(self, other: AbstractExpression) -> AbstractExpression:
         """Matrix multiply."""
         # Calls the free function tensor_algebra.matrix_product.
         ...
 
-    def __truediv__(self, other: object) -> AbstractExpression:
+    def __truediv__(self, other: AbstractExpression) -> AbstractExpression:
         """Divide."""
         # Calls the free function arithmetic.divide.
         ...
 
-    def __rtruediv__(self, other: object) -> AbstractExpression:
-        """Divide."""
-        # Calls divide(other, self), keeping the order that the user wrote.
-        ...
 
     def __neg__(self) -> AbstractExpression:
         """Negate."""
@@ -538,15 +532,11 @@ class AbstractExpression(Base, ABC):
         # Calls the free function arithmetic.absolute.
         ...
 
-    def __pow__(self, exponent: object) -> AbstractExpression:
+    def __pow__(self, exponent: AbstractExpression) -> AbstractExpression:
         """Raise to a power."""
         # Calls the free function arithmetic.power.
         ...
 
-    def __rpow__(self, base: object) -> AbstractExpression:
-        """Raise a Python int to a power."""
-        # Calls power(base, self).
-        ...
 
     def __getitem__(self, indices: object) -> AbstractExpression:
         """Index."""
@@ -557,10 +547,6 @@ class AbstractExpression(Base, ABC):
         """Raise TypeError, because expressions are not iterable."""
         # Without __iter__, Python iterates through __getitem__.
         ...
-
-def _int_to_integer(x: object) -> object:
-    """Convert exactly int to Integer and return anything else unchanged."""
-    return Integer(x) if type(x) is int else x
 
 # arithmetic.py
 
@@ -628,28 +614,22 @@ Integer(2) + Integer(3) != Integer(5)
 Integer(2) + Integer(3) == Sum(Integer(2), Integer(3))
 ```
 
-#### Python integers in expressions
+#### Numbers in expressions
 
-> LLM generated content.
-
-Wherever an operator overload accepts an expression, the operator overload
-also accepts a Python `int`, which becomes `Integer`. A `bool` is rejected with
-`TypeError`, although `bool` is a subclass of `int`. Free functions and class
-constructors never convert, so a free function called by name takes
-`Integer(2)`, not `2`.
-
-Every other number must be written as a literal, such as `RealScalar(0.5)`,
-`Rational(1, 3)` or `ComplexScalar(RealScalar(0.0), RealScalar(1.0))`. A
-`float`, `complex`, `Fraction` or NumPy scalar is rejected with `TypeError`.
-Only `int` converts because only the conversion of `int` is unambiguous. The
-type of every other literal is a choice that the user makes explicitly.
+Every number in an expression is written as a literal, such as `Integer(2)`,
+`RealScalar(0.5)`, `Rational(1, 3)` or
+`ComplexScalar(RealScalar(0.0), RealScalar(1.0))`. A Python `int`, `float`,
+`complex`, `Fraction` or NumPy scalar is never converted and is rejected with
+`TypeError`. The type of every literal is a choice that the user makes
+explicitly.
 
 Examples, with `X = coordinate(RD(2))`:
 
-- `X[0]**2`, `2 * X[0]` and `1 - X[0]` are accepted.
-- `0.5 * X[0]` raises `TypeError`. `RealScalar(0.5) * X[0]` is accepted.
-- `add(1, X[0])` and `tensor((1, 2))` raise `TypeError`.
-  `add(Integer(1), X[0])` and `tensor((Integer(1), Integer(2)))` are accepted.
+- `X[0]**Integer(2)`, `Integer(2) * X[0]` and `Integer(1) - X[0]` are
+  accepted.
+- `X[0]**2`, `2 * X[0]`, `1 - X[0]` and `0.5 * X[0]` raise `TypeError`.
+- `tensor((1, 2))` raises `TypeError`. `tensor((Integer(1), Integer(2)))` is
+  accepted.
 
 ### Operators
 
@@ -666,13 +646,12 @@ with a set must have the same set, or construction raises `ValueError`. Each
 free function performs no simplification. Construction raises `ValueError` for
 wrong value shapes.
 
-| Class      | Free function | Overload | Operand shapes | Result shape |
-| ---------- | ------------- | -------- | -------------- | ------------ |
-| `Sum`      | `add`         | `+`      | `s`, `s`       | `s`          |
-| `Product`  | `multiply`    | `*`      | `()`, `s`      | `s`          |
-|            |               |          | `s`, `()`      | `s`          |
-| `Division` | `divide`      | `/`      | `s`, `()`      | `s`          |
-| `Power`    | `power`       | `**`     | `()`, `()`     | `()`         |
+| Class      | Free function | Overload | Operand shapes           | Result shape |
+| ---------- | ------------- | -------- | ------------------------ | ------------ |
+| `Sum`      | `add`         | `+`      | `s`, `s`                 | `s`          |
+| `Product`  | `multiply`    | `*`      | `()`, `s` or `s`, `()`   | `s`          |
+| `Division` | `divide`      | `/`      | `s`, `()`                | `s`          |
+| `Power`    | `power`       | `**`     | `()`, `()`               | `()`         |
 
 At least one operand of `Product` is scalar. The free indices of every operator
 follow the general rule of [Free indices](#free-indices).
@@ -694,7 +673,7 @@ composition changes the arithmetic that the user wrote. Division is a node
 class, because `multiply(f, power(g, Integer(-1)))` rounds twice and differs
 from `f / g` in floating-point arithmetic.
 
-### Elementary functions
+### Elementary functions (very incomplete)
 
 `SquareRoot` is a concrete subclass of `UnaryOperator`. The free function
 `square_root(f)` takes a scalar and returns a scalar. Like every unary
@@ -938,10 +917,11 @@ Examples:
 - `X[-1]` and `X[True]` raise errors.
 - For the coordinate function $X$ of `RD(2)`, `Tensor((X[0], X[1])) != X`,
   because construction performs no simplification.
-- `tensor((1 - X[0], X[0]))` has value shape `(2,)` and the set `RD(2)`.
+- `tensor((Integer(1) - X[0], X[0]))` has value shape `(2,)` and the set
+  `RD(2)`.
 - `tensor(((X[0], X[1]),))` has value shape `(1, 2)`.
-- In the paraboloid example, the height `X[0]**2 + X[1]**2` is an expression
-  on `RD(2)` with value shape `()`.
+- In the paraboloid example, the height `X[0]**Integer(2) + X[1]**Integer(2)`
+  is an expression on `RD(2)` with value shape `()`.
 
 ## Index notation
 
@@ -984,9 +964,8 @@ Note that `transpose(A)` `is` or `==` `transpose(A)` with this design.
 
 *Downsides:* expressions that differ only by bound-index labels are not equal
 and are not shared, every substitution must avoid capturing indices, and
-derived indices enlarge the graph. Later passes, not construction, could
-address these downsides by hashing modulo renaming of bound indices (Maziarz et
-al., PLDI 2021) and by removing index-notation scaffolding.
+derived indices enlarge the graph. There are well-established algorithms
+for simplifying these expressions
 
 ### Free indices
 
@@ -1065,10 +1044,12 @@ shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
 
 > LLM generated content.
 
-An annotation records how an object was produced. An annotation is a `tuple`
-of a `str` name followed by the arguments that produced the object, for example
-`("metric", D)`. Every argument must be an allowed construction argument (see
-[The base object](#the-base-object-base)).
+An annotation records how an object was produced or incidental metadata. An
+annotation is a `tuple` of a `str` name followed by the arguments that produced
+the object, for example `("metric", D)`. Every argument must be an allowed
+construction argument (see [The base object](#the-base-object-base)).
+
+> Matthew expressed dislike for MixIns, rethink?
 
 The mixin `Annotation` holds what every annotated class shares. Each kind of
 object that can be annotated has one concrete annotated class, which combines
@@ -1124,8 +1105,8 @@ coordinate domain.
 
 Examples:
 
-- `annotate(X[0]**2 + X[1]**2, "height", X)` is an `AnnotatedExpression` with
-  value shape `()`, and prints as `height(X)`.
+- `annotate(X[0]**Integer(2) + X[1]**Integer(2), "height", X)` is an
+  `AnnotatedExpression` with value shape `()`, and prints as `height(X)`.
 - `annotate(parameterised_domain(RD(2), psi), "paraboloid")` is an
   `AnnotatedDomain` with $k = 2$ and $n = 3$.
 
@@ -1139,6 +1120,9 @@ scalar. `Determinant` stores one expression, which is the only edge, and
 derives the set of that expression. The determinant of an expression of value
 shape `(n, n)` is a polynomial of degree $n$ in the entries, so no fixed
 composition expresses the determinant, and `Determinant` is a node class.
+
+Construction raises `ValueError` if the expression does not have rank 2, or if
+the two extents of the value shape differ.
 
 ### Transpose and matrix product
 
@@ -1207,10 +1191,10 @@ Examples, with `X = coordinate(RD(2))`:
 
 - `grad(X)` has value shape `(2, 2)`. A later pass evaluates `grad(X)` to the
   identity.
-- `grad(X[0]**2 + X[1]**2)` has value shape `(2,)`. A later pass evaluates the
-  gradient to $(2 X_0, 2 X_1)$.
+- `grad(X[0]**Integer(2) + X[1]**Integer(2))` has value shape `(2,)`. A later
+  pass evaluates the gradient to $(2 X_0, 2 X_1)$.
 - `grad(Integer(1))` raises `ValueError`, because the literal `Integer(1)` has
-  no set. `grad(1)` raises `TypeError`, because `1` is not an expression.
+  no set.
 
 ### Parameterised domains
 
@@ -1256,8 +1240,9 @@ Examples:
 - The hypotenuse of the unit triangle is a parameterised domain with $k = 1$
   and $n = 2$. $P$ is the unit interval in $R^1$, and
   $\psi(X) = (1 - X_0, X_0)$.
-- `parameterised_domain(RD(2), tensor((X[0], X[1], X[0]**2 + X[1]**2)))`, with
-  `X = coordinate(RD(2))`, is the paraboloid, with $k = 2$ and $n = 3$.
+- With `X = coordinate(RD(2))` and `h = X[0]**Integer(2) + X[1]**Integer(2)`,
+  `parameterised_domain(RD(2), tensor((X[0], X[1], h)))` is the paraboloid,
+  with $k = 2$ and $n = 3$.
   `ambient_domain` of the paraboloid is `RD(3)`.
 - A physical triangle in $R^2$ is a parameterised domain with $k = n = 2$. $P$
   is the unit triangle, and $\psi$ is the affine map from $P$ onto the
@@ -1298,7 +1283,7 @@ X = coordinate(P)
 
 # AbstractExpression: Tensor((Indexed(X, (0,)), Indexed(X, (1,)), Sum(...))),
 # value shape (3,).
-psi = tensor((X[0], X[1], X[0]**2 + X[1]**2))
+psi = tensor((X[0], X[1], X[0]**Integer(2) + X[1]**Integer(2)))
 
 # AbstractDomain: ParameterisedDomain(RD(2), psi), k = 2, n = 3.
 D = parameterised_domain(P, psi)
@@ -1364,7 +1349,8 @@ T = UnitSimplex(2)
 X = coordinate(T)
 
 # AbstractExpression: Tensor(..., ...), value shape (2,).
-psi = tensor((1 + 2 * X[0] + X[1], X[0] + 3 * X[1]))
+one, two, three = Integer(1), Integer(2), Integer(3)
+psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
 
 # AbstractDomain: ParameterisedDomain(UnitSimplex(2), psi), k = n = 2.
 K = parameterised_domain(T, psi)
