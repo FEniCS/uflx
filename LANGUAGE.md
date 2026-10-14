@@ -2,7 +2,7 @@
 
 This note describes the smallest core language behind UFLx. It intentionally
 avoids implementation details, compiler algorithms, and broad redesign ideas.
-It assumes knowledge of differential geometry and functional analysis. Some
+It assumes knowledge of differential geometry, and functional analysis. Some
 advanced differential geometry concepts are explained in more detail.
 
 This document is aimed at users and developers with extensive knowledge of
@@ -14,10 +14,8 @@ In one sentence:
 
 > UFLx is a typed symbolic language for writing variational forms.
 
-UFLx is embedded in Python.
-
 The UFLx core language (henceforth the core) should not use finite element or
-numerical analysis terminology - differential geometry and functional analysis,
+numerical analysis terminology - differential geometry, and functional analysis,
 and their intersection, without finite element (numerical analysis) concepts,
 should be all that is required.
 
@@ -26,18 +24,15 @@ on top of the core, or provided by external libraries (Basix being the
 'in-house' example). Basix and DOLFINx and their assumptions should not be
 visible in the core.
 
-UFLx will then provide higher-level functionality based on the core which
-mimics the 'easier' interface presented by other competing packages.
-
 UFLx is *not* a symbolic language for reasoning about problems in functional
 analysis or differential geometry. Hence, the core should only contain the
 minimal concepts and relations necessary for writing a wide range of
 variational forms as code for subsequent algorithmic transformation.
 
 A UFLx program is ordinary Python code that constructs symbolic objects and
-connects them through a graph. The primary result is usually a Form, such as a
-bilinear form, linear form, or functional. Python code will be used to motivate
-examples but a full concrete implementation is out of scope.
+connects them through a graph. The primary result(s) are usually Form(s), such
+as a bilinear form, linear form, or functional. Python code will be used to
+motivate examples but a full concrete implementation is out of scope.
 
 UFLx does not handle concrete data or numerical algorithms; e.g. actual meshes,
 boundary markers, numerical values of coefficients, or assembly procedures.
@@ -50,17 +45,16 @@ external library provides the concrete data behind the leaf nodes.
 - All core object definitions should be closely related to their strict
   mathematical definition.
 - Extra definitions, properties or terminology outside of the established
-  mathematical fields noted must be avoided, in particular ideas from more
-  applied fields such as mechanics and engineering-oriented computational
-  sciences.
+  mathematical fields noted must be avoided.
 - Strictness and expressivity, not brevity, is key in the core - brevity can be
-  added later with higher-level APIs.
+  added later with higher-level APIs. The cost of writing code against a
+  precise lower-level API has massively decreased with LLMs, and so the end
+  library could potentially more concise than it was in the past.
 - The mathematical fields provide a rich foundation for writing variational
   problems in a uniform way across geometric dimensions, i.e. 'special cases'
   for particular dimensions do not exist, and so should not exist in the core.
-  This is *enforced* through the implementation principles.
-- The core should not contain any algorithm that is designed to produce
-  convenient output for form compilers.
+- The core should not contain any algorithm that is largely focused on
+  producing convenient output for form compilers.
 
 ## Basic implementation principles
 
@@ -81,26 +75,22 @@ external library provides the concrete data behind the leaf nodes.
   needs a subclass calls a free function, and the free function constructs the
   subclass.
 - A concept must be a free function, not a node class, if the free function can
-  build the concept as one fixed composition of existing node classes applied
-  to the arguments, *without inspecting the arguments to choose the
-  composition*. Otherwise the concept gets its own node class. A free function
-  *never* validates the arguments, because validation belongs to constructors
-  (see [The base object](#the-base-object-base)). For example, the metric is
-  always `transpose(J) @ J`, so the metric is a free function. No composition
-  of existing nodes differentiates, so `Gradient` is currently a node class. A
-  free function that builds a fixed composition is a definition, not a
+  build the concept as one fixed composition of existing node classes applied to
+  the arguments, *without inspecting the arguments to choose the composition*.
+  Otherwise the concept gets its own node class. For example, the metric is
+  always `transpose(J) @ J`, so the metric is a free function. No composition of
+  existing nodes differentiates, so `Gradient` is currently a node class. A free
+  function that builds a fixed composition is a definition, not a
   simplification. The free function does not inspect the operands, so the free
-  function never removes structure that the user built. The free function
-  annotates the result with the name and arguments of the free function (see
-  [Annotation](#annotation)), so the graph stays readable.
+  function never removes structure that the user built.
 - Under the previous rule, a node class may become a free function as UFLx core
-  grows, once the node class can be written as a fixed composition of those newer
-  nodes *without inspecting the arguments to choose the composition*. For
+  grows, once the node class can be written as a fixed composition of those
+  newer nodes *without inspecting the arguments to choose the composition*. For
   example, if subtraction were a node class `Difference`, `subtract(f, g)`
   should become the free function `add(f, negate(g))` once `negate` exists. The
   composition is the same for every `f` and `g`, so the composition is allowed.
-  In contrast, `transpose(A)`, assuming no index notation, cannot be
-  implemented as:
+  In contrast, `transpose(A)`, assuming no index notation, cannot be implemented
+  as:
 
   ```python
   m, n = A.value_shape
@@ -111,23 +101,21 @@ external library provides the concrete data behind the leaf nodes.
   With free indices, `transpose(A)` is the fixed composition
   `component_tensor(A[i, j], (j, i))`, so `transpose` is a free function.
 - Simplifications and rewriting should be completely avoided during user graph
-  construction, maintaining the user's intent. Only later selectable
-  algorithmic passes should re-write. A good example is `(a + b) + c` in
-  floating point arithmetic where `a`, `b` and `c` are unknown terminals (i.e.
-  to be provided later). The user may have very good reason to have `(a + b)`
-  performed before adding the answer to `c`.
+  construction, maintaining the user's intent. Only later selectable algorithmic
+  passes should re-write. A good example is `(a + b) + c` in floating point
+  arithmetic where `a`, `b` and `c` are unknown terminals (i.e. to be provided
+  later). The user may have very good reason to have `(a + b)` performed before
+  adding the answer to `c`.
 - A pass is a pure free function that walks a graph after construction of the
-  graph. The result of a pass depends only on the arguments of the pass. A
-  pass returns a value, such as a unit, or a new graph. A pass builds a new
-  graph by constructing an object for each node that the pass replaces, and by
+  graph. The result of a pass depends only on the arguments of the pass. A pass
+  returns a value, such as a unit, or a new graph. A pass builds a new graph by
+  constructing an object for each node that the pass replaces, and by
   reconstructing every object that depends on a replaced node, up to the root
-  (see [The base object](#the-base-object-base)). Every object that a pass
-  builds goes through a constructor, so every object that a pass builds is
-  valid. A pass may cache results for each object, because objects are
-  immutable.
+  (see [The base object](#the-base-object-base)). A pass may cache results for
+  each object, because objects are immutable.
 
   A pass differs from a free function used during construction in two ways. A
-  pass may read any property of an object, including the value shape, to choose
+  pass may read any property of an object, such as the value shape, to choose
   what the pass builds. A pass may rewrite the graph, for example by
   simplifying.
 
@@ -142,14 +130,13 @@ Three kinds of code produce objects:
 | Construction free function, such as `transpose`       | While the user builds the graph   | No, the free function builds one fixed composition        | No                             |
 | Pass, such as differentiation, lowering or `units`    | After construction                | Yes, and a pass may rewrite the graph                     | No                             |
 
-Every object that a free function or a pass returns comes from a constructor,
-so every object that a free function or a pass returns is valid. A call can
-still fail. A construction free function fails when a constructor rejects the
+Every object that a free function or a pass returns comes from a constructor, so
+every object that a free function or a pass returns is valid. A call can still
+fail. A construction free function fails when a constructor rejects the
 arguments, for example `transpose` of a vector raises `IndexError` from the
 constructor of `Indexed`. A pass fails with `TypeError` for a node class that
 the pass has no rule for, or with an error of the pass, such as inconsistent
-units. Free functions and passes never check validity, because every object
-goes through a constructor.
+units.
 
 ## The minimal object model
 
@@ -165,33 +152,37 @@ Objects must satisfy the following rules:
 
 1. All construction arguments must be deeply immutable values. For example, a
    `tuple` of `list`s is not allowed.
-1. All construction arguments must be compared by type and value, so that `1`,
+2. All construction arguments must be compared by type and value, so that `1`,
    `1.0` and `True` are distinct, `0.0` and `-0.0` are also distinct, and every
    value is equal (`==` or `is`, depending on implementation) to itself.
-1. Every construction argument must have an identity (hash) that is
+3. Every construction argument must have an identity (hash) that is
    deterministic across processes on the same machine.
-1. Construction must depend only on the construction arguments, not on global
+4. Construction must depend only on the construction arguments, not on global
    state.
-1. An object must be reconstructible from its class and construction arguments,
+5. An object must be reconstructible from its class and construction arguments,
    and the reconstructed object must be equal to the original.
-1. Any results produced by the class after construction must be a result of
+6. Any results produced by the class after construction must be a result of
    only the class and the construction arguments.
-1. The state of the class must be immutable after construction.
-1. Any ordering of objects must come from a total order that is deterministic
-   across processes.
-1. The edges of an object must be exactly the base objects among its
+7. The state of the class is immutable after construction.
+8. Any order that the core or a pass relies on must be deterministic across
+   processes. A pass, and any other walk of the graph such as hashing,
+   serialisation or printing, follows the edges of each object in order (rule
+   9). Where unrelated objects must be sorted, the sort uses a total order
+   defined by the class and the construction arguments alone. Rules on sorting
+   comes in later passes, e.g. deciding whether `a + b` and `b + a` are
+   mathematically equivalent.
+9. The edges of an object must be exactly the base objects among its
    construction arguments, including the base objects nested in `tuple`s, in
    order.
-1. Equality (`==` or `is`) must be structural and return a `bool`. Equality
-   does not decide mathematical equivalence, so $a + b$ and $b + a$ are not
-   equal. Mathematical equivalencies are applied in later graph algorithms.
-1. All validation of an object happens in the constructor of the class of the
-   object. This rule is a hard rule. A free function, including a free function
-   that builds a composition, never validates. A free function never converts
-   arguments. A free function only reads derived properties of arguments and
-   constructs objects. An invalid argument is
-   rejected by the constructor of the first object that the argument makes
-   invalid.
+10. Equality (`==` or `is`) must be structural and return a `bool`. Equality
+    does not decide mathematical equivalence, so $a + b$ and $b + a$ are not
+    equal. Mathematical equivalencies are applied in later graph algorithms.
+11. All validation of an object happens in the constructor of the class of the
+    object. This rule is a hard rule. A free function, including a free
+    function that builds a composition, never validates. A free function never
+    converts arguments. A free function only reads derived properties of
+    arguments and constructs objects. An invalid argument is rejected by the
+    constructor of the first object that the argument makes invalid.
 
 Hence two objects are equal if and only if the two objects have the same class
 and equal construction arguments.
@@ -244,7 +235,7 @@ Base
 │   ├── Tensor                            built from scalar entries
 │   ├── Indexed                           full indexing, int or Index entries
 │   ├── ComponentTensor                   binds indices to tensor axes
-│   ├── IndexSum                          sums over one bound index
+│   ├── IndexSum                          sums over bound indices
 │   ├── AnnotatedExpression               Annotation mixin, identity
 │   ├── UnaryOperator
 │   │   ├── Gradient                      grad, on coordinate domains only
@@ -269,8 +260,7 @@ Base
 ### Free functions
 
 Free functions are not objects in the graph. A free function builds or returns
-objects in the graph. They must be pure. Operator overloads call the free
-functions.
+objects in the graph. Operator overloads call the free functions.
 
 > LLM generated table.
 
@@ -295,7 +285,7 @@ functions.
 | Index notation        | [`index(label)`](#index)                                |                               | `label: str \| tuple`                                                        | `Index`                                                       |
 |                       | [`indices(*labels)`](#index)                            |                               | `*labels: str \| tuple`                                                      | `tuple` of `Index`                                            |
 |                       | [`component_tensor(f, indices)`](#componenttensor)      |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                        | `ComponentTensor`                                             |
-|                       | [`index_sum(f, i)`](#indexsum)                          |                               | `f: AbstractExpression`, `i: Index`                                          | `IndexSum`                                                    |
+|                       | [`index_sum(f, indices)`](#indexsum)                    |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                        | `IndexSum`                                                    |
 | Annotation            | [`annotate(x, name, *arguments)`](#annotation)          |                               | `x: AbstractExpression \| AbstractDomain`, `name: str`, `*arguments`         | `AnnotatedExpression` or `AnnotatedDomain`                    |
 | Tensor algebra        | [`determinant(f)`](#determinant)                        |                               | `f: AbstractExpression`                                                      | `Determinant`                                                 |
 |                       | [`transpose(f)`](#transpose-and-matrix-product)         |                               | `f: AbstractExpression`                                                      | `AnnotatedExpression`: `ComponentTensor`                      |
@@ -311,11 +301,9 @@ Every overload in the table is a method of `AbstractExpression` (see
 arithmetic, matrix or indexing overloads. Overloading should be considered
 carefully outside of standard mathematical meanings.
 
-The value-shape and other constraints on the arguments are stated in the
-section of each free function. A free function and an operator overload
-accept only the types in the "Takes" column. A Python number is never accepted
-in place of an expression (see
-[Numbers in expressions](#numbers-in-expressions)).
+The value-shape and other constraints on the arguments are stated in the section
+of each free function. A free function and an operator overload accept only the
+types in the "Takes" column.
 
 ## Extending the core
 
@@ -333,6 +321,8 @@ the node classes of the core. A new pass needs one rule for each node class of
 the core and does not change the core.
 
 The core supports five kinds of extension:
+
+> LLM generated table, could be made more concise.
 
 | Kind of extension                  | Examples                                                | Section                                                   |
 | ---------------------------------- | ------------------------------------------------------- | --------------------------------------------------------- |
@@ -369,21 +359,18 @@ compared by content, so the leaves are reliable keys of the table.
 An error reported by `units` does not make an object invalid. An object is
 valid if the constructors of the core accept the object.
 
-A pass raises `TypeError` for a node class that the pass has no rule for. The
-pass never guesses a rule. A
-`TypeError` from `units` means that the units library does not know a node
-class. An error of the units library means that the expression has
-inconsistent units.
+The pass never guesses a rule. A `TypeError` from `units` means that the units
+library does not know a node class. An error of the units library means that the
+expression has inconsistent units.
 
 ### New leaves
 
-Each kind of leaf has an abstract class in the core, such as `AbstractScalar`
-or `AbstractCoordinateDomain`. A downstream leaf class is a subclass of the
+Each kind of leaf has an abstract class in the core, such as `AbstractScalar` or
+`AbstractCoordinateDomain`. A downstream leaf class is a subclass of the
 abstract class. The abstract class is the contract between the downstream leaf
-class and the transformations of the core. The transformations of the core
-treat a downstream leaf class according to the abstract class. For example,
-differentiation gives zero for every `AbstractScalar`, so differentiation
-handles a downstream subclass of `AbstractScalar` without a new rule.
+class and the transformations of the core. For example, differentiation gives
+zero for every `AbstractScalar`, so differentiation handles a downstream
+subclass of `AbstractScalar` without a new rule.
 
 Information that a downstream library attaches to the graph goes in one of two
 places:
@@ -440,8 +427,7 @@ core.
 ### Expressions
 
 An expression denotes an array-valued function defined on the set of the
-expression. An expression with no set denotes a single array. An expression is
-real or complex valued.
+expression. An expression with no set denotes a single array.
 
 #### `AbstractExpression`
 
@@ -452,7 +438,7 @@ scalar type and the set of the expression.
   set, such as a literal.
 - The scalar type is real or complex. Unless a node class states otherwise, an
   expression is complex if and only if at least one edge is a complex
-  expression. `ComplexScalar` is complex. `Absolute` is real.
+  expression. `ComplexScalar` is complex.
 
 An operator overload calls the free function with the operands unchanged, and
 the constructor validates. An operand that is not an `AbstractExpression`, such
@@ -460,11 +446,10 @@ as the Python `int` in `X[0] + 2`, is rejected with `TypeError` by the
 constructor. `AbstractExpression` defines no reflected overloads, such as
 `__radd__`, so `2 + X[0]` also raises `TypeError`.
 
-`__getitem__` is the one exception. Python passes `f[i]` to `__getitem__` as
-the single entry `i`, and passes `f[i, j]` as the `tuple` `(i, j)`.
-`__getitem__` converts a single entry into a `tuple` of one entry and calls
-`indexed`. The conversion exists because of Python indexing syntax. The free
-function `indexed` called by name takes `(i,)`, not `i`.
+`__getitem__` is the one exception. Python passes `f[i]` to `__getitem__` as the
+single entry `i`, and passes `f[i, j]` as the `tuple` `(i, j)`. `__getitem__`
+converts a single entry into a `tuple` of one entry and calls `indexed`. The
+conversion exists because of Python indexing syntax.
 
 This base class is sketched in pseudo-code according to the principles outlined
 above. Later classes will not be sketched in detail.
@@ -498,18 +483,15 @@ class AbstractExpression(Base, ABC):
         """Add."""
         return add(self, other)
 
-
     def __sub__(self, other: AbstractExpression) -> AbstractExpression:
         """Subtract."""
         # Calls the free function arithmetic.subtract.
         ...
 
-
     def __mul__(self, other: AbstractExpression) -> AbstractExpression:
         """Multiply."""
         # Calls the free function arithmetic.multiply.
         ...
-
 
     def __matmul__(self, other: AbstractExpression) -> AbstractExpression:
         """Matrix multiply."""
@@ -520,7 +502,6 @@ class AbstractExpression(Base, ABC):
         """Divide."""
         # Calls the free function arithmetic.divide.
         ...
-
 
     def __neg__(self) -> AbstractExpression:
         """Negate."""
@@ -536,7 +517,6 @@ class AbstractExpression(Base, ABC):
         """Raise to a power."""
         # Calls the free function arithmetic.power.
         ...
-
 
     def __getitem__(self, indices: object) -> AbstractExpression:
         """Index."""
@@ -577,8 +557,6 @@ def add(
 
 A literal is a number written down in an expression, e.g. `Integer(2) * u`. A
 literal's value is part of the expression itself.
-
-> Literals are Expressions, but literals have no set.
 
 Base:
 
@@ -642,9 +620,8 @@ Downstream basic ops are relatively obvious.
 
 Concrete subclasses of `BinaryOperator`. Each class stores two expressions,
 which are the two edges in order. The set is the set of the operands. Operands
-with a set must have the same set, or construction raises `ValueError`. Each
-free function performs no simplification. Construction raises `ValueError` for
-wrong value shapes.
+with a set must have the same set, or construction raises `ValueError`.
+Construction raises `ValueError` for wrong value shapes.
 
 | Class      | Free function | Overload | Operand shapes           | Result shape |
 | ---------- | ------------- | -------- | ------------------------ | ------------ |
@@ -653,8 +630,8 @@ wrong value shapes.
 | `Division` | `divide`      | `/`      | `s`, `()`                | `s`          |
 | `Power`    | `power`       | `**`     | `()`, `()`               | `()`         |
 
-At least one operand of `Product` is scalar. The free indices of every operator
-follow the general rule of [Free indices](#free-indices).
+The free indices of every operator follow the general rule of
+[Free indices](#free-indices).
 
 `Absolute` is a concrete subclass of `UnaryOperator`. The free function
 `absolute(f)`, with the overload `abs(f)`, takes a scalar and returns a scalar.
@@ -722,11 +699,7 @@ dimension $k$ and geometric dimension $n$:
   image $\psi(P)$ is $D$.
 - `ambient_domain(D)` returns `RD(n)`.
 
-Each of the three free functions reads a derived property of $D$.
-
-The mapping of $D$ gives the coordinates in $R^n$ of the points of $D$. The
-geometry of $D$ is derived from the mapping (see
-[Geometry](#geometry)).
+The geometry of $D$ is derived from the mapping (see [Geometry](#geometry)).
 
 #### AbstractCoordinateDomain
 
@@ -734,10 +707,7 @@ An abstract base class for coordinate domains `AbstractCoordinateDomain`, and a
 subclass of `AbstractDomain`.
 
 A coordinate domain is a subset of $R^n$ with non-empty interior in $R^n$ whose
-points are named by the coordinates of the points themselves. A coordinate
-domain is the parameter domain of the coordinate domain, and the mapping of a
-coordinate domain is the identity. Hence the topological dimension of a
-coordinate domain equals the geometric dimension $n$.
+points are named by the coordinates of the points themselves.
 
 `AbstractCoordinateDomain` is distinguished from other subclasses of
 `AbstractDomain` by how the domain is built, not by the set of points. A
@@ -790,12 +760,8 @@ of $P$ to the $n$-tuple of that point:
 
 $X : P \to R^n$, $X(p) = p$.
 
-The coordinate function $X$ is a function on $P$, not a point of $P$.
-Evaluating $X$ at a point $p$ of $P$ gives the $n$-tuple of $p$.
-
 `Coordinate(P)` stores the coordinate domain $P$, which is the only edge.
-`Coordinate(P)` derives the value shape `(n,)` and the set $P$. Two coordinate
-functions are equal if and only if the two coordinate domains are equal.
+`Coordinate(P)` derives the value shape `(n,)` and the set $P$.
 
 Only coordinate domains provide a coordinate function. The coordinates of the
 points of any other domain are given by `mapping` (see
@@ -841,8 +807,7 @@ lexicographic order of the indices $(i_0, \ldots, i_{r-1})$.
 Construction performs no simplification. For example,
 `tensor((Integer(1) + Integer(1),)) != tensor((Integer(2),))`.
 
-The free function `tensor(entries)` returns `Tensor(entries)`. The nesting
-depth of the entries gives the rank.
+The free function `tensor(entries)` returns `Tensor(entries)`.
 
 A value shape may contain the extent 0, for example the value shape `(0,)` of
 the coordinate function of `RD(0)`. `Tensor` cannot build an expression with
@@ -856,7 +821,6 @@ Examples, with `zero, one, two = Integer(0), Integer(1), Integer(2)`:
 - With `r0 = RealScalar(0.0)` and `r1 = RealScalar(1.0)`,
   `tensor(((r1, r0), (r0, r1)))` has `RealScalar` entries, so the matrix is not
   equal to `tensor(((one, zero), (zero, one)))`.
-- `tensor((1, 2))` raises `TypeError`.
 - `tensor(((one, two),))` has value shape `(1, 2)`, and `tensor((one, two))`
   has value shape `(2,)`.
 - `tensor((((one,),),))` has value shape `(1, 1, 1)`.
@@ -900,14 +864,10 @@ Construction of `Indexed` raises:
 | `ValueError` | An `Index` that occurs twice, or that is already free.       |
 
 A negative index is rejected rather than converted, so the stored indices are
-always the indices that the user wrote. Expressions are not iterable (see
-`AbstractExpression.__iter__`).
+always the indices that the user wrote.
 
 Construction performs no simplification. For example, `tensor((a, b))[0]` is
 `Indexed(Tensor((a, b)), (0,))` and is not equal to `a`.
-
-Partial indexing and slicing are not part of `Indexed`. A repeated `Index`
-does not imply summation (see [Index notation](#index-notation)).
 
 Examples:
 
@@ -988,13 +948,7 @@ The following node classes state otherwise:
 - `ComponentTensor` and `IndexSum`: see below.
 
 Summation is never implicit. `a[i] * b[i]` has the free index `i` and denotes
-the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], i)`.
-
-Equality is structural. Two expressions that differ only by the names of bound
-indices are not equal. A later algorithmic pass may compare expressions up to
-renaming of bound indices.
-
-A form integrand must have no free indices.
+the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], (i,))`.
 
 ### ComponentTensor
 
@@ -1016,29 +970,39 @@ if an index is not free in the expression.
 ### IndexSum
 
 A concrete subclass of `AbstractExpression` for the sum of a scalar expression
-over one free index.
+over free indices.
 
-`IndexSum(expression, index)` stores a scalar expression and an `Index` that is
-free in the expression. The edges are the expression and the index, in that
-order.
-`IndexSum(expression, index)` derives the value shape `()` and the free indices
-of the expression without the summation index.
+`IndexSum(expression, indices)` stores a scalar expression and a non-empty
+`tuple` of distinct `Index`es that are free in the expression. The edges are
+the expression followed by the indices, in order.
+`IndexSum(expression, indices)` derives the value shape `()` and the free
+indices of the expression without the summation indices.
 
-The free function `index_sum(expression, index)` returns
-`IndexSum(expression, index)`. Construction raises `ValueError` if the
-expression is not scalar, or if the index is not free in the expression.
+One `IndexSum` holds a whole contraction, such as the sum over both indices of
+`A[i, j] * B[i, j]`. A pass that chooses the order of summation then finds the
+contraction in one node, not in a chain of nested nodes.
+
+The free function `index_sum(expression, indices)` returns
+`IndexSum(expression, indices)`. Construction raises `ValueError` if the
+expression is not scalar, if the indices are empty, if an index is repeated, or
+if an index is not free in the expression.
 
 Examples, with `i, j = indices("i", "j")`, two vectors `a` and `b` of value
 shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
 
 - `A[i, j]` has value shape `()` and the free indices `((i, 2), (j, 2))`.
 - `a[i] * b[i]` has value shape `()` and the free indices `((i, 3),)`.
-- `index_sum(a[i] * b[i], i)` is the inner product of `a` and `b`, with no
+- `index_sum(a[i] * b[i], (i,))` is the inner product of `a` and `b`, with no
   free indices.
+- `index_sum(A[i, j] * A[i, j], (i, j))` is the sum of the squares of the
+  entries of `A`, with no free indices.
 - `component_tensor(A[i, j], (j, i))` has value shape `(2, 2)` and is the
   transpose of `A`, written with user indices.
 - `a[i] + b[j]` raises `ValueError`, because the free indices differ.
 - `A[i, i]` raises `ValueError`, because `i` occurs twice.
+
+> Note: `opt_einsum` can directly plan a contract path for a given contraction,
+but assumes dense operators.
 
 ## Annotation
 
@@ -1075,9 +1039,7 @@ The `Annotation` mixin specifies:
   annotation, unless the pass shows that the annotation still holds.
 
 The free function `annotate(x, name, *arguments)` returns the annotated class
-for the abstract kind of `x`, with the annotation `(name, *arguments)`. Reading
-the abstract kind of `x` is reading a derived property of `x` (see rule 11 of
-[The base object](#the-base-object-base)).
+for the abstract kind of `x`, with the annotation `(name, *arguments)`.
 
 Every free function in the core that is defined as a composition annotates the
 result with the name and arguments of the free function. For example,
@@ -1132,24 +1094,19 @@ Transpose and matrix product are free functions built with derived indices:
   $k$ = `Index(("transpose", A, 0))` and $l$ = `Index(("transpose", A, 1))`,
   annotated with `("transpose", A)`.
 - `matrix_product(A, B)`, with the overload `A @ B`, is
-  `component_tensor(index_sum(A[i, k] * B[k, j], k), (i, j))`, with $i$, $k$
+  `component_tensor(index_sum(A[i, k] * B[k, j], (k,)), (i, j))`, with $i$, $k$
   and $j$ the derived indices `Index(("matrix_product", A, B, m))` for
   $m = 0, 1, 2$, annotated with `("matrix_product", A, B)`.
 
-Neither free function validates. The constructors of the nodes that the
-compositions build reject invalid operands. An operand that does not have rank
-2, including a scalar operand, is rejected with `IndexError` by the
-constructor of `Indexed`. Unequal inner
-extents in `matrix_product` are rejected with `ValueError` by the constructor
-of `Product`, because the index $k$ has two extents. So the overload `@`
-accepts only rank 2 operands. Contractions of other ranks, such as a
-matrix-vector product, are written in index notation.
+An operand that does not have rank 2, including a scalar operand, is rejected
+with `IndexError` by the constructor of `Indexed`. Unequal inner extents in
+`matrix_product` are rejected with `ValueError` by the constructor of `Product`,
+because the index $k$ has two extents. So the overload `@` accepts only rank 2
+operands. Contractions of other ranks, such as a matrix-vector product, are
+written in index notation.
 
 Examples, with a matrix `A` of value shape `(2, 2)`:
 
-- `transpose(A)` is `component_tensor(A[k, l], (l, k))`, annotated with
-  `("transpose", A)`, with the derived indices
-  `k = Index(("transpose", A, 0))` and `l = Index(("transpose", A, 1))`.
 - `transpose(A)` is not equal to `component_tensor(A[i, j], (j, i))` for user
   indices `i` and `j`, because the index labels differ and because
   `transpose(A)` is annotated.
@@ -1221,19 +1178,12 @@ $P$ and $\psi$ are the two edges, in that order.
 - The geometric dimension $n$, which is taken from the value shape `(n,)` of
   $\psi$. The geometric dimension is derived, not stored, so the geometric
   dimension cannot disagree with the value shape of $\psi$.
-- The ambient domain `ambient_domain(D)`, which is `RD(n)`.
-
-A parameterised domain does not provide a coordinate function.
 
 The free function `parameterised_domain(P, psi)` returns
 `ParameterisedDomain(P, psi)`. Construction raises `TypeError` if $P$ is not an
 `AbstractCoordinateDomain`. Construction raises `ValueError` if $\psi$ does not
 have rank 1, if the set of $\psi$ is not $P$, including a $\psi$ with no set,
 if $\psi$ has free indices, or if $k > n$.
-
-A coordinate domain is *not* a parameterised domain. `AbstractCoordinateDomain`
-and `ParameterisedDomain` are both subclasses of `AbstractDomain`.
-`parameter_domain` and `mapping` accept both classes.
 
 Examples:
 
@@ -1259,12 +1209,6 @@ mapping $\psi$ = `mapping(D)` on the parameter domain $P$ =
 | `jacobian(D)`        | $J$ = `grad(mapping(D))`         | `(n, k)`    |
 | `metric(D)`          | $g$ = `transpose(J) @ J`         | `(k, k)`    |
 | `measure_density(D)` | `square_root(determinant(g))`    | `()`        |
-
-Each free function annotates the result with the name of the free function
-and $D$, for example `("jacobian", D)`.
-
-The Jacobian, metric and measure density are lazy expressions. Construction
-performs no simplification.
 
 For a coordinate domain, the mapping is the coordinate function $X$. The
 general rules give $J$ = `grad(X)` $= I$, $g = I$ and a measure density of 1,
@@ -1319,8 +1263,7 @@ Define the unit simplex in $R^n$,
 
 $\{p \in R^n : p_i \ge 0 \text{ for every } i, \ \sum_i p_i \le 1\}$,
 
-as a concrete `AbstractCoordinateDomain`. A concrete coordinate domain provides
-only the dimension $n$. Everything else comes from `AbstractCoordinateDomain`.
+as a concrete `AbstractCoordinateDomain`.
 
 ```python
 class UnitSimplex(AbstractCoordinateDomain):
