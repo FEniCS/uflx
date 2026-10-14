@@ -16,10 +16,10 @@ In one sentence:
 
 UFLx is a symbolic language embedded in Python for writing variational forms.
 
-The UFLx core language (henceforth core) should not use finite element or
+The UFLx core language (henceforth the core) should not use finite element or
 numerical analysis terminology - differential geometry and functional analysis
-(and their fascinating intersection), without finite element (numerical
-analysis) concepts, should be all that should is required.
+,and their intersection, without finite element (numerical analysis) concepts,
+should be all that should is required.
 
 Finite element and numerical analysis concepts, when necessary, will be added
 on top of the core, or provided by external libraries (Basix being the
@@ -65,29 +65,82 @@ which the external library must provide.
 
 ## Basic implementation principles
 
-- UFLx should be deterministic on the same machine using the same byte-code.
+- Explicit is better than implicit.
+- Boilerplate and error-prone patterns should be minimised.
+- UFLx should deterministic on the same machine using the same byte-code.
 - Performance is *important* and so any data structures and algorithms in the
   core should be carefully chosen and tested for scalability.
 - The minimal language should only need a relatively small number of object
   kinds. When designing the language, consider whether objects can be composed,
   rather than extended.
-- Explicit is better than implicit.
-- Boilerplate and error-prone patterns should be minimised.
 - Free functions should be preferred over class members. Class members should
   immediately call free functions wherever possible. Free functions maximise
   the chance of code re-use and are easier to reason about.
 - A parent class should avoid returning a subclass.
-- A concept gets its own node class if it can't be written as a fixed
-  composition of existing nodes, and the composition must be the same
+- A concept is a free function, not a node class, if the free function can
+  build the concept as one fixed composition of existing nodes applied to the
+  arguments, *without inspecting the arguments to choose the composition*. A
+  free function may inspect the arguments to validate the arguments. Otherwise
+  the concept gets its own node class. For example, the metric is always
+  `transpose(J) @ J`, so the metric is a free function. No composition of
+  existing nodes differentiates, so `Gradient` is a node class. A free
+  function that builds a fixed composition is a definition, not a
+  simplification. The free function does not inspect the operands, so the free
+  function never removes structure that the user built. The free function
+  annotates the result with the name and arguments of the free function (see
+  [Annotation](#annotation)), so the graph stays readable.
+- Under the previous rule, a node class is likely to become a free function as
+  UFLx grows, once the node class can be written as a fixed composition of
+  newer nodes *without inspecting the arguments to choose the composition*. For
+  example, if subtraction were a node class `Difference`, `subtract(f, g)`
+  should become the free function `add(f, negate(g))` once `negate` exists. The
+  composition is the same for every `f` and `g`, so the composition is allowed.
+  In contrast, `transpose(A)`, assuming no `Indexing`-related functionality,
+  cannot be:
+
+  ```python
+  m, n = A.value_shape
+  tensor(tuple(tuple(A[j, i] for j in range(m)) for i in range(n)))
+  ```
+
+  because the composition reads the value shape of `A` to choose the entries.
+  With free indices, `transpose(A)` is the fixed composition
+  `component_tensor(A[i, j], (j, i))`, so `transpose` is a free function.
+  `Gradient` is a primitive, and `Gradient` stays a node class.
 - Simplifications and rewriting should be avoided at all costs during user
-  graph construction, maintaining the user's intent. Only later algorithmic
-  passes should re-write. A good example is `(a + b) + c` in floating point
-  arithmetic. The user may have very good reason to have `(a + b)` performed
-  before adding the answer to `c`!
+  graph construction, maintaining the user's intent. Only later controllable
+  algorithmic passes should re-write. A good example is `(a + b) + c` in
+  floating point arithmetic where `a`, `b` and `c` are unknown terminals (i.e.
+  to be provided later. The user may have very good reason to have `(a + b)`
+  performed before adding the answer to `c`.
+
+## Tradeoffs of the above decisions
+
+Good things:
+
+- Much smaller algebraic lowering pass.
+- Fewer node types. Every algorithm, including differentiation, will handle a
+  smaller and more stable set of classes.
+- Repeated construction gives equal, shared graphs, for example
+  `transpose(A) == transpose(A)`. Spellings with different bound-index labels
+  are equal only up to renaming, which a later pass decides.
+- Graphs stay readable. Every composition is wrapped in an `AnnotatedExpression` node
+  that records the name and arguments of the free function, so a printer can
+  show `metric(D)` instead of the expanded composition (see
+  [Annotation](#annotation)).
+
+Bad things:
+
+- An annotated result is not structurally equal to the same composition
+  written by hand. Comparison that ignores annotations is a later pass.
+- Graph size. *Requires highly performant graph/hashing implementation*.
+- Shape-dependent operations stay nodes (until lowering). For example,
+  `Determinant` and `Inverse` cannot be lowered without inspecting the value
+  shape. 
 
 ## The minimal object model
 
-### The base object ``
+### The base object `Base`
 
 The base object in UFLx must be extended by all objects that are included in
 the graph. The graph is a directed acyclic graph (DAG).
@@ -135,6 +188,24 @@ the root of the graph.
 The above design implies that construction arguments should be small and cheap
 to hash and compare, and the graph implementation must be performant.
 
+The base object also fixes two Python protocols for every object in the graph:
+
+- Truth testing raises `TypeError`. An object has no truth value, so
+  `if a == b` cannot be mistaken for a test of mathematical equality, and
+  `if x` cannot replace `if x is not None`.
+- The base object sets `__array_ufunc__ = None`. NumPy then defers to the
+  object rather than broadcasting over the object, so `np.float64(0.5) * X`
+  raises `TypeError` and comparison with a NumPy array does not become
+  element-wise.
+
+### Enforcement
+
+Enforcement must be implemented statically and dynamically - look at tools such as
+`dataclass`, deterministic hashing, hash-consing, `WeakValueDictionary`, `ruff`
+and `semgrep`.
+
+https://github.com/semgrep/semgrep
+
 ### Class hierarchy
 
 Every object in the graph extends `Base`. The classes defined in this document
@@ -152,19 +223,25 @@ Base
 │   │   └── ComplexScalar
 │   ├── Coordinate                        terminal, X on P
 │   ├── Tensor                            built from scalar entries
-│   ├── Indexed                           full indexing only
+│   ├── Indexed                           full indexing, int or Index entries
+│   ├── ComponentTensor                   binds indices to tensor axes
+│   ├── IndexSum                          sums over one bound index
+│   ├── AnnotatedExpression               Annotation mixin, identity
 │   ├── UnaryOperator
 │   │   ├── Gradient                      grad, on coordinate domains only
-│   │   ├── Transpose
 │   │   ├── Determinant
-│   │   └── SquareRoot
+│   │   ├── SquareRoot
+│   │   └── Absolute
 │   └── BinaryOperator
 │       ├── Sum                           +
 │       ├── Product                       *
-│       ├── Power                         **
-│       └── MatrixProduct                 @
+│       ├── Division                      /
+│       └── Power                         **
+│
+├── Index                                 named by a label, not an expression
 │
 └── AbstractDomain                        parameter_domain(D), mapping(D)
+    ├── AnnotatedDomain                   Annotation mixin, identity
     ├── AbstractCoordinateDomain          stores n, mapping is X
     │   └── RD                            R^n
     └── ParameterisedDomain               stores P and ψ, mapping is ψ
@@ -188,35 +265,41 @@ objects in the graph. Operator overloads call the free functions.
 
 > LLM generated table.
 
-| Group                | Free function                  | Overload  | Takes                                                      | Returns                                |
-| -------------------- | ------------------------------ | --------- | ---------------------------------------------------------- | -------------------------------------- |
-| Tensors and indexing | `tensor(entries)`              |           | nested `tuple` of scalar entries                           | `Tensor`                               |
-|                      | `vector(entries)`              |           | flat `tuple` of scalar entries                             | `Tensor` of rank 1                     |
-|                      | `matrix(entries)`              |           | `tuple` of `tuple`s of scalar entries                      | `Tensor` of rank 2                     |
-|                      | `indexed(f, indices)`          | `f[i]`    | `f` of rank $r \ge 1$, an `int` or a `tuple` of $r$ `int`s | `Indexed`                              |
-| Arithmetic           | `add(f, g)`                    | `+`       | `f` and `g` of equal shape                                 | `Sum`                                  |
-|                      | `subtract(f, g)`               | `-`       | `f` and `g` of equal shape                                 | not yet specified                      |
-|                      | `multiply(f, g)`               | `*`       | scalar `f` and `g`                                         | `Product`                              |
-|                      | `divide(f, g)`                 | `/`       | not yet specified                                          | not yet specified                      |
-|                      | `negate(f)`                    | unary `-` | `f`                                                        | not yet specified                      |
-|                      | `absolute(f)`                  | `abs`     | not yet specified                                          | not yet specified                      |
-|                      | `power(f, g)`                  | `**`      | scalar `f` and `g`                                         | `Power`                                |
-|                      | `matrix_product(f, g)`         | `@`       | `f` of shape `(m, k)`, `g` of shape `(k, n)`               | `MatrixProduct`                        |
-| Tensor algebra       | `transpose(f)`                 |           | `f` of shape `(m, n)`                                      | `Transpose`                            |
-|                      | `determinant(f)`               |           | `f` of shape `(n, n)`                                      | `Determinant`                          |
-| Elementary functions | `square_root(f)`               |           | scalar `f`                                                 | `SquareRoot`                           |
-| Differentiation      | `grad(f)`                      |           | `f` on a coordinate domain                                 | `Gradient`                             |
-|                      | `derivative(a, u, du)`         |           | see section 4                                              | Gateaux derivative                     |
-| Domains              | `parameterised_domain(P, psi)` |           | coordinate domain `P`, `psi` on `P` of rank 1              | `ParameterisedDomain`                  |
-|                      | `ambient_domain(D)`            |           | domain `D`                                                 | `RD(n)`                                |
-|                      | `parameter_domain(D)`          |           | domain `D`                                                 | `AbstractCoordinateDomain`             |
-|                      | `mapping(D)`                   |           | domain `D`                                                 | `AbstractExpression` with shape `(n,)` |
-|                      | `coordinate(P)`                |           | coordinate domain `P`                                      | `Coordinate`                           |
-| Geometry             | `jacobian(D)`                  |           | domain `D`                                                 | `Gradient` of `mapping(D)`             |
-|                      | `metric(D)`                    |           | domain `D`                                                 | `MatrixProduct` of $J^T$ and $J$       |
-|                      | `measure_density(D)`           |           | domain `D`                                                 | `SquareRoot` of the determinant of $g$ |
+| Group                 | Free function                                           | Overload  | Takes                                                                        | Returns                                                       |
+| --------------------- | ------------------------------------------------------- | --------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Arithmetic            | [`add(f, g)`](#arithmetic)                              | `+`       | `f, g: AbstractExpression`                                                   | `Sum`                                                         |
+|                       | [`subtract(f, g)`](#arithmetic)                         | `-`       | `f, g: AbstractExpression`                                                   | `AnnotatedExpression`: `Sum` of `f` and `negate(g)`           |
+|                       | [`multiply(f, g)`](#arithmetic)                         | `*`       | `f, g: AbstractExpression`                                                   | `Product`                                                     |
+|                       | [`divide(f, g)`](#arithmetic)                           | `/`       | `f, g: AbstractExpression`                                                   | `Division`                                                    |
+|                       | [`negate(f)`](#arithmetic)                              | unary `-` | `f: AbstractExpression`                                                      | `AnnotatedExpression`: `Product` of `-1` and `f`              |
+|                       | [`absolute(f)`](#arithmetic)                            | `abs`     | `f: AbstractExpression`                                                      | `Absolute`                                                    |
+|                       | [`power(f, g)`](#arithmetic)                            | `**`      | `f, g: AbstractExpression`                                                   | `Power`                                                       |
+| Elementary functions  | [`square_root(f)`](#elementary-functions)               |           | `f: AbstractExpression`                                                      | `SquareRoot`                                                  |
+| Domains               | [`ambient_domain(D)`](#abstractcoordinatedomain)        |           | `D: AbstractDomain`                                                          | `RD(n)`                                                       |
+|                       | [`parameter_domain(D)`](#abstractdomain)                |           | `D: AbstractDomain`                                                          | `AbstractCoordinateDomain`                                    |
+|                       | [`mapping(D)`](#abstractdomain)                         |           | `D: AbstractDomain`                                                          | `AbstractExpression` with shape `(n,)`                        |
+|                       | [`coordinate(P)`](#coordinate)                          |           | `P: AbstractCoordinateDomain`                                                | `Coordinate`                                                  |
+| Tensors and indexing  | [`tensor(entries)`](#tensor)                            |           | `entries: tuple` (nested, of `AbstractExpression`)                           | `Tensor`                                                      |
+|                       | [`vector(entries)`](#tensor)                            |           | `entries: tuple[AbstractExpression, ...]`                                    | `Tensor` of rank 1                                            |
+|                       | [`matrix(entries)`](#tensor)                            |           | `entries: tuple[tuple[AbstractExpression, ...], ...]`                        | `Tensor` of rank 2                                            |
+|                       | [`indexed(f, indices)`](#indexed)                       | `f[i]`    | `f: AbstractExpression`, `indices: int \| Index \| tuple[int \| Index, ...]` | `Indexed`                                                     |
+| Index notation        | [`index(label)`](#index)                                |           | `label: str \| tuple`                                                        | `Index`                                                       |
+|                       | [`indices(*labels)`](#index)                            |           | `*labels: str \| tuple`                                                      | `tuple` of `Index`                                            |
+|                       | [`component_tensor(f, indices)`](#componenttensor)      |           | `f: AbstractExpression`, `indices: tuple[Index, ...]`                        | `ComponentTensor`                                             |
+|                       | [`index_sum(f, i)`](#indexsum)                          |           | `f: AbstractExpression`, `i: Index`                                          | `IndexSum`                                                    |
+| Annotation            | [`annotate(x, name, *arguments)`](#annotation)          |           | `x: AbstractExpression \| AbstractDomain`, `name: str`, `*arguments`         | `AnnotatedExpression` or `AnnotatedDomain`                    |
+| Tensor algebra        | [`determinant(f)`](#determinant)                        |           | `f: AbstractExpression`                                                      | `Determinant`                                                 |
+|                       | [`transpose(f)`](#transpose-and-matrix-product)         |           | `f: AbstractExpression`                                                      | `AnnotatedExpression`: `ComponentTensor`                      |
+|                       | [`matrix_product(f, g)`](#transpose-and-matrix-product) | `@`       | `f, g: AbstractExpression`                                                   | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`     |
+| Differentiation       | [`grad(f)`](#gradient)                                  |           | `f: AbstractExpression`                                                      | `Gradient`                                                    |
+| Parameterised domains | [`parameterised_domain(P, psi)`](#parameteriseddomain)  |           | `P: AbstractCoordinateDomain`, `psi: AbstractExpression`                     | `ParameterisedDomain`                                         |
+| Geometry              | [`jacobian(D)`](#geometry)                              |           | `D: AbstractDomain`                                                          | `AnnotatedExpression`: `Gradient` of `mapping(D)`             |
+|                       | [`metric(D)`](#geometry)                                |           | `D: AbstractDomain`                                                          | `AnnotatedExpression`: `transpose(J) @ J`                     |
+|                       | [`measure_density(D)`](#geometry)                       |           | `D: AbstractDomain`                                                          | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$ |
 
-A Python `int` is accepted wherever an expression is (see
+The value-shape and other constraints on the arguments are stated in the
+section of each free function. A Python `int` is accepted wherever an
+expression is (see
 [Python integers in expressions](#python-integers-in-expressions)).
 
 ## The lowest objects
@@ -229,6 +312,15 @@ expression can be real or complex valued.
 
 #### `AbstractExpression`
 
+Every `AbstractExpression` derives the value shape, the free indices and the
+set of the expression. The set is absent for an expression with no set, such
+as a literal.
+
+An operator overload returns `NotImplemented` for an operand type that the
+overload does not accept, rather than raising an error. Python then tries the
+reflected overload of the other operand and raises `TypeError` if neither
+overload accepts the operands.
+
 This base class is sketched in pseudo-code according to the principles outlined
 above. Later classes will not be sketched in detail.
 
@@ -236,10 +328,15 @@ above. Later classes will not be sketched in detail.
 # expressions.py
 class AbstractExpression(Base, ABC):
     """Abstract base class for expressions."""
-    @abstractmethod
     @property
+    @abstractmethod
     def value_shape(self) -> tuple[int, ...]:
-        """The value shape of the expression"
+        """The value shape of the expression."""
+
+    @property
+    @abstractmethod
+    def free_indices(self) -> tuple[tuple[Index, int], ...]:
+        """The free indices and extents, in order of first occurrence."""
 
     # Operator overloading must be in the class.
     def __add__(self, other: object) -> AbstractExpression:
@@ -249,7 +346,7 @@ class AbstractExpression(Base, ABC):
 
     def __radd__(self, other: object) -> AbstractExpression:
         """Add."""
-        # Calls the free function arithmetic.add.
+        # Calls add(other, self), keeping the order that the user wrote.
         ...
 
     def __sub__(self, other: object) -> AbstractExpression:
@@ -259,7 +356,7 @@ class AbstractExpression(Base, ABC):
 
     def __rsub__(self, other: object) -> AbstractExpression:
         """Subtract."""
-        # Calls the free function arithmetic.subtract.
+        # Calls subtract(other, self), keeping the order that the user wrote.
         ...
 
     def __mul__(self, other: object) -> AbstractExpression:
@@ -269,12 +366,12 @@ class AbstractExpression(Base, ABC):
 
     def __rmul__(self, other: object) -> AbstractExpression:
         """Multiply."""
-        # Calls the free function arithmetic.multiply.
+        # Calls multiply(other, self), keeping the order that the user wrote.
         ...
 
     def __matmul__(self, other: object) -> AbstractExpression:
         """Matrix multiply."""
-        # Calls the free function arithmetic.matrix_product.
+        # Calls the free function tensor_algebra.matrix_product.
         ...
 
     def __truediv__(self, other: object) -> AbstractExpression:
@@ -284,7 +381,7 @@ class AbstractExpression(Base, ABC):
 
     def __rtruediv__(self, other: object) -> AbstractExpression:
         """Divide."""
-        # Calls the free function arithmetic.divide.
+        # Calls divide(other, self), keeping the order that the user wrote.
         ...
 
     def __neg__(self) -> AbstractExpression:
@@ -297,9 +394,14 @@ class AbstractExpression(Base, ABC):
         # Calls the free function arithmetic.absolute.
         ...
 
-    def __pow__(self, power: object) -> AbstractExpression:
-        """Raise to an integer power."""
+    def __pow__(self, exponent: object) -> AbstractExpression:
+        """Raise to a power."""
         # Calls the free function arithmetic.power.
+        ...
+
+    def __rpow__(self, base: object) -> AbstractExpression:
+        """Raise a Python int to a power."""
+        # Calls power(base, self).
         ...
 
     def __getitem__(self, indices: object) -> AbstractExpression:
@@ -315,21 +417,24 @@ class AbstractExpression(Base, ABC):
 # arithmetic.py
 
 # A free function
-def add(first: AbstractExpression, second: AbstractExpression) -> AbstractExpression:
+def add(
+    first: AbstractExpression | int, second: AbstractExpression | int
+) -> AbstractExpression:
     """Add two expressions.
 
     Args:
-        first: The first summand.
-        second: The second summand.
+        first: The first summand. A Python int becomes an Integer.
+        second: The second summand. A Python int becomes an Integer.
 
     Returns:
-        The sum of the two expressions.
+        The sum of the two expressions, with the summands in the given order.
 
     Raises:
-        ValueError: If the value shapes of the summands differ.
+        TypeError: If a summand is neither an expression nor an int, or is a bool.
+        ValueError: If the value shapes or the free indices of the summands differ.
     """
-    # Checks on value_shape
-    return Sum((first, second))
+    # Converts ints, then checks value_shape and free_indices.
+    return Sum(first, second)
 ```
 
 ### Literals
@@ -399,31 +504,47 @@ Examples, with `X = coordinate(RD(2))`:
 
 Downstream basic ops are relatively obvious.
 
-### Basic operators
+### Arithmetic
 
-Concrete subclasses of `UnaryOperator` needed for the first example. Each class
-stores one expression, which is the only edge, and derives the set of that
-expression. Each free function accepts a Python `int` as the operand, raises
-`ValueError` for a wrong value shape and performs no simplification.
+Concrete subclasses of `BinaryOperator`. Each class stores two expressions,
+which are the two edges in order. The set is the set of the operands. Operands
+with a set must have the same set. Each free function accepts Python `int`s as
+operands, raises `ValueError` for wrong value shapes and performs no
+simplification.
 
-| Class         | Free function | Argument shape | Result shape |
-| ------------- | ------------- | -------------- | ------------ |
-| `Transpose`   | `transpose`   | `(m, n)`       | `(n, m)`     |
-| `Determinant` | `determinant` | `(n, n)`       | `()`         |
-| `SquareRoot`  | `square_root` | `()`           | `()`         |
+| Class      | Free function | Overload | Operand shapes | Result shape |
+| ---------- | ------------- | -------- | -------------- | ------------ |
+| `Sum`      | `add`         | `+`      | `s`, `s`       | `s`          |
+| `Product`  | `multiply`    | `*`      | `()`, `s`      | `s`          |
+|            |               |          | `s`, `()`      | `s`          |
+| `Division` | `divide`      | `/`      | `s`, `()`      | `s`          |
+| `Power`    | `power`       | `**`     | `()`, `()`     | `()`         |
 
-Concrete subclasses of `BinaryOperator` needed for the first example. Each
-class stores two expressions, which are the two edges in order. The set is the
-set of the operands. Operands with a set must have the same set. Each free
-function accepts Python `int`s as operands, raises `ValueError` for wrong value
-shapes and performs no simplification.
+At least one operand of `Product` is scalar. The free indices of every operator
+follow the general rule of [Free indices](#free-indices).
 
-| Class           | Free function    | Overload | Operand shapes     | Result shape |
-| --------------- | ---------------- | -------- | ------------------ | ------------ |
-| `Sum`           | `add`            | `+`      | `s`, `s`           | `s`          |
-| `Product`       | `multiply`       | `*`      | `()`, `()`         | `()`         |
-| `Power`         | `power`          | `**`     | `()`, `()`         | `()`         |
-| `MatrixProduct` | `matrix_product` | `@`      | `(m, k)`, `(k, n)` | `(m, n)`     |
+`Absolute` is a concrete subclass of `UnaryOperator`. The free function
+`absolute(f)`, with the overload `abs(f)`, takes a scalar and returns a scalar.
+For a complex-valued argument, `Absolute` is the modulus and is real-valued.
+
+Negation and subtraction are free functions, not node classes:
+
+- `negate(f)`, with the overload `-f`, is `multiply(-1, f)`, annotated with
+  `("negate", f)`.
+- `subtract(f, g)`, with the overload `f - g`, is `add(f, negate(g))`,
+  annotated with `("subtract", f, g)`.
+
+Both compositions are exact in floating-point arithmetic, so neither
+composition changes the arithmetic that the user wrote. Division is a node
+class, because `multiply(f, power(g, -1))` rounds twice and differs from
+`f / g` in floating-point arithmetic.
+
+### Elementary functions
+
+`SquareRoot` is a concrete subclass of `UnaryOperator`. The free function
+`square_root(f)` takes a scalar and returns a scalar. Like every unary
+operator, `SquareRoot` stores one expression, which is the only edge, derives
+the set of that expression and performs no simplification.
 
 ## Differential geometry
 
@@ -436,7 +557,9 @@ kinds of structure on the domain:
 - geometric structure, which is the metric of the domain and the measure
   induced by the metric.
 
-### AbstractDomain
+### Domains
+
+#### AbstractDomain
 
 An abstract base class for domains `AbstractDomain`.
 
@@ -462,9 +585,9 @@ dimension $n$ provides two free functions:
 
 The mapping of $D$ gives the coordinates in $R^n$ of the points of $D$. The
 geometry of $D$ is derived from the mapping (see
-[Geometry of a domain](#geometry-of-a-domain)).
+[Geometry](#geometry)).
 
-### AbstractCoordinateDomain
+#### AbstractCoordinateDomain
 
 An abstract base class for coordinate domains `AbstractCoordinateDomain`, and a
 subclass of `AbstractDomain`.
@@ -494,7 +617,7 @@ Examples:
   in $R^{n-1}$ under a map, so the facet is a parameterised domain (defined
   below).
 
-### RD
+#### RD
 
 A concrete subclass of `AbstractCoordinateDomain` for the whole of $R^n$.
 
@@ -507,7 +630,7 @@ Example:
 
 - `RD(2)` is the parameter domain of the paraboloid example below.
 
-### Coordinate
+#### Coordinate
 
 A concrete subclass of `AbstractExpression` for the coordinate function of a
 coordinate domain.
@@ -539,7 +662,9 @@ Examples:
   `coordinate(RD(2)) == coordinate(RD(3))` is `False`.
 - In the paraboloid example, `X = coordinate(RD(2))` has value shape `(2,)`.
 
-### Tensor
+### Tensors and indexing
+
+#### Tensor
 
 A concrete subclass of `AbstractExpression` that builds a tensor-valued
 expression from scalar expressions.
@@ -585,9 +710,9 @@ Examples:
 - `matrix(((1, 2),))` has value shape `(1, 2)`.
 - `tensor((((1,),),))` has value shape `(1, 1, 1)`.
 
-### Indexed
+#### Indexed
 
->>> LLM generated content.
+> LLM generated content.
 
 A concrete subclass of `AbstractExpression` that selects one component of a
 tensor-valued expression.
@@ -596,27 +721,31 @@ tensor-valued expression.
 
 - The expression, an `AbstractExpression` of rank $r \ge 1$. The expression is
   the only edge of `Indexed(expression, indices)`.
-- The indices, a `tuple` of $r$ `int`s.
+- The indices, a `tuple` of $r$ entries. Each entry is an `int` or an `Index`
+  (see [Index notation](#index-notation)).
 
 Indexing is full indexing only. The number of indices must equal the rank $r$
-of the expression, and each index $i_j$ must satisfy $0 \le i_j < n_j$, where
-`(n_0, ..., n_{r-1})` is the value shape of the expression.
+of the expression. Each `int` entry $i_j$ must satisfy $0 \le i_j < n_j$, where
+`(n_0, ..., n_{r-1})` is the value shape of the expression. Each `Index` entry
+$i_j$ takes the extent $n_j$.
 
-`Indexed(expression, indices)` derives the value shape `()` and the set of the
-expression.
+`Indexed(expression, indices)` derives the value shape `()`, the set of the
+expression, and the free indices of the expression followed by the `Index`
+entries.
 
-The free function `indexed(expression, indices)` accepts a single `int` $i$,
-which the free function converts into the `tuple` `(i,)`, or a `tuple` of
-`int`s, and returns `Indexed(expression, indices)`. The overload
+The free function `indexed(expression, indices)` accepts a single entry, which
+the free function converts into a `tuple` of one entry, or a `tuple` of
+entries, and returns `Indexed(expression, indices)`. The overload
 `expression[indices]` calls `indexed`, so `X[0]` and `A[0, 1]` are
 `indexed(X, 0)` and `indexed(A, (0, 1))`. The free function `indexed` raises:
 
 | Error        | Cause                                                        |
 | ------------ | ------------------------------------------------------------ |
-| `TypeError`  | An index whose type is not exactly `int`, such as `bool`.    |
+| `TypeError`  | An entry that is neither exactly `int` nor `Index`.          |
 | `TypeError`  | An expression with value shape `()`.                         |
 | `IndexError` | A number of indices that differs from the rank.              |
-| `IndexError` | A negative index, or an index $i_j \ge n_j$.                 |
+| `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.     |
+| `ValueError` | An `Index` that occurs twice, or that is already free.       |
 
 A negative index is rejected rather than converted, so the stored indices are
 always the indices that the user wrote. Expressions are not iterable (see
@@ -625,7 +754,8 @@ always the indices that the user wrote. Expressions are not iterable (see
 Construction performs no simplification. For example, `vector((a, b))[0]` is
 `Indexed(Tensor((a, b)), (0,))` and is not equal to `a`.
 
-Partial indexing, slicing and free indices are not part of `Indexed`.
+Partial indexing and slicing are not part of `Indexed`. A repeated `Index`
+does not imply summation (see [Index notation](#index-notation)).
 
 Examples:
 
@@ -640,7 +770,220 @@ Examples:
 - In the paraboloid example, the height `X[0]**2 + X[1]**2` is an expression
   on `RD(2)` with value shape `()`.
 
-### Gradient
+### Index notation
+
+>>> LLM generated content.
+
+Index notation writes tensor algebra as fixed compositions, so that operators
+such as `transpose`, `inner` and `dot` are free functions rather than node
+classes.
+
+#### Index
+
+A concrete subclass of the base object for a free index. An `Index` is not an
+expression.
+
+`Index(label)` stores the label. The label is either a `str`, for an index
+that the user names, or a `tuple` that contains graph objects, for an index
+that a free function derives from the free function's operands. The edges of
+`Index(label)` are the graph objects in the label, in order. Two indices are
+equal if and only if the two labels are equal.
+
+The free function `index(label)` returns `Index(label)`. The free function
+`indices(*labels)` returns a `tuple` of `Index`, one for each label. An `Index`
+has no extent of its own. An `Index` takes the extent of the axis that the
+`Index` indexes.
+
+The user names user indices. The user is responsible for not reusing a name
+that is already free in an operand.
+
+A free function that needs fresh indices derives the indices from the
+operands. For example, `transpose(A)` uses `Index(("transpose", A, 0))` and
+`Index(("transpose", A, 1))`. An index whose label contains `A` cannot occur
+inside `A`, because `A` would then contain `A`, and the graph is acyclic. Hence
+a derived index is fresh with respect to the operands, and the free function
+does not inspect the operands to find a fresh index. A global counter is not
+allowed, because a counter makes construction depend on global state.
+
+Note that `transpose(A)` `is` or `==` `transpose(A)` with this design.
+
+*Downsides:* expressions that differ only by bound-index labels are not equal
+and are not shared, every substitution must avoid capturing indices, and
+derived indices enlarge the graph. Later passes, not construction, could
+address these downsides by hashing modulo renaming of bound indices (Maziarz et
+al., PLDI 2021) and by removing index-notation scaffolding.
+
+#### Free indices
+
+Every `AbstractExpression` derives the free indices, a `tuple` of pairs of an
+`Index` and an extent. The order is the order of first occurrence, never the
+order of a `set`.
+
+Unless a node class states otherwise, the free indices of a node are the free
+indices of the edges of the node, in edge order, with each `Index` taken once
+at the first occurrence. An `Index` that occurs in two edges must have the same
+extent in both edges, or construction raises `ValueError`. Terminals and
+literals have no free indices.
+
+The following node classes state otherwise:
+
+- `Sum`: both operands must have the same free indices with the same extents,
+  in any order, or construction raises `ValueError`. The order of the free
+  indices of the sum is the order of the first operand.
+- `Indexed`: see [Indexed](#indexed).
+- `ComponentTensor` and `IndexSum`: see below.
+
+Summation is never implicit. `a[i] * b[i]` has the free index `i` and denotes
+the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], i)`.
+
+Equality is structural. Two expressions that differ only by the names of bound
+indices are not equal. A later algorithmic pass may compare expressions up to
+renaming of bound indices.
+
+A form integrand must have no free indices.
+
+#### ComponentTensor
+
+A concrete subclass of `AbstractExpression` that turns free indices into
+tensor axes.
+
+`ComponentTensor(expression, indices)` stores a scalar expression and a `tuple`
+of distinct `Index`es that are free in the expression. The expression is the
+only edge. `ComponentTensor(expression, indices)` derives the value shape from
+the extents of the indices, in the order of the indices, and the free indices
+of the expression without the bound indices.
+
+The free function `component_tensor(expression, indices)` returns
+`ComponentTensor(expression, indices)`. The free function raises `ValueError`
+if the expression is not scalar, if an index is repeated, or if an index is not
+free in the expression.
+
+#### IndexSum
+
+A concrete subclass of `AbstractExpression` for the sum of a scalar expression
+over one free index.
+
+`IndexSum(expression, index)` stores a scalar expression and an `Index` that is
+free in the expression. The expression is the only edge.
+`IndexSum(expression, index)` derives the value shape `()` and the free indices
+of the expression without the summation index.
+
+The free function `index_sum(expression, index)` returns
+`IndexSum(expression, index)`. The free function raises `ValueError` if the
+expression is not scalar, or if the index is not free in the expression.
+
+Examples, with `i, j = indices("i", "j")`, two vectors `a` and `b` of value
+shape `(3,)`, and `A = matrix(((1, 2), (3, 4)))`:
+
+- `A[i, j]` has value shape `()` and the free indices `((i, 2), (j, 2))`.
+- `a[i] * b[i]` has value shape `()` and the free indices `((i, 3),)`.
+- `index_sum(a[i] * b[i], i)` is the inner product of `a` and `b`, with no
+  free indices.
+- `component_tensor(A[i, j], (j, i))` has value shape `(2, 2)` and is the
+  transpose of `A`, written with user indices.
+- `a[i] + b[j]` raises `ValueError`, because the free indices differ.
+- `A[i, i]` raises `ValueError`, because `i` occurs twice.
+
+### Annotation
+
+An annotation records how an object was produced. An annotation is a `tuple`
+of a `str` name followed by the arguments that produced the object, for example
+`("metric", D)`.
+
+The mixin `Annotation` holds what every annotated class shares. Each kind of
+object that can be annotated has one concrete annotated class, which combines
+`Annotation` with the abstract class of that kind. An annotated object is an
+object of the same kind as the wrapped object, so an annotated object stands in
+wherever the wrapped object does.
+
+The `Annotation` mixin specifies:
+
+- Storage. An annotated class stores the wrapped object and the annotation. The
+  edges are the wrapped object, followed by the graph objects in the
+  annotation, in order.
+- Identity. An annotated object derives every attribute of the kind from the
+  wrapped object.
+- Equality. Equality is structural, so an annotated object is not equal to the
+  wrapped object. A later algorithmic pass may compare objects while ignoring
+  annotations.
+- Passes. An annotation adds structure and never removes structure, so
+  annotation is not a simplification. An algorithmic pass may drop any
+  annotation. A pass that rewrites inside an annotated object drops the
+  annotation, unless the pass shows that the annotation still holds.
+
+The free function `annotate(x, name, *arguments)` returns the annotated class
+for the kind of `x`, with the annotation `(name, *arguments)`.
+
+Every free function in the core that is defined as a composition annotates the
+result with the name and arguments of the free function. For example,
+`metric(D)` is `AnnotatedExpression(transpose(J) @ J, ("metric", D))`.
+
+#### AnnotatedExpression
+
+`AnnotatedExpression(expression, annotation)` combines `Annotation` with
+`AbstractExpression`. `AnnotatedExpression` derives the value shape, the set
+and the free indices of the expression. `grad` of an annotated expression
+differentiates the expression and drops the annotation.
+
+#### AnnotatedDomain
+
+`AnnotatedDomain(domain, annotation)` combines `Annotation` with
+`AbstractDomain`. `AnnotatedDomain` derives the dimensions, the parameter
+domain, the mapping and the ambient domain of the domain.
+
+An annotated domain is an `AbstractDomain` but not an
+`AbstractCoordinateDomain`, even when the domain is a coordinate domain. A
+coordinate function, a gradient and a parameterised domain need the plain
+coordinate domain.
+
+Examples:
+
+- `annotate(X[0]**2 + X[1]**2, "height", X)` is an `AnnotatedExpression` with
+  value shape `()`, and prints as `height(X)`.
+- `annotate(parameterised_domain(RD(2), psi), "paraboloid")` is an
+  `AnnotatedDomain` with $k = 2$ and $n = 3$.
+
+### Tensor algebra
+
+#### Determinant
+
+`Determinant` is a concrete subclass of `UnaryOperator`. The free function
+`determinant(f)` takes an expression of value shape `(n, n)` and returns a
+scalar. `Determinant` stores one expression, which is the only edge, and
+derives the set of that expression. A determinant of value shape `(n, n)` is a
+polynomial of degree $n$ in the entries, so no fixed composition expresses the
+determinant, and `Determinant` is a node class.
+
+#### Transpose and matrix product
+
+Transpose and matrix product are free functions built with derived indices:
+
+- `transpose(A)` is `component_tensor(A[k, l], (l, k))`, with
+  $k$ = `Index(("transpose", A, 0))` and $l$ = `Index(("transpose", A, 1))`,
+  annotated with `("transpose", A)`.
+- `matrix_product(A, B)`, with the overload `A @ B`, is
+  `component_tensor(index_sum(A[i, k] * B[k, j], k), (i, j))`, with $i$, $k$
+  and $j$ the derived indices `Index(("matrix_product", A, B, m))` for
+  $m = 0, 1, 2$, annotated with `("matrix_product", A, B)`.
+
+`transpose` raises `ValueError` unless `A` has rank 2. `matrix_product` raises
+`ValueError` unless `A` and `B` have rank 2 and the second extent of `A` equals
+the first extent of `B`. The overload `@` accepts only rank 2 operands.
+Contractions of other ranks, such as a matrix-vector product, are written in
+index notation.
+
+Examples, with `A = matrix(((1, 2), (3, 4)))`:
+
+- `transpose(A)` is `component_tensor(A[k, l], (l, k))`, annotated with
+  `("transpose", A)`, with the derived indices
+  `k = Index(("transpose", A, 0))` and `l = Index(("transpose", A, 1))`.
+- `transpose(A)` is not equal to `component_tensor(A[i, j], (j, i))` for user
+  indices `i` and `j`, because the index labels differ and because
+  `transpose(A)` is annotated.
+
+### Differentiation
+
+#### Gradient
 
 > LLM generated content.
 
@@ -662,7 +1005,7 @@ and a zero derivative for every literal.
 The gradient on a parameterised domain is not a primitive. The gradient on a
 parameterised domain is a composite of `grad` on the parameter domain and the
 geometry of the parameterised domain (see
-[Geometry of a domain](#geometry-of-a-domain)).
+[Geometry](#geometry)).
 
 Examples, with `X = coordinate(RD(2))`:
 
@@ -672,7 +1015,9 @@ Examples, with `X = coordinate(RD(2))`:
   gradient to $(2 X_0, 2 X_1)$.
 - `grad(1)` raises `ValueError`, because the literal `Integer(1)` has no set.
 
-### ParameterisedDomain
+### Parameterised domains
+
+#### ParameterisedDomain
 
 A concrete subclass of `AbstractDomain` for parameterised domains.
 
@@ -720,7 +1065,7 @@ Examples:
   is a reference triangle, and $\psi$ is the affine map from $P$ onto the
   physical triangle. See the affinely mapped triangle example.
 
-### Geometry of a domain
+### Geometry
 
 The geometry of every domain $D$, coordinate or parameterised, comes from the
 mapping $\psi$ = `mapping(D)` on the parameter domain $P$ =
@@ -731,6 +1076,9 @@ mapping $\psi$ = `mapping(D)` on the parameter domain $P$ =
 | `jacobian(D)`        | $J$ = `grad(mapping(D))`         | `(n, k)`    |
 | `metric(D)`          | $g$ = `transpose(J) @ J`         | `(k, k)`    |
 | `measure_density(D)` | `square_root(determinant(g))`    | `()`        |
+
+Each free function annotates the result with the name of the free function
+and $D$, for example `("jacobian", D)`.
 
 The Jacobian, metric and measure density are lazy expressions. Construction
 performs no simplification.
@@ -757,13 +1105,16 @@ psi = vector((X[0], X[1], X[0]**2 + X[1]**2))
 # AbstractDomain: ParameterisedDomain(RD(2), psi), k = 2, n = 3.
 D = parameterised_domain(P, psi)
 
-# AbstractExpression: Gradient(psi), value shape (3, 2).
+# AbstractExpression: AnnotatedExpression(Gradient(psi), ("jacobian", D)),
+# value shape (3, 2).
 J = jacobian(D)
 
-# AbstractExpression: MatrixProduct(Transpose(J), J), value shape (2, 2).
+# AbstractExpression: AnnotatedExpression(transpose(J) @ J, ("metric", D)),
+# value shape (2, 2).
 g = metric(D)
 
-# AbstractExpression: SquareRoot(Determinant(g)), value shape ().
+# AbstractExpression: AnnotatedExpression(SquareRoot(Determinant(g)),
+# ("measure_density", D)), value shape ().
 rho = measure_density(D)
 ```
 
@@ -816,11 +1167,12 @@ psi = vector((1 + 2 * X[0] + X[1], X[0] + 3 * X[1]))
 # AbstractDomain: ParameterisedDomain(UnitSimplex(2), psi), k = n = 2.
 K = parameterised_domain(T, psi)
 
-# AbstractExpression: Gradient(psi), value shape (2, 2).
+# AbstractExpression: AnnotatedExpression(Gradient(psi), ("jacobian", K)),
+# value shape (2, 2).
 J = jacobian(K)
 
-# AbstractExpression: SquareRoot(Determinant(MatrixProduct(Transpose(J), J))),
-# value shape ().
+# AbstractExpression: AnnotatedExpression(SquareRoot(Determinant(metric(K))),
+# ("measure_density", K)), value shape ().
 rho = measure_density(K)
 ```
 
