@@ -717,10 +717,10 @@ from `f / g` in floating-point arithmetic.
 expression. The free function `square_root(f)` takes a scalar and returns a
 scalar.
 
-`SquareRoot` is a node class, not the composition
-`power(f, Integer(1) / Integer(2))`.
-IEEE 754 requires a correctly rounded square root but does not require a
-correctly rounded power, so the two differ in floating-point arithmetic.
+`SquareRoot` is a node class, not the composition `power(f, Integer(1) /
+Integer(2))`. IEEE 754 requires a correctly rounded square root but does not
+require a correctly rounded power, so the two differ in floating-point
+arithmetic (i.e. the compiler/machine provides a specific implementation).
 
 ## Differential geometry
 
@@ -779,8 +779,7 @@ Examples:
 
 A concrete subclass of `AbstractCoordinateDomain` for the whole of $R^n$.
 
-`RD(n)` stores the dimension $n$, an `int` with $n \ge 0$. Everything else
-comes from `AbstractCoordinateDomain`.
+`RD(n)` stores the dimension $n$, an `int` with $n \ge 0$.
 
 Example:
 
@@ -792,8 +791,8 @@ A concrete subclass of `AbstractExpression` for the coordinate function of a
 coordinate domain.
 
 Every concrete coordinate domain $P$ provides a coordinate function
-`Coordinate(P)`. The coordinate function $X$ of $P$ is the terminal expression that maps each point
-of $P$ to the $n$-tuple of that point:
+`Coordinate(P)`. The coordinate function $X$ of $P$ is the terminal expression
+that maps each point of $P$ to the $n$-tuple of that point:
 
 $X : P \to R^n$, $X(p) = p$.
 
