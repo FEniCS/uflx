@@ -434,11 +434,12 @@ annotation.
 A downstream library builds a new operation from existing node classes, as a
 free function. A free function above the core may read value shapes to choose
 the composition (see
-[Basic implementation principles](#basic-implementation-principles)), and
-annotates the result. For example, `trace(A)` reads the extent $n$ of `A` and
-returns the sum of the diagonal entries `A[0, 0] + ... + A[n - 1, n - 1]`,
-annotated with `("library.trace", A)`. An operation that a `EllipsisIndex`
-expresses, such as `scale(a, T)`, needs no value shape (see [EllipsisIndex](#ellipsisindex)).
+[Basic implementation principles](#basic-implementation-principles)). For
+example, `trace(A)` reads the extent $n$ of `A` and returns the sum of the
+diagonal entries `A[0, 0] + ... + A[n - 1, n - 1]`. An operation that a
+`EllipsisIndex` expresses, such as `scale(a, T)`, needs no value shape (see
+[EllipsisIndex](#ellipsisindex)). Every such free function annotates the result
+(see [Annotation](#annotation)).
 
 A library node class that a pass replaces by node classes of the core gives
 nothing that the free function does not give, unless a core transformation
@@ -593,10 +594,8 @@ class AbstractExpression(Base, ABC):
 # arithmetic.py
 
 # A free function
-def add(
-    first: AbstractExpression, second: AbstractExpression
-) -> AbstractExpression:
-    """Add two expressions.
+def add(first: AbstractExpression, second: AbstractExpression) -> Sum:
+    """Add two scalar expressions.
 
     Args:
         first: The first summand.
@@ -608,8 +607,9 @@ def add(
     Raises:
         TypeError: From the constructor of Sum, if a summand is not an
             expression.
-        ValueError: From the constructor of Sum, if the value shapes or the free
-            indices of the summands differ.
+        ValueError: From the constructor of Sum, if a summand does not have
+            value shape (), if the free indices of the summands differ, or if
+            the summands have different sets.
     """
     # The constructor of Sum validates.
     return Sum(first, second)
@@ -703,10 +703,8 @@ $L^2$ inner product $\int u \bar{v}$, needs `Conjugate`.
 
 Negation and subtraction are free functions, not node classes:
 
-- `negate(f)`, with the overload `-f`, is `multiply(Integer(-1), f)`,
-  annotated with `("uflx.negate", f)`.
-- `subtract(f, g)`, with the overload `f - g`, is `add(f, negate(g))`,
-  annotated with `("uflx.subtract", f, g)`.
+- `negate(f)`, with the overload `-f`, is `multiply(Integer(-1), f)`.
+- `subtract(f, g)`, with the overload `f - g`, is `add(f, negate(g))`.
 
 Both compositions are exact in floating-point arithmetic, so neither
 composition changes the arithmetic that the user wrote. Division is a node
@@ -943,8 +941,8 @@ cover, so a `EllipsisIndex` may cover no axis. The extent of a `EllipsisIndex` i
 notation, a `EllipsisIndex` behaves as an `Index`.
 
 A `EllipsisIndex` writes an operation on tensors of every rank as one fixed
-composition. With derived ellipsis indices `r` and `s`, an ordinary index `k`, and
-annotations omitted:
+composition. With derived ellipsis indices `r` and `s` and an ordinary index
+`k`:
 
 | Operation          | Fixed composition                                              |
 | ------------------ | -------------------------------------------------------------- |
@@ -1096,11 +1094,11 @@ Transpose and matrix product are free functions built with derived indices:
 
 - `transpose(A)` is `component_tensor(A[k, l], (l, k))`, with
   $k$ = `Index(("uflx.transpose", A, 0))` and
-  $l$ = `Index(("uflx.transpose", A, 1))`, annotated with `("uflx.transpose", A)`.
+  $l$ = `Index(("uflx.transpose", A, 1))`.
 - `matrix_product(A, B)`, with the overload `A @ B`, is
   `component_tensor(index_sum(A[i, k] * B[k, j], (k,)), (i, j))`, with $i$, $k$
   and $j$ the derived indices `Index(("uflx.matrix_product", A, B, m))` for
-  $m = 0, 1, 2$, annotated with `("uflx.matrix_product", A, B)`.
+  $m = 0, 1, 2$.
 
 An operand that does not have rank 2, including a scalar operand, is rejected
 with `IndexError` by the constructor of `Indexed`. Unequal inner extents in
@@ -1158,9 +1156,9 @@ Examples, with `X = coordinate(RD(2))`:
 
 The free function `identity(P)` is the identity on the tangent space of a
 coordinate domain $P$ of dimension $k$. `identity(P)` is
-`gradient(coordinate(P), P)`, annotated with `("uflx.identity", P)`. With $X$
-the coordinate function of $P$, $\partial X_i / \partial X_j = \delta_{ij}$, so
-the identity is a fixed composition, and the core has no identity node class.
+`gradient(coordinate(P), P)`. With $X$ the coordinate function of $P$,
+$\partial X_i / \partial X_j = \delta_{ij}$, so the identity is a fixed
+composition, and the core has no identity node class.
 
 `identity(P)` has value shape `(k, k)` and the set $P$. The identity depends on
 $P$, not on $k$ alone, because the identity acts on the tangent space of $P$.
@@ -1459,10 +1457,10 @@ $\sqrt{\det g} \ge 0$.
 
 The free function `integrate(f, D)` integrates $f$ over the domain $D$ with the
 induced measure $\mu_D$. `integrate(f, D)` is
-`lebesgue_integral(f * measure_density(D), D.parameter_domain)`, annotated with
-`("uflx.integrate", f, D)`. The free function is the definition above, written as a
-fixed composition. Arithmetic is scalar, so $f$ is a scalar, possibly with free
-indices. A tensor-valued integral is written in index notation, such as
+`lebesgue_integral(f * measure_density(D), D.parameter_domain)`. The free
+function is the definition above, written as a fixed composition. Arithmetic
+is scalar, so $f$ is a scalar, possibly with free indices. A tensor-valued
+integral is written in index notation, such as
 `component_tensor(integrate(f[r], D), (r,))`, with `r` a
 [EllipsisIndex](#ellipsisindex).
 
