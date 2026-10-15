@@ -226,7 +226,7 @@ Base
 │   ├── Integer                           literal
 │   ├── Float                             literal
 │   ├── ImaginaryUnit                     literal
-│   ├── Zero                              zero of any shape, no set
+│   ├── Zero                              zero of any shape and degree, no set
 │   ├── Coordinate                        terminal, X on P
 │   ├── Tensor                            stacks entries along a new axis
 │   ├── Indexed                           full indexing, int or Index entries
@@ -237,7 +237,7 @@ Base
 │   ├── Composition                       f composed with a domain, set P of the domain
 │   ├── LebesgueIntegral                  Lebesgue integral over P, no set
 │   ├── Sum                               +
-│   ├── Product                           *
+│   ├── Product                           *, the wedge product
 │   ├── Division                          /
 │   ├── Power                             **
 │   ├── Absolute                          abs
@@ -322,7 +322,7 @@ rules in the section of the concrete class.
 | ---------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------- |
 | `AbstractExpression`                                 |                                                          | `value_shape`, `free_indices`, `scalar_type`, `set`, `degree` |
 | `Integer`, `Float`                                   | `value`                                                  |                                                               |
-| `Zero`                                               | `value_shape`, `free_indices`                            |                                                               |
+| `Zero`                                               | `value_shape`, `free_indices`, `degree`                  |                                                               |
 | `Coordinate`                                         | `domain`                                                 |                                                               |
 | `Tensor`                                             | `entries`                                                |                                                               |
 | `Indexed`, `ComponentTensor`, `IndexSum`             | `expression`, `indices`                                  |                                                               |
@@ -486,8 +486,11 @@ pointwise. The node class has no lowering.
 
 ### Expressions
 
-An expression denotes an array-valued function defined on the set of the
-expression. An expression with no set denotes a single array.
+An expression denotes an array-valued multi-form on the set of the
+expression, with the degree of the expression. A 0-form is an array-valued
+function. An expression with no set and the degree `()` denotes a single
+array. A `Zero` with a non-empty degree has no set and denotes the zero form
+of that degree on every set.
 
 #### `AbstractExpression`
 
@@ -512,8 +515,8 @@ scalar type, the set and the degree of the expression.
 Examples of the degree, on $R^3$ with the coordinate function $X$, the
 coordinates $x, y, z$ and a scalar function $f$. The forms are written in
 mathematical notation, because the node classes that build forms, such as the
-exterior derivative and the wedge product, are not yet defined. Only the rows
-with the degree `()` are expressions of the current core.
+exterior derivative, are not yet defined. Only the rows with the degree `()`
+are expressions of the current core.
 
 | Object                                                                     | Value shape | Degree   |
 | -------------------------------------------------------------------------- | ----------- | -------- |
@@ -681,11 +684,14 @@ integers rounds once, the same as the conversion of a rational number, so the
 core has no rational literal. A complex number is a composition such as
 `a + ImaginaryUnit() * b`, so the core has no complex literal.
 
-`Zero(value_shape, free_indices)` is the zero with the given value shape and
-free indices, and has no set. `apply_derivatives` produces `Zero` (see
-[Applying derivatives](#applying-derivatives)). No fixed
-composition gives a zero with free indices, because `Integer(0) * a[i]` has
-edges to `a`, so `Zero` is a node class.
+`Zero(value_shape, free_indices, degree)` is the zero with the given value
+shape, free indices and degree, and has no set. `apply_derivatives` produces
+`Zero` (see [Applying derivatives](#applying-derivatives)). No fixed
+composition gives a zero with free indices or with a non-empty degree, because
+`Integer(0) * a[i]` has edges to `a`, and $0 \, \mathrm{d}x$ has edges to
+$\mathrm{d}x$. So `Zero` is a node class. For example,
+`Zero((), (), (1,))` is the zero 1-form, and `Zero((3,), (), ())` is the zero
+array of value shape `(3,)`.
 
 #### Numbers in expressions
 
@@ -722,6 +728,45 @@ rank is `component_tensor(a * T[r], (r,))`, with `r` a
 | `Product`  | `multiply`    | `*`      |
 | `Division` | `divide`      | `/`      |
 | `Power`    | `power`       | `**`     |
+
+`Sum(first, second)` adds two forms of the same degree. Both operands must have
+the same degree, or construction raises `ValueError`, and the sum has that
+degree. For example, $\mathrm{d}x + \mathrm{d}y$ has the degree `(1,)`, and
+$f + \mathrm{d}x$ raises `ValueError`.
+
+`Product(first, second)` is the wedge product $\alpha \wedge \beta$ of the
+two operands. For two 0-forms, the wedge product is the ordinary product.
+`Product` adds the degrees of the operands slot by slot, and an operand with
+the degree `()` adds 0 to every slot, so $f \wedge \omega = f \omega$. If both
+operands have a non-empty degree, the two degrees must have the same number of
+slots, or construction raises `ValueError`. A slot of the result may have a
+degree greater than the dimension of the set, and then the result is the zero
+form. `Division` and `Power` follow the default rule for the degree (see
+[`AbstractExpression`](#abstractexpression)).
+
+The wedge product is graded commutative,
+$\alpha \wedge \beta = (-1)^{kl} \beta \wedge \alpha$ for a $k$-form $\alpha$
+and an $l$-form $\beta$. Equality is structural, so `Product` never reorders
+the operands, and a later pass may apply the identity. `Product` never adds a
+slot, so the product of two 1-forms is a 2-form with the degree `(2,)`, not a
+double form with the degree `(1, 1)`.
+
+No fixed composition of the other node classes multiplies, so `Product` is a
+node class. `Product` is also the one node class that combines the free
+indices of two operands that differ, so every contraction is an `IndexSum` of
+a `Product`.
+
+Examples, with a scalar $f$, the 1-forms $\mathrm{d}x$ and $\mathrm{d}y$ and a
+double form $S$ with the degree `(1, 1)`:
+
+| Product                                         | Degree              |
+| ----------------------------------------------- | ------------------- |
+| $f \cdot f$                                     | `()`                |
+| $f \, \mathrm{d}x$                              | `(1,)`              |
+| $\mathrm{d}x \wedge \mathrm{d}y$                | `(2,)`              |
+| $\mathrm{d}x \wedge \mathrm{d}x$, the zero form | `(2,)`              |
+| $f \, S$                                        | `(1, 1)`            |
+| $\mathrm{d}x \wedge S$                          | raises `ValueError` |
 
 The exponent of `Power` has no set, or construction raises `ValueError`. The
 derivative of a power whose exponent has a set needs a logarithm, which the
@@ -1071,8 +1116,8 @@ allowed construction argument (see [The base object](#the-base-object-base)).
 `AbstractExpression` that stores the wrapped expression and the annotation.
 
 - Identity. `AnnotatedExpression` derives the value shape, the free indices,
-  the scalar type and the set of the wrapped expression, so an annotated
-  expression stands in wherever an expression is accepted.
+  the scalar type, the set and the degree of the wrapped expression, so an
+  annotated expression stands in wherever an expression is accepted.
 - Equality. Equality is structural, so an annotated expression is not equal to
   the wrapped expression. A later algorithmic pass may compare expressions
   while ignoring annotations.
