@@ -89,7 +89,7 @@ external library provides the concrete data behind the leaf nodes.
   property of the object, such as `value_shape` of an expression or
   `parameter_domain` of a domain. A property never constructs an object. Any
   operation that constructs objects is a pure free function, such as
-  `coordinate(P)`, `jacobian(D)` or `metric(D)`. A class method, where
+  `coordinate(P)` or `transpose(A)`. A class method, where
   needed, immediately calls a free function.
 
 - A parent class never constructs a subclass. A property of a parent class may
@@ -100,9 +100,10 @@ external library provides the concrete data behind the leaf nodes.
 - A concept must be a free function, not a node class, if the free function can
   build the concept as one fixed composition of existing node classes applied to
   the arguments, *without inspecting the arguments to choose the composition*.
-  Otherwise the concept gets its own node class. For example, the metric is
-  always `transpose(J) @ J`, so the metric is a free function. No composition of
-  existing nodes differentiates, so `Gradient` is currently a node class. A free
+  Otherwise the concept gets its own node class. For example, the transpose is
+  always `component_tensor(A[k, l], (l, k))`, so the transpose is a free
+  function. No composition of existing nodes differentiates, so
+  `ExteriorDerivative` is a node class. A free
   function that builds a fixed composition is a definition, not a
   simplification. The free function does not inspect the operands, so the free
   function never removes structure that the user built. This rule binds the
@@ -291,9 +292,6 @@ objects in the graph. Operator overloads call the free functions.
 |                       | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Components`                                                        |
 |                       | [`identity(P)`](#identity)                                      |                               | `P: AbstractCoordinateDomain`                               | `AnnotatedExpression`: `Gradient` of `coordinate(P)`                |
 | Parameterised domains | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression` | `ParameterisedDomain`                                               |
-| Geometry              | [`jacobian(D)`](#geometry)                                      |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `Gradient` of `D.parameterisation`           |
-|                       | [`metric(D)`](#geometry)                                        |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `transpose(J) @ J`                           |
-|                       | [`measure_density(D)`](#geometry)                               |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$       |
 | Pull-back             | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain`           | `PullBack`                                                          |
 | Integration           | [`lebesgue_integral(f, P)`](#lebesgueintegral)                  |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `LebesgueIntegral`                                                  |
 |                       | [`integrate(f, D)`](#integrate)                                 |                               | `f: AbstractExpression`, `D: ParameterisedDomain`           | `AnnotatedExpression`: `LebesgueIntegral` over `D.parameter_domain` |
@@ -1165,7 +1163,7 @@ shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
 
 An annotation records how an expression was produced or incidental metadata.
 An annotation is a `tuple` of a `str` name followed by the arguments that
-produced the expression, for example `("uflx.metric", D)`. Every argument must be an
+produced the expression, for example `("uflx.transpose", A)`. Every argument must be an
 allowed construction argument (see [The base object](#the-base-object-base)).
 
 `AnnotatedExpression(expression, annotation)` is a concrete subclass of
@@ -1187,10 +1185,11 @@ the identifier of the free function, followed by the arguments of the free
 function in the order of the signature. An argument passed by keyword or
 filled by a default value gives the same annotation as an argument passed by
 position. For example,
-`metric(D)` is `AnnotatedExpression(transpose(J) @ J, ("uflx.metric", D))`.
+`transpose(A)` is
+`AnnotatedExpression(component_tensor(A[k, l], (l, k)), ("uflx.transpose", A))`.
 
 The identifier of a free function is the public name of the free function,
-qualified by the package name, such as `"uflx.metric"` for the core or
+qualified by the package name, such as `"uflx.transpose"` for the core or
 `"library.trace"` for a library with the package name `library`. The package
 name makes the identifier unique without a registry. The identifier names the
 public interface, not the module that defines the free function, so moving the
@@ -1206,7 +1205,7 @@ Examples:
 
 - `annotate(X[0]**Integer(2) + X[1]**Integer(2), ("height", X))` is an
   `AnnotatedExpression` with value shape `()`, and prints as `height(X)`.
-- `metric(D)` prints as `metric(D)`, because the printer shows the last
+- `transpose(A)` prints as `transpose(A)`, because the printer shows the last
   component of the identifier.
 
 ## Tensor algebra
@@ -1429,8 +1428,7 @@ $Q$.
 
 $Q$ is usually `RD(n)`. A domain in a smaller $Q$, such as an edge of the unit
 triangle in the unit triangle, pulls back an expression on $Q$ (see
-[PullBack](#pullback)). The geometry of $D$ is derived from the
-parameterisation (see [Geometry](#geometry)).
+[PullBack](#pullback)).
 
 Examples:
 
@@ -1452,27 +1450,6 @@ Examples:
   is `RD(0)`, $\psi$ is the constant `tensor((p0, p1))`, with no set, and $Q$
   is `RD(2)`.
 
-### Geometry
-
-The geometry of every domain $D$ comes from the parameterisation $\psi$ =
-`D.parameterisation` on the parameter domain $P$ = `D.parameter_domain` of
-dimension $k$:
-
-| Free function        | Definition                                               | Value shape |
-| -------------------- | -------------------------------------------------------- | ----------- |
-| `jacobian(D)`        | $J$ = `Gradient(D.parameterisation, D.parameter_domain)` | `(n, k)`    |
-| `metric(D)`          | $g$ = `transpose(J) @ J`                                 | `(k, k)`    |
-| `measure_density(D)` | `square_root(determinant(g))`                            | `()`        |
-
-For `parameterised_domain(P, coordinate(P), P)`, the parameterisation is the
-coordinate function $X$ of $P$. The general rules give
-$J$ = `gradient(X, P)`, which is the identity on $P$, $g = I$ and a measure
-density of 1, so the domain of the points of $P$ needs no special case.
-
-For a point, $k = 0$. $J$ has value shape `(n, 0)`, $g$ has value shape
-`(0, 0)`, and the measure density is $\sqrt{1} = 1$. So the measure of a point
-is the measure at the point, and a point needs no special case either.
-
 ### Example: a paraboloid
 
 The paraboloid over `RD(2)` collects the examples of the sections above.
@@ -1490,18 +1467,6 @@ psi = tensor((X[0], X[1], X[0]**Integer(2) + X[1]**Integer(2)))
 
 # ParameterisedDomain(RD(2), psi, RD(3)), k = 2, n = 3.
 D = parameterised_domain(P, psi, RD(3))
-
-# AbstractExpression: AnnotatedExpression(Gradient(psi, P), ("uflx.jacobian", D)),
-# value shape (3, 2).
-J = jacobian(D)
-
-# AbstractExpression: AnnotatedExpression(transpose(J) @ J, ("uflx.metric", D)),
-# value shape (2, 2).
-g = metric(D)
-
-# AbstractExpression: AnnotatedExpression(SquareRoot(Determinant(g)),
-# ("uflx.measure_density", D)), value shape ().
-rho = measure_density(D)
 ```
 
 Note that at this stage we do not need the concept of a `Point` as we have not
@@ -1551,22 +1516,14 @@ psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
 
 # ParameterisedDomain(UnitSimplex(2), psi, RD(2)), k = n = 2.
 K = parameterised_domain(T, psi, RD(2))
-
-# AbstractExpression: AnnotatedExpression(Gradient(psi, T), ("uflx.jacobian", K)),
-# value shape (2, 2).
-J = jacobian(K)
-
-# AbstractExpression: AnnotatedExpression(SquareRoot(Determinant(metric(K))),
-# ("uflx.measure_density", K)), value shape ().
-rho = measure_density(K)
 ```
 
-A later pass evaluates the Jacobian to the constant matrix
+The Jacobian matrix of $\psi$ is the constant matrix
 
 $$J = \begin{pmatrix} 2 & 1 \\ 1 & 3 \end{pmatrix},$$
 
-so $\det J = 5$ and $\sqrt{\det g} = |\det J| = 5$. The area of the physical
-triangle is $5$ times the area $1/2$ of the unit triangle.
+so $\det J = 5$, and the area of the physical triangle is $5$ times the area
+$1/2$ of the unit triangle.
 
 The physical triangle is a parameterised domain with $k = n$, not a coordinate
 domain, although the physical triangle has non-empty interior in $R^2$. The
@@ -1637,10 +1594,10 @@ E = parameterised_domain(I, pull_back(psi, e), RD(2))
   because $X_0 = 1 - U_0$ on the edge.
 - `pull_back(dx * exterior_derivative(X[1], T), e)` has the degree `(2,)` and
   is the zero form, because the edge has dimension 1.
-- The chain rule gives `jacobian(E)` $= \begin{pmatrix} 2 & 1 \\ 1 & 3
-  \end{pmatrix} \begin{pmatrix} -1 \\ 1 \end{pmatrix} = \begin{pmatrix} -1 \\ 2
-  \end{pmatrix}$, so the measure density of `E` is $\sqrt{5}$, the length of
-  the edge of `K`.
+- The Jacobian matrix of the parameterisation of `E` is
+  $\begin{pmatrix} 2 & 1 \\ 1 & 3 \end{pmatrix} \begin{pmatrix} -1 \\ 1
+  \end{pmatrix} = \begin{pmatrix} -1 \\ 2 \end{pmatrix}$, so the edge of `K`
+  has the length $\sqrt{5}$.
 - `pull_back(f, parameterised_domain(I, tensor((one - U[0], U[0])), RD(2)))`
   raises `ValueError`, because that domain lies in `RD(2)`, not in `T`.
 
@@ -1689,15 +1646,16 @@ expression.
 
 The induced measure $\mu_D$ of $D$ is the measure that the parameterisation
 $\psi$ induces from the Euclidean metric of $R^n$, with density
-$\sqrt{\det g}$, $g = J^T J$ and $J = \nabla_P \psi$. The density is
-`measure_density(D)`. The induced measure needs no orientation, because
+$\sqrt{\det g}$, $g = J^T J$ and $J = \nabla_P \psi$. The induced measure needs no orientation, because
 $\sqrt{\det g} \ge 0$.
 
 ### integrate
 
 The free function `integrate(f, D)` integrates $f$ over the domain $D$ with the
-induced measure $\mu_D$. `integrate(f, D)` is
-`lebesgue_integral(f * measure_density(D), D.parameter_domain)`. The free
+induced measure $\mu_D$. With $P$ = `D.parameter_domain` and the Jacobian
+matrix `J = components(exterior_derivative(D.parameterisation, P), P)`,
+`integrate(f, D)` is
+`lebesgue_integral(f * square_root(determinant(transpose(J) @ J)), P)`. The free
 function is the definition above, written as a fixed composition. Arithmetic
 is scalar, so $f$ is a scalar, possibly with free indices. A tensor-valued
 integral is written in index notation, such as
