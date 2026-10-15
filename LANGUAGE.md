@@ -1054,6 +1054,8 @@ allowed, because a counter makes construction depend on global state.
 
 > LLM generated content.
 
+> Legacy UFL: This numpy-like concept does not appear to be in legacy UFL.
+
 A concrete subclass of the base object for an index that covers any number of
 axes. A `EllipsisIndex` is not an expression. `EllipsisIndex(label)` stores the label,
 with the same rules as the label of an `Index`.
