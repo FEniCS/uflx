@@ -283,6 +283,7 @@ objects in the graph. Operator overloads call the free functions.
 |                       | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                     | `AnnotatedExpression`: `ComponentTensor`                            |
 |                       | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                  | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`           |
 | Differentiation       | [`gradient(f, P)`](#gradient)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Gradient`                                                          |
+|                       | [`identity(P)`](#identity)                                      |                               | `P: AbstractCoordinateDomain`                               | `AnnotatedExpression`: `Gradient` of `coordinate(P)`                |
 | Parameterised domains | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression` | `ParameterisedDomain`                                               |
 | Geometry              | [`jacobian(D)`](#geometry)                                      |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `Gradient` of `D.parameterisation`           |
 |                       | [`metric(D)`](#geometry)                                        |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `transpose(J) @ J`                           |
@@ -938,8 +939,7 @@ for simplifying these expressions
 
 Every `AbstractExpression` derives the free indices, a `tuple` of pairs of an
 `Index` and an `int` extent, or of a `EllipsisIndex` and a `tuple` extent. The
-order is the order of first occurrence, never the
-order of a `set`.
+order is the order of first occurrence, never the order of a `set`.
 
 Unless a node class states otherwise, the free indices of a node are the free
 indices of the edges of the node that are expressions, in edge order, with each
@@ -1089,9 +1089,10 @@ construction raises `TypeError` for $P$ or `ValueError` for $f$. An $f$ with
 no set is a constant on $P$. `Gradient(f, P)` requires a valid pair.
 
 `Gradient` is lazy. Construction does not evaluate the derivative. A later pass
-evaluates the derivative with the standard rules, including
-`gradient(X, P)` $= I$, a zero derivative for every expression with no set,
-and the chain rule for a `Composition` (see [Composition](#composition)).
+evaluates the derivative with the standard rules, including a zero derivative
+for every expression with no set and the chain rule for a `Composition` (see
+[Composition](#composition)). `gradient(X, P)` is already the identity on $P$,
+so the pass leaves `gradient(X, P)` unchanged (see [Identity](#identity)).
 
 Differentiation on a parameterised domain is not a primitive. Differentiation
 on a parameterised domain will be a composite of `gradient` on the parameter
@@ -1100,13 +1101,40 @@ domain and the geometry of the parameterised domain (see
 
 Examples, with `X = coordinate(RD(2))`:
 
-- `gradient(X, RD(2))` has value shape `(2, 2)`. A later pass evaluates the
-  gradient to the identity.
+- `gradient(X, RD(2))` has value shape `(2, 2)` and is the identity on
+  `RD(2)`.
 - `gradient(X[0]**Integer(2) + X[1]**Integer(2), RD(2))` has value shape
   `(2,)`. A later pass evaluates the gradient to $(2 X_0, 2 X_1)$.
 - `gradient(Integer(1), RD(2))` has value shape `(2,)`, and a later pass
   evaluates the gradient to zero.
 - `gradient(X, RD(3))` raises `ValueError`, because `X` has the set `RD(2)`.
+
+### Identity
+
+The free function `identity(P)` is the identity on the tangent space of a
+coordinate domain $P$ of dimension $k$. `identity(P)` is
+`gradient(coordinate(P), P)`, annotated with `("identity", P)`. With $X$ the
+coordinate function of $P$, $\partial X_i / \partial X_j = \delta_{ij}$, so
+the identity is a fixed composition, and the core has no identity node class.
+
+`identity(P)` has value shape `(k, k)` and the set $P$. The identity depends on
+$P$, not on $k$ alone, because the identity acts on the tangent space of $P$.
+`identity(RD(0))` has value shape `(0, 0)` and needs no special case.
+
+The Kronecker delta $\delta_{ij}$ is `identity(P)[i, j]`.
+
+A differentiation pass leaves `Gradient(Coordinate(P), P)` unchanged, and
+evaluates the gradient of `Gradient(Coordinate(P), P)` with respect to $P$ to
+`Zero` with value shape `(k, k, k)`.
+
+Examples, with `X = coordinate(RD(2))`:
+
+- `identity(RD(2))` has value shape `(2, 2)` and the set `RD(2)`.
+- `identity(RD(2))` is not equal to `gradient(X, RD(2))`, because
+  `identity(RD(2))` is annotated.
+- With `i, j = index("i"), index("j")`, `identity(RD(2))[i, j] * X[j]` has the
+  free indices `((i, 2), (j, 2))`, and
+  `index_sum(identity(RD(2))[i, j] * X[j], (j,))` is $X_i$.
 
 ## Geometry of domains
 
@@ -1177,8 +1205,8 @@ dimension $k$:
 
 For `parameterised_domain(P, coordinate(P), P)`, the parameterisation is the
 coordinate function $X$ of $P$. The general rules give
-$J$ = `gradient(X, P)` $= I$, $g = I$ and a measure density of 1, so the
-domain of the points of $P$ needs no special case.
+$J$ = `gradient(X, P)`, which is the identity on $P$, $g = I$ and a measure
+density of 1, so the domain of the points of $P$ needs no special case.
 
 For a point, $k = 0$. $J$ has value shape `(n, 0)`, $g$ has value shape
 `(0, 0)`, and the measure density is $\sqrt{1} = 1$. So the measure of a point
