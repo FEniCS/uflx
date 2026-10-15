@@ -236,7 +236,6 @@ Base
 │   ├── ComponentTensor                   binds indices to tensor axes
 │   ├── IndexSum                          sums over bound indices
 │   ├── AnnotatedExpression               identity
-│   ├── Gradient                          derivative with respect to X of P
 │   ├── Composition                       f composed with a domain, set P of the domain
 │   ├── LebesgueIntegral                  Lebesgue integral over P, no set
 │   ├── Sum                               +
@@ -286,8 +285,7 @@ objects in the graph. Operator overloads call the free functions.
 | Tensor algebra        | [`determinant(f)`](#determinant)                                |                               | `f: AbstractExpression`                                     | `Determinant`                                                       |
 |                       | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                     | `AnnotatedExpression`: `ComponentTensor`                            |
 |                       | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                  | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`           |
-| Differentiation       | [`gradient(f, P)`](#gradient)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Gradient`                                                          |
-|                       | [`identity(P)`](#identity)                                      |                               | `P: AbstractCoordinateDomain`                               | `AnnotatedExpression`: `Gradient` of `coordinate(P)`                |
+| Differentiation       | [`identity(P)`](#identity)                                      |                               | `P: AbstractCoordinateDomain`                               | `AnnotatedExpression`: `Gradient` of `coordinate(P)`                |
 | Parameterised domains | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression` | `ParameterisedDomain`                                               |
 | Geometry              | [`jacobian(D)`](#geometry)                                      |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `Gradient` of `D.parameterisation`           |
 |                       | [`metric(D)`](#geometry)                                        |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `transpose(J) @ J`                           |
@@ -330,7 +328,7 @@ rules in the section of the concrete class.
 | `Tensor`                                             | `entries`                                                |                                                               |
 | `Indexed`, `ComponentTensor`, `IndexSum`             | `expression`, `indices`                                  |                                                               |
 | `AnnotatedExpression`                                | `expression`, `annotation`                               |                                                               |
-| `Gradient`, `LebesgueIntegral`, `Composition`        | `expression`, `domain`                                   |                                                               |
+| `LebesgueIntegral`, `Composition`                    | `expression`, `domain`                                   |                                                               |
 | `Absolute`, `Conjugate`, `SquareRoot`, `Determinant` | `operand`                                                |                                                               |
 | `Sum`, `Product`, `Division`, `Power`                | `first`, `second`                                        |                                                               |
 | `Index`, `EllipsisIndex`                             | `label`                                                  |                                                               |
@@ -527,17 +525,17 @@ degree of an edge breaks the rule of the node, construction raises
 statement, such as for `SquareRoot`, because the square root of a form is not
 defined.
 
-| Class                                                                                 | Edges that are expressions must have       | Degree of the node                               |
-| ------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------ |
-| `Integer`, `Float`, `ImaginaryUnit`, `Coordinate`                                     | No such edges                              | `()`                                             |
-| `Zero`                                                                                | No such edges                              | The stored degree                                |
-| `Sum`                                                                                 | Equal degrees                              | The degree of the operands                       |
-| `Product`                                                                             | The degree `()`, or equal numbers of slots | The slotwise sum (see [Arithmetic](#arithmetic)) |
-| `AnnotatedExpression`                                                                 | Any degree                                 | The degree of the wrapped expression             |
-| `Division`, `Power`, `Absolute`, `Conjugate`, `SquareRoot`, `Determinant`, `Gradient` | The degree `()`                            | `()`                                             |
-| `Tensor`                                                                              | Equal degrees                              | The degree of the entries                        |
-| `Indexed`, `ComponentTensor`, `IndexSum`                                              | Any degree                                 | The degree of the expression                     |
-| `Composition`, `LebesgueIntegral`                                                     | The degree `()`, until forms are added     | `()`                                             |
+| Class                                                                     | Edges that are expressions must have       | Degree of the node                               |
+| ------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------ |
+| `Integer`, `Float`, `ImaginaryUnit`, `Coordinate`                         | No such edges                              | `()`                                             |
+| `Zero`                                                                    | No such edges                              | The stored degree                                |
+| `Sum`                                                                     | Equal degrees                              | The degree of the operands                       |
+| `Product`                                                                 | The degree `()`, or equal numbers of slots | The slotwise sum (see [Arithmetic](#arithmetic)) |
+| `AnnotatedExpression`                                                     | Any degree                                 | The degree of the wrapped expression             |
+| `Division`, `Power`, `Absolute`, `Conjugate`, `SquareRoot`, `Determinant` | The degree `()`                            | `()`                                             |
+| `Tensor`                                                                  | Equal degrees                              | The degree of the entries                        |
+| `Indexed`, `ComponentTensor`, `IndexSum`                                  | Any degree                                 | The degree of the expression                     |
+| `Composition`, `LebesgueIntegral`                                         | The degree `()`, until forms are added     | `()`                                             |
 
 Examples of the degree, on $R^3$ with the coordinate function $X$, the
 coordinates $x, y, z$ and a scalar function $f$. The forms are written in
@@ -1247,43 +1245,6 @@ Examples, with a matrix `A` of value shape `(2, 2)`:
 
 ## Differentiation
 
-### Gradient
-
-> LLM generated content.
-
-A concrete subclass of `AbstractExpression` for the gradient of an expression
-$f$ with respect to the coordinate function $X$ of a coordinate domain $P$ of
-dimension $k$.
-
-`Gradient(f, P)` stores $f$ and $P$ and derives the value shape
-`f.value_shape + (k,)` and the set $P$.
-
-An expression and a coordinate domain $(f, P)$ are a valid pair if $P$ is an
-`AbstractCoordinateDomain` and $f$ has the set $P$ or no set. Otherwise
-construction raises `TypeError` for $P$ or `ValueError` for $f$. An $f$ with
-no set is a constant on $P$. `Gradient(f, P)` requires a valid pair.
-
-`Gradient` is lazy. Construction does not evaluate the derivative. The core
-transformation `apply_derivatives` evaluates the derivative (see
-[Applying derivatives](#applying-derivatives)). `gradient(X, P)` is already the
-identity on $P$, so `apply_derivatives` leaves `gradient(X, P)` unchanged (see
-[Identity](#identity)).
-
-Differentiation on a parameterised domain is not a primitive. Differentiation
-on a parameterised domain will be a composite of `gradient` on the parameter
-domain and the geometry of the parameterised domain (see
-[Geometry](#geometry)).
-
-Examples, with `X = coordinate(RD(2))`:
-
-- `gradient(X, RD(2))` has value shape `(2, 2)` and is the identity on
-  `RD(2)`.
-- `gradient(X[0]**Integer(2) + X[1]**Integer(2), RD(2))` has value shape
-  `(2,)`. A later pass evaluates the gradient to $(2 X_0, 2 X_1)$.
-- `gradient(Integer(1), RD(2))` has value shape `(2,)`, and a later pass
-  evaluates the gradient to zero.
-- `gradient(X, RD(3))` raises `ValueError`, because `X` has the set `RD(2)`.
-
 ### Identity
 
 The free function `identity(P)` is the identity on the tangent space of a
@@ -1551,8 +1512,11 @@ $$
 \int_P f \,\mathrm{d}X.
 $$
 
-`LebesgueIntegral(f, P)` requires a valid pair $(f, P)$ (see
-[Gradient](#gradient)). `LebesgueIntegral(f, P)` stores $f$ and $P$ and derives
+An expression and a coordinate domain $(f, P)$ are a valid pair if $P$ is an
+`AbstractCoordinateDomain` and $f$ has the set $P$ or no set. Otherwise
+construction raises `TypeError` for $P$ or `ValueError` for $f$. An $f$ with
+no set is a constant on $P$. `LebesgueIntegral(f, P)` requires a valid pair.
+`LebesgueIntegral(f, P)` stores $f$ and $P$ and derives
 the value shape, the free indices and the scalar type of $f$.
 `LebesgueIntegral(f, P)` has no set.
 
@@ -1561,9 +1525,6 @@ pass might evaluate the integral, for example by quadrature.
 
 Note that a `LebesgueIntegral` is an expression, so integrals can be added,
 multiplied and used wherever an expression is accepted.
-
-The naming is slightly pretentious for good reason here - the vast majority of
-users will want to use the `integrate` primitive below which takes a domain.
 
 ### Measures
 
@@ -1641,13 +1602,6 @@ The value of a tensor-valued expression at a point is written in index
 notation, because `integrate` takes a scalar. For $f$ of any value shape, the
 value at $p$ is `component_tensor(integrate(compose(f, p)[r], p), (r,))`, with
 `r` a [EllipsisIndex](#ellipsisindex).
-
-> Alternative: `lebesgue_integral(compose(f, p), RD(0))` gives the
-> tensor-valued value directly, because the measure density of a point is 1.
-> The composition is fixed, so a core free function `evaluate(f, p)` could
-> build the composition. If $p$ is not a point, the constructor of
-> `LebesgueIntegral` raises `ValueError`. The cost is a second way to write
-> point evaluation beside `integrate`.
 
 A point in `T` is given in the coordinates of `T`. For a point $x$ of `K`, the
 surrounding environment supplies $\psi^{-1}(x)$. For a non-affine $\psi$, the
