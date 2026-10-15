@@ -78,7 +78,8 @@ external library provides the concrete data behind the leaf nodes.
   single class of the core or a free function that returns objects of the core,
   never a subclass. For example, every domain is a `ParameterisedDomain`, and an
   affinely mapped triangle is a free function that returns a
-  `ParameterisedDomain`.
+  `ParameterisedDomain`. A language extension is the one exception (see
+  [Language extensions](#language-extensions)).
 
 - A property reads and a free function builds. Data that an object stores, or
   derives from the class and the construction arguments of the object, is a
@@ -343,12 +344,13 @@ to extend UFLx without changing the core.
 > so many language features were hacked in, for example complex numbers and
 > dual spaces.
 
-The core has a small enough, fixed set of node classes and an open set of passes. A
-downstream library extends UFLx by adding passes, not by adding properties to
-the node classes of the core. A new pass needs one rule for each node class of
-the core and does not change the core.
+The core has a small, fixed set of node classes and an open set of passes. A
+downstream library extends UFLx mainly by adding passes, not by adding
+properties to the node classes of the core. A new pass needs one rule for each
+node class of the core and does not change the core. Only a language extension
+adds node classes.
 
-The core supports four kinds of extension:
+The core supports five kinds of extension:
 
 > LLM generated table, could be made more concise.
 
@@ -356,8 +358,9 @@ The core supports four kinds of extension:
 | ----------------------------- | --------------------------------------------------------- | ------------------------------------------- |
 | New questions asked of a form | Physical units, polynomial degree, linearity checks       | [New questions](#new-questions)             |
 | New subclasses                | Elements and functions from Basix, new coordinate domains | [New subclasses](#new-subclasses)           |
-| New operations                | Trace, external operators                                 | [New operations](#new-operations)           |
-| New transformations           | Pull-back, Gateaux derivative                             | [New transformations](#new-transformations) |
+| New operations                | Trace, divergence                                         | [New operations](#new-operations)           |
+| New transformations           | Gateaux derivative                                        | [New transformations](#new-transformations) |
+| Language extensions           | External operators                                        | [Language extensions](#language-extensions) |
 
 A property that the rules of the core depend on is part of the core, not an
 extension. For example, the scalar type is part of the core, because
@@ -368,7 +371,8 @@ core.
 
 A downstream library asks a new question of a form with a pass. The pass has
 one rule for each node class of the core and one rule for each leaf class of
-the library.
+the library. The pass needs no rule for a node class of a language extension
+that has a lowering (see [Language extensions](#language-extensions)).
 
 For example, a library that checks physical units, like the work of Habera et
 al.:
@@ -398,18 +402,19 @@ expression has inconsistent units.
 ### New subclasses
 
 Every abstract class is a contract. The contract states what a subclass
-provides, so that every transformation of the core handles the subclass
-through the abstract class alone. A downstream library may subclass an
+provides, so that every core transformation handles the subclass through the
+abstract class alone. A downstream library may subclass an
 abstract class by fulfilling the contract, without changing the core. Only
 leaves are subclassed (see
 [Basic implementation principles](#basic-implementation-principles)). An
 operation built from other expressions is not a subclass but a free function
-or a language extension (see [New operations](#new-operations)). A contract is
+(see [New operations](#new-operations)) or a node class of a language extension
+(see [Language extensions](#language-extensions)). A contract is
 part of the class, never a global registry. For example, a
 downstream subclass of `AbstractCoordinateDomain`, such as `UnitSimplex` in the
 [affinely mapped triangle](#example-an-affinely-mapped-triangle), provides the
-dimension, and every transformation of the core handles the coordinate
-function of the subclass through `Coordinate`.
+dimension, and every core transformation handles the coordinate function of
+the subclass through `Coordinate`.
 
 Information that a downstream library attaches to the graph goes in one of two
 places:
@@ -432,32 +437,49 @@ the composition (see
 [Basic implementation principles](#basic-implementation-principles)), and
 annotates the result. For example, `trace(A)` reads the extent $n$ of `A` and
 returns the sum of the diagonal entries `A[0, 0] + ... + A[n - 1, n - 1]`,
-annotated with `("trace", A)`. An operation that a `EllipsisIndex` expresses, such
-as `scale(a, T)`, needs no value shape (see [EllipsisIndex](#ellipsisindex)).
+annotated with `("library.trace", A)`. An operation that a `EllipsisIndex`
+expresses, such as `scale(a, T)`, needs no value shape (see [EllipsisIndex](#ellipsisindex)).
 
 A library node class that a pass replaces by node classes of the core gives
-nothing that the free function does not give, and no transformation of the
-core handles the node class before the replacement. So the free function is
-the only way to add an operation that is a composition.
-
-An operation that is not a composition of node classes of the core needs a
-language extension. A language
-extension adds node classes and tells every transformation of the core how to
-handle the new node classes. Every transformation of the core must still
-produce only node classes of the core or of the language extension. For
-example, a language extension for external operators adds a node class for an
-operation known only by name, such as `exp`, a material law or a neural
-network, together with the rule that differentiates the node class.
+nothing that the free function does not give, unless a core transformation
+must keep the structure of the operation. Such an operation, and an operation
+that is not a composition of node classes of the core, needs a language
+extension.
 
 ### New transformations
 
-A new transformation, such as a pull-back, is a pass with one rule for each
-node class of the core. A new transformation
-must produce only node classes of the core. A transformation that needs a new
-node class is a proposal to change the core.
+A new transformation is a pass with one rule for each node class of the coreV
+and one rule for each leaf class that the transformation rewrites. For example,
+a Gateaux derivative rewrites the functions that the derivative is taken with
+respect to, so the Gateaux derivative needs a rule for the leaf classes of
+those functions. A new transformation must produce only node classes of the
+core. A transformation that needs a new node class needs a language extension.
 
 There should be helpers to check whether a transformation covers all classes
 of the core.
+
+### Language extensions
+
+A language extension adds node classes that are not leaves, in a package
+outside the core. Each node class of a language extension provides, as part
+of the class:
+
+- a rule for each [core transformation](#core-transformations), which
+  produces only node classes of the core or of the language extension, and
+- a lowering to an equal expression of node classes of the core, if such an
+  expression exists.
+
+A pass without a rule for a node class of a language extension lowers the node
+and continues, so a pass such as `units` needs no rule for the node class. For
+a node class without a lowering, every pass without a rule raises
+`TypeError`. A rule must agree with the lowering followed by the rules for the
+lowered expression, up to mathematical equality.
+
+For example, a language extension for external operators adds a node class
+for an operation known only by name, such as `exp`, a material law or a neural
+network. The rule for `apply_derivatives` differentiates the node class. The
+rule for `expand_compositions` composes the operands, because the operation is
+pointwise. The node class has no lowering.
 
 ## The lowest objects
 
@@ -623,7 +645,8 @@ core has no rational literal. A complex number is a composition such as
 `a + ImaginaryUnit() * b`, so the core has no complex literal.
 
 `Zero(value_shape, free_indices)` is the zero with the given value shape and
-free indices, and has no set. A differentiation pass produces `Zero`. No fixed
+free indices, and has no set. `apply_derivatives` produces `Zero` (see
+[Applying derivatives](#applying-derivatives)). No fixed
 composition gives a zero with free indices, because `Integer(0) * a[i]` has
 edges to `a`, so `Zero` is a node class.
 
@@ -681,9 +704,9 @@ $L^2$ inner product $\int u \bar{v}$, needs `Conjugate`.
 Negation and subtraction are free functions, not node classes:
 
 - `negate(f)`, with the overload `-f`, is `multiply(Integer(-1), f)`,
-  annotated with `("negate", f)`.
+  annotated with `("uflx.negate", f)`.
 - `subtract(f, g)`, with the overload `f - g`, is `add(f, negate(g))`,
-  annotated with `("subtract", f, g)`.
+  annotated with `("uflx.subtract", f, g)`.
 
 Both compositions are exact in floating-point arithmetic, so neither
 composition changes the arithmetic that the user wrote. Division is a node
@@ -895,9 +918,11 @@ The user names user indices. The user is responsible for not reusing a name
 that is already free in an operand.
 
 A free function that needs fresh indices derives the indices from the
-operands. For example, `transpose(A)` uses `Index(("transpose", A, 0))` and
-`Index(("transpose", A, 1))`. An index whose label contains `A` has an edge to
-`A`. Every node that uses an `Index` has an edge to the `Index`. So an index
+operands. The label of a derived index is the annotation of the free function
+followed by a number (see [Annotation](#annotation)). For example,
+`transpose(A)` uses `Index(("uflx.transpose", A, 0))` and
+`Index(("uflx.transpose", A, 1))`. An index whose label contains `A` has an
+edge to `A`. Every node that uses an `Index` has an edge to the `Index`. So an index
 whose label contains `A` cannot occur inside `A`, because `A` would then
 contain `A`, and the graph is acyclic. Hence
 a derived index is fresh with respect to the operands, and the free function
@@ -905,6 +930,8 @@ does not inspect the operands to find a fresh index. A global counter is not
 allowed, because a counter makes construction depend on global state.
 
 ### EllipsisIndex
+
+> LLM generated content.
 
 A concrete subclass of the base object for an index that covers any number of
 axes. A `EllipsisIndex` is not an expression. `EllipsisIndex(label)` stores the label,
@@ -1003,7 +1030,7 @@ shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
 
 An annotation records how an expression was produced or incidental metadata.
 An annotation is a `tuple` of a `str` name followed by the arguments that
-produced the expression, for example `("metric", D)`. Every argument must be an
+produced the expression, for example `("uflx.metric", D)`. Every argument must be an
 allowed construction argument (see [The base object](#the-base-object-base)).
 
 `AnnotatedExpression(expression, annotation)` is a concrete subclass of
@@ -1020,14 +1047,32 @@ allowed construction argument (see [The base object](#the-base-object-base)).
   annotation. A pass that rewrites inside an annotated expression drops the
   annotation, unless the pass shows that the annotation still holds.
 
-Every free function in the core that is defined as a composition annotates the
-result with the name and arguments of the free function. For example,
-`metric(D)` is `AnnotatedExpression(transpose(J) @ J, ("metric", D))`.
+Every free function that is defined as a composition annotates the result with
+the identifier of the free function, followed by the arguments of the free
+function in the order of the signature. An argument passed by keyword or
+filled by a default value gives the same annotation as an argument passed by
+position. For example,
+`metric(D)` is `AnnotatedExpression(transpose(J) @ J, ("uflx.metric", D))`.
 
-Example:
+The identifier of a free function is the public name of the free function,
+qualified by the package name, such as `"uflx.metric"` for the core or
+`"library.trace"` for a library with the package name `library`. The package
+name makes the identifier unique without a registry. The identifier names the
+public interface, not the module that defines the free function, so moving the
+free function to another module does not change the identifier. Importing the
+package and looking up the public name gives back the free function, so a pass
+can check an annotation by calling the free function on the arguments and
+comparing the result with the wrapped expression.
+
+A user may annotate an expression with any `str` name. A name with a dot is
+reserved for the identifier of a free function.
+
+Examples:
 
 - `annotate(X[0]**Integer(2) + X[1]**Integer(2), ("height", X))` is an
   `AnnotatedExpression` with value shape `()`, and prints as `height(X)`.
+- `metric(D)` prints as `metric(D)`, because the printer shows the last
+  component of the identifier.
 
 ## Tensor algebra
 
@@ -1050,12 +1095,12 @@ product.
 Transpose and matrix product are free functions built with derived indices:
 
 - `transpose(A)` is `component_tensor(A[k, l], (l, k))`, with
-  $k$ = `Index(("transpose", A, 0))` and $l$ = `Index(("transpose", A, 1))`,
-  annotated with `("transpose", A)`.
+  $k$ = `Index(("uflx.transpose", A, 0))` and
+  $l$ = `Index(("uflx.transpose", A, 1))`, annotated with `("uflx.transpose", A)`.
 - `matrix_product(A, B)`, with the overload `A @ B`, is
   `component_tensor(index_sum(A[i, k] * B[k, j], (k,)), (i, j))`, with $i$, $k$
-  and $j$ the derived indices `Index(("matrix_product", A, B, m))` for
-  $m = 0, 1, 2$, annotated with `("matrix_product", A, B)`.
+  and $j$ the derived indices `Index(("uflx.matrix_product", A, B, m))` for
+  $m = 0, 1, 2$, annotated with `("uflx.matrix_product", A, B)`.
 
 An operand that does not have rank 2, including a scalar operand, is rejected
 with `IndexError` by the constructor of `Indexed`. Unequal inner extents in
@@ -1088,11 +1133,11 @@ An expression and a coordinate domain $(f, P)$ are a valid pair if $P$ is an
 construction raises `TypeError` for $P$ or `ValueError` for $f$. An $f$ with
 no set is a constant on $P$. `Gradient(f, P)` requires a valid pair.
 
-`Gradient` is lazy. Construction does not evaluate the derivative. A later pass
-evaluates the derivative with the standard rules, including a zero derivative
-for every expression with no set and the chain rule for a `Composition` (see
-[Composition](#composition)). `gradient(X, P)` is already the identity on $P$,
-so the pass leaves `gradient(X, P)` unchanged (see [Identity](#identity)).
+`Gradient` is lazy. Construction does not evaluate the derivative. The core
+transformation `apply_derivatives` evaluates the derivative (see
+[Applying derivatives](#applying-derivatives)). `gradient(X, P)` is already the
+identity on $P$, so `apply_derivatives` leaves `gradient(X, P)` unchanged (see
+[Identity](#identity)).
 
 Differentiation on a parameterised domain is not a primitive. Differentiation
 on a parameterised domain will be a composite of `gradient` on the parameter
@@ -1113,8 +1158,8 @@ Examples, with `X = coordinate(RD(2))`:
 
 The free function `identity(P)` is the identity on the tangent space of a
 coordinate domain $P$ of dimension $k$. `identity(P)` is
-`gradient(coordinate(P), P)`, annotated with `("identity", P)`. With $X$ the
-coordinate function of $P$, $\partial X_i / \partial X_j = \delta_{ij}$, so
+`gradient(coordinate(P), P)`, annotated with `("uflx.identity", P)`. With $X$
+the coordinate function of $P$, $\partial X_i / \partial X_j = \delta_{ij}$, so
 the identity is a fixed composition, and the core has no identity node class.
 
 `identity(P)` has value shape `(k, k)` and the set $P$. The identity depends on
@@ -1122,10 +1167,6 @@ $P$, not on $k$ alone, because the identity acts on the tangent space of $P$.
 `identity(RD(0))` has value shape `(0, 0)` and needs no special case.
 
 The Kronecker delta $\delta_{ij}$ is `identity(P)[i, j]`.
-
-A differentiation pass leaves `Gradient(Coordinate(P), P)` unchanged, and
-evaluates the gradient of `Gradient(Coordinate(P), P)` with respect to $P$ to
-`Zero` with value shape `(k, k, k)`.
 
 Examples, with `X = coordinate(RD(2))`:
 
@@ -1230,16 +1271,16 @@ psi = tensor((X[0], X[1], X[0]**Integer(2) + X[1]**Integer(2)))
 # ParameterisedDomain(RD(2), psi, RD(3)), k = 2, n = 3.
 D = parameterised_domain(P, psi, RD(3))
 
-# AbstractExpression: AnnotatedExpression(Gradient(psi, P), ("jacobian", D)),
+# AbstractExpression: AnnotatedExpression(Gradient(psi, P), ("uflx.jacobian", D)),
 # value shape (3, 2).
 J = jacobian(D)
 
-# AbstractExpression: AnnotatedExpression(transpose(J) @ J, ("metric", D)),
+# AbstractExpression: AnnotatedExpression(transpose(J) @ J, ("uflx.metric", D)),
 # value shape (2, 2).
 g = metric(D)
 
 # AbstractExpression: AnnotatedExpression(SquareRoot(Determinant(g)),
-# ("measure_density", D)), value shape ().
+# ("uflx.measure_density", D)), value shape ().
 rho = measure_density(D)
 ```
 
@@ -1291,12 +1332,12 @@ psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
 # ParameterisedDomain(UnitSimplex(2), psi, RD(2)), k = n = 2.
 K = parameterised_domain(T, psi, RD(2))
 
-# AbstractExpression: AnnotatedExpression(Gradient(psi, T), ("jacobian", K)),
+# AbstractExpression: AnnotatedExpression(Gradient(psi, T), ("uflx.jacobian", K)),
 # value shape (2, 2).
 J = jacobian(K)
 
 # AbstractExpression: AnnotatedExpression(SquareRoot(Determinant(metric(K))),
-# ("measure_density", K)), value shape ().
+# ("uflx.measure_density", K)), value shape ().
 rho = measure_density(K)
 ```
 
@@ -1326,12 +1367,14 @@ The second operand is a domain, not an expression, because a domain states $Q$.
 Construction raises `ValueError` unless $f$ has no set or the set of $f$ is
 $Q$. Construction raises `TypeError` if $D$ is not a `ParameterisedDomain`.
 
-`Composition` is lazy. An expansion pass moves a `Composition` towards the
-leaves and replaces `Composition(Coordinate(S), D)` by $\psi$. A `Composition`
-of a terminal remains, and the external library that supplies the terminal
-evaluates the terminal at $\psi(p)$. A differentiation pass applies the chain
-rule. `Gradient(Composition(f, D), P)` is `Composition(Gradient(f, S), D)`
-contracted with `jacobian(D)`, with $S$ the set of $f$.
+`Composition` is lazy. The core transformation `expand_compositions` moves a
+`Composition` towards the leaves and replaces `Composition(Coordinate(Q), D)`
+by $\psi$ (see [Expanding compositions](#expanding-compositions)). A
+`Composition` of a downstream terminal remains, and the external library that
+supplies the terminal evaluates the terminal at $\psi(p)$. The core
+transformation `apply_derivatives` applies the chain rule.
+`Gradient(Composition(f, D), P)` is `Composition(Gradient(f, Q), D)`
+contracted with `jacobian(D)`.
 
 A domain $E$ in the parameter domain of $D$ has the image $\psi(E)$, a subset
 of $D$. The image is the parameterised domain with the parameterisation
@@ -1417,7 +1460,7 @@ $\sqrt{\det g} \ge 0$.
 The free function `integrate(f, D)` integrates $f$ over the domain $D$ with the
 induced measure $\mu_D$. `integrate(f, D)` is
 `lebesgue_integral(f * measure_density(D), D.parameter_domain)`, annotated with
-`("integrate", f, D)`. The free function is the definition above, written as a
+`("uflx.integrate", f, D)`. The free function is the definition above, written as a
 fixed composition. Arithmetic is scalar, so $f$ is a scalar, possibly with free
 indices. A tensor-valued integral is written in index notation, such as
 `component_tensor(integrate(f[r], D), (r,))`, with `r` a
@@ -1508,6 +1551,34 @@ C = parameterised_domain(RD(0), compose(psi, c), RD(2))
   `ValueError`, because `q` lies in `RD(2)`, not in `T`.
 - `parameterised_domain(RD(0), X, T)` raises `ValueError`, because `X` has the
   set `T`, not `RD(0)`.
+
+## Core transformations
+
+The core has two transformations, `apply_derivatives` and
+`expand_compositions`. Each core transformation is a pass with one rule for
+each node class of the core, and produces only node classes of the core. A rule
+replaces a node by a mathematically equal expression and never simplifies.
+
+A terminal is a `Coordinate`, or an expression with a set whose class is a leaf
+class of a downstream library. Neither core transformation rewrites a terminal.
+Every other pass, such as simplification or `units`, is not a core
+transformation.
+
+### Applying derivatives
+
+`apply_derivatives(f)` evaluates every `Gradient` in $f$ with the standard
+rules of differentiation, including the chain rule for a `Composition`. The
+gradient of an expression with no set is `Zero`. `Gradient(Coordinate(P), P)`
+is the identity on $P$ and remains (see [Identity](#identity)). Afterwards,
+every `Gradient` is applied, one or more times, to a terminal.
+
+### Expanding compositions
+
+`expand_compositions(f)` moves every `Composition` in $f$ towards the leaves,
+because composition commutes with pointwise operations, and replaces
+`Composition(Coordinate(Q), D)` by the parameterisation of $D$. A
+`Composition` of a downstream terminal or of a `Gradient` remains.
+`expand_compositions` is the pull-back to the parameter domain.
 
 ## Topology of domains
 
