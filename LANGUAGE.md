@@ -236,6 +236,7 @@ Base
 │   ├── ComponentTensor                   binds indices to tensor axes
 │   ├── IndexSum                          sums over bound indices
 │   ├── AnnotatedExpression               identity
+│   ├── ExteriorDerivative                d with respect to P
 │   ├── Composition                       f composed with a domain, set P of the domain
 │   ├── LebesgueIntegral                  Lebesgue integral over P, no set
 │   ├── Sum                               +
@@ -285,7 +286,8 @@ objects in the graph. Operator overloads call the free functions.
 | Tensor algebra        | [`determinant(f)`](#determinant)                                |                               | `f: AbstractExpression`                                     | `Determinant`                                                       |
 |                       | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                     | `AnnotatedExpression`: `ComponentTensor`                            |
 |                       | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                  | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`           |
-| Differentiation       | [`identity(P)`](#identity)                                      |                               | `P: AbstractCoordinateDomain`                               | `AnnotatedExpression`: `Gradient` of `coordinate(P)`                |
+| Differentiation       | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `ExteriorDerivative`                                                |
+|                       | [`identity(P)`](#identity)                                      |                               | `P: AbstractCoordinateDomain`                               | `AnnotatedExpression`: `Gradient` of `coordinate(P)`                |
 | Parameterised domains | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression` | `ParameterisedDomain`                                               |
 | Geometry              | [`jacobian(D)`](#geometry)                                      |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `Gradient` of `D.parameterisation`           |
 |                       | [`metric(D)`](#geometry)                                        |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `transpose(J) @ J`                           |
@@ -319,21 +321,21 @@ rules in the section of the concrete class.
 
 > LLM generated table.
 
-| Class                                                | Stored properties                                        | Derived properties                                            |
-| ---------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------- |
-| `AbstractExpression`                                 |                                                          | `value_shape`, `free_indices`, `scalar_type`, `set`, `degree` |
-| `Integer`, `Float`                                   | `value`                                                  |                                                               |
-| `Zero`                                               | `value_shape`, `free_indices`, `degree`                  |                                                               |
-| `Coordinate`                                         | `domain`                                                 |                                                               |
-| `Tensor`                                             | `entries`                                                |                                                               |
-| `Indexed`, `ComponentTensor`, `IndexSum`             | `expression`, `indices`                                  |                                                               |
-| `AnnotatedExpression`                                | `expression`, `annotation`                               |                                                               |
-| `LebesgueIntegral`, `Composition`                    | `expression`, `domain`                                   |                                                               |
-| `Absolute`, `Conjugate`, `SquareRoot`, `Determinant` | `operand`                                                |                                                               |
-| `Sum`, `Product`, `Division`, `Power`                | `first`, `second`                                        |                                                               |
-| `Index`, `EllipsisIndex`                             | `label`                                                  |                                                               |
-| `AbstractCoordinateDomain`                           | `dimension`, in every concrete subclass such as `RD`     |                                                               |
-| `ParameterisedDomain`                                | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                               |
+| Class                                                   | Stored properties                                        | Derived properties                                            |
+| ------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------- |
+| `AbstractExpression`                                    |                                                          | `value_shape`, `free_indices`, `scalar_type`, `set`, `degree` |
+| `Integer`, `Float`                                      | `value`                                                  |                                                               |
+| `Zero`                                                  | `value_shape`, `free_indices`, `degree`                  |                                                               |
+| `Coordinate`                                            | `domain`                                                 |                                                               |
+| `Tensor`                                                | `entries`                                                |                                                               |
+| `Indexed`, `ComponentTensor`, `IndexSum`                | `expression`, `indices`                                  |                                                               |
+| `AnnotatedExpression`                                   | `expression`, `annotation`                               |                                                               |
+| `ExteriorDerivative`, `LebesgueIntegral`, `Composition` | `expression`, `domain`                                   |                                                               |
+| `Absolute`, `Conjugate`, `SquareRoot`, `Determinant`    | `operand`                                                |                                                               |
+| `Sum`, `Product`, `Division`, `Power`                   | `first`, `second`                                        |                                                               |
+| `Index`, `EllipsisIndex`                                | `label`                                                  |                                                               |
+| `AbstractCoordinateDomain`                              | `dimension`, in every concrete subclass such as `RD`     |                                                               |
+| `ParameterisedDomain`                                   | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                               |
 
 ## Extending the core
 
@@ -533,6 +535,7 @@ defined.
 | `Product`                                                                 | The degree `()`, or equal numbers of slots | The slotwise sum (see [Arithmetic](#arithmetic)) |
 | `AnnotatedExpression`                                                     | Any degree                                 | The degree of the wrapped expression             |
 | `Division`, `Power`, `Absolute`, `Conjugate`, `SquareRoot`, `Determinant` | The degree `()`                            | `()`                                             |
+| `ExteriorDerivative`                                                      | The degree `()` or `(k,)`                  | `(1,)` for `()`, and `(k + 1,)` for `(k,)`       |
 | `Tensor`                                                                  | Equal degrees                              | The degree of the entries                        |
 | `Indexed`, `ComponentTensor`, `IndexSum`                                  | Any degree                                 | The degree of the expression                     |
 | `Composition`, `LebesgueIntegral`                                         | The degree `()`, until forms are added     | `()`                                             |
@@ -1244,6 +1247,77 @@ Examples, with a matrix `A` of value shape `(2, 2)`:
   `transpose(A)` is annotated.
 
 ## Differentiation
+
+### ExteriorDerivative
+
+A concrete subclass of `AbstractExpression` for the exterior derivative
+$\mathrm{d}\omega$ of a form $\omega$ on a coordinate domain $P$.
+
+`ExteriorDerivative(f, P)` stores $f$ and $P$ and derives the value shape of
+$f$ and the set $P$. The free indices and the scalar type follow the general
+rule. `ExteriorDerivative(f, P)` requires a valid pair $(f, P)$ (see
+[LebesgueIntegral](#lebesgueintegral)). An $f$ with no set is a constant on
+$P$.
+
+The exterior derivative acts on forms with at most one slot. If $f$ has the
+degree `()`, the exterior derivative has the degree `(1,)`. If $f$ has the
+degree `(k,)`, the exterior derivative has the degree `(k + 1,)`. If $f$ has
+two or more slots, construction raises `ValueError`, because the exterior
+derivative of a double form needs a connection. A degree greater than the
+dimension of $P$ gives the zero form, as for [`Product`](#arithmetic).
+
+The exterior derivative acts on each component of an array-valued form, so
+the axes of the value shape pass through unchanged.
+
+No fixed composition of the other node classes differentiates, so
+`ExteriorDerivative` is a node class. `ExteriorDerivative` is lazy.
+Construction does not evaluate the derivative. The core transformation
+`apply_derivatives` evaluates the derivative with linearity, the graded
+Leibniz rule
+$\mathrm{d}(\alpha \wedge \beta) = \mathrm{d}\alpha \wedge \beta + (-1)^k \alpha \wedge \mathrm{d}\beta$
+for a $k$-form $\alpha$, and $\mathrm{d}\mathrm{d}\omega = 0$ (see
+[Applying derivatives](#applying-derivatives)). The exterior derivative of
+`Coordinate(P)` is the vector-valued 1-form $\mathrm{d}X$ and remains.
+
+Examples on $R^3$:
+
+```python
+P = RD(3)
+X = coordinate(P)
+x, y, z = X[0], X[1], X[2]
+
+def d(f):
+    return exterior_derivative(f, P)
+
+# The coordinate 1-forms, each with value shape () and the degree (1,).
+dx, dy, dz = d(x), d(y), d(z)
+
+# The coordinate coframe, with value shape (3,) and the degree (1,).
+dX = d(X)
+```
+
+A pass that applies the rules of `apply_derivatives` gives the familiar
+results of vector calculus:
+
+| Expression                                   | Degree | After a pass                                                               |
+| -------------------------------------------- | ------ | -------------------------------------------------------------------------- |
+| `d(x * y * z)`                               | `(1,)` | $yz \, \mathrm{d}x + xz \, \mathrm{d}y + xy \, \mathrm{d}z$, the gradient  |
+| `d(-y * dx + x * dy)`                        | `(2,)` | $2 \, \mathrm{d}x \wedge \mathrm{d}y$, the curl $(0, 0, 2)$                |
+| `d(x * dy * dz + y * dz * dx + z * dx * dy)` | `(3,)` | $3 \, \mathrm{d}x \wedge \mathrm{d}y \wedge \mathrm{d}z$, the divergence 3 |
+| `d(d(x * y * z))`                            | `(2,)` | The zero 2-form, because the curl of a gradient is zero                    |
+| `d(d(-y * dx + x * dy))`                     | `(3,)` | The zero 3-form, because the divergence of a curl is zero                  |
+| `d(Integer(1))`                              | `(1,)` | The zero 1-form, because a constant has no gradient                        |
+
+The second row is the reason that half the integral of
+$-y \, \mathrm{d}x + x \, \mathrm{d}y$ around a closed curve in the plane is
+the enclosed area, by Stokes' theorem.
+
+- `d(dx * dy * dz)` has the degree `(4,)` and is the zero form, because
+  `RD(3)` has dimension 3.
+- With a double form $S$ with the degree `(1, 1)`, such as a metric, `d(S)`
+  raises `ValueError`.
+- `exterior_derivative(X, RD(2))` raises `ValueError`, because `X` has the
+  set `RD(3)`.
 
 ### Identity
 
