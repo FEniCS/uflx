@@ -104,7 +104,9 @@ external library provides the concrete data behind the leaf nodes.
   function never removes structure that the user built. This rule binds the
   free functions of the core. A layer above the core may read value shapes to
   choose what to build, if the layer builds only objects of the core and
-  annotates the result.
+  annotates the result. A `EllipsisIndex` makes most tensor algebra a fixed
+  composition (see [EllipsisIndex](#ellipsisindex)), so the layer rarely needs to
+  read a value shape.
 
 - Simplifications and rewriting should be completely avoided during user graph
   construction, maintaining the user's intent. Only later selectable algorithmic
@@ -223,6 +225,7 @@ Base
 │   ├── Integer                           literal
 │   ├── Float                             literal
 │   ├── ImaginaryUnit                     literal
+│   ├── Zero                              zero of any shape, no set
 │   ├── Coordinate                        terminal, X on P
 │   ├── Tensor                            stacks entries along a new axis
 │   ├── Indexed                           full indexing, int or Index entries
@@ -242,6 +245,7 @@ Base
 │   └── Determinant
 │
 ├── Index                                 named by a label, not an expression
+├── EllipsisIndex                         covers any number of axes
 │
 ├── AbstractCoordinateDomain              parameter space, stores n
 │   └── RD                                R^n
@@ -256,35 +260,36 @@ objects in the graph. Operator overloads call the free functions.
 
 > LLM generated table.
 
-| Group                 | Free function                                                   | `AbstractExpression` overload | Takes                                                        | Returns                                                             |
-| --------------------- | --------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------- |
-| Arithmetic            | [`add(f, g)`](#arithmetic)                                      | `+`                           | `f, g: AbstractExpression`                                   | `Sum`                                                               |
-|                       | [`subtract(f, g)`](#arithmetic)                                 | `-`                           | `f, g: AbstractExpression`                                   | `AnnotatedExpression`: `Sum` of `f` and `negate(g)`                 |
-|                       | [`multiply(f, g)`](#arithmetic)                                 | `*`                           | `f, g: AbstractExpression`                                   | `Product`                                                           |
-|                       | [`divide(f, g)`](#arithmetic)                                   | `/`                           | `f, g: AbstractExpression`                                   | `Division`                                                          |
-|                       | [`negate(f)`](#arithmetic)                                      | unary `-`                     | `f: AbstractExpression`                                      | `AnnotatedExpression`: `Product` of `Integer(-1)` and `f`           |
-|                       | [`absolute(f)`](#arithmetic)                                    | `abs`                         | `f: AbstractExpression`                                      | `Absolute`                                                          |
-|                       | [`conjugate(f)`](#arithmetic)                                   |                               | `f: AbstractExpression`                                      | `Conjugate`                                                         |
-|                       | [`power(f, g)`](#arithmetic)                                    | `**`                          | `f, g: AbstractExpression`                                   | `Power`                                                             |
-| Elementary functions  | [`square_root(f)`](#elementary-functions-very-incomplete)       |                               | `f: AbstractExpression`                                      | `SquareRoot`                                                        |
-| Coordinate domains    | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain`                                | `Coordinate`                                                        |
-| Tensors and indexing  | [`tensor(entries)`](#tensor)                                    |                               | `entries: tuple[AbstractExpression, ...]`                    | `Tensor`                                                            |
-|                       | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple[int \| Index, ...]` | `Indexed`                                                           |
-| Index notation        | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                        | `Index`                                                             |
-|                       | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`        | `ComponentTensor`                                                   |
-|                       | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`        | `IndexSum`                                                          |
-| Annotation            | [`annotate(f, annotation)`](#annotation)                        |                               | `f: AbstractExpression`, `annotation: tuple`                 | `AnnotatedExpression`                                               |
-| Tensor algebra        | [`determinant(f)`](#determinant)                                |                               | `f: AbstractExpression`                                      | `Determinant`                                                       |
-|                       | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                      | `AnnotatedExpression`: `ComponentTensor`                            |
-|                       | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                   | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`           |
-| Differentiation       | [`gradient(f, P)`](#gradient)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`       | `Gradient`                                                          |
-| Parameterised domains | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression`  | `ParameterisedDomain`                                               |
-| Geometry              | [`jacobian(D)`](#geometry)                                      |                               | `D: ParameterisedDomain`                                     | `AnnotatedExpression`: `Gradient` of `D.parameterisation`           |
-|                       | [`metric(D)`](#geometry)                                        |                               | `D: ParameterisedDomain`                                     | `AnnotatedExpression`: `transpose(J) @ J`                           |
-|                       | [`measure_density(D)`](#geometry)                               |                               | `D: ParameterisedDomain`                                     | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$       |
-| Composition           | [`compose(f, D)`](#composition)                                 |                               | `f: AbstractExpression`, `D: ParameterisedDomain`            | `Composition`                                                       |
-| Integration           | [`lebesgue_integral(f, P)`](#lebesgueintegral)                  |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`       | `LebesgueIntegral`                                                  |
-|                       | [`integrate(f, D)`](#integrate)                                 |                               | `f: AbstractExpression`, `D: ParameterisedDomain`            | `AnnotatedExpression`: `LebesgueIntegral` over `D.parameter_domain` |
+| Group                 | Free function                                                   | `AbstractExpression` overload | Takes                                                       | Returns                                                             |
+| --------------------- | --------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------- |
+| Arithmetic            | [`add(f, g)`](#arithmetic)                                      | `+`                           | `f, g: AbstractExpression`                                  | `Sum`                                                               |
+|                       | [`subtract(f, g)`](#arithmetic)                                 | `-`                           | `f, g: AbstractExpression`                                  | `AnnotatedExpression`: `Sum` of `f` and `negate(g)`                 |
+|                       | [`multiply(f, g)`](#arithmetic)                                 | `*`                           | `f, g: AbstractExpression`                                  | `Product`                                                           |
+|                       | [`divide(f, g)`](#arithmetic)                                   | `/`                           | `f, g: AbstractExpression`                                  | `Division`                                                          |
+|                       | [`negate(f)`](#arithmetic)                                      | unary `-`                     | `f: AbstractExpression`                                     | `AnnotatedExpression`: `Product` of `Integer(-1)` and `f`           |
+|                       | [`absolute(f)`](#arithmetic)                                    | `abs`                         | `f: AbstractExpression`                                     | `Absolute`                                                          |
+|                       | [`conjugate(f)`](#arithmetic)                                   |                               | `f: AbstractExpression`                                     | `Conjugate`                                                         |
+|                       | [`power(f, g)`](#arithmetic)                                    | `**`                          | `f, g: AbstractExpression`                                  | `Power`                                                             |
+| Elementary functions  | [`square_root(f)`](#elementary-functions-very-incomplete)       |                               | `f: AbstractExpression`                                     | `SquareRoot`                                                        |
+| Coordinate domains    | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain`                               | `Coordinate`                                                        |
+| Tensors and indexing  | [`tensor(entries)`](#tensor)                                    |                               | `entries: tuple[AbstractExpression, ...]`                   | `Tensor`                                                            |
+|                       | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple`                   | `Indexed`                                                           |
+| Index notation        | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                       | `Index`                                                             |
+|                       | [`ellipsis_index(label)`](#ellipsisindex)                       |                               | `label: str \| tuple`                                       | `EllipsisIndex`                                                     |
+|                       | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `ComponentTensor`                                                   |
+|                       | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `IndexSum`                                                          |
+| Annotation            | [`annotate(f, annotation)`](#annotation)                        |                               | `f: AbstractExpression`, `annotation: tuple`                | `AnnotatedExpression`                                               |
+| Tensor algebra        | [`determinant(f)`](#determinant)                                |                               | `f: AbstractExpression`                                     | `Determinant`                                                       |
+|                       | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                     | `AnnotatedExpression`: `ComponentTensor`                            |
+|                       | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                  | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`           |
+| Differentiation       | [`gradient(f, P)`](#gradient)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Gradient`                                                          |
+| Parameterised domains | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression` | `ParameterisedDomain`                                               |
+| Geometry              | [`jacobian(D)`](#geometry)                                      |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `Gradient` of `D.parameterisation`           |
+|                       | [`metric(D)`](#geometry)                                        |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `transpose(J) @ J`                           |
+|                       | [`measure_density(D)`](#geometry)                               |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$       |
+| Composition           | [`compose(f, D)`](#composition)                                 |                               | `f: AbstractExpression`, `D: ParameterisedDomain`           | `Composition`                                                       |
+| Integration           | [`lebesgue_integral(f, P)`](#lebesgueintegral)                  |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `LebesgueIntegral`                                                  |
+|                       | [`integrate(f, D)`](#integrate)                                 |                               | `f: AbstractExpression`, `D: ParameterisedDomain`           | `AnnotatedExpression`: `LebesgueIntegral` over `D.parameter_domain` |
 
 Every overload in the table is a method of `AbstractExpression` (see
 [`AbstractExpression`](#abstractexpression)). No other class defines
@@ -315,6 +320,7 @@ rules in the section of the concrete class.
 | ---------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------- |
 | `AbstractExpression`                                 |                                                          | `value_shape`, `free_indices`, `scalar_type`, `set` |
 | `Integer`, `Float`                                   | `value`                                                  |                                                     |
+| `Zero`                                               | `value_shape`, `free_indices`                            |                                                     |
 | `Coordinate`                                         | `domain`                                                 |                                                     |
 | `Tensor`                                             | `entries`                                                |                                                     |
 | `Indexed`, `ComponentTensor`, `IndexSum`             | `expression`, `indices`                                  |                                                     |
@@ -322,7 +328,7 @@ rules in the section of the concrete class.
 | `Gradient`, `LebesgueIntegral`, `Composition`        | `expression`, `domain`                                   |                                                     |
 | `Absolute`, `Conjugate`, `SquareRoot`, `Determinant` | `operand`                                                |                                                     |
 | `Sum`, `Product`, `Division`, `Power`                | `first`, `second`                                        |                                                     |
-| `Index`                                              | `label`                                                  |                                                     |
+| `Index`, `EllipsisIndex`                             | `label`                                                  |                                                     |
 | `AbstractCoordinateDomain`                           | `dimension`, in every concrete subclass such as `RD`     |                                                     |
 | `ParameterisedDomain`                                | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                     |
 
@@ -423,13 +429,10 @@ A downstream library builds a new operation from existing node classes, as a
 free function. A free function above the core may read value shapes to choose
 the composition (see
 [Basic implementation principles](#basic-implementation-principles)), and
-annotates the result. For example:
-
-- `scale(a, T)` reads the rank of `T` and returns
-  `component_tensor(a * T[i, j], (i, j))` for a matrix, annotated with
-  `("scale", a, T)`.
-- `trace(A)` reads the extent $n$ of `A` and returns the sum of the diagonal
-  entries `A[0, 0] + ... + A[n - 1, n - 1]`, annotated with `("trace", A)`.
+annotates the result. For example, `trace(A)` reads the extent $n$ of `A` and
+returns the sum of the diagonal entries `A[0, 0] + ... + A[n - 1, n - 1]`,
+annotated with `("trace", A)`. An operation that a `EllipsisIndex` expresses, such
+as `scale(a, T)`, needs no value shape (see [EllipsisIndex](#ellipsisindex)).
 
 A library node class that a pass replaces by node classes of the core gives
 nothing that the free function does not give, and no transformation of the
@@ -499,7 +502,9 @@ class AbstractExpression(Base, ABC):
 
     @property
     @abstractmethod
-    def free_indices(self) -> tuple[tuple[Index, int], ...]:
+    def free_indices(
+        self,
+    ) -> tuple[tuple[Index | EllipsisIndex, int | tuple[int, ...]], ...]:
         """The free indices and extents, in order of first occurrence."""
 
     @property
@@ -616,6 +621,11 @@ integers rounds once, the same as the conversion of a rational number, so the
 core has no rational literal. A complex number is a composition such as
 `a + ImaginaryUnit() * b`, so the core has no complex literal.
 
+`Zero(value_shape, free_indices)` is the zero with the given value shape and
+free indices, and has no set. A differentiation pass produces `Zero`. No fixed
+composition gives a zero with free indices, because `Integer(0) * a[i]` has
+edges to `a`, so `Zero` is a node class.
+
 #### Numbers in expressions
 
 Every number in an expression is written with literals, such as `Integer(2)`,
@@ -641,8 +651,9 @@ Examples, with `X = coordinate(RD(2))`:
 Both operands must have value shape `()`, or construction raises
 `ValueError`, and the result has value shape `()`. Free indices pass through
 arithmetic (see [Free indices](#free-indices)), so tensor arithmetic is
-written in index notation. For example, a scalar `a` times a matrix `T` is
-`component_tensor(a * T[i, j], (i, j))`.
+written in index notation. For example, a scalar `a` times a tensor `T` of any
+rank is `component_tensor(a * T[r], (r,))`, with `r` a
+[EllipsisIndex](#ellipsisindex).
 
 | Class      | Free function | Overload |
 | ---------- | ------------- | -------- |
@@ -816,28 +827,34 @@ tensor-valued expression.
 
 `Indexed(expression, indices)` stores:
 
-- The expression, an `AbstractExpression` of rank $r \ge 1$.
-- The indices, a `tuple` of $r$ entries. Each entry is an `int` or an `Index`
-  (see [Index notation](#index-notation)).
+- The expression, an `AbstractExpression` of rank $r$.
+- The indices, a `tuple` of entries. Each entry is an `int`, an `Index` or a
+  `EllipsisIndex` (see [Index notation](#index-notation)). At most one entry is a
+  `EllipsisIndex`.
 
-Indexing is full indexing only. The number of indices must equal the rank $r$
-of the expression. Each `int` entry $i_j$ must satisfy $0 \le i_j < n_j$, where
-`(n_0, ..., n_{r-1})` is the value shape of the expression. Each `Index` entry
-$i_j$ takes the extent $n_j$.
+Indexing is full indexing only. Each `int` and each `Index` entry covers one
+axis, and a `EllipsisIndex` entry covers every axis that the other entries do not
+cover. Without a `EllipsisIndex`, the number of entries must equal $r$. With a
+`EllipsisIndex`, the number of other entries must be at most $r$. Each `int` entry
+$i_j$ must satisfy $0 \le i_j < n_j$, where `(n_0, ..., n_{r-1})` is the value
+shape of the expression. Each `Index` entry $i_j$ takes the extent $n_j$. A
+`EllipsisIndex` takes the `tuple` of the extents of the axes that the `EllipsisIndex`
+covers.
 
 `Indexed(expression, indices)` derives the value shape `()`, the set of the
-expression, and the free indices of the expression followed by the `Index`
-entries.
+expression, and the free indices of the expression followed by the `Index` and
+`EllipsisIndex` entries.
 
 `X[0]` and `A[0, 1]` are `indexed(X, (0,))` and `indexed(A, (0, 1))`.
 Construction of `Indexed` raises:
 
-| Error        | Cause                                                                                           |
-| ------------ | ----------------------------------------------------------------------------------------------- |
-| `TypeError`  | An entry that is neither exactly `int` nor `Index`.                                             |
-| `IndexError` | A number of indices that differs from the rank. An expression with value shape `()` has rank 0. |
-| `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                        |
-| `ValueError` | An `Index` that occurs twice, or that is already free.                                          |
+| Error        | Cause                                                                                                     |
+| ------------ | --------------------------------------------------------------------------------------------------------- |
+| `TypeError`  | An entry that is neither exactly `int`, `Index` nor `EllipsisIndex`.                                      |
+| `IndexError` | A number of entries that does not cover exactly the rank. An expression with value shape `()` has rank 0. |
+| `ValueError` | More than one `EllipsisIndex` entry.                                                                      |
+| `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                                  |
+| `ValueError` | An `Index` that occurs twice, or that is already free.                                                    |
 
 A negative index is rejected rather than converted, so the stored indices are
 always the indices that the user wrote.
@@ -886,6 +903,32 @@ a derived index is fresh with respect to the operands, and the free function
 does not inspect the operands to find a fresh index. A global counter is not
 allowed, because a counter makes construction depend on global state.
 
+### EllipsisIndex
+
+A concrete subclass of the base object for an index that covers any number of
+axes. A `EllipsisIndex` is not an expression. `EllipsisIndex(label)` stores the label,
+with the same rules as the label of an `Index`.
+
+A `EllipsisIndex` covers every axis of an `Indexed` that the other entries do not
+cover, so a `EllipsisIndex` may cover no axis. The extent of a `EllipsisIndex` is the
+`tuple` of the extents of the covered axes. In every other rule of index
+notation, a `EllipsisIndex` behaves as an `Index`.
+
+A `EllipsisIndex` writes an operation on tensors of every rank as one fixed
+composition. With derived ellipsis indices `r` and `s`, an ordinary index `k`, and
+annotations omitted:
+
+| Operation          | Fixed composition                                              |
+| ------------------ | -------------------------------------------------------------- |
+| `scale(a, T)`      | `component_tensor(a * T[r], (r,))`                             |
+| tensor sum `A + B` | `component_tensor(A[r] + B[r], (r,))`                          |
+| `outer(u, v)`      | `component_tensor(u[r] * v[s], (r, s))`                        |
+| `dot(u, v)`        | `component_tensor(index_sum(u[r, k] * v[k, s], (k,)), (r, s))` |
+| `inner(A, B)`      | `index_sum(A[r] * conjugate(B[r]), (r,))`                      |
+
+`A[r] + B[r]` raises `ValueError` if the value shapes of `A` and `B` differ,
+because the extents of `r` differ.
+
 *Downsides:* expressions that differ only by bound-index labels are not equal
 and are not shared, every substitution must avoid capturing indices, and
 derived indices enlarge the graph. There are well-established algorithms
@@ -894,7 +937,8 @@ for simplifying these expressions
 ### Free indices
 
 Every `AbstractExpression` derives the free indices, a `tuple` of pairs of an
-`Index` and an extent. The order is the order of first occurrence, never the
+`Index` and an `int` extent, or of a `EllipsisIndex` and a `tuple` extent. The
+order is the order of first occurrence, never the
 order of a `set`.
 
 Unless a node class states otherwise, the free indices of a node are the free
@@ -922,14 +966,15 @@ the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], (i,))`.
 `ComponentTensor(expression, indices)` turns the indices into tensor axes.
 `IndexSum(expression, indices)` sums over the indices.
 
-Both store a scalar expression and a non-empty `tuple` of distinct `Index`es
-that are free in the expression. Construction raises `ValueError` if the
-expression is not scalar, if the indices are empty, if an index is repeated, or
-if an index is not free in the expression. Both derive the free indices of the
-expression without the bound indices.
+Both store a scalar expression and a non-empty `tuple` of distinct `Index` and
+`EllipsisIndex` entries that are free in the expression. Construction raises
+`ValueError` if the expression is not scalar, if the indices are empty, if an
+index is repeated, or if an index is not free in the expression. Both derive the
+free indices of the expression without the bound indices.
 
 `ComponentTensor` derives the value shape from the extents of the indices, in
-the order of the indices. `IndexSum` derives the value shape `()`.
+the order of the indices. A `EllipsisIndex` contributes every extent in the
+`tuple` extent of the `EllipsisIndex`. `IndexSum` derives the value shape `()`.
 
 One `IndexSum` holds a whole contraction, such as the sum over both indices of
 `A[i, j] * B[i, j]`. A pass that chooses the order of summation then finds the
@@ -1067,7 +1112,7 @@ Examples, with `X = coordinate(RD(2))`:
 
 ### ParameterisedDomain
 
-A concrete subclass of `Base`, and the only class of domain in the core.
+A concrete subclass of `Base`.
 
 The domain $D$ = `ParameterisedDomain(P, psi, Q)` stores:
 
@@ -1347,7 +1392,8 @@ induced measure $\mu_D$. `integrate(f, D)` is
 `("integrate", f, D)`. The free function is the definition above, written as a
 fixed composition. Arithmetic is scalar, so $f$ is a scalar, possibly with free
 indices. A tensor-valued integral is written in index notation, such as
-`component_tensor(integrate(f[i], D), (i,))`.
+`component_tensor(integrate(f[r], D), (r,))`, with `r` a
+[EllipsisIndex](#ellipsisindex).
 
 Most users will use this method.
 
@@ -1391,9 +1437,9 @@ $p$. `compose(f, p)` is an expression on `RD(0)`, and the integral has no set,
 so the integral combines with any expression.
 
 The value of a tensor-valued expression at a point is written in index
-notation, because `integrate` takes a scalar. For $f$ of value shape `(m,)`,
-the value at $p$ is `component_tensor(integrate(compose(f, p)[i], p), (i,))`.
-A layer above the core may read the rank of $f$ to build this composition.
+notation, because `integrate` takes a scalar. For $f$ of any value shape, the
+value at $p$ is `component_tensor(integrate(compose(f, p)[r], p), (r,))`, with
+`r` a [EllipsisIndex](#ellipsisindex).
 
 > Alternative: `lebesgue_integral(compose(f, p), RD(0))` gives the
 > tensor-valued value directly, because the measure density of a point is 1.
