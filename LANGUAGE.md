@@ -15,9 +15,12 @@ In one sentence:
 > UFLx is a typed symbolic language for writing variational forms.
 
 The UFLx core language (henceforth the core) should not use finite element or
-numerical analysis terminology - differential geometry, and functional analysis,
-and their intersection, without finite element (numerical analysis) concepts,
-should be all that is required.
+numerical analysis terminology - differential geometry, and functional
+analysis, and their intersection, without finite element (numerical analysis)
+concepts, should be all that is required. This draft of the scheme requires
+knowledge of calculus on intrinsic manifolds, i.e. a coordinate-free
+representation. This provides a very compact and dimension-free representation
+of many concepts already in FEniCS.
 
 Finite element and numerical analysis concepts, when necessary, will be added
 on top of the core, or provided by external libraries (Basix being the
@@ -461,6 +464,7 @@ of the core.
 
 ### Language extensions
 
+
 A language extension adds node classes that are not leaves, in a package
 outside the core. Each node class of a language extension provides, as part
 of the class:
@@ -476,11 +480,15 @@ a node class without a lowering, every pass without a rule raises
 `TypeError`. A rule must agree with the lowering followed by the rules for the
 lowered expression, up to mathematical equality.
 
-For example, a language extension for external operators adds a node class
-for an operation known only by name, such as `exp`, a material law or a neural
-network. The rule for `apply_derivatives` differentiates the node class. The
-rule for `expand_compositions` composes the operands, because the operation is
-pointwise. The node class has no lowering.
+UFLx core is likely to include its own language extensions, such as UFL
+compatibility layers and a simpler layer based on classical notions of
+differential geometry compatible with most engineering and physics syllabus.
+
+For example, a language extension for local external operators adds a node
+class for an operation known only by name, such as `exp`, a material law or a
+neural network. The rule for `apply_derivatives` differentiates the node class.
+The rule for `expand_compositions` composes the operands, because the operation
+is pointwise. The node class has no lowering.
 
 ## The lowest objects
 
@@ -508,9 +516,28 @@ scalar type, the set and the degree of the expression.
 - The degree is a `tuple` with the form degree of each slot of the expression,
   and every entry is at least 1. An expression with the degree `()` has no
   slots and is a 0-form, such as a scalar or an array. The axes of the value
-  shape are not slots. Unless a node class states otherwise, every edge
-  of a node that is an expression must have the degree `()`, or construction
-  raises `ValueError`, and the node has the degree `()`.
+  shape are not slots. The degree has no default. Every concrete class states
+  the degree of the class, and a leaf class of a downstream library states the
+  degree as part of the contract of the class (see
+  [New subclasses](#new-subclasses)).
+
+The degree of every node class of the core is in the following table. If the
+degree of an edge breaks the rule of the node, construction raises
+`ValueError`. A rule that requires the degree `()` of an edge is a deliberate
+statement, such as for `SquareRoot`, because the square root of a form is not
+defined.
+
+| Class                                                                                 | Edges that are expressions must have       | Degree of the node                               |
+| ------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------ |
+| `Integer`, `Float`, `ImaginaryUnit`, `Coordinate`                                     | No such edges                              | `()`                                             |
+| `Zero`                                                                                | No such edges                              | The stored degree                                |
+| `Sum`                                                                                 | Equal degrees                              | The degree of the operands                       |
+| `Product`                                                                             | The degree `()`, or equal numbers of slots | The slotwise sum (see [Arithmetic](#arithmetic)) |
+| `AnnotatedExpression`                                                                 | Any degree                                 | The degree of the wrapped expression             |
+| `Division`, `Power`, `Absolute`, `Conjugate`, `SquareRoot`, `Determinant`, `Gradient` | The degree `()`                            | `()`                                             |
+| `Tensor`                                                                              | Equal degrees                              | The degree of the entries                        |
+| `Indexed`, `ComponentTensor`, `IndexSum`                                              | Any degree                                 | The degree of the expression                     |
+| `Composition`, `LebesgueIntegral`                                                     | The degree `()`, until forms are added     | `()`                                             |
 
 Examples of the degree, on $R^3$ with the coordinate function $X$, the
 coordinates $x, y, z$ and a scalar function $f$. The forms are written in
@@ -659,7 +686,7 @@ def add(first: AbstractExpression, second: AbstractExpression) -> Sum:
 
 A literal is a number written down in an expression, e.g. `Integer(2) * u`. A
 literal's value is part of the expression itself. Every literal has value shape
-`()`, no free indices and no set.
+`()`, no free indices, no set and the degree `()`.
 
 The literals are concrete subclasses of `AbstractExpression`:
 
@@ -741,8 +768,8 @@ the degree `()` adds 0 to every slot, so $f \wedge \omega = f \omega$. If both
 operands have a non-empty degree, the two degrees must have the same number of
 slots, or construction raises `ValueError`. A slot of the result may have a
 degree greater than the dimension of the set, and then the result is the zero
-form. `Division` and `Power` follow the default rule for the degree (see
-[`AbstractExpression`](#abstractexpression)).
+form. The degree rules of the other node classes are in
+[`AbstractExpression`](#abstractexpression).
 
 The wedge product is graded commutative,
 $\alpha \wedge \beta = (-1)^{kl} \beta \wedge \alpha$ for a $k$-form $\alpha$
@@ -878,7 +905,10 @@ that maps each point of $P$ to the $n$-tuple of that point:
 
 $X : P \to R^n$, $X(p) = p$.
 
-`Coordinate(P)` stores the coordinate domain $P$ and derives the value shape `(n,)` and the set $P$.
+`Coordinate(P)` stores the coordinate domain $P$ and derives the value shape
+`(n,)`, the set $P$ and the degree `()`. The coordinate function is a 0-form.
+The 1-forms $\mathrm{d}X_i$ come from the exterior derivative, not from
+`Coordinate`.
 
 Only coordinate domains provide a coordinate function. The coordinates of the
 points of a domain are given by the parameterisation of the domain (see
@@ -901,9 +931,12 @@ A concrete subclass of `AbstractExpression` that stacks expressions along a
 new first axis.
 
 `Tensor(entries)` stores the entries, a non-empty `tuple` of
-`AbstractExpression`s that all have the same value shape `s`, or construction
-raises `ValueError`. `Tensor(entries)` derives the value shape `(n,) + s`, with
-$n$ the number of entries. A matrix is a `Tensor` of `Tensor`s.
+`AbstractExpression`s that all have the same value shape `s` and the same
+degree, or construction raises `ValueError`. `Tensor(entries)` derives the
+value shape `(n,) + s`, with $n$ the number of entries, and the degree of the
+entries. A matrix is a `Tensor` of `Tensor`s. A `Tensor` of forms is an
+array-valued form, so the new axis is an axis of the value shape and never a
+slot.
 
 A value shape may contain the extent 0, for example the value shape `(0,)` of
 the coordinate function of `RD(0)`. `Tensor` cannot build an expression with
@@ -912,6 +945,9 @@ the extent 0, because an empty `tuple` has no entry to give `s`.
 Examples, with `zero, one, two = Integer(0), Integer(1), Integer(2)`:
 
 - `tensor((one, two))` has value shape `(2,)` and no set.
+- With the 1-forms $\mathrm{d}x$ and $\mathrm{d}y$ on `RD(2)`,
+  `tensor((dx, dy))` has value shape `(2,)` and the degree `(1,)`, and is the
+  vector-valued 1-form $\mathrm{d}X$.
 - `tensor((tensor((one, zero)), tensor((zero, one))))` has value shape
   `(2, 2)` and no set.
 - With `r0 = Float(0.0)` and `r1 = Float(1.0)`,
@@ -920,6 +956,8 @@ Examples, with `zero, one, two = Integer(0), Integer(1), Integer(2)`:
 - `tensor((tensor((one, two)),))` has value shape `(1, 2)`.
 - `tensor((one, tensor((one, two))))` raises `ValueError`, because the value
   shapes of the entries differ.
+- `tensor((one, dx))` raises `ValueError`, because the degrees of the entries
+  differ.
 
 ### Indexed
 
@@ -945,8 +983,10 @@ shape of the expression. Each `Index` entry $i_j$ takes the extent $n_j$. A
 covers.
 
 `Indexed(expression, indices)` derives the value shape `()`, the set of the
-expression, and the free indices of the expression followed by the `Index` and
-`EllipsisIndex` entries.
+expression, the degree of the expression, and the free indices of the
+expression followed by the `Index` and `EllipsisIndex` entries. The rank $r$
+counts the axes of the value shape only. The indices select axes of the value
+shape and never a slot, so the slots of a form cannot be indexed.
 
 `X[0]` and `A[0, 1]` are `indexed(X, (0,))` and `indexed(A, (0, 1))`.
 Construction of `Indexed` raises:
@@ -971,6 +1011,8 @@ Examples:
 - `tensor((Integer(1) - X[0], X[0]))` has value shape `(2,)` and the set
   `RD(2)`.
 - `tensor((tensor((X[0], X[1])),))` has value shape `(1, 2)`.
+- For the vector-valued 1-form `dX = tensor((dx, dy))` on `RD(2)`, `dX[0]` is
+  the 1-form $\mathrm{d}x$, with value shape `()` and the degree `(1,)`.
 - In the paraboloid example, the height `X[0]**Integer(2) + X[1]**Integer(2)`
   is an expression on `RD(2)` with value shape `()`.
 
@@ -1076,7 +1118,10 @@ Both store a scalar expression and a non-empty `tuple` of distinct `Index` and
 `EllipsisIndex` entries that are free in the expression. Construction raises
 `ValueError` if the expression is not scalar, if the indices are empty, if an
 index is repeated, or if an index is not free in the expression. Both derive the
-free indices of the expression without the bound indices.
+free indices of the expression without the bound indices, and the degree of the
+expression. The indices bind axes of the value shape, so a `ComponentTensor` of
+a form is an array-valued form, and an `IndexSum` of forms is a sum of forms of
+the same degree.
 
 `ComponentTensor` derives the value shape from the extents of the indices, in
 the order of the indices. A `EllipsisIndex` contributes every extent in the
@@ -1097,6 +1142,10 @@ shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
   entries of `A`, with no free indices.
 - `component_tensor(A[i, j], (j, i))` has value shape `(2, 2)` and is the
   transpose of `A`, written with user indices.
+- With the vector-valued 1-form `dX` of value shape `(3,)` and the degree
+  `(1,)`, `index_sum(a[i] * dX[i], (i,))` is the 1-form
+  $a_0 \mathrm{d}x + a_1 \mathrm{d}y + a_2 \mathrm{d}z$, with the degree
+  `(1,)`.
 - `a[i] + b[j]` raises `ValueError`, because the free indices differ.
 - `A[i, i]` raises `ValueError`, because `i` occurs twice.
 
