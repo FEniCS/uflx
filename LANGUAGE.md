@@ -318,21 +318,21 @@ rules in the section of the concrete class.
 
 > LLM generated table.
 
-| Class                                                | Stored properties                                        | Derived properties                                  |
-| ---------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------- |
-| `AbstractExpression`                                 |                                                          | `value_shape`, `free_indices`, `scalar_type`, `set` |
-| `Integer`, `Float`                                   | `value`                                                  |                                                     |
-| `Zero`                                               | `value_shape`, `free_indices`                            |                                                     |
-| `Coordinate`                                         | `domain`                                                 |                                                     |
-| `Tensor`                                             | `entries`                                                |                                                     |
-| `Indexed`, `ComponentTensor`, `IndexSum`             | `expression`, `indices`                                  |                                                     |
-| `AnnotatedExpression`                                | `expression`, `annotation`                               |                                                     |
-| `Gradient`, `LebesgueIntegral`, `Composition`        | `expression`, `domain`                                   |                                                     |
-| `Absolute`, `Conjugate`, `SquareRoot`, `Determinant` | `operand`                                                |                                                     |
-| `Sum`, `Product`, `Division`, `Power`                | `first`, `second`                                        |                                                     |
-| `Index`, `EllipsisIndex`                             | `label`                                                  |                                                     |
-| `AbstractCoordinateDomain`                           | `dimension`, in every concrete subclass such as `RD`     |                                                     |
-| `ParameterisedDomain`                                | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                     |
+| Class                                                | Stored properties                                        | Derived properties                                            |
+| ---------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------- |
+| `AbstractExpression`                                 |                                                          | `value_shape`, `free_indices`, `scalar_type`, `set`, `degree` |
+| `Integer`, `Float`                                   | `value`                                                  |                                                               |
+| `Zero`                                               | `value_shape`, `free_indices`                            |                                                               |
+| `Coordinate`                                         | `domain`                                                 |                                                               |
+| `Tensor`                                             | `entries`                                                |                                                               |
+| `Indexed`, `ComponentTensor`, `IndexSum`             | `expression`, `indices`                                  |                                                               |
+| `AnnotatedExpression`                                | `expression`, `annotation`                               |                                                               |
+| `Gradient`, `LebesgueIntegral`, `Composition`        | `expression`, `domain`                                   |                                                               |
+| `Absolute`, `Conjugate`, `SquareRoot`, `Determinant` | `operand`                                                |                                                               |
+| `Sum`, `Product`, `Division`, `Power`                | `first`, `second`                                        |                                                               |
+| `Index`, `EllipsisIndex`                             | `label`                                                  |                                                               |
+| `AbstractCoordinateDomain`                           | `dimension`, in every concrete subclass such as `RD`     |                                                               |
+| `ParameterisedDomain`                                | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                               |
 
 ## Extending the core
 
@@ -492,7 +492,7 @@ expression. An expression with no set denotes a single array.
 #### `AbstractExpression`
 
 Every `AbstractExpression` derives the value shape, the free indices, the
-scalar type and the set of the expression.
+scalar type, the set and the degree of the expression.
 
 - The set is an `AbstractCoordinateDomain`. The set is absent for an expression
   with no set, such as a literal. Unless a node class states otherwise, the set
@@ -502,6 +502,38 @@ scalar type and the set of the expression.
 - The scalar type is real or complex. Unless a node class states otherwise, an
   expression is complex if and only if at least one edge is a complex
   expression. `ImaginaryUnit` is complex.
+- The degree is a `tuple` with the form degree of each slot of the expression,
+  and every entry is at least 1. An expression with the degree `()` has no
+  slots and is a 0-form, such as a scalar or an array. The axes of the value
+  shape are not slots. Unless a node class states otherwise, every edge
+  of a node that is an expression must have the degree `()`, or construction
+  raises `ValueError`, and the node has the degree `()`.
+
+Examples of the degree, on $R^3$ with the coordinate function $X$, the
+coordinates $x, y, z$ and a scalar function $f$. The forms are written in
+mathematical notation, because the node classes that build forms, such as the
+exterior derivative and the wedge product, are not yet defined. Only the rows
+with the degree `()` are expressions of the current core.
+
+| Object                                                                     | Value shape | Degree   |
+| -------------------------------------------------------------------------- | ----------- | -------- |
+| The scalar $f$, or the literal `Integer(1)`                                | `()`        | `()`     |
+| The coordinate function `X`                                                | `(3,)`      | `()`     |
+| The array of partial derivatives `gradient(f, RD(3))`                      | `(3,)`      | `()`     |
+| The 1-form $\mathrm{d}f$                                                   | `()`        | `(1,)`   |
+| The 1-form $\mathrm{d}x$                                                   | `()`        | `(1,)`   |
+| The 2-form $\mathrm{d}x \wedge \mathrm{d}y$                                | `()`        | `(2,)`   |
+| The volume form $\mathrm{d}x \wedge \mathrm{d}y \wedge \mathrm{d}z$        | `()`        | `(3,)`   |
+| The vector-valued 1-form $\mathrm{d}X$, with one 1-form for each component | `(3,)`      | `(1,)`   |
+| The double form $\mathrm{d}x \otimes \mathrm{d}y$, a covariant 2-tensor    | `()`        | `(1, 1)` |
+
+`gradient(f, RD(3))` and $\mathrm{d}f$ hold the same three numbers. The
+gradient stores the numbers in an axis of the value shape, and
+$\mathrm{d}f$ stores the numbers in a slot. Composition with a domain $D$
+evaluates the numbers of the gradient at the points $\psi(p)$ unchanged. The
+pull-back of $\mathrm{d}f$ by $\psi$ also multiplies the numbers by the
+transpose of the Jacobian of $\psi$. The value shape counts the components of
+an expression, and the degree states how the expression transforms.
 
 An operator overload calls the free function with the operands unchanged, and
 the constructor validates (see [Numbers in expressions](#numbers-in-expressions)).
@@ -540,6 +572,11 @@ class AbstractExpression(Base, ABC):
     @abstractmethod
     def set(self) -> AbstractCoordinateDomain | None:
         """The set of the expression, or None for an expression with no set."""
+
+    @property
+    @abstractmethod
+    def degree(self) -> tuple[int, ...]:
+        """The form degree of each slot, with every entry at least 1."""
 
     # Operator overloading must be in the class.
     def __add__(self, other: AbstractExpression) -> AbstractExpression:
