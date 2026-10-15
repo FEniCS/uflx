@@ -237,7 +237,8 @@ Base
 │   ├── IndexSum                          sums over bound indices
 │   ├── AnnotatedExpression               identity
 │   ├── ExteriorDerivative                d with respect to P
-│   ├── Composition                       f composed with a domain, set P of the domain
+│   ├── Components                        first slot to an axis, with the frame of P
+│   ├── PullBack                          pull-back of a form by a domain, set P of the domain
 │   ├── LebesgueIntegral                  Lebesgue integral over P, no set
 │   ├── Sum                               +
 │   ├── Product                           *, the wedge product
@@ -287,12 +288,13 @@ objects in the graph. Operator overloads call the free functions.
 |                       | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                     | `AnnotatedExpression`: `ComponentTensor`                            |
 |                       | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                  | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`           |
 | Differentiation       | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `ExteriorDerivative`                                                |
+|                       | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Components`                                                        |
 |                       | [`identity(P)`](#identity)                                      |                               | `P: AbstractCoordinateDomain`                               | `AnnotatedExpression`: `Gradient` of `coordinate(P)`                |
 | Parameterised domains | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression` | `ParameterisedDomain`                                               |
 | Geometry              | [`jacobian(D)`](#geometry)                                      |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `Gradient` of `D.parameterisation`           |
 |                       | [`metric(D)`](#geometry)                                        |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `transpose(J) @ J`                           |
 |                       | [`measure_density(D)`](#geometry)                               |                               | `D: ParameterisedDomain`                                    | `AnnotatedExpression`: `SquareRoot` of the determinant of $g$       |
-| Composition           | [`compose(f, D)`](#composition)                                 |                               | `f: AbstractExpression`, `D: ParameterisedDomain`           | `Composition`                                                       |
+| Pull-back             | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain`           | `PullBack`                                                          |
 | Integration           | [`lebesgue_integral(f, P)`](#lebesgueintegral)                  |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `LebesgueIntegral`                                                  |
 |                       | [`integrate(f, D)`](#integrate)                                 |                               | `f: AbstractExpression`, `D: ParameterisedDomain`           | `AnnotatedExpression`: `LebesgueIntegral` over `D.parameter_domain` |
 
@@ -321,21 +323,21 @@ rules in the section of the concrete class.
 
 > LLM generated table.
 
-| Class                                                   | Stored properties                                        | Derived properties                                            |
-| ------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------- |
-| `AbstractExpression`                                    |                                                          | `value_shape`, `free_indices`, `scalar_type`, `set`, `degree` |
-| `Integer`, `Float`                                      | `value`                                                  |                                                               |
-| `Zero`                                                  | `value_shape`, `free_indices`, `degree`                  |                                                               |
-| `Coordinate`                                            | `domain`                                                 |                                                               |
-| `Tensor`                                                | `entries`                                                |                                                               |
-| `Indexed`, `ComponentTensor`, `IndexSum`                | `expression`, `indices`                                  |                                                               |
-| `AnnotatedExpression`                                   | `expression`, `annotation`                               |                                                               |
-| `ExteriorDerivative`, `LebesgueIntegral`, `Composition` | `expression`, `domain`                                   |                                                               |
-| `Absolute`, `Conjugate`, `SquareRoot`, `Determinant`    | `operand`                                                |                                                               |
-| `Sum`, `Product`, `Division`, `Power`                   | `first`, `second`                                        |                                                               |
-| `Index`, `EllipsisIndex`                                | `label`                                                  |                                                               |
-| `AbstractCoordinateDomain`                              | `dimension`, in every concrete subclass such as `RD`     |                                                               |
-| `ParameterisedDomain`                                   | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                               |
+| Class                                                              | Stored properties                                        | Derived properties                                            |
+| ------------------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------- |
+| `AbstractExpression`                                               |                                                          | `value_shape`, `free_indices`, `scalar_type`, `set`, `degree` |
+| `Integer`, `Float`                                                 | `value`                                                  |                                                               |
+| `Zero`                                                             | `value_shape`, `free_indices`, `degree`                  |                                                               |
+| `Coordinate`                                                       | `domain`                                                 |                                                               |
+| `Tensor`                                                           | `entries`                                                |                                                               |
+| `Indexed`, `ComponentTensor`, `IndexSum`                           | `expression`, `indices`                                  |                                                               |
+| `AnnotatedExpression`                                              | `expression`, `annotation`                               |                                                               |
+| `ExteriorDerivative`, `Components`, `LebesgueIntegral`, `PullBack` | `expression`, `domain`                                   |                                                               |
+| `Absolute`, `Conjugate`, `SquareRoot`, `Determinant`               | `operand`                                                |                                                               |
+| `Sum`, `Product`, `Division`, `Power`                              | `first`, `second`                                        |                                                               |
+| `Index`, `EllipsisIndex`                                           | `label`                                                  |                                                               |
+| `AbstractCoordinateDomain`                                         | `dimension`, in every concrete subclass such as `RD`     |                                                               |
+| `ParameterisedDomain`                                              | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                               |
 
 ## Extending the core
 
@@ -487,8 +489,8 @@ differential geometry compatible with most engineering and physics syllabus.
 For example, a language extension for local external operators adds a node
 class for an operation known only by name, such as `exp`, a material law or a
 neural network. The rule for `apply_derivatives` differentiates the node class.
-The rule for `expand_compositions` composes the operands, because the operation
-is pointwise. The node class has no lowering.
+The rule for `expand_pull_backs` pulls back the operands, because the
+operation is pointwise. The node class has no lowering.
 
 ## The lowest objects
 
@@ -536,9 +538,11 @@ defined.
 | `AnnotatedExpression`                                                     | Any degree                                 | The degree of the wrapped expression             |
 | `Division`, `Power`, `Absolute`, `Conjugate`, `SquareRoot`, `Determinant` | The degree `()`                            | `()`                                             |
 | `ExteriorDerivative`                                                      | The degree `()` or `(k,)`                  | `(1,)` for `()`, and `(k + 1,)` for `(k,)`       |
+| `Components`                                                              | At least one slot                          | The first slot lowered by 1, and removed at 0    |
 | `Tensor`                                                                  | Equal degrees                              | The degree of the entries                        |
 | `Indexed`, `ComponentTensor`, `IndexSum`                                  | Any degree                                 | The degree of the expression                     |
-| `Composition`, `LebesgueIntegral`                                         | The degree `()`, until forms are added     | `()`                                             |
+| `PullBack`                                                                | Any degree                                 | The degree of the expression                     |
+| `LebesgueIntegral`                                                        | The degree `()`, until forms are added     | `()`                                             |
 
 Examples of the degree, on $R^3$ with the coordinate function $X$, the
 coordinates $x, y, z$ and a scalar function $f$. The forms are written in
@@ -1319,6 +1323,57 @@ the enclosed area, by Stokes' theorem.
 - `exterior_derivative(X, RD(2))` raises `ValueError`, because `X` has the
   set `RD(3)`.
 
+### Components
+
+A concrete subclass of `AbstractExpression` that turns the first slot of a form
+into an axis of the value shape, with the coordinate frame of a coordinate
+domain $P$ of dimension $n$.
+
+`Components(f, P)` stores $f$ and $P$ and derives the set $P$. The free
+indices and the scalar type follow the general rule. `Components(f, P)`
+requires a valid pair $(f, P)$ (see [LebesgueIntegral](#lebesgueintegral)),
+and $f$ must have at least one slot, or construction raises `ValueError`.
+
+With $\partial_j$ the coordinate vector fields of $P$, dual to the coordinate
+1-forms $\mathrm{d}X_j$, the entry $j$ of the new axis is the interior product
+of $\partial_j$ with the first slot of $f$,
+
+$$
+\mathrm{Components}(f, P)_j(v_2, \dots, v_k) = f(\partial_j, v_2, \dots, v_k).
+$$
+
+`Components(f, P)` derives the value shape `f.value_shape + (n,)`. If the
+first slot of $f$ has the degree $k > 1$, the first slot of the result has the
+degree $k - 1$. If the first slot of $f$ has the degree 1, the result does not
+have that slot. For example, the degree `(1,)` gives `()`, the degree `(2,)`
+gives `(1,)`, and the degree `(1, 1)` gives `(1,)`.
+
+No fixed composition of the other node classes turns a slot into an axis, so
+`Components` is a node class. The reverse direction is a fixed composition,
+`index_sum(v[i] * dX[i], (i,))` for a vector `v` of value shape `(n,)`.
+
+The components depend on the coordinates of $P$. So a pull-back does not move
+inside `Components`. `PullBack(Components(f, Q), D)` is the array of the
+components of $f$ on $Q$, evaluated at $\psi(p)$, and remains.
+
+With `Components`, the arrays of standard differential calculus are fixed
+compositions. With the examples of [ExteriorDerivative](#exteriorderivative)
+on `RD(3)`, and `f = x * y * z`:
+
+| Expression                              | Value shape | Degree | Meaning                                                      |
+| --------------------------------------- | ----------- | ------ | ------------------------------------------------------------ |
+| `components(d(f), P)`                   | `(3,)`      | `()`   | The gradient $(yz, xz, xy)$, after a pass                    |
+| `components(d(components(d(f), P)), P)` | `(3, 3)`    | `()`   | The Hessian of $f$                                           |
+| `components(dX, P)`                     | `(3, 3)`    | `()`   | The identity matrix                                          |
+| `components(dx * dy, P)`                | `(3,)`      | `(1,)` | $(\mathrm{d}y, -\mathrm{d}x, 0)$                             |
+| `components(components(dx * dy, P), P)` | `(3, 3)`    | `()`   | The antisymmetric matrix of $\mathrm{d}x \wedge \mathrm{d}y$ |
+
+- `components(x, P)` raises `ValueError`, because `x` has no slot.
+- For a parameterised domain $D$ with the parameter domain $P$,
+  `components(exterior_derivative(D.parameterisation, P), P)` is the Jacobian
+  matrix of value shape `(m, n)`, with $m$ the dimension of the ambient
+  coordinate domain of $D$.
+
 ### Identity
 
 The free function `identity(P)` is the identity on the tangent space of a
@@ -1373,8 +1428,8 @@ complex, or if $k > n$. Construction does not check that $\psi(P)$ lies in
 $Q$.
 
 $Q$ is usually `RD(n)`. A domain in a smaller $Q$, such as an edge of the unit
-triangle in the unit triangle, can be composed with an expression on $Q$ (see
-[Composition](#composition)). The geometry of $D$ is derived from the
+triangle in the unit triangle, pulls back an expression on $Q$ (see
+[PullBack](#pullback)). The geometry of $D$ is derived from the
 parameterisation (see [Geometry](#geometry)).
 
 Examples:
@@ -1517,33 +1572,43 @@ The physical triangle is a parameterised domain with $k = n$, not a coordinate
 domain, although the physical triangle has non-empty interior in $R^2$. The
 class records how the domain is built.
 
-### Composition
+### PullBack
 
-A concrete subclass of `AbstractExpression` for $f \circ \psi$, the composition
-of an expression $f$ with the parameterisation $\psi$ of a domain $D$.
+A concrete subclass of `AbstractExpression` for the pull-back $\psi^* f$ of a
+form $f$ on $Q$ by the parameterisation $\psi$ of a domain $D$, with $P$ the
+parameter domain and $Q$ the ambient coordinate domain of $D$.
 
-`Composition(f, D)` stores $f$ and $D$. With $P$ the parameter domain and $Q$
-the ambient coordinate domain of $D$, `Composition(f, D)` is the expression on
-$P$ with the value $f(\psi(p))$ at each point $p$ of $P$. `Composition(f, D)`
-derives the value shape of $f$ and the set $P$. The free indices and the scalar
-type follow the general rule.
+`PullBack(f, D)` stores $f$ and $D$ and derives the value shape of $f$, the
+degree of $f$ and the set $P$. The free indices and the scalar type follow the
+general rule. The second operand is a domain, not an expression, because a
+domain states $Q$. Construction raises `ValueError` unless $f$ has no set or
+the set of $f$ is $Q$. Construction raises `TypeError` if $D$ is not a
+`ParameterisedDomain`.
 
-The second operand is a domain, not an expression, because a domain states $Q$.
-Construction raises `ValueError` unless $f$ has no set or the set of $f$ is
-$Q$. Construction raises `TypeError` if $D$ is not a `ParameterisedDomain`.
+For a 0-form $f$, the pull-back is the composition $f \circ \psi$, the
+expression on $P$ with the value $f(\psi(p))$ at each point $p$ of $P$. For a
+form with slots, the pull-back acts on each slot,
 
-`Composition` is lazy. The core transformation `expand_compositions` moves a
-`Composition` towards the leaves and replaces `Composition(Coordinate(Q), D)`
-by $\psi$ (see [Expanding compositions](#expanding-compositions)). A
-`Composition` of a downstream terminal remains, and the external library that
-supplies the terminal evaluates the terminal at $\psi(p)$. The core
-transformation `apply_derivatives` applies the chain rule.
-`Gradient(Composition(f, D), P)` is `Composition(Gradient(f, Q), D)`
-contracted with `jacobian(D)`.
+$$
+(\psi^* f)_p(v_1, \dots, v_k) = f_{\psi(p)}(\mathrm{d}\psi \, v_1, \dots, \mathrm{d}\psi \, v_k),
+$$
+
+so `PullBack` accepts any degree, including a double form such as a metric.
+The axes of the value shape are not transformed. A slot with a degree greater
+than the dimension of $P$ gives the zero form, so a 2-form pulled back to a
+curve, and a 1-form pulled back to a point, are zero.
+
+`PullBack` is lazy. The core transformation `expand_pull_backs` moves a
+`PullBack` towards the leaves, because the pull-back commutes with pointwise
+operations, with the wedge product and with the exterior derivative, and
+replaces `PullBack(Coordinate(Q), D)` by $\psi$ (see
+[Expanding pull-backs](#expanding-pull-backs)). A `PullBack` of a downstream
+terminal remains, and the external library that supplies the terminal
+evaluates the terminal at $\psi(p)$ and transforms the slots.
 
 A domain $E$ in the parameter domain of $D$ has the image $\psi(E)$, a subset
 of $D$. The image is the parameterised domain with the parameterisation
-`compose(D.parameterisation, E)` on the parameter domain of $E$.
+`pull_back(D.parameterisation, E)` on the parameter domain of $E$.
 
 Example, with `T`, `X`, `psi`, `one` and `K` of the affinely mapped triangle:
 
@@ -1554,21 +1619,29 @@ U = coordinate(I)
 # The edge of T from (1, 0) to (0, 1), as a domain in T.
 e = parameterised_domain(I, tensor((one - U[0], U[0])), T)
 
-# Composition(f, e), with the set UnitSimplex(1) and value shape ().
+# PullBack(f, e), with the set UnitSimplex(1), value shape () and the degree ().
 f = X[0] * X[1]
-fe = compose(f, e)
+fe = pull_back(f, e)
+
+# PullBack(dx, e), with the set UnitSimplex(1) and the degree (1,).
+dx = exterior_derivative(X[0], T)
+dxe = pull_back(dx, e)
 
 # The edge of K from (3, 1) to (2, 3), as a domain in RD(2).
-E = parameterised_domain(I, compose(psi, e), RD(2))
+E = parameterised_domain(I, pull_back(psi, e), RD(2))
 ```
 
 - A later pass evaluates `fe` to $(1 - U_0) U_0$ and the parameterisation of
   `E` to $(3 - U_0, 1 + 2 U_0)$.
+- A later pass evaluates `dxe` to $\mathrm{d}(1 - U_0) = -\mathrm{d}U_0$,
+  because $X_0 = 1 - U_0$ on the edge.
+- `pull_back(dx * exterior_derivative(X[1], T), e)` has the degree `(2,)` and
+  is the zero form, because the edge has dimension 1.
 - The chain rule gives `jacobian(E)` $= \begin{pmatrix} 2 & 1 \\ 1 & 3
   \end{pmatrix} \begin{pmatrix} -1 \\ 1 \end{pmatrix} = \begin{pmatrix} -1 \\ 2
   \end{pmatrix}$, so the measure density of `E` is $\sqrt{5}$, the length of
   the edge of `K`.
-- `compose(f, parameterised_domain(I, tensor((one - U[0], U[0])), RD(2)))`
+- `pull_back(f, parameterised_domain(I, tensor((one - U[0], U[0])), RD(2)))`
   raises `ValueError`, because that domain lies in `RD(2)`, not in `T`.
 
 ## Integrating over the domain
@@ -1657,7 +1730,7 @@ of the affinely mapped triangle example:
   measure on $R^0$ is the counting measure at the single point of $R^0$.
 - `integrate(X[0], K) * integrate(X[1], K)` is a product of two integrals, with
   value shape `()` and no set.
-- With `fe` and `E` of the [Composition](#composition) example,
+- With `fe` and `E` of the [PullBack](#pullback) example,
   `integrate(fe, E)` is the integral of $X_0 X_1$ over the edge of `K`, which
   is $\sqrt{5}/6$.
 
@@ -1668,13 +1741,13 @@ A point is a domain! A point in a coordinate domain $Q$ of dimension $n$ is
 shape `(n,)`. The core needs no node class and no free function for a point.
 
 The value of a scalar expression $f$ at a point $p$ is
-`integrate(compose(f, p), p)`, the integral of $f$ with the counting measure of
-$p$. `compose(f, p)` is an expression on `RD(0)`, and the integral has no set,
+`integrate(pull_back(f, p), p)`, the integral of $f$ with the counting measure of
+$p$. `pull_back(f, p)` is an expression on `RD(0)`, and the integral has no set,
 so the integral combines with any expression.
 
 The value of a tensor-valued expression at a point is written in index
 notation, because `integrate` takes a scalar. For $f$ of any value shape, the
-value at $p$ is `component_tensor(integrate(compose(f, p)[r], p), (r,))`, with
+value at $p$ is `component_tensor(integrate(pull_back(f, p)[r], p), (r,))`, with
 `r` a [EllipsisIndex](#ellipsisindex).
 
 A point in `T` is given in the coordinates of `T`. For a point $x$ of `K`, the
@@ -1693,19 +1766,19 @@ c = parameterised_domain(RD(0), tensor((third, third)), T)
 
 # AnnotatedExpression: the value of f at the centroid, with no set and value
 # shape (). A later pass evaluates the integral to 1/9.
-fc = integrate(compose(f, c), c)
+fc = integrate(pull_back(f, c), c)
 
 # ParameterisedDomain: the centroid of K, as a point in RD(2). A later pass
-# evaluates compose(psi, c) to (2, 4/3).
-C = parameterised_domain(RD(0), compose(psi, c), RD(2))
+# evaluates pull_back(psi, c) to (2, 4/3).
+C = parameterised_domain(RD(0), pull_back(psi, c), RD(2))
 ```
 
 - With a second point
   `d = parameterised_domain(RD(0), tensor((third, Integer(2) / Integer(3))), T)`,
-  `integrate(compose(f, c), c) + integrate(compose(f, d), d)` is the action of
+  `integrate(pull_back(f, c), c) + integrate(pull_back(f, d), d)` is the action of
   a sum of two Dirac measures on $f$.
 - `parameterised_domain(RD(0), tensor((third, third)), RD(2))` is the point
-  $(1/3, 1/3)$ in the plane. With that point as `q`, `compose(f, q)` raises
+  $(1/3, 1/3)$ in the plane. With that point as `q`, `pull_back(f, q)` raises
   `ValueError`, because `q` lies in `RD(2)`, not in `T`.
 - `parameterised_domain(RD(0), X, T)` raises `ValueError`, because `X` has the
   set `T`, not `RD(0)`.
@@ -1713,7 +1786,7 @@ C = parameterised_domain(RD(0), compose(psi, c), RD(2))
 ## Core transformations
 
 The core has two transformations, `apply_derivatives` and
-`expand_compositions`. Each core transformation is a pass with one rule for
+`expand_pull_backs`. Each core transformation is a pass with one rule for
 each node class of the core, and produces only node classes of the core. A rule
 replaces a node by a mathematically equal expression and never simplifies.
 
@@ -1725,18 +1798,18 @@ transformation.
 ### Applying derivatives
 
 `apply_derivatives(f)` evaluates every `Gradient` in $f$ with the standard
-rules of differentiation, including the chain rule for a `Composition`. The
+rules of differentiation, including the chain rule for a `PullBack`. The
 gradient of an expression with no set is `Zero`. `Gradient(Coordinate(P), P)`
 is the identity on $P$ and remains (see [Identity](#identity)). Afterwards,
 every `Gradient` is applied, one or more times, to a terminal.
 
-### Expanding compositions
+### Expanding pull-backs
 
-`expand_compositions(f)` moves every `Composition` in $f$ towards the leaves,
+`expand_pull_backs(f)` moves every `PullBack` in $f$ towards the leaves,
 because composition commutes with pointwise operations, and replaces
-`Composition(Coordinate(Q), D)` by the parameterisation of $D$. A
-`Composition` of a downstream terminal or of a `Gradient` remains.
-`expand_compositions` is the pull-back to the parameter domain.
+`PullBack(Coordinate(Q), D)` by the parameterisation of $D$. A
+`PullBack` of a downstream terminal or of a `Gradient` remains.
+`expand_pull_backs` is the pull-back to the parameter domain.
 
 ## Topology of domains
 
