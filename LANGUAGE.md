@@ -33,9 +33,10 @@ minimal concepts and relations necessary for writing a wide range of
 variational forms as code for subsequent algorithmic transformation.
 
 A UFLx program is ordinary Python code that constructs symbolic objects and
-connects them through a graph. The primary result(s) are usually Form(s), such
-as a bilinear form, linear form, or functional. Python code will be used to
-motivate examples but a full concrete implementation is out of scope.
+connects them through a graph. The primary results are usually variational
+forms, such as bilinear forms, linear forms and functionals. Python code will
+be used to motivate examples but a full concrete implementation is out of
+scope.
 
 UFLx does not handle concrete data or numerical algorithms; e.g. actual meshes,
 boundary markers, numerical values of coefficients, or assembly procedures.
@@ -246,7 +247,7 @@ Base
 │   ├── AnnotatedExpression               identity
 │   ├── ExteriorDerivative                d with respect to P
 │   ├── Components                        first slot to an axis, with the frame of P
-│   ├── PullBack                          pull-back of a form by a domain, set P of the domain
+│   ├── PullBack                          pull-back of a differential form by a domain, set P of the domain
 │   ├── Integral                          integral of a top form over P, no set
 │   ├── Sum                               +
 │   ├── Product                           *, the wedge product
@@ -367,13 +368,13 @@ The core supports five kinds of extension:
 
 > LLM generated table, could be made more concise.
 
-| Kind of extension             | Examples                                                  | Section                                     |
-| ----------------------------- | --------------------------------------------------------- | ------------------------------------------- |
-| New questions asked of a form | Physical units, polynomial degree, linearity checks       | [New questions](#new-questions)             |
-| New subclasses                | Elements and functions from Basix, new coordinate domains | [New subclasses](#new-subclasses)           |
-| New operations                | Trace, divergence                                         | [New operations](#new-operations)           |
-| New transformations           | Gateaux derivative                                        | [New transformations](#new-transformations) |
-| Language extensions           | External operators                                        | [Language extensions](#language-extensions) |
+| Kind of extension                    | Examples                                                  | Section                                     |
+| ------------------------------------ | --------------------------------------------------------- | ------------------------------------------- |
+| New questions asked of an expression | Physical units, polynomial degree, linearity checks       | [New questions](#new-questions)             |
+| New subclasses                       | Elements and functions from Basix, new coordinate domains | [New subclasses](#new-subclasses)           |
+| New operations                       | Trace, divergence                                         | [New operations](#new-operations)           |
+| New transformations                  | Gateaux derivative                                        | [New transformations](#new-transformations) |
+| Language extensions                  | External operators                                        | [Language extensions](#language-extensions) |
 
 A property that the rules of the core depend on is part of the core, not an
 extension. For example, the scalar type is part of the core, because
@@ -382,9 +383,9 @@ core.
 
 ### New questions
 
-A downstream library asks a new question of a form with a pass. The pass has
-one rule for each node class of the core and one rule for each leaf class of
-the library. The pass needs no rule for a node class of a language extension
+A downstream library asks a new question of an expression with a pass. The pass
+has one rule for each node class of the core and one rule for each leaf class
+of the library. The pass needs no rule for a node class of a language extension
 that has a lowering (see [Language extensions](#language-extensions)).
 
 For example, a library that checks physical units, like the work of Habera et
@@ -401,7 +402,7 @@ al.:
    `components(exterior_derivative(X[0], RD(2)), RD(2))` is in metres divided
    by metres, so the gradient is dimensionless.
    `X[0] + X[0] * X[1]` is an error of the units library.
-3. Calls `units` on a form whenever the library needs the check.
+3. Calls `units` on an expression whenever the library needs the check.
 
 The core never knows about units. Objects of the core are immutable and are
 compared by content, so the leaves are reliable keys of the table.
@@ -435,10 +436,10 @@ places:
 
 - Information that defines the variational problem goes in the construction
   arguments of a leaf. For example, the space that a function belongs to
-  changes the meaning of a form, so the space is part of the leaf.
+  changes the meaning of an expression, so the space is part of the leaf.
 - Information that only checks or analyses the variational problem may stay in
-  a table of the library, keyed by leaves. For example, units check a form but
-  do not change the meaning of the form.
+  a table of the library, keyed by leaves. For example, units check an
+  expression but do not change the meaning of the expression.
 
 Information never goes in an annotation, because any pass may drop an
 annotation.
@@ -505,11 +506,18 @@ operation is pointwise. The node class has no lowering.
 
 ### Expressions
 
-An expression denotes an array-valued multi-form on the set of the
-expression, with the degree of the expression. A 0-form is an array-valued
-function. An expression with no set and the degree `()` denotes a single
-array. A `Zero` with a non-empty degree has no set and denotes the zero form
-of that degree on every set.
+An expression denotes an array-valued differential form, a multi-form, on the
+set of the expression, with the degree of the expression. A 0-form is an
+array-valued function. An expression with no set and the degree `()` denotes a
+single array. A `Zero` with a non-empty degree has no set and denotes the zero
+form of that degree on every set.
+
+A variational form is an `Integral`, or a combination of `Integral`s. The arity
+of a variational form is the number of test and trial functions in the
+integrand, and the integrand depends linearly on each of them. A functional has
+the arity 0, a linear form the arity 1 and a bilinear form the arity 2. The
+integrand of every variational form is a top form, so the degree of a
+differential form and the arity of a variational form are independent.
 
 #### `AbstractExpression`
 
@@ -535,8 +543,8 @@ scalar type, the set and the degree of the expression.
 The degree of every node class of the core is in the following table. If the
 degree of an edge breaks the rule of the node, construction raises
 `ValueError`. A rule that requires the degree `()` of an edge is a deliberate
-statement, such as for `SquareRoot`, because the square root of a form is not
-defined.
+statement, such as for `SquareRoot`, because the square root of a differential
+form is not defined.
 
 | Class                                                                                | Edges that are expressions must have                      | Degree of the node                               |
 | ------------------------------------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------ |
@@ -665,7 +673,7 @@ class AbstractExpression(Base, ABC):
 
 # A free function
 def add(first: AbstractExpression, second: AbstractExpression) -> Sum:
-    """Add two scalar forms of the same degree.
+    """Add two scalar differential forms of the same degree.
 
     Args:
         first: The first summand.
@@ -759,10 +767,10 @@ rank is `component_tensor(a * T[r], (r,))`, with `r` a
 | `Division` | `divide`      | `/`      |
 | `Power`    | `power`       | `**`     |
 
-`Sum(first, second)` adds two forms of the same degree. Both operands must have
-the same degree, or construction raises `ValueError`, and the sum has that
-degree. For example, $\mathrm{d}x + \mathrm{d}y$ has the degree `(1,)`, and
-$f + \mathrm{d}x$ raises `ValueError`.
+`Sum(first, second)` adds two differential forms of the same degree. Both
+operands must have the same degree, or construction raises `ValueError`, and
+the sum has that degree. For example, $\mathrm{d}x + \mathrm{d}y$ has the
+degree `(1,)`, and $f + \mathrm{d}x$ raises `ValueError`.
 
 `Product(first, second)` is the wedge product $\alpha \wedge \beta$ of the
 two operands. For two 0-forms, the wedge product is the ordinary product.
@@ -771,7 +779,7 @@ the degree `()` adds 0 to every slot, so $f \wedge \omega = f \omega$. If both
 operands have a non-empty degree, the two degrees must have the same number of
 slots, or construction raises `ValueError`. A slot of the result may have a
 degree greater than the dimension of the set, and then the result is the zero
-form. The degree rules of the other node classes are in
+form of that degree. The degree rules of the other node classes are in
 [`AbstractExpression`](#abstractexpression).
 
 The wedge product is graded commutative,
@@ -810,8 +818,8 @@ modulus. `Absolute` is real for every argument.
 `Conjugate` is a concrete subclass of `AbstractExpression` that stores one
 expression. The free function `conjugate(f)` takes a scalar and returns the
 complex conjugate of the scalar. No fixed composition of the other node classes
-conjugates, so `Conjugate` is a node class. A sesquilinear form, such as the
-$L^2$ inner product $\int u \bar{v}$, needs `Conjugate`.
+conjugates, so `Conjugate` is a node class. A sesquilinear variational form,
+such as the $L^2$ inner product $\int u \bar{v}$, needs `Conjugate`.
 
 Negation and subtraction are free functions, not node classes:
 
@@ -826,8 +834,8 @@ from `f / g` in floating-point arithmetic.
 ### TensorProduct
 
 `TensorProduct(first, second)` is a concrete subclass of `AbstractExpression`
-for the tensor product $\alpha \otimes \beta$ of two forms. The free function
-is `tensor_product(f, g)`, with no overload.
+for the tensor product $\alpha \otimes \beta$ of two differential forms. The
+free function is `tensor_product(f, g)`, with no overload.
 
 `TensorProduct` concatenates the degrees of the operands, so the degree of the
 result is `first.degree + second.degree`. An operand with the degree `()` adds
@@ -992,9 +1000,9 @@ new first axis.
 `AbstractExpression`s that all have the same value shape `s` and the same
 degree, or construction raises `ValueError`. `Tensor(entries)` derives the
 value shape `(n,) + s`, with $n$ the number of entries, and the degree of the
-entries. A matrix is a `Tensor` of `Tensor`s. A `Tensor` of forms is an
-array-valued form, so the new axis is an axis of the value shape and never a
-slot.
+entries. A matrix is a `Tensor` of `Tensor`s. A `Tensor` of differential forms
+is an array-valued differential form, so the new axis is an axis of the value
+shape and never a slot.
 
 A value shape may contain the extent 0, for example the value shape `(0,)` of
 the coordinate function of `RD(0)`. `Tensor` cannot build an expression with
@@ -1044,7 +1052,7 @@ covers.
 expression, the degree of the expression, and the free indices of the
 expression followed by the `Index` and `EllipsisIndex` entries. The rank $r$
 counts the axes of the value shape only. The indices select axes of the value
-shape and never a slot, so the slots of a form cannot be indexed.
+shape and never a slot, so the slots of a differential form cannot be indexed.
 
 `X[0]` and `A[0, 1]` are `indexed(X, (0,))` and `indexed(A, (0, 1))`.
 Construction of `Indexed` raises:
@@ -1175,8 +1183,8 @@ Both store a scalar expression and a non-empty `tuple` of distinct `Index` and
 index is repeated, or if an index is not free in the expression. Both derive the
 free indices of the expression without the bound indices, and the degree of the
 expression. The indices bind axes of the value shape, so a `ComponentTensor` of
-a form is an array-valued form, and an `IndexSum` of forms is a sum of forms of
-the same degree.
+a differential form is an array-valued differential form, and an `IndexSum` of
+differential forms is a sum of differential forms of the same degree.
 
 `ComponentTensor` derives the value shape from the extents of the indices, in
 the order of the indices. A `EllipsisIndex` contributes every extent in the
@@ -1264,8 +1272,8 @@ expression. The free function `determinant(f)` takes an expression of value
 shape `(n, n)` and returns a scalar. The determinant of an expression of
 value shape `(n, n)` is a polynomial of degree $n$ in the entries. For each
 $n$, the cofactor expansion is a fixed composition, but the determinant is
-evaluated by a numerical algorithm that the user supplies, such as a closed
-form or an LU factorisation. So `Determinant` is a node class.
+evaluated by a numerical algorithm that the user supplies, such as a closed-form
+formula or an LU factorisation. So `Determinant` is a node class.
 
 Construction raises `ValueError` if the expression does not have rank 2, or if
 the two extents of the value shape differ.
@@ -1329,7 +1337,7 @@ Examples, with a matrix `A` of value shape `(2, 2)`:
 ### ExteriorDerivative
 
 A concrete subclass of `AbstractExpression` for the exterior derivative
-$\mathrm{d}\omega$ of a form $\omega$ on a coordinate domain $P$.
+$\mathrm{d}\omega$ of a differential form $\omega$ on a coordinate domain $P$.
 
 `ExteriorDerivative(f, P)` stores $f$ and $P$ and derives the value shape of
 $f$ and the set $P$. The free indices and the scalar type follow the general
@@ -1337,15 +1345,15 @@ rule. `ExteriorDerivative(f, P)` requires a valid pair $(f, P)$ (see
 [Integral](#integral)). An $f$ with no set is a constant on
 $P$.
 
-The exterior derivative acts on forms with at most one slot. If $f$ has the
-degree `()`, the exterior derivative has the degree `(1,)`. If $f$ has the
-degree `(k,)`, the exterior derivative has the degree `(k + 1,)`. If $f$ has
-two or more slots, construction raises `ValueError`, because the exterior
-derivative of a double form needs a connection. A degree greater than the
-dimension of $P$ gives the zero form, as for [`Product`](#arithmetic).
+The exterior derivative acts on differential forms with at most one slot. If
+$f$ has the degree `()`, the exterior derivative has the degree `(1,)`. If $f$
+has the degree `(k,)`, the exterior derivative has the degree `(k + 1,)`. If
+$f$ has two or more slots, construction raises `ValueError`, because the
+exterior derivative of a double form needs a connection. A degree greater than
+the dimension of $P$ gives the zero form, as for [`Product`](#arithmetic).
 
-The exterior derivative acts on each component of an array-valued form, so
-the axes of the value shape pass through unchanged.
+The exterior derivative acts on each component of an array-valued differential
+form, so the axes of the value shape pass through unchanged.
 
 No fixed composition of the other node classes differentiates, so
 `ExteriorDerivative` is a node class. `ExteriorDerivative` is lazy.
@@ -1399,9 +1407,9 @@ the enclosed area, by Stokes' theorem.
 
 ### Components
 
-A concrete subclass of `AbstractExpression` that turns the first slot of a form
-into an axis of the value shape, with the coordinate frame of a coordinate
-domain $P$ of dimension $n$.
+A concrete subclass of `AbstractExpression` that turns the first slot of a
+differential form into an axis of the value shape, with the coordinate frame of
+a coordinate domain $P$ of dimension $n$.
 
 `Components(f, P)` stores $f$ and $P$ and derives the set $P$. The free
 indices and the scalar type follow the general rule. `Components(f, P)`
@@ -1580,8 +1588,8 @@ class records how the domain is built.
 ### PullBack
 
 A concrete subclass of `AbstractExpression` for the pull-back $\psi^* f$ of a
-form $f$ on $Q$ by the parameterisation $\psi$ of a domain $D$, with $P$ the
-parameter domain and $Q$ the ambient coordinate domain of $D$.
+differential form $f$ on $Q$ by the parameterisation $\psi$ of a domain $D$,
+with $P$ the parameter domain and $Q$ the ambient coordinate domain of $D$.
 
 `PullBack(f, D)` stores $f$ and $D$ and derives the value shape of $f$, the
 degree of $f$ and the set $P$. The free indices and the scalar type follow the
@@ -1592,7 +1600,7 @@ the set of $f$ is $Q$. Construction raises `TypeError` if $D$ is not a
 
 For a 0-form $f$, the pull-back is the composition $f \circ \psi$, the
 expression on $P$ with the value $f(\psi(p))$ at each point $p$ of $P$. For a
-form with slots, the pull-back acts on each slot,
+differential form with slots, the pull-back acts on each slot,
 
 $$
 (\psi^* f)_p(v_1, \dots, v_k) = f_{\psi(p)}(\mathrm{d}\psi \, v_1, \dots, \mathrm{d}\psi \, v_k),
@@ -1679,7 +1687,7 @@ raises `ValueError`.
 
 `Integral(f, P)` stores $f$ and $P$ and derives the value shape, the free
 indices and the scalar type of $f$, and the degree `()`. `Integral(f, P)` has
-no set. An array-valued form integrates component by component.
+no set. An array-valued differential form integrates component by component.
 
 `Integral` is lazy. Construction does not evaluate the integral. A later pass
 might evaluate the integral, for example by quadrature.
@@ -1777,7 +1785,7 @@ pull-back inside the exterior derivative. Afterwards, every
 `ExteriorDerivative` is applied to one of these four.
 
 > Open: the rule for `Conjugate` is the conjugate of the exterior derivative,
-> which needs `Conjugate` of a form.
+> which needs `Conjugate` of a differential form.
 
 ### Expanding pull-backs
 
