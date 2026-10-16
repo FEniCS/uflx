@@ -84,8 +84,9 @@ fully LLM generated content are explicitly marked.
   - [Example: a paraboloid](#example-a-paraboloid)
   - [Example: an affinely mapped triangle](#example-an-affinely-mapped-triangle)
   - [PullBack](#pullback)
-  - [Orientation of a domain](#orientation-of-a-domain)
-  - [Integral over a domain](#integral-over-a-domain)
+  - [Concept: orientation of a domain](#concept-orientation-of-a-domain)
+  - [Concept: integral over a domain](#concept-integral-over-a-domain)
+  - [Example: orientation of an edge and of a triangle](#example-orientation-of-an-edge-and-of-a-triangle)
   - [Example: integrating over an edge](#example-integrating-over-an-edge)
   - [Example: integrating over the boundary of a triangle](#example-integrating-over-the-boundary-of-a-triangle)
   - [Points and point evaluation](#points-and-point-evaluation)
@@ -1840,15 +1841,112 @@ E = parameterised_domain(S, pull_back(psi, e), RD(2))
 - `pull_back(f, parameterised_domain(S, tensor((one - t, t)), RD(2)))`
   raises `ValueError`, because that domain lies in `RD(2)`, not in `T`.
 
-### Orientation of a domain
+### Concept: orientation of a domain
 
 Requires: [ParameterisedDomain](#parameteriseddomain),
-[Volume form](#volume-form).
+[Volume form](#volume-form), [PullBack](#pullback).
 
-### Integral over a domain
+An orientation is a choice of direction, i.e. which way an edge runs, or which
+side of a surface is up. A coordinate domain $P$ is oriented by the order of
+the coordinates of $P$, as fixed by the volume form of $P$ (see
+[Volume form](#volume-form)). A domain $D$ = `ParameterisedDomain(P, psi, Q)`
+takes the orientation of $P$ through $\psi$. For example, an edge runs in the
+direction in which $\psi$ moves as the parameter increases. For a map $r$ of
+$P$ onto $P$, $\psi$ and $\psi \circ r$ parameterise the same set. The two
+orientations are equal if the Jacobian determinant of $r$ is positive, and
+opposite if the Jacobian determinant of $r$ is negative. For example,
+$r(t) = 1 - t$ reverses an edge, and $r(X) = (X_1, X_0)$ reverses a triangle.
+The orientation needs no metric.
+
+If $k = n$, $D$ also has the orientation of $Q$. With $J$ the Jacobian matrix
+of $\psi$,
+
+$$
+\psi^* (\mathrm{d}Y_0 \wedge \dots \wedge \mathrm{d}Y_{n-1})
+= \det J \, \mathrm{d}X_0 \wedge \dots \wedge \mathrm{d}X_{n-1},
+$$
+
+with $Y$ the coordinates of $Q$ and $X$ the coordinates of $P$. The two
+orientations agree where $\det J > 0$, and differ where $\det J < 0$. The core
+has no node class for the determinant, because $\det J$ is the coefficient of
+`pull_back(volume_form(Q), D)`.
+
+### Concept: integral over a domain
 
 Requires: [PullBack](#pullback), [Integral](#integral),
-[Orientation of a domain](#orientation-of-a-domain).
+[Absolute](#absolute), [Division](#division),
+[Concept: orientation of a domain](#concept-orientation-of-a-domain).
+
+The integral of a $k$-form $\omega$ on $Q$ over a domain $D$ =
+`ParameterisedDomain(P, psi, Q)` of dimension $k$, with the orientation of $D$,
+is
+
+$$
+\int_D \omega = \int_P \psi^* \omega,
+$$
+
+which is `integral(pull_back(omega, D), P)`. Reversing the orientation of $D$
+changes the sign of the integral.
+
+An integral that must not depend on the orientation, such as the legacy UFL
+integral `f * dx` over a cell whose orientation is arbitrary, multiplies by
+the sign $s = \det J / |\det J|$ for $k = n$. Then
+$\int_P s \, \psi^* (f \, \mathrm{d}Y_0 \wedge \dots \wedge \mathrm{d}Y_{n-1})
+= \int_P (f \circ \psi) \, |\det J| \, \mathrm{d}X$.
+
+### Example: orientation of an edge and of a triangle
+
+Requires: [Concept: orientation of a domain](#concept-orientation-of-a-domain),
+[Concept: integral over a domain](#concept-integral-over-a-domain),
+[Components](#components), [Example: an affinely mapped
+triangle](#example-an-affinely-mapped-triangle).
+
+The examples use `T`, `X`, `one`, `S`, `t` and `e` of the
+[PullBack](#pullback) example, and `K` of the
+[affinely mapped triangle example](#example-an-affinely-mapped-triangle).
+
+The edge `e`, with $\psi(t) = (1 - t, t)$, runs from vertex 1 to vertex 2 of
+the unit triangle. The edge with $\psi(t) = (t, 1 - t)$ is the same set with
+the opposite orientation, so the integral of $x \, \mathrm{d}y$ changes sign:
+
+```python
+x, y = X[0], X[1]
+dy = exterior_derivative(y, T)
+
+# The edge e reversed, the same set with the opposite orientation.
+e_reversed = parameterised_domain(S, tensor((t, one - t)), T)
+
+# A later pass evaluates the two integrals to 1/2 and -1/2.
+integral(pull_back(x * dy, e), S)
+integral(pull_back(x * dy, e_reversed), S)
+```
+
+On `e_reversed`, $x = t$ and $\mathrm{d}y$ pulls back to $-\mathrm{d}t$, so
+the integral is $\int_0^1 -t \, \mathrm{d}t = -1/2$.
+
+The triangle `K` has $\det J = 5$, so the orientation of `K` agrees with the
+orientation of `RD(2)`:
+
+```python
+# The pull-back of the volume form of RD(2), det J dX_0 ^ dX_1, a 2-form on T.
+w = pull_back(volume_form(RD(2)), K)
+
+# The 2-form as the antisymmetric matrix [[0, det J], [-det J, 0]] of value shape (2, 2).
+W = components(components(w, T), T)
+
+# Entry [0, 1] follows the order of dX_0 ^ dX_1, so the entry is det J and not -det J.
+# A later pass evaluates det J to 5.
+det_J = W[0, 1]
+
+# The sign of det J, 1 here.
+s = det_J / absolute(det_J)
+
+# The area of K. A later pass evaluates the integral to 5/2, whatever the sign of det J.
+integral(s * w, T)
+```
+
+Swapping $v_1$ and $v_2$ gives $\det J = -5$ and $s = -1$. The integral of `w`
+alone is then $-5/2$, and the integral of `s * w` is still $5/2$.
 
 ### Example: integrating over an edge
 
@@ -2404,7 +2502,8 @@ Requires: [AbstractTopology](#abstracttopology),
 
 ### Integral over a topology
 
-Requires: [Integral](#integral), [Orientation of a domain](#orientation-of-a-domain),
+Requires: [Integral](#integral),
+[Concept: orientation of a domain](#concept-orientation-of-a-domain),
 [AbstractTopology](#abstracttopology), [Restriction](#restriction).
 
 ## Function spaces
