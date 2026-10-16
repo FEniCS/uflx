@@ -244,7 +244,6 @@ Base
 │   ├── Indexed                           full indexing, int or Index entries
 │   ├── ComponentTensor                   binds indices to tensor axes
 │   ├── IndexSum                          sums over bound indices
-│   ├── AnnotatedExpression               identity
 │   ├── ExteriorDerivative                d with respect to P
 │   ├── Components                        first slot to an axis, with the frame of P
 │   ├── PullBack                          pull-back of a differential form by a domain, set P of the domain
@@ -276,36 +275,35 @@ objects in the graph. Operator overloads call the free functions.
 
 > LLM generated table.
 
-| Group                 | Free function                                                   | `AbstractExpression` overload | Takes                                                       | Returns                                                    |
-| --------------------- | --------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
-| Arithmetic            | [`add(f, g)`](#arithmetic)                                      | `+`                           | `f, g: AbstractExpression`                                  | `Sum`                                                      |
-|                       | [`subtract(f, g)`](#arithmetic)                                 | `-`                           | `f, g: AbstractExpression`                                  | `AnnotatedExpression`: `Sum` of `f` and `negate(g)`        |
-|                       | [`multiply(f, g)`](#arithmetic)                                 | `*`                           | `f, g: AbstractExpression`                                  | `Product`                                                  |
-|                       | [`tensor_product(f, g)`](#tensorproduct)                        |                               | `f, g: AbstractExpression`                                  | `TensorProduct`                                            |
-|                       | [`divide(f, g)`](#arithmetic)                                   | `/`                           | `f, g: AbstractExpression`                                  | `Division`                                                 |
-|                       | [`negate(f)`](#arithmetic)                                      | unary `-`                     | `f: AbstractExpression`                                     | `AnnotatedExpression`: `Product` of `Integer(-1)` and `f`  |
-|                       | [`absolute(f)`](#arithmetic)                                    | `abs`                         | `f: AbstractExpression`                                     | `Absolute`                                                 |
-|                       | [`conjugate(f)`](#arithmetic)                                   |                               | `f: AbstractExpression`                                     | `Conjugate`                                                |
-|                       | [`power(f, g)`](#arithmetic)                                    | `**`                          | `f, g: AbstractExpression`                                  | `Power`                                                    |
-| Elementary functions  | [`square_root(f)`](#elementary-functions-very-incomplete)       |                               | `f: AbstractExpression`                                     | `SquareRoot`                                               |
-| Coordinate domains    | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain`                               | `Coordinate`                                               |
-|                       | [`volume_form(P)`](#volume-form)                                |                               | `P: AbstractCoordinateDomain`                               | `AnnotatedExpression`: `Product` of the coordinate 1-forms |
-| Tensors and indexing  | [`tensor(entries)`](#tensor)                                    |                               | `entries: tuple[AbstractExpression, ...]`                   | `Tensor`                                                   |
-|                       | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple`                   | `Indexed`                                                  |
-| Index notation        | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                       | `Index`                                                    |
-|                       | [`ellipsis_index(label)`](#ellipsisindex)                       |                               | `label: str \| tuple`                                       | `EllipsisIndex`                                            |
-|                       | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `ComponentTensor`                                          |
-|                       | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `IndexSum`                                                 |
-| Annotation            | [`annotate(f, annotation)`](#annotation)                        |                               | `f: AbstractExpression`, `annotation: tuple`                | `AnnotatedExpression`                                      |
-| Tensor algebra        | [`determinant(f)`](#determinant)                                |                               | `f: AbstractExpression`                                     | `Determinant`                                              |
-|                       | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                     | `Inverse`                                                  |
-|                       | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                     | `AnnotatedExpression`: `ComponentTensor`                   |
-|                       | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                  | `AnnotatedExpression`: `ComponentTensor` of an `IndexSum`  |
-| Differentiation       | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `ExteriorDerivative`                                       |
-|                       | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Components`                                               |
-| Parameterised domains | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression` | `ParameterisedDomain`                                      |
-| Pull-back             | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain`           | `PullBack`                                                 |
-| Integration           | [`integral(f, P)`](#integral)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Integral`                                                 |
+| Group                 | Free function                                                   | `AbstractExpression` overload | Takes                                                       | Returns                             |
+| --------------------- | --------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------- | ----------------------------------- |
+| Arithmetic            | [`add(f, g)`](#arithmetic)                                      | `+`                           | `f, g: AbstractExpression`                                  | `Sum`                               |
+|                       | [`subtract(f, g)`](#arithmetic)                                 | `-`                           | `f, g: AbstractExpression`                                  | `Sum` of `f` and `negate(g)`        |
+|                       | [`multiply(f, g)`](#arithmetic)                                 | `*`                           | `f, g: AbstractExpression`                                  | `Product`                           |
+|                       | [`tensor_product(f, g)`](#tensorproduct)                        |                               | `f, g: AbstractExpression`                                  | `TensorProduct`                     |
+|                       | [`divide(f, g)`](#arithmetic)                                   | `/`                           | `f, g: AbstractExpression`                                  | `Division`                          |
+|                       | [`negate(f)`](#arithmetic)                                      | unary `-`                     | `f: AbstractExpression`                                     | `Product` of `Integer(-1)` and `f`  |
+|                       | [`absolute(f)`](#arithmetic)                                    | `abs`                         | `f: AbstractExpression`                                     | `Absolute`                          |
+|                       | [`conjugate(f)`](#arithmetic)                                   |                               | `f: AbstractExpression`                                     | `Conjugate`                         |
+|                       | [`power(f, g)`](#arithmetic)                                    | `**`                          | `f, g: AbstractExpression`                                  | `Power`                             |
+| Elementary functions  | [`square_root(f)`](#elementary-functions-very-incomplete)       |                               | `f: AbstractExpression`                                     | `SquareRoot`                        |
+| Coordinate domains    | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain`                               | `Coordinate`                        |
+|                       | [`volume_form(P)`](#volume-form)                                |                               | `P: AbstractCoordinateDomain`                               | `Product` of the coordinate 1-forms |
+| Tensors and indexing  | [`tensor(entries)`](#tensor)                                    |                               | `entries: tuple[AbstractExpression, ...]`                   | `Tensor`                            |
+|                       | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple`                   | `Indexed`                           |
+| Index notation        | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                       | `Index`                             |
+|                       | [`ellipsis_index(label)`](#ellipsisindex)                       |                               | `label: str \| tuple`                                       | `EllipsisIndex`                     |
+|                       | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `ComponentTensor`                   |
+|                       | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `IndexSum`                          |
+| Tensor algebra        | [`determinant(f)`](#determinant)                                |                               | `f: AbstractExpression`                                     | `Determinant`                       |
+|                       | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                     | `Inverse`                           |
+|                       | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                     | `ComponentTensor` of an `Indexed`   |
+|                       | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                  | `ComponentTensor` of an `IndexSum`  |
+| Differentiation       | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `ExteriorDerivative`                |
+|                       | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Components`                        |
+| Parameterised domains | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression` | `ParameterisedDomain`               |
+| Pull-back             | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain`           | `PullBack`                          |
+| Integration           | [`integral(f, P)`](#integral)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Integral`                          |
 
 Every overload in the table is a method of `AbstractExpression` (see
 [`AbstractExpression`](#abstractexpression)). No other class defines
@@ -317,7 +315,8 @@ of each free function. A free function and an operator overload accept only the
 types in the "Takes" column.
 
 A free function whose "Returns" column names only a node class `C` returns
-`C(...)` of the arguments, unchanged. The sections of the node classes do not
+`C(...)` of the arguments. Any other free function returns the composition in
+the "Returns" column. The sections of the node classes do not
 repeat this rule.
 
 ### Properties
@@ -340,7 +339,6 @@ rules in the section of the concrete class.
 | `Coordinate`                                                    | `domain`                                                 |                                                               |
 | `Tensor`                                                        | `entries`                                                |                                                               |
 | `Indexed`, `ComponentTensor`, `IndexSum`                        | `expression`, `indices`                                  |                                                               |
-| `AnnotatedExpression`                                           | `expression`, `annotation`                               |                                                               |
 | `ExteriorDerivative`, `Components`, `Integral`, `PullBack`      | `expression`, `domain`                                   |                                                               |
 | `Absolute`, `Conjugate`, `SquareRoot`, `Determinant`, `Inverse` | `operand`                                                |                                                               |
 | `Sum`, `Product`, `TensorProduct`, `Division`, `Power`          | `first`, `second`                                        |                                                               |
@@ -441,9 +439,6 @@ places:
   a table of the library, keyed by leaves. For example, units check an
   expression but do not change the meaning of the expression.
 
-Information never goes in an annotation, because any pass may drop an
-annotation.
-
 ### New operations
 
 A downstream library builds a new operation from existing node classes, as a
@@ -453,8 +448,7 @@ the operands, such as a value shape, to choose the composition (see
 example, `trace(A)` reads the extent $n$ of `A` and returns the sum of the
 diagonal entries `A[0, 0] + ... + A[n - 1, n - 1]`. An operation that a
 `EllipsisIndex` expresses, such as `scale(a, T)`, needs no value shape (see
-[EllipsisIndex](#ellipsisindex)). Every such free function annotates the result
-(see [Annotation](#annotation)).
+[EllipsisIndex](#ellipsisindex)).
 
 A library node class that a pass replaces by node classes of the core gives
 nothing that the free function does not give, unless a core transformation
@@ -481,8 +475,9 @@ A language extension adds node classes that are not leaves, in a package
 outside the core. Each node class of a language extension provides, as part
 of the class:
 
-- a rule for each [core transformation](#core-transformations), which
-  produces only node classes of the core or of the language extension, and
+- a rule for each [core transformation](#core-transformations) that keeps
+  the node, which produces only node classes of the core or of the language
+  extension, and
 - a lowering to an equal expression of node classes of the core, if such an
   expression exists.
 
@@ -501,6 +496,12 @@ class for an operation known only by name, such as `exp`, a material law or a
 neural network. The rule for `apply_derivatives` differentiates the node class.
 The rule for `expand_pull_backs` pulls back the operands, because the
 operation is pointwise. The node class has no lowering.
+
+A named composition that must survive a pass, or print as written, is a node
+class of a language extension whose lowering is the composition. For example,
+a `Transpose` node class lowers to `component_tensor(A[k, l], (l, k))`. The
+rule for `expand_pull_backs` moves the pull-back inside `Transpose`, because
+the transpose is pointwise, so `Transpose` survives the pull-back.
 
 ## The lowest objects
 
@@ -553,7 +554,6 @@ form is not defined.
 | `Sum`                                                                                | Equal degrees                                             | The degree of the operands                       |
 | `Product`                                                                            | The degree `()`, or equal numbers of slots                | The slotwise sum (see [Arithmetic](#arithmetic)) |
 | `TensorProduct`                                                                      | Any degree                                                | The concatenated degrees                         |
-| `AnnotatedExpression`                                                                | Any degree                                                | The degree of the wrapped expression             |
 | `Division`, `Power`, `Absolute`, `Conjugate`, `SquareRoot`, `Determinant`, `Inverse` | The degree `()`                                           | `()`                                             |
 | `ExteriorDerivative`                                                                 | The degree `()` or `(k,)`                                 | `(1,)` for `()`, and `(k + 1,)` for `(k,)`       |
 | `Components`                                                                         | At least one slot                                         | The first slot lowered by 1, and removed at 0    |
@@ -987,7 +987,7 @@ Examples:
   $\mathrm{d}x \wedge \mathrm{d}y \wedge \mathrm{d}z$.
 - With `T = UnitSimplex(2)`, `integral(volume_form(T), T)` is the area $1/2$
   of `T`.
-- `volume_form(RD(0))` is `Integer(1)`, annotated.
+- `volume_form(RD(0))` is `Integer(1)`.
 
 ## Tensors and indexing
 
@@ -1105,8 +1105,10 @@ The user names user indices. The user is responsible for not reusing a name
 that is already free in an operand.
 
 A free function that needs fresh indices derives the indices from the
-operands. The label of a derived index is the annotation of the free function
-followed by a number (see [Annotation](#annotation)). For example,
+operands. The label of a derived index is the identifier of the free function,
+followed by the arguments of the free function and a number. The identifier is
+the public name of the free function, qualified by the package name, such as
+`"uflx.transpose"` for the core or `"library.trace"` for a library. For example,
 `transpose(A)` uses `Index(("uflx.transpose", A, 0))` and
 `Index(("uflx.transpose", A, 1))`. An index whose label contains `A` has an
 edge to `A`. Every node that uses an `Index` has an edge to the `Index`. So an index
@@ -1215,54 +1217,6 @@ shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
 > Note: `opt_einsum` can directly plan a contract path for a given contraction,
 > but assumes dense operators.
 
-## Annotation
-
-> LLM generated content.
-
-An annotation records how an expression was produced or incidental metadata.
-An annotation is a `tuple` of a `str` name followed by the arguments that
-produced the expression, for example `("uflx.transpose", A)`. Every argument must be an
-allowed construction argument (see [The base object](#the-base-object-base)).
-
-`AnnotatedExpression(expression, annotation)` is a concrete subclass of
-`AbstractExpression` that stores the wrapped expression and the annotation.
-
-- Identity. `AnnotatedExpression` derives the value shape, the free indices,
-  the scalar type, the set and the degree of the wrapped expression, so an
-  annotated expression stands in wherever an expression is accepted.
-- Equality. Equality is structural, so an annotated expression is not equal to
-  the wrapped expression. A later algorithmic pass may compare expressions
-  while ignoring annotations.
-- Passes. An annotation adds structure and never removes structure, so
-  annotation is not a simplification. An algorithmic pass may drop any
-  annotation. A pass that rewrites inside an annotated expression drops the
-  annotation, unless the pass shows that the annotation still holds.
-
-Every free function that is defined as a composition annotates the result with
-the identifier of the free function, followed by the arguments of the free
-function in the order of the signature. An argument passed by keyword or
-filled by a default value gives the same annotation as an argument passed by
-position. For example,
-`transpose(A)` is
-`AnnotatedExpression(component_tensor(A[k, l], (l, k)), ("uflx.transpose", A))`.
-
-The identifier of a free function is the public name of the free function,
-qualified by the package name, such as `"uflx.transpose"` for the core or
-`"library.trace"` for a library with the package name `library`. Importing the
-package and looking up the public name gives back the free function, so a pass
-can check an annotation by calling the free function on the arguments and
-comparing the result with the wrapped expression.
-
-A user may annotate an expression with any `str` name. A name with a dot is
-reserved for the identifier of a free function.
-
-Examples:
-
-- `annotate(X[0]**Integer(2) + X[1]**Integer(2), ("height", X))` is an
-  `AnnotatedExpression` with value shape `()`, and prints as `height(X)`.
-- `transpose(A)` prints as `transpose(A)`, because the printer shows the last
-  component of the identifier.
-
 ## Tensor algebra
 
 ### Determinant
@@ -1329,8 +1283,7 @@ written in index notation.
 Examples, with a matrix `A` of value shape `(2, 2)`:
 
 - `transpose(A)` is not equal to `component_tensor(A[i, j], (j, i))` for user
-  indices `i` and `j`, because the index labels differ and because
-  `transpose(A)` is annotated.
+  indices `i` and `j`, because the index labels differ.
 
 ## Differentiation
 
@@ -1773,8 +1726,7 @@ A rule of a core transformation rewrites a node of the evaluated class to a
 mathematically equal expression of node classes of the core, and never
 simplifies. The rule dispatches on the class of the operand and moves the
 evaluated node towards the leaves. The pass rewrites inner nodes first, until
-no rule applies. A node without a rule is rebuilt on the rewritten edges, and a
-rule on an `AnnotatedExpression` drops the annotation.
+no rule applies. A node without a rule is rebuilt on the rewritten edges.
 
 Each core transformation rewrites only the evaluated class, so the three run
 separately or together. Evaluation runs the three together until no rule
