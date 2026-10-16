@@ -1759,44 +1759,53 @@ C = parameterised_domain(RD(0), pull_back(psi, c), RD(2))
 
 ## Core transformations
 
-The core has three transformations, `expand_pull_backs`, `apply_derivatives`
-and `expand_components`. Evaluation applies the three core transformations
-until no core transformation changes the expression. The number of rounds is
-bounded by the depth to which `PullBack`, `ExteriorDerivative` and `Components`
-nest. For example, the Hessian `components(d(components(d(f), P)), P)` needs
-`apply_derivatives`, `expand_components`, `apply_derivatives` and
-`expand_components`. Each core transformation is a pass with one rule for each
-node class of the core, and produces only node classes of the core. A rule
-replaces a node by a mathematically equal expression and never simplifies. A
-rule that does not rewrite a node rebuilds the node on the transformed edges,
-so the result is equal to the node when the edges are unchanged.
+The core has three transformations, each a pass (see
+[Basic implementation principles](#basic-implementation-principles)) that
+evaluates one lazy node class:
+
+| Core transformation                             | Evaluates            |
+| ----------------------------------------------- | -------------------- |
+| [`expand_pull_backs(f)`](#expanding-pull-backs) | `PullBack`           |
+| [`apply_derivatives(f)`](#applying-derivatives) | `ExteriorDerivative` |
+| [`expand_components(f)`](#expanding-components) | `Components`         |
+
+A rule of a core transformation rewrites a node of the evaluated class to a
+mathematically equal expression of node classes of the core, and never
+simplifies. The rule dispatches on the class of the operand and moves the
+evaluated node towards the leaves. The pass rewrites inner nodes first, until
+no rule applies. A node without a rule is rebuilt on the rewritten edges, and a
+rule on an `AnnotatedExpression` drops the annotation.
+
+Each core transformation rewrites only the evaluated class, so the three run
+separately or together. Evaluation runs the three together until no rule
+applies. A `PullBack` moves inside an `ExteriorDerivative`, and never the
+reverse, so evaluation terminates. A downstream lazy node class may join
+evaluation if the rules of the class rewrite only that class, move the node
+towards the leaves, and never reverse a core rule, as moving an
+`ExteriorDerivative` inside a `PullBack` would.
 
 A terminal is a `Coordinate`, or an expression with a set whose class is a leaf
-class of a downstream library. No core transformation rewrites a terminal.
-Every other pass, such as simplification or `units`, is not a core
-transformation.
+class of a downstream library. After evaluation, every `PullBack`,
+`ExteriorDerivative` and `Components` applies to an expression that contains a
+downstream terminal, except the coordinate frame $\mathrm{d}X$. An expression
+without a downstream terminal evaluates to a sum of products and tensor
+products of 0-forms and the coordinate 1-forms $\mathrm{d}X_i$.
 
 ### Expanding pull-backs
 
-`expand_pull_backs(f)` moves every `PullBack` in $f$ towards the leaves. For a
-`PullBack` by a domain $D$ with the parameter domain $P$ and the ambient
-coordinate domain $Q$, the pull-back commutes with every node class of the core
-except `Components` and `PullBack`. The pass expands an inner `PullBack` first.
-The rule for a node rebuilds the node on the pulled-back edges. The rule for
-`ExteriorDerivative(f, Q)` gives `ExteriorDerivative` of the pulled-back $f$ on
-$P$. The rule for `Coordinate(Q)` gives the parameterisation of $D$. An
-expression with no set, such as a literal or an `Integral`, is unchanged. The
-rule for an `AnnotatedExpression` drops the annotation.
+For a domain $D$ with the parameterisation $\psi$, the parameter domain $P$
+and the ambient coordinate domain $Q$, $\psi^*$ commutes with every node class
+of the core except `Components` and `PullBack`. Two rules are specific:
 
-A `PullBack` of a downstream terminal, of a `Components`, or of such a
-`PullBack` remains. `expand_pull_backs` is the pull-back to the parameter
-domain.
+- $\psi^* X = \psi$ for `Coordinate(Q)`, and an expression with no set is
+  unchanged.
+- $\psi^* \mathrm{d}f = \mathrm{d}(\psi^* f)$, with the exterior derivative on
+  $P$.
 
 ### Applying derivatives
 
-`apply_derivatives(f)` evaluates every `ExteriorDerivative` in $f$ by the
-rules of calculus: linearity for the linear node classes, and the chain rule for
-the node classes of the degree `()`. Three rules differ from vector calculus:
+The exterior derivative is linear for the linear node classes and follows the
+chain rule for the node classes of the degree `()`. Two rules are specific:
 
 - `Product` follows the graded Leibniz rule,
   $\mathrm{d}(\alpha \wedge \beta) = \mathrm{d}\alpha \wedge \beta + (-1)^k \alpha \wedge \mathrm{d}\beta$
@@ -1804,22 +1813,15 @@ the node classes of the degree `()`. Three rules differ from vector calculus:
   most one slot, so the same rule applies.
 - $\mathrm{d}\mathrm{d}\omega = 0$, and the exterior derivative of an
   expression with no set is `Zero`, with the degree raised by one.
-- The exterior derivative of a `Coordinate`, a downstream terminal, a
-  `Components` or a `PullBack` remains, so $\mathrm{d}X$ is the coordinate
-  frame, not the identity.
-
-An annotation is dropped.
 
 > Open: the rule for `Conjugate` is the conjugate of the exterior derivative,
 > which needs `Conjugate` of a differential form.
 
 ### Expanding components
 
-`expand_components(f)` evaluates every `Components` in $f$. The interior
-product $\iota_j$ with $\partial_j$ is algebraic, so the pass differentiates
-nothing. The pass expands an inner `Components` first. The interior product is
-linear for the linear node classes, and the new axis stays the last axis of the
-value shape. Three rules are specific to differential forms:
+The interior product $\iota_j$ with $\partial_j$ is linear for the linear node
+classes, and the new axis stays the last axis of the value shape. Two rules are
+specific:
 
 - `Product` follows the graded rule,
   $\iota_j(\alpha \wedge \beta) = \iota_j\alpha \wedge \beta + (-1)^k \alpha \wedge \iota_j\beta$
@@ -1829,19 +1831,8 @@ value shape. Three rules are specific to differential forms:
   $\iota_j(\alpha \otimes \beta) = (\iota_j\alpha) \otimes \beta$ if
   $\alpha$ has a slot, and $\iota_j(f \otimes \beta) = f \, \iota_j\beta$
   for a 0-form $f$.
-- The components of the coordinate frame are the identity,
-  $\iota_j \mathrm{d}X_i = \delta_{ij}$, and the components of a `Zero` are a
+- $\iota_j \mathrm{d}X_i = \delta_{ij}$, and the components of a `Zero` are a
   `Zero` with the new value shape and degree.
-- A `Components` of a downstream terminal, of a `PullBack`, or of an
-  `ExteriorDerivative` of anything other than `Coordinate(P)` remains.
-
-An annotation is dropped.
-
-When no core transformation changes the expression, every
-`ExteriorDerivative`, `Components` and `PullBack` applies to an expression that
-contains a downstream terminal, except the coordinate frame $\mathrm{d}X$. An
-expression without a downstream terminal is then a sum of products and tensor
-products of 0-forms and the coordinate 1-forms $\mathrm{d}X_i$.
 
 ## Topology of domains
 
