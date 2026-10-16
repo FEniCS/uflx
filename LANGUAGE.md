@@ -220,8 +220,9 @@ the graph. No information is held outside of the graph.
 Objects must satisfy the following rules:
 
 1. A construction argument must be one of a small curated set of types: a base
-   object, exactly `int`, a finite `float`, `str`, or a `tuple` whose items are
-   of these types. A `bool` is not an `int` for this rule. Construction
+   object, or exactly an `int`, a finite `float`, a `str`, or a `tuple` whose
+   items are of these types. A subclass of these Python types is not accepted,
+   so a `bool` is not an `int` and a named tuple is not a `tuple`. Construction
    arguments are therefore deeply immutable, have a hash that is deterministic
    across processes on the same machine, and are compared by type and value.
    `1`, `1.0` and `True` are distinct, `0.0` and `-0.0` are distinct, and every
@@ -257,7 +258,11 @@ Objects must satisfy the following rules:
    object. This rule is a hard rule. A free function never validates and never
    converts arguments. A free function only reads derived properties of
    arguments and constructs objects. An invalid argument is rejected by the
-   constructor of the first object that the argument makes invalid.
+   constructor of the first object that the argument makes invalid. Unless the
+   section of a class states otherwise, the constructor raises `TypeError` for
+   an argument of a type or a class that the constructor does not accept, and
+   `ValueError` for an argument of an accepted type or class with a value that
+   the constructor does not accept.
 9. A constructor has no default values, so every construction argument is
    written at construction. A free function may supply a default value.
 
@@ -482,7 +487,8 @@ Requires: [The base object `Base`](#the-base-object-base).
 
 Every `AbstractExpression` derives the value shape, the free indices, the
 scalar type, the support and the degree of the expression. The value shape is
-a `tuple` of [extents](#extents), one for each axis.
+a `tuple` of [extents](#extents), one for each axis. An expression with value
+shape `()` is a scalar.
 
 ### Index
 
@@ -1082,6 +1088,7 @@ Construction of `Indexed` raises:
 | Error        | Cause                                                                                                     |
 | ------------ | --------------------------------------------------------------------------------------------------------- |
 | `TypeError`  | An entry that is neither exactly `int`, `Index`, `EllipsisIndex` nor `AbstractIndexValue`.                |
+| `ValueError` | No entries.                                                                                               |
 | `IndexError` | A number of entries that does not cover exactly the rank. An expression with value shape `()` has rank 0. |
 | `ValueError` | More than one `EllipsisIndex` entry.                                                                      |
 | `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                                  |
@@ -1163,19 +1170,22 @@ and IndexSum](#componenttensor-and-indexsum), [Sum](#sum), [Product](#product),
 [Conjugate](#conjugate).
 
 A `EllipsisIndex` writes an operation on tensors of every rank as one fixed
-composition. With derived ellipsis indices `r` and `s` and an ordinary index
-`k`:
+composition. The operations in the table below are not part of the core. A
+library may provide the operations as free functions (see
+[New operations](#new-operations)). With derived ellipsis indices `r` and `s`
+and an ordinary index `k`:
 
 | Operation          | Fixed composition                                              |
 | ------------------ | -------------------------------------------------------------- |
 | `scale(a, T)`      | `component_tensor(a * T[r], (r,))`                             |
-| tensor sum `A + B` | `component_tensor(A[r] + B[r], (r,))`                          |
+| `tensor_sum(A, B)` | `component_tensor(A[r] + B[r], (r,))`                          |
 | `outer(u, v)`      | `component_tensor(u[r] * v[s], (r, s))`                        |
 | `dot(u, v)`        | `component_tensor(index_sum(u[r, k] * v[k, s], (k,)), (r, s))` |
 | `inner(A, B)`      | `index_sum(A[r] * conjugate(B[r]), (r,))`                      |
 
 `A[r] + B[r]` raises `ValueError` if the value shapes of `A` and `B` differ,
-because the extents of `r` differ.
+because the extents of `r` differ. The overload `A + B` calls `add`, so
+`A + B` accepts only scalars (see [Arithmetic](#arithmetic)).
 
 ### Transpose and matrix product
 
@@ -1230,7 +1240,7 @@ converts a single entry into a `tuple` of one entry and calls `indexed`. The
 conversion exists because of Python indexing syntax.
 
 This base class is sketched in pseudo-code according to the principles outlined
-above. Later classes will not be sketched in detail - `AbstractExpression` isn
+above. Later classes will not be sketched in detail - `AbstractExpression` is
 the only class with overloads.
 
 ```
