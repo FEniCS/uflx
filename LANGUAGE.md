@@ -38,6 +38,7 @@ content are explicitly marked.
 - [Coordinate domains](#coordinate-domains)
   - [AbstractCoordinateDomain](#abstractcoordinatedomain)
   - [RD](#rd)
+  - [Example: the unit simplex](#example-the-unit-simplex)
 - [Expressions and static type](#expressions-and-static-type)
   - [`AbstractExpression`](#abstractexpression)
   - [Index](#index)
@@ -89,6 +90,7 @@ content are explicitly marked.
   - [Example: quadrature](#example-quadrature)
   - [Example: the centroid of a triangle](#example-the-centroid-of-a-triangle)
 - [Topology of domains](#topology-of-domains)
+  - [Reference cell](#reference-cell)
   - [Cells](#cells)
   - [Facets](#facets)
   - [Restriction](#restriction)
@@ -417,6 +419,34 @@ A concrete subclass of `AbstractCoordinateDomain` for the whole of $R^n$.
 Example:
 
 - `RD(2)` is the parameter domain of the paraboloid example below.
+
+### Example: the unit simplex
+
+Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain).
+
+`UnitSimplex` is not part of the core. The examples use `UnitSimplex` as a
+concrete `AbstractCoordinateDomain`.
+
+Define the unit simplex in $R^n$,
+
+$\{p \in R^n : p_i \ge 0 \text{ for every } i, \ \sum_i p_i \le 1\}$,
+
+as a concrete `AbstractCoordinateDomain`.
+
+```python
+class UnitSimplex(AbstractCoordinateDomain):
+    def __init__(self, n: int):
+        if n < 0:
+            raise ValueError("Dimension must be non-negative.")
+        self._n = n
+
+    @property
+    def dimension(self) -> int:
+        return self._n
+```
+
+`UnitSimplex(1)` is the unit interval $[0, 1]$. `UnitSimplex(2)` is the unit
+triangle with vertices $(0, 0)$, $(1, 0)$ and $(0, 1)$.
 
 ## Expressions and static type
 
@@ -1465,7 +1495,8 @@ $$
 with the Lebesgue measure $\mathrm{d}X$ on $P$. For $n = 0$, the top form is a
 0-form, and the integral is the value of $f$ at the single point of $R^0$.
 
-`Integral(f, P)` requires a valid pair, and $f$
+`Integral(f, P)` requires a valid pair $(f, P)$ (see
+[Valid pair](#valid-pair)), and $f$
 must have the degree `(n,)`, or the degree `()` for $n = 0$, or construction
 raises `ValueError`.
 
@@ -1514,7 +1545,7 @@ domain is a free function (see
 
 Requires: [Domains](#domains),
 [AbstractCoordinateDomain](#abstractcoordinatedomain),
-[Coordinate](#coordinate), [Support](#support), [Free indices](#free-indices),
+[Coordinate](#coordinate), [Support](#support), [Valid pair](#valid-pair), [Free indices](#free-indices),
 [Scalar type](#scalar-type), [Degree](#degree).
 
 See also: [PullBack](#pullback), [Example: an affinely mapped
@@ -1547,11 +1578,11 @@ with an array `x` of value shape `(m, n)` and indices `i` and `k`,
 family of $m$ points in `RD(n)`. A family of domains writes a set of points
 once, such as the points of a quadrature rule.
 
-Construction raises `TypeError` if $P$ or $Q$ is not an
+`ParameterisedDomain(P, psi, Q)` requires a valid pair $(\psi, P)$ (see
+[Valid pair](#valid-pair)). Construction raises `TypeError` if $Q$ is not an
 `AbstractCoordinateDomain`. Construction raises `ValueError` if $\psi$ does not
 have value shape `(n,)` with $n$ the dimension of $Q$, if $\psi$ does not have
-the degree `()`, if $\psi$ has a support
-other than $P$, if $\psi$ is complex, or if $k > n$. Construction does not check that $\psi(P)$ lies in $Q$.
+the degree `()`, if $\psi$ is complex, or if $k > n$. Construction does not check that $\psi(P)$ lies in $Q$.
 
 $Q$ is usually `RD(n)`. A domain in a smaller $Q$, such as an edge of the unit
 triangle in the unit triangle, pulls back an expression on $Q$ (see
@@ -1601,7 +1632,7 @@ D = parameterised_domain(P, psi, RD(3))
 
 ### Example: an affinely mapped triangle
 
-Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain),
+Requires: [Example: the unit simplex](#example-the-unit-simplex),
 [Coordinate](#coordinate), [Tensor](#tensor), [Components](#components),
 [ParameterisedDomain](#parameteriseddomain).
 
@@ -1610,26 +1641,7 @@ $v_2 = (2, 3)$ is the image of the unit triangle under an affine map.
 
 Important point is that there is no topology here, just geometry.
 
-Define the unit simplex in $R^n$,
-
-$\{p \in R^n : p_i \ge 0 \text{ for every } i, \ \sum_i p_i \le 1\}$,
-
-as a concrete `AbstractCoordinateDomain`.
-
-```python
-class UnitSimplex(AbstractCoordinateDomain):
-    def __init__(self, n: int):
-        if n < 0:
-            raise ValueError("Dimension must be non-negative.")
-        self._n = n
-
-    @property
-    def dimension(self) -> int:
-        return self._n
-```
-
-`UnitSimplex(2)` is the unit triangle with vertices $(0, 0)$, $(1, 0)$ and
-$(0, 1)$. The affine map from `UnitSimplex(2)` onto the physical triangle is
+The affine map from `UnitSimplex(2)` onto the physical triangle is
 
 $$\psi(X) = v_0 + X_0 (v_1 - v_0) + X_1 (v_2 - v_0)
 = (1 + 2 X_0 + X_1, X_0 + 3 X_1).$$
@@ -1662,7 +1674,8 @@ class records how the domain is built.
 
 ### PullBack
 
-Requires: [ParameterisedDomain](#parameteriseddomain), [Support](#support),
+Requires: [ParameterisedDomain](#parameteriseddomain), [Valid pair](#valid-pair),
+[Support](#support),
 [Free indices](#free-indices), [Degree](#degree),
 [ExteriorDerivative](#exteriorderivative), [Example: an
 affinely mapped triangle](#example-an-affinely-mapped-triangle).
@@ -1679,9 +1692,9 @@ $f$ followed by the free indices of $D$, with each `Index` taken once. An
 `Index` that is free in both $f$ and $D$ must have the same extent in both, or
 construction raises `ValueError`. The scalar type follows the general rule.
 The second operand is a domain, not an expression, because a
-domain states $Q$. Construction raises `ValueError` unless $f$ has no support or
-the support of $f$ is $Q$. Construction raises `TypeError` if $D$ is not a
-`ParameterisedDomain`.
+domain states $Q$. Construction raises `TypeError` if $D$ is not a
+`ParameterisedDomain`. `PullBack(f, D)` requires a valid pair $(f, Q)$ (see
+[Valid pair](#valid-pair)).
 
 For a 0-form $f$, the pull-back is the composition $f \circ \psi$, the
 expression on $P$ with the value $f(\psi(p))$ at each point $p$ of $P$. For a
@@ -2010,9 +2023,13 @@ pass evaluates both to $(2, 4/3)$.
 
 ## Topology of domains
 
+### Reference cell
+
+Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain), [RD](#rd).
+
 ### Cells
 
-Requires: [Domains](#domains).
+Requires: [Domains](#domains), [Reference cell](#reference-cell).
 
 A domain can be divided into finitely many cells. A cell is a piece of the
 domain with the same dimension as the domain. Two cells meet only on the
@@ -2299,8 +2316,8 @@ operation built from other expressions is not a subclass but a free function
 (see [New operations](#new-operations)) or a node class of a language extension
 (see [Language extensions](#language-extensions)). A contract is
 part of the class, never a global registry. For example, a
-downstream subclass of `AbstractCoordinateDomain`, such as `UnitSimplex` in the
-[affinely mapped triangle](#example-an-affinely-mapped-triangle), provides the
+downstream subclass of `AbstractCoordinateDomain`, such as
+[`UnitSimplex`](#example-the-unit-simplex), provides the
 dimension, and every core transformation handles the coordinate function of
 the subclass through `Coordinate`.
 
