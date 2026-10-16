@@ -653,9 +653,6 @@ must have the same extent in both edges, or construction raises `ValueError`.
 
 The following node classes state otherwise:
 
-- `Sum` and `Tensor`: all operands, or all entries, must have the same free
-  indices with the same extents, or construction raises `ValueError`. The
-  order of the free indices follows the general rule.
 - `Indexed`: see [Indexed](#indexed).
 - `ComponentTensor` and `IndexSum`: see
   [ComponentTensor and IndexSum](#componenttensor-and-indexsum).
@@ -663,6 +660,8 @@ The following node classes state otherwise:
 
 Summation is never implicit. `a[i] * b[i]` has the free index `i` and denotes
 the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], (i,))`.
+The operands of a node may have different free indices, so `a[i] + b[j]` has
+the free indices `i` and `j` and denotes the outer sum.
 
 ### Scalar type
 
@@ -905,11 +904,10 @@ slot, so the product of two 1-forms is a 2-form with the degree `(2,)`, not a
 double form with the degree `(1, 1)`.
 
 No fixed composition of the other node classes multiplies, so `Product` is a
-node class. `Product`, [`TensorProduct`](#tensorproduct),
-[`Division`](#division) and [`Power`](#power) combine the free indices of two
-operands that differ, by the general rule of [Free indices](#free-indices). So
-every contraction is an `IndexSum` of one of the four node classes, such as
-`index_sum(a[i] * b[i], (i,))` or `index_sum(a[i] / b[i], (i,))`.
+node class. Every node class combines the free indices of operands that
+differ, by the general rule of [Free indices](#free-indices), unless the node
+class states otherwise. So a contraction is an `IndexSum` of any node class,
+such as `index_sum(a[i] * b[i], (i,))` or `index_sum(a[i] / b[i], (i,))`.
 
 Examples, with a scalar $f$, the 1-forms $\mathrm{d}x$ and $\mathrm{d}y$ and a
 double form $S$ with the degree `(1, 1)`:
@@ -1192,7 +1190,8 @@ shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
   `(1,)`, `index_sum(a[i] * dX[i], (i,))` is the 1-form
   $a_0 \mathrm{d}x + a_1 \mathrm{d}y + a_2 \mathrm{d}z$, with the degree
   `(1,)`.
-- `a[i] + b[j]` raises `ValueError`, because the free indices differ.
+- `a[i] + b[j]` has the free indices `((i, 3), (j, 3))`, the outer sum of `a`
+  and `b`.
 - `A[i, i]` raises `ValueError`, because `i` occurs twice.
 
 > Note: `opt_einsum` can directly plan a contract path for a given contraction,
@@ -1379,8 +1378,8 @@ def add(first: AbstractExpression, second: AbstractExpression) -> Sum:
         TypeError: From the constructor of Sum, if a summand is not an
             expression.
         ValueError: From the constructor of Sum, if a summand does not have
-            value shape (), if the free indices of the summands differ, if
-            the summands have different supports, or if the degrees differ.
+            value shape (), if an index has two extents, if the summands
+            have different supports, or if the degrees differ.
     """
     # The constructor of Sum validates.
     return Sum(first, second)
