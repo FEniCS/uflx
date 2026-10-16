@@ -15,11 +15,11 @@ domain specific languages for variational forms (e.g. UFL, ngsolve).
 This document has been co-created with Claude Opus 5.5 which has presumably
 been trained on a large corpus of material related to modern differential
 geometry, algorithms, functional programming and the source code of Firedrake,
-DOLFINx, UFL, FFCx, TSFC. That said, Claude Code was specifically instructed
-not to look at any materials or source code directly. The quality of the
-document and resulting design is substantially higher than what could be
-achieved through 'old-fashioned' means. Sections with fully LLM generated
-content are explicitly marked.
+DOLFINx, UFL, FFCx, TSFC, GEM and many other packages. That said, Claude Code
+was specifically instructed not to look at any materials or source code
+directly. The quality of the document and resulting design is substantially
+higher than what could be achieved through 'old-fashioned' means. Sections with
+fully LLM generated content are explicitly marked.
 
 ## Contents
 
@@ -44,6 +44,7 @@ content are explicitly marked.
   - [Index](#index)
   - [EllipsisIndex](#ellipsisindex)
   - [Extents](#extents)
+  - [AbstractIndexValue](#abstractindexvalue)
   - [Free indices](#free-indices)
   - [Scalar type](#scalar-type)
   - [Support](#support)
@@ -552,6 +553,35 @@ Example:
   an expression `weights` of value shape `(r,)` raises `ValueError` in
   `weights[i] * points[i, 0]`, because the index `i` has two extents.
 
+### AbstractIndexValue
+
+Requires: [The base object `Base`](#the-base-object-base), [Extents](#extents).
+
+See also: [Indexed](#indexed), [Facets of a topology](#facets-of-a-topology).
+
+An abstract subclass of the base object `AbstractIndexValue` for an index whose
+value is fixed but not known during construction, such as the local number of
+the facet of a cell in a facet integral, which the solver gives for each facet.
+An `AbstractIndexValue` is not an expression and not a free index. A concrete
+`AbstractIndexValue` is a subclass outside the core and provides `extent`, an
+extent. The value is an `int` $v$ with $0 \le v <$ `extent`.
+
+An `AbstractIndexValue` is an entry of [Indexed](#indexed). The entry covers
+one axis, as an `int` entry does, and the extent of the entry must equal the
+extent of the axis.
+
+> Legacy note: GEM, the intermediate language of TSFC, has `VariableIndex` for
+> the same purpose -- not fact checked.
+
+Example:
+
+- With an `AbstractIndexValue` `l` with the extent 3, and the table `starts` of
+  value shape `(3, 2)` of the
+  [boundary example](#example-integrating-over-the-boundary-of-a-triangle),
+  `starts[l, k]` is the start of edge `l`, with the free index `k`. With an
+  `AbstractIndexValue` with the extent 4, the same expression raises
+  `IndexError`.
+
 ### Free indices
 
 Requires: [`AbstractExpression`](#abstractexpression), [Index](#index),
@@ -982,8 +1012,9 @@ Examples, with `zero, one, two = Integer(0), Integer(1), Integer(2)`:
 ### Indexed
 
 Requires: [`AbstractExpression`](#abstractexpression), [Index](#index),
-[EllipsisIndex](#ellipsisindex), [Extents](#extents), [Free
-indices](#free-indices), [Support](#support), [Degree](#degree).
+[EllipsisIndex](#ellipsisindex), [Extents](#extents),
+[AbstractIndexValue](#abstractindexvalue), [Free indices](#free-indices),
+[Support](#support), [Degree](#degree).
 
 See also: [Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative),
 [Example: a paraboloid](#example-a-paraboloid).
@@ -996,17 +1027,20 @@ tensor-valued expression.
 `Indexed(expression, indices)` stores:
 
 - The expression, an `AbstractExpression` of rank $r$.
-- The indices, a `tuple` of entries. Each entry is an `int`, an `Index` or a
-  `EllipsisIndex` (see [Index](#index) and [EllipsisIndex](#ellipsisindex)). At most one entry is a
+- The indices, a `tuple` of entries. Each entry is an `int`, an `Index`, a
+  `EllipsisIndex` or an `AbstractIndexValue` (see [Index](#index),
+  [EllipsisIndex](#ellipsisindex) and
+  [AbstractIndexValue](#abstractindexvalue)). At most one entry is a
   `EllipsisIndex`.
 
-Indexing is full indexing only. Each `int` and each `Index` entry covers one
-axis, and a `EllipsisIndex` entry covers every axis that the other entries do not
+Indexing is full indexing only. Each `int`, each `Index` and each
+`AbstractIndexValue` entry covers one axis, and a `EllipsisIndex` entry covers every axis that the other entries do not
 cover. Without a `EllipsisIndex`, the number of entries must equal $r$. With a
 `EllipsisIndex`, the number of other entries must be at most $r$. Each `int` entry
 $i_j$ must index an axis with an `int` extent $n_j$ and must satisfy
 $0 \le i_j < n_j$, where `(n_0, ..., n_{r-1})` is the value
-shape of the expression. Each `Index` entry $i_j$ takes the extent $n_j$. A
+shape of the expression. Each `AbstractIndexValue` entry must have the extent
+$n_j$. Each `Index` entry $i_j$ takes the extent $n_j$. A
 `EllipsisIndex` takes the `tuple` of the extents of the axes that the `EllipsisIndex`
 covers.
 
@@ -1021,11 +1055,12 @@ Construction of `Indexed` raises:
 
 | Error        | Cause                                                                                                     |
 | ------------ | --------------------------------------------------------------------------------------------------------- |
-| `TypeError`  | An entry that is neither exactly `int`, `Index` nor `EllipsisIndex`.                                      |
+| `TypeError`  | An entry that is neither exactly `int`, `Index`, `EllipsisIndex` nor `AbstractIndexValue`.                |
 | `IndexError` | A number of entries that does not cover exactly the rank. An expression with value shape `()` has rank 0. |
 | `ValueError` | More than one `EllipsisIndex` entry.                                                                      |
 | `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                                  |
 | `IndexError` | An `int` entry for an axis whose extent is not an `int`.                                                  |
+| `IndexError` | An `AbstractIndexValue` entry whose extent differs from the extent of the axis.                           |
 | `ValueError` | An `Index` that occurs twice, or that is already free.                                                    |
 
 A negative index is rejected rather than converted, so the stored indices are
@@ -2052,9 +2087,11 @@ that part of each cut cell, so the number of points differs from cell to cell.
 
 > The points and the weights are leaves of a small
 > [language extension](#language-extensions) for kernel inputs:
-> `RuntimeExtent(label)`, an `AbstractExtent`, and
+> `RuntimeExtent(label)`, an `AbstractExtent`,
 > `RuntimeArray(label, value_shape)`, an array such as quadrature data, the
-> coefficients of a function on a cell, or a constant.
+> coefficients of a function on a cell, or a constant, and
+> `RuntimeIndex(label, extent)`, an `AbstractIndexValue`, such as the local
+> number of a facet.
 
 With `T`, `f`, `i` and `k` of the quadrature example:
 
@@ -2311,7 +2348,7 @@ type $j$ is the vertex `cells[j][c][i]` of the topology. The cell types are
 reference cells, so that each cell has numbered vertices.
 
 > This is primarily useful for testing UFLx ideas later, but also covers
-> splits.
+> Alfeld splits.
 
 ```python
 class StaticTopology(AbstractTopology):
@@ -2684,7 +2721,8 @@ Base
 ├── AbstractExpression
 ├── Index                                 named by a label, not an expression
 ├── EllipsisIndex                         covers any number of axes
-└── AbstractExtent                        extent not known during construction
+├── AbstractExtent                        extent not known during construction
+└── AbstractIndexValue                    index value not known during construction
 
 # Algebra
 AbstractExpression
@@ -2701,7 +2739,7 @@ AbstractExpression
 ├── TensorProduct                         ⊗, concatenates slots
 ├── SquareRoot
 ├── Tensor                                stacks entries along a new axis
-├── Indexed                               full indexing, int or Index entries
+├── Indexed                               full indexing, int, Index or index value entries
 ├── ComponentTensor                       binds indices to tensor axes
 └── IndexSum                              sums over bound indices
 
@@ -2781,6 +2819,7 @@ rules in the section of the concrete class.
 | `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`     |                                                                   |
 | `AbstractExpression`                           |                                                          | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree` |
 | `Index`, `EllipsisIndex`                       | `label`                                                  |                                                                   |
+| `AbstractIndexValue`                           | `extent`, in every concrete subclass                     |                                                                   |
 | `Integer`, `Float`                             | `value`                                                  |                                                                   |
 | `Zero`                                         | `value_shape`, `free_indices`, `degree`                  |                                                                   |
 | `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                        |                                                                   |
