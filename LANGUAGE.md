@@ -22,7 +22,7 @@ analysis, and their intersection, without finite element (numerical analysis)
 concepts, should be all that is required. This draft of the scheme requires
 knowledge of calculus on intrinsic manifolds, i.e. a coordinate-free
 representation. This provides a very compact and dimension-free representation
-of many concepts already in FEniCS.
+of many concepts already in UFL.
 
 Finite element and numerical analysis concepts, when necessary, will be added
 on top of the core, or provided by external libraries (Basix being the
@@ -59,8 +59,10 @@ external library provides the concrete data behind the leaf nodes.
 - The mathematical fields provide a rich foundation for writing variational
   problems in a uniform way across geometric dimensions, i.e. 'special cases'
   for particular dimensions do not exist, and so should not exist in the core.
-- The core should not contain any algorithm that is largely focused on
-  producing convenient output for form compilers.
+- The core does not contain algorithms for the convenience of a form
+  compiler. A form compiler states the forms that the form compiler accepts.
+  A pass outside the core lowers a form to those forms, and the pass produces
+  only node classes of the core.
 
 ## Rules of the language
 
