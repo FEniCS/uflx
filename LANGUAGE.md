@@ -1,6 +1,6 @@
 # Core UFLx language definition
 
-## Authors: Jack S. Hale, Matthew Scroggs
+## Authors: Jack S. Hale, Matthew Scroggs, Michal Habera
 
 This note describes the smallest core language behind UFLx. It intentionally
 avoids implementation details, compiler algorithms, and broad redesign ideas.
