@@ -1565,7 +1565,9 @@ $$
 $$
 
 so `PullBack` accepts any degree, including a double form such as a metric.
-The axes of the value shape are not transformed. A slot with a degree greater
+The axes of the value shape are not transformed. An axis of an expression on
+$Q$ is an array in the coordinate frame of $Q$, so the pull-back keeps the
+frame of $Q$. A slot with a degree greater
 than the dimension of $P$ gives the zero form, so a 2-form pulled back to a
 curve, and a 1-form pulled back to a point, are zero.
 
