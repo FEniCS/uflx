@@ -2013,41 +2013,50 @@ form the following hierarchy.
 > LLM generated graphs.
 
 ```
+# Coordinate domains
 Base
-├── AbstractCoordinateDomain              parameter space, stores n
-│   └── RD                                R^n
-│
+└── AbstractCoordinateDomain              parameter space, stores n
+    └── RD                                R^n
+
+# Expressions and static type
+Base
 ├── AbstractExpression
-│   ├── Integer                           literal
-│   ├── Float                             literal
-│   ├── ImaginaryUnit                     literal
-│   ├── Zero                              zero of any shape and degree, no support
-│   ├── Sum                               +
-│   ├── Product                           *, the wedge product
-│   ├── Power                             **
-│   ├── Division                          /
-│   ├── Absolute                          abs
-│   ├── Conjugate
-│   ├── TensorProduct                     ⊗, concatenates slots
-│   ├── SquareRoot
-│   ├── Tensor                            stacks entries along a new axis
-│   ├── Indexed                           full indexing, int or Index entries
-│   ├── ComponentTensor                   binds indices to tensor axes
-│   ├── IndexSum                          sums over bound indices
-│   ├── Determinant
-│   ├── Inverse
-│   │
-│   ├── Coordinate                        terminal, X on P
-│   ├── ExteriorDerivative                d with respect to P
-│   ├── Components                        first slot to an axis, with the frame of P
-│   ├── Integral                          integral of a top form over P, no support
-│   │
-│   └── PullBack                          pull-back of a differential form by a domain, support P of the domain
-│
 ├── Index                                 named by a label, not an expression
-├── EllipsisIndex                         covers any number of axes
-│
+└── EllipsisIndex                         covers any number of axes
+
+# Algebra
+AbstractExpression
+├── Integer                               literal
+├── Float                                 literal
+├── ImaginaryUnit                         literal
+├── Zero                                  zero of any shape and degree, no support
+├── Sum                                   +
+├── Product                               *, the wedge product
+├── Power                                 **
+├── Division                              /
+├── Absolute                              abs
+├── Conjugate
+├── TensorProduct                         ⊗, concatenates slots
+├── SquareRoot
+├── Tensor                                stacks entries along a new axis
+├── Indexed                               full indexing, int or Index entries
+├── ComponentTensor                       binds indices to tensor axes
+├── IndexSum                              sums over bound indices
+├── Determinant
+└── Inverse
+
+# Calculus on a coordinate domain
+AbstractExpression
+├── Coordinate                            terminal, X on P
+├── ExteriorDerivative                    d with respect to P
+├── Components                            first slot to an axis, with the frame of P
+└── Integral                              integral of a top form over P, no support
+
+# Maps between domains
+Base
 └── ParameterisedDomain                   stores P, ψ and Q
+AbstractExpression
+└── PullBack                              pull-back of a differential form by a domain, support P of the domain
 ```
 
 ## Appendix: Free functions
