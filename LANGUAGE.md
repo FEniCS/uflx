@@ -1,5 +1,7 @@
 # Core UFLx language definition
 
+## Authors: Jack S. Hale, Matthew Scroggs
+
 This note describes the smallest core language behind UFLx. It intentionally
 avoids implementation details, compiler algorithms, and broad redesign ideas.
 It assumes knowledge of differential geometry, and functional analysis. Some
@@ -7,6 +9,108 @@ advanced differential geometry concepts are explained in more detail.
 
 This document is aimed at users and developers with extensive knowledge of
 domain specific languages for variational forms (e.g. UFL, ngsolve).
+
+## AI usage statement
+
+This document has been co-created with Claude Opus 5.5 which has presumably
+been trained on a large corpus of material related to modern differential
+geometry, algorithms, functional programming and the source code of Firedrake,
+DOLFINx, UFL, FFCx, TSFC. That said, Claude Code was specifically instructed
+not to look at any materials or source code directly. The quality of the
+document and resulting design is substantially higher than what could be
+achieved through 'old-fashioned' means. Sections with fully LLM generated
+content are explicitly marked.
+
+## Contents
+
+- [Scope](#scope)
+  - [What UFLx is and isn't](#what-uflx-is-and-isnt)
+  - [Basic principles](#basic-principles)
+- [Rules of the language](#rules-of-the-language)
+  - [Basic implementation principles](#basic-implementation-principles)
+  - [The base object `Base`](#the-base-object-base)
+  - [Leaves and subclassing](#leaves-and-subclassing)
+  - [Properties and free functions](#properties-and-free-functions)
+  - [No simplification during construction](#no-simplification-during-construction)
+  - [Passes](#passes)
+  - [Kinds of code that produce objects](#kinds-of-code-that-produce-objects)
+  - [Enforcement](#enforcement)
+- [Coordinate domains](#coordinate-domains)
+  - [AbstractCoordinateDomain](#abstractcoordinatedomain)
+  - [RD](#rd)
+- [Expressions and static type](#expressions-and-static-type)
+  - [`AbstractExpression`](#abstractexpression)
+  - [Index](#index)
+  - [EllipsisIndex](#ellipsisindex)
+  - [Free indices](#free-indices)
+  - [Scalar type](#scalar-type)
+  - [Support](#support)
+  - [Degree](#degree)
+  - [Expressions as differential forms](#expressions-as-differential-forms)
+  - [Node class or free function](#node-class-or-free-function)
+- [Algebra](#algebra)
+  - [Literals](#literals)
+  - [Zero](#zero)
+  - [Arithmetic](#arithmetic)
+  - [Sum](#sum)
+  - [Product](#product)
+  - [Power](#power)
+  - [Negation and subtraction](#negation-and-subtraction)
+  - [Division](#division)
+  - [Absolute](#absolute)
+  - [Conjugate](#conjugate)
+  - [TensorProduct](#tensorproduct)
+  - [Elementary functions (very incomplete)](#elementary-functions-very-incomplete)
+  - [Tensor](#tensor)
+  - [Indexed](#indexed)
+  - [ComponentTensor and IndexSum](#componenttensor-and-indexsum)
+  - [Tensor algebra with EllipsisIndex](#tensor-algebra-with-ellipsisindex)
+  - [Transpose and matrix product](#transpose-and-matrix-product)
+  - [Operator overloads](#operator-overloads)
+  - [Numbers in expressions](#numbers-in-expressions)
+- [Calculus on a coordinate domain](#calculus-on-a-coordinate-domain)
+  - [Coordinate](#coordinate)
+  - [Valid pair](#valid-pair)
+  - [ExteriorDerivative](#exteriorderivative)
+  - [Components](#components)
+  - [Volume form](#volume-form)
+  - [Integral](#integral)
+- [Maps between domains](#maps-between-domains)
+  - [Domains](#domains)
+  - [ParameterisedDomain](#parameteriseddomain)
+  - [Example: a paraboloid](#example-a-paraboloid)
+  - [Example: an affinely mapped triangle](#example-an-affinely-mapped-triangle)
+  - [PullBack](#pullback)
+  - [Orientation of a domain](#orientation-of-a-domain)
+  - [Integral over a domain](#integral-over-a-domain)
+  - [Example: integrating over an edge](#example-integrating-over-an-edge)
+  - [Example: integrating over the boundary of a triangle](#example-integrating-over-the-boundary-of-a-triangle)
+  - [Points and point evaluation](#points-and-point-evaluation)
+  - [Example: quadrature](#example-quadrature)
+  - [Example: the centroid of a triangle](#example-the-centroid-of-a-triangle)
+- [Topology of domains](#topology-of-domains)
+  - [Cells](#cells)
+  - [Facets](#facets)
+- [Function spaces](#function-spaces)
+- [Functions](#functions)
+- [Geometry of decomposed domains](#geometry-of-decomposed-domains)
+  - [Coordinate field](#coordinate-field)
+  - [Cells as parameterised domains](#cells-as-parameterised-domains)
+- [Variational forms](#variational-forms)
+- [Core transformations](#core-transformations)
+  - [Expanding pull-backs](#expanding-pull-backs)
+  - [Applying derivatives](#applying-derivatives)
+  - [Expanding components](#expanding-components)
+- [Extending the core](#extending-the-core)
+  - [Language extensions](#language-extensions)
+  - [New questions](#new-questions)
+  - [New operations](#new-operations)
+  - [New subclasses](#new-subclasses)
+  - [New transformations](#new-transformations)
+- [Appendix: Class hierarchy](#appendix-class-hierarchy)
+- [Appendix: Free functions](#appendix-free-functions)
+- [Appendix: Properties](#appendix-properties)
+- [Appendix: Degree table](#appendix-degree-table)
 
 ## Scope
 
@@ -1639,6 +1743,16 @@ E = parameterised_domain(S, pull_back(psi, e), RD(2))
 - `pull_back(f, parameterised_domain(S, tensor((one - t, t)), RD(2)))`
   raises `ValueError`, because that domain lies in `RD(2)`, not in `T`.
 
+### Orientation of a domain
+
+Requires: [ParameterisedDomain](#parameteriseddomain),
+[Volume form](#volume-form).
+
+### Integral over a domain
+
+Requires: [PullBack](#pullback), [Integral](#integral),
+[Orientation of a domain](#orientation-of-a-domain).
+
 ### Example: integrating over an edge
 
 Requires: [PullBack](#pullback), [Integral](#integral),
@@ -1859,7 +1973,7 @@ tables.
 
 ### Example: the centroid of a triangle
 
-> LLM generated example.
+> LLM came up with this example.
 
 Requires: [Example: an affinely mapped
 triangle](#example-an-affinely-mapped-triangle), [PullBack](#pullback),
@@ -1888,6 +2002,10 @@ determinant. The centroid is the parameterisation of the point `C` of
 image of the centroid of `T`. The two expressions are not equal, and a later
 pass evaluates both to $(2, 4/3)$.
 
+> At this point, we can do no more on geometry before we do some work in
+> topology (cells, facets, families, orientations) and functions. Then, we can
+> return to geometry later.
+
 ## Topology of domains
 
 ### Cells
@@ -1912,6 +2030,17 @@ metric.
 ## Function spaces
 
 ## Functions
+
+## Geometry of decomposed domains
+
+### Coordinate field
+
+Requires: [Functions](#functions),
+[ParameterisedDomain](#parameteriseddomain).
+
+### Cells as parameterised domains
+
+Requires: [Cells](#cells), [Coordinate field](#coordinate-field).
 
 ## Variational forms
 
