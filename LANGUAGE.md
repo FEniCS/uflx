@@ -437,7 +437,8 @@ See also: [Example: a paraboloid](#example-a-paraboloid).
 
 A concrete subclass of `AbstractCoordinateDomain` for the whole of $R^n$.
 
-`RD(n)` stores the dimension $n$, an `int` with $n \ge 0$.
+`RD(n)` stores the dimension $n$, an `int` with $n \ge 0$. Construction raises
+`TypeError` if $n$ is not an `int`, and `ValueError` if $n < 0$.
 
 Example:
 
@@ -480,7 +481,8 @@ triangle with vertices $(0, 0)$, $(1, 0)$ and $(0, 1)$.
 Requires: [The base object `Base`](#the-base-object-base).
 
 Every `AbstractExpression` derives the value shape, the free indices, the
-scalar type, the support and the degree of the expression.
+scalar type, the support and the degree of the expression. The value shape is
+a `tuple` of [extents](#extents), one for each axis.
 
 ### Index
 
@@ -501,7 +503,8 @@ expression.
 
 `Index(label)` stores the label. The label is either a `str`, for an index
 that the user names, or a `tuple` that contains graph objects, for an index
-that a free function derives from the free function's operands. An `Index`
+that a free function derives from the free function's operands. Construction
+raises `TypeError` if the label is neither a `str` nor a `tuple`. An `Index`
 has no extent of its own. An `Index` takes the extent of the axis that the
 `Index` indexes.
 
@@ -561,6 +564,9 @@ expression. A concrete `AbstractExtent` is a subclass outside the core, such as
 
 An `AbstractExtent` has no arithmetic and no ordering, so the rules of the
 core, which compare extents by equality, accept an `AbstractExtent` unchanged.
+Two `AbstractExtent`s are the same extent only if the two `AbstractExtent`s are
+equal as base objects, so a concrete `AbstractExtent` stores the arguments that
+identify the extent, such as a label.
 
 Example:
 
@@ -615,7 +621,6 @@ Unless a node class states otherwise, the free indices of a node are the free
 indices of the edges of the node that are expressions, in edge order, with each
 `Index` taken once at the first occurrence. An `Index` that occurs in two edges
 must have the same extent in both edges, or construction raises `ValueError`.
-Terminals and literals have no free indices.
 
 The following node classes state otherwise:
 
@@ -767,13 +772,13 @@ Float(3.5)
 ImaginaryUnit()
 ```
 
-Each literal constructor accepts only exact types and raises `TypeError` or
-`ValueError` otherwise:
+Each literal constructor accepts only exact types. Construction raises
+`TypeError` for a value of another type, and `ValueError` for a `float` that is
+not finite, as in rule 1 of [the base object](#the-base-object-base):
 
 - `Integer(v)` takes an `int` $v$. A `bool` is rejected, although `bool` is a
   subclass of `int`.
-- `Float(v)` takes a finite `float` $v$. NaN and infinities are rejected,
-  because a NaN is not equal to itself. `Float(-0.0) != Float(0.0)`.
+- `Float(v)` takes a finite `float` $v$. `Float(-0.0) != Float(0.0)`.
 - `ImaginaryUnit()` takes no arguments and denotes $i$.
 
 A rational number is the `Division` of two `Integer`s, such as
@@ -790,7 +795,11 @@ indices](#free-indices), [Support](#support), [Degree](#degree).
 See also: [Indexed](#indexed), [Applying derivatives](#applying-derivatives).
 
 `Zero(value_shape, free_indices, degree)` is the zero with the given value
-shape, free indices and degree, and has no support. `apply_derivatives` produces
+shape, free indices and degree, and has no support. The value shape, the free
+indices and the degree have the forms of [Extents](#extents), [Free
+indices](#free-indices) and [Degree](#degree). Construction raises `TypeError`
+for an argument of another form, and `ValueError` for a negative extent, an
+index that occurs twice, or a slot degree less than 1. `Zero` is real. `apply_derivatives` produces
 `Zero` (see [Applying derivatives](#applying-derivatives)). No fixed
 composition gives a zero with free indices or with a non-empty degree, because
 `Integer(0) * a[i]` has edges to `a`, and $0 \, \mathrm{d}x$ has edges to
