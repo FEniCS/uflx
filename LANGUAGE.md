@@ -94,8 +94,10 @@ content are explicitly marked.
 - [Topology of domains](#topology-of-domains)
   - [AbstractCellType](#abstractcelltype)
   - [Reference cell](#reference-cell)
+  - [Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell)
   - [AbstractTopology](#abstracttopology)
-  - [Facets](#facets)
+  - [Example: a static topology](#example-a-static-topology)
+  - [Facets of a topology](#facets-of-a-topology)
   - [Restriction](#restriction)
   - [Integral over a topology](#integral-over-a-topology)
 - [Function spaces](#function-spaces)
@@ -2181,7 +2183,60 @@ Examples:
   with $\psi(t) = (1 - t, t)$, as in the
   [ParameterisedDomain](#parameteriseddomain) examples.
 - The unit interval has the vertices $(0)$ and $(1)$, and two facets over
-  `RD(0)` with the vertex numbers $(1)$ and $(0)$.
+  `RD(0)` with the vertex numbers $(0)$ and $(1)$.
+
+### Example: the unit simplex as a reference cell
+
+> LLM generated content.
+
+Requires: [Example: the unit simplex](#example-the-unit-simplex),
+[Literals](#literals), [Tensor](#tensor), [Reference cell](#reference-cell).
+
+`ReferenceSimplex(n)` is the unit simplex in $R^n$ as a reference cell, for
+$n \ge 1$. Vertex 0 is the origin, and vertex $v \ge 1$ is the unit vector
+$e_{v-1}$. For $n \ge 2$, facet $j$ is opposite vertex $j$, with the other
+vertex numbers in increasing order. For $n = 1$, facet $j$ is vertex $j$. This
+is the numbering of Basix.
+
+```python
+class ReferenceSimplex(AbstractReferenceCell):
+    def __init__(self, n: int):
+        if n < 1:
+            raise ValueError("Dimension must be at least 1.")
+        self._n = n
+
+    @property
+    def dimension(self) -> int:
+        return self._n
+
+    @property
+    def vertices(self) -> AbstractExpression:
+        n = self._n
+        return tensor(
+            tuple(
+                tensor(tuple(Integer(1 if k == v - 1 else 0) for k in range(n)))
+                for v in range(n + 1)
+            )
+        )
+
+    @property
+    def facets(self) -> tuple[tuple[AbstractCoordinateDomain, tuple[int, ...]], ...]:
+        n = self._n
+        if n == 1:
+            return ((RD(0), (0,)), (RD(0), (1,)))
+        F = ReferenceSimplex(n - 1)
+        return tuple((F, tuple(v for v in range(n + 1) if v != j)) for j in range(n + 1))
+```
+
+`ReferenceSimplex(2)` and `ReferenceSimplex(1)` have the vertices and the
+facets of the unit triangle and the unit interval in the
+[Reference cell](#reference-cell) examples. `ReferenceSimplex(3)` has the
+facets $(1, 2, 3)$, $(0, 2, 3)$, $(0, 1, 3)$ and $(0, 1, 2)$. The facet types
+of `ReferenceSimplex(n)` are `((ReferenceSimplex(n - 1), n + 1),)`, or
+`((RD(0), 2),)` for $n = 1$.
+
+`ReferenceSimplex(2)` and `UnitSimplex(2)` are the same set but different
+coordinate domains, so an expression on one is not an expression on the other.
 
 ### AbstractTopology
 
@@ -2189,7 +2244,8 @@ Requires: [The base object `Base`](#the-base-object-base), [Index](#index),
 [Extents](#extents), [AbstractCellType](#abstractcelltype),
 [Reference cell](#reference-cell).
 
-See also: [Facets](#facets), [Restriction](#restriction),
+See also: [Facets of a topology](#facets-of-a-topology),
+[Restriction](#restriction),
 [Integral over a topology](#integral-over-a-topology),
 [Cells as parameterised domains](#cells-as-parameterised-domains).
 
@@ -2241,21 +2297,73 @@ Examples:
 - A mesh of a solver with triangles and quadrilaterals has two reference cells
   as the cell types, and two `AbstractExtent`s as the numbers of cells.
 
-### Facets
+### Example: a static topology
 
-Requires: [AbstractTopology](#abstracttopology).
+> LLM generated content.
 
-A facet is a piece of the boundary of a cell, one dimension lower than the
-cell. A facet in the boundary of exactly one cell is an exterior facet. A facet shared
-by two cells is an interior facet.
+Requires: [AbstractTopology](#abstracttopology),
+[Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell).
 
-Cells and facets are topological. Defining cells and facets does not require a
-metric.
+`StaticTopology(cell_types, cells)` is a topology whose cells are known during
+construction. Entry $j$ of `cells` is a `tuple` with the vertices of each cell
+of type $j$, as vertex numbers of the topology. Local vertex $i$ of cell $c$ of
+type $j$ is the vertex `cells[j][c][i]` of the topology. The cell types are
+reference cells, so that each cell has numbered vertices.
+
+> This is primarily useful for testing UFLx ideas later, but also covers
+> splits.
+
+```python
+class StaticTopology(AbstractTopology):
+    def __init__(
+        self,
+        cell_types: tuple[AbstractReferenceCell, ...],
+        cells: tuple[tuple[tuple[int, ...], ...], ...],
+    ):
+        if len(cells) != len(cell_types):
+            raise ValueError("Need one tuple of cells for each cell type.")
+        self._cell_types = cell_types
+        self._cells = cells
+
+    @property
+    def cell_types(self) -> tuple[AbstractReferenceCell, ...]:
+        return self._cell_types
+
+    @property
+    def num_cells(self) -> tuple[int, ...]:
+        return tuple(len(c) for c in self._cells)
+```
+
+With `K = ReferenceSimplex(2)`:
+
+```python
+# The unit square divided into two triangles, with the numbers of cells (2,).
+square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),))
+
+# The Alfeld split of a triangle at vertex 3, with the numbers of cells (3,).
+alfeld = StaticTopology((K,), (((0, 1, 3), (1, 2, 3), (2, 0, 3)),))
+```
+
+A facet of a cell is a set of vertex numbers of the topology, found through the
+facets of `K`. In `square`, the facet $\{1, 2\}$ is interior and the other
+four facets are exterior. In `alfeld`, the three facets that contain vertex 3
+are interior, and the three other facets are exterior. A `StaticTopology` has
+no coordinates. The positions of the vertices come from the
+[coordinate field](#coordinate-field).
+
+### Facets of a topology
+
+Requires: [AbstractCellType](#abstractcelltype),
+[AbstractTopology](#abstracttopology).
+
+A facet of a topology $T$ is a facet of a cell of $T$. A facet of $T$ that is a
+facet of exactly one cell is an exterior facet. A facet of $T$ that is a facet
+of two cells is an interior facet.
 
 ### Restriction
 
-Requires: [AbstractTopology](#abstracttopology), [Facets](#facets),
-[Support](#support).
+Requires: [AbstractTopology](#abstracttopology),
+[Facets of a topology](#facets-of-a-topology), [Support](#support).
 
 ### Integral over a topology
 
