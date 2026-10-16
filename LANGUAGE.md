@@ -1167,7 +1167,8 @@ converts a single entry into a `tuple` of one entry and calls `indexed`. The
 conversion exists because of Python indexing syntax.
 
 This base class is sketched in pseudo-code according to the principles outlined
-above. Later classes will not be sketched in detail.
+above. Later classes will not be sketched in detail - `AbstractExpression` isn
+the only class with overloads.
 
 ```
 class AbstractExpression(Base, ABC):
@@ -2115,25 +2116,19 @@ See also: [Reference cell](#reference-cell),
 [AbstractTopology](#abstracttopology).
 
 An abstract subclass of the base object `AbstractCellType` for the type of a
-cell. An `AbstractCellType` is not an expression. A concrete `AbstractCellType`
-is a subclass outside the core.
+cell. A concrete `AbstractCellType` is a subclass outside the core and
+provides:
 
-Every concrete `AbstractCellType` $C$ provides:
+- `dimension`, an `int` $n \ge 1$.
+- `facet_types`, a `tuple` of pairs of a facet type $F$ and the number of
+  facets of the type $F$, an extent. $F$ is an `AbstractCellType` of dimension
+  $n - 1$, or `RD(0)` for $n = 1$. The facet types are distinct.
 
-- The dimension $n$, an `int` with $n \ge 1$, provided by the property
-  `dimension`.
-- The facet types, a `tuple` provided by the property `facet_types`. Each
-  entry is a pair of a facet type $F$ and the number of facets of the type
-  $F$, an extent. $F$ is an `AbstractCellType` of dimension $n - 1$ for
-  $n \ge 2$, and `RD(0)` for $n = 1$. The facet types are distinct.
-
-A number of facets that is an `AbstractExtent` may differ from cell to cell,
-in the same way as the number of points in the
-[cut cell example](#example-integrating-over-a-cut-cell).
-
-A reference cell is a cell type with coordinates (see
-[Reference cell](#reference-cell)). A cell type without a reference cell, such
-as the polygon of the virtual element method, is not yet covered.
+A number of facets that is an `AbstractExtent` may differ from cell to cell, as
+the number of points does in the
+[cut cell example](#example-integrating-over-a-cut-cell). A cell type without
+a reference cell, such as a polygon of the virtual element method, is not yet
+covered.
 
 ### Reference cell
 
@@ -2144,35 +2139,29 @@ Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain), [RD](#rd),
 See also: [AbstractTopology](#abstracttopology).
 
 An abstract subclass of `AbstractCoordinateDomain` and of `AbstractCellType`
-for reference cells `AbstractReferenceCell`.
+for a reference cell `AbstractReferenceCell`, a coordinate domain with
+numbered vertices and numbered facets. A concrete reference cell is a subclass
+outside the core, such as a reference cell version of
+[`UnitSimplex`](#example-the-unit-simplex). A concrete `AbstractReferenceCell`
+$K$ of dimension $n$ also provides:
 
-A reference cell is a coordinate domain with numbered vertices and numbered
-facets. A concrete reference cell is a subclass outside the core, such as a
-reference cell version of [`UnitSimplex`](#example-the-unit-simplex).
+- `vertices`, a constant expression with no support and value shape `(m, n)`.
+  Row $v$ holds the coordinates of vertex $v$.
+- `facets`, a `tuple` of pairs of a parameter domain $F$ and a `tuple` of
+  vertex numbers of $K$, one for each vertex of $F$, in the order of the
+  vertices of $F$. $F$ is an `AbstractReferenceCell` of dimension $n - 1$, or
+  `RD(0)` with one vertex number for $n = 1$. The boundary of $K$ is the union
+  of the facets.
 
-Every concrete `AbstractReferenceCell` $K$ of dimension $n \ge 1$ provides, in
-addition to the dimension:
+The facet types of $K$ pair each distinct parameter domain $F$ of the facets
+with the number of facets with the parameter domain $F$, an `int`.
 
-- The vertices, a constant expression with no support and value shape
-  `(m, n)`, provided by the property `vertices`. Row $v$ holds the coordinates
-  of vertex $v$.
-- The facets, a tuple provided by the property `facets`. Each facet is a pair
-  of a parameter domain $F$ and a tuple of vertex numbers of $K$. $F$ is an
-  `AbstractReferenceCell` of dimension $n - 1$ for $n \ge 2$, and `RD(0)` for
-  $n = 1$. For $n \ge 2$, the tuple lists one vertex number of $K$ for each
-  vertex of $F$, in the order of the vertices of $F$. For $n = 1$, the tuple
-  lists one vertex number. The boundary of $K$ is the union of the facets.
-
-$K$ derives the facet types from the facets. For each distinct parameter
-domain $F$ of the facets, the facet types contain the pair of $F$ and the
-number of facets with the parameter domain $F$, an `int`.
-
-A facet with the parameter domain $F$ and the vertex numbers
-$(w_0, w_1, \dots)$ is the domain `parameterised_domain(F, psi, K)`. For
-$n \ge 2$, $\psi$ is the affine map that sends vertex $j$ of $F$ to vertex
-$w_j$ of $K$ for $j < n$. The first $n$ vertices of $F$ must not lie in a
-hyperplane of $F$. For $n = 1$, $\psi$ is the constant vertex $w_0$ of $K$. The
-core does not check that $\psi(F)$ is the facet.
+The facet with the parameter domain $F$ and the vertex numbers
+$(w_0, w_1, \dots)$ is `parameterised_domain(F, psi, K)`. $\psi$ is the affine
+map that sends vertex $j$ of $F$ to vertex $w_j$ of $K$ for $j < n$, or the
+constant vertex $w_0$ of $K$ for $n = 1$. The first $n$ vertices of $F$ must
+not lie in a hyperplane of $F$. The core does not check that $\psi(F)$ is the
+facet.
 
 > In UFLx, a downstream library such as Basix provides the same data through a
 > concrete `AbstractReferenceCell`, so a facet is an ordinary
@@ -2180,22 +2169,19 @@ core does not check that $\psi(F)$ is the facet.
 > integral of a pull-back, as in the [boundary
 > example](#example-integrating-over-the-boundary-of-a-triangle).
 
-A sub-entity of $K$ of dimension $d < n - 1$ is a facet of a facet, with the
-vertex numbers of $K$ found through each facet. Two sub-entities with the same
-set of vertex numbers are the same sub-entity. A vertex is a sub-entity of
-dimension 0.
+A sub-entity of $K$ of dimension $d < n - 1$ is a facet of a facet. A
+sub-entity is identified by the set of the vertex numbers of $K$ of the
+sub-entity. A vertex is a sub-entity of dimension 0.
 
-Example:
+Examples:
 
-- The unit triangle as a reference cell has the vertices $(0, 0)$, $(1, 0)$
-  and $(0, 1)$. The unit triangle has three facets. The parameter domain of
-  each facet is the unit interval, and the vertex numbers are $(1, 2)$,
-  $(0, 2)$ and $(0, 1)$. Facet $j$ is opposite vertex $j$. Facet 0 is the
-  hypotenuse, with $\psi(t) = (1 - t, t)$, as in the
+- The unit triangle has the vertices $(0, 0)$, $(1, 0)$ and $(0, 1)$, and three
+  facets over the unit interval with the vertex numbers $(1, 2)$, $(0, 2)$ and
+  $(0, 1)$, so facet $j$ is opposite vertex $j$. Facet 0 is the hypotenuse,
+  with $\psi(t) = (1 - t, t)$, as in the
   [ParameterisedDomain](#parameteriseddomain) examples.
-- The unit interval as a reference cell has the vertices $(0)$ and $(1)$. The
-  unit interval has two facets. The parameter domain of each facet is `RD(0)`,
-  and the vertex numbers are $(1)$ and $(0)$.
+- The unit interval has the vertices $(0)$ and $(1)$, and two facets over
+  `RD(0)` with the vertex numbers $(1)$ and $(0)$.
 
 ### AbstractTopology
 
@@ -2204,49 +2190,42 @@ Requires: [The base object `Base`](#the-base-object-base), [Index](#index),
 [Reference cell](#reference-cell).
 
 See also: [Facets](#facets), [Restriction](#restriction),
+[Integral over a topology](#integral-over-a-topology),
 [Cells as parameterised domains](#cells-as-parameterised-domains).
 
 An abstract subclass of the base object `AbstractTopology` for a domain that
-is divided into cells, without coordinates. An `AbstractTopology` is not an
-expression and not a coordinate domain. A concrete `AbstractTopology` is a
+is divided into cells, without coordinates. A concrete `AbstractTopology` is a
 subclass outside the core, such as a subclass for the topology of the mesh of
-a solver.
+a solver, and provides:
 
-Every concrete `AbstractTopology` $T$ provides:
+- `cell_types`, a `tuple` of distinct `AbstractCellType`s $C_0, C_1, \dots$ of
+  the same dimension. A cell of type $j$ has the facets of $C_j$. If $C_j$ is a
+  reference cell, a cell of type $j$ has the vertices and the facets of $C_j$,
+  numbered as in $C_j$.
+- `num_cells`, a `tuple` with the number of cells of each type, so the length
+  of the `tuple` is known during construction. Entry $j$ is an `int`, such as
+  for a macro element, or an `AbstractExtent`, such as for the mesh of a
+  solver. For the mesh of a solver, the solver loops over the cells, and a
+  kernel computes the terms of one cell.
 
-- The cell types $C_0, C_1, \dots$, a `tuple` of distinct `AbstractCellType`s
-  of the same dimension, provided by the property `cell_types`. The cells with
-  the cell type $C_j$ are the cells of type $j$. Every cell of type $j$ has the
-  facets of $C_j$. If $C_j$ is a reference cell, every cell of type $j$ has the
-  vertices and the facets of $C_j$, numbered as in $C_j$.
-- The numbers of cells, a `tuple` of extents, provided by the property
-  `num_cells`. Entry $j$ is the number of cells of type $j$. The `tuple` has
-  one entry for each cell type, so the length of the `tuple` is known
-  during construction. Entry $j$ is an `int` if the number of cells is known
-  during construction, such as for a macro element, and an `AbstractExtent`
-  otherwise, such as for the mesh of a solver. For the mesh of a solver, the
-  solver loops over the cells, and a kernel computes the terms of one cell.
-
-The dimension of $T$ is the dimension of the cell types, returned by the
-derived property `dimension`. Two topologies are the same topology only if the
-two topologies are equal as base objects, so a concrete `AbstractTopology`
-stores the arguments that identify the topology, such as a label.
+The derived property `dimension` is the dimension of the cell types. Two
+topologies are the same topology only if the two topologies are equal as base
+objects, so a concrete `AbstractTopology` stores the arguments that identify
+the topology, such as a label.
 
 > This assumption needs thinking about because it is violated in non-conforming
 > situations.
 
-Two cells of $T$ meet on a whole sub-entity of each cell, or do not meet. The
-sub-entity is a sub-entity of both cells, so $T$ is conforming. The shared
-sub-entity has the same cell type in both cells, also for two cells of
-different types, such as a triangle and a quadrilateral that share an edge.
+Two cells of $T$ meet on a whole sub-entity of both cells, with the same cell
+type in both cells, or do not meet, so $T$ is conforming. For example, a
+triangle and a quadrilateral may share an edge.
 
-The cells of each type are numbered from 0. The free function
-`cell_index(T, j)` returns the derived index
-`Index(("uflx.cell_index", T, j, 0))`, which selects a cell of type $j$. The
-index takes the extent `T.num_cells[j]` from [Restriction](#restriction). A
-derived index differs for two different types, and for two different
-topologies, even if the numbers of cells are equal. An expression over all the
-cells of $T$ is a sum over the types, with one `IndexSum` for each type.
+The free function `cell_index(T, j)` returns the derived index
+`Index(("uflx.cell_index", T, j, 0))` for the cells of type $j$, numbered from
+0. [Restriction](#restriction) gives the index the extent `T.num_cells[j]`.
+The index differs between types and between topologies, even if the numbers of
+cells are equal. Restriction and the integral over a topology use the index,
+so user code rarely needs the index.
 
 > Legacy note: In legacy UFL, a `Mesh` holds both the topology and the
 > coordinate element, and the measure `dx` hides the sum over the cells. In
@@ -2255,14 +2234,12 @@ cells of $T$ is a sum over the types, with one `IndexSum` for each type.
 
 Examples:
 
-- The unit square divided into two triangles is a topology with the cell
-  types `(K,)`, for the unit triangle `K` as a reference cell, and the numbers
-  of cells `(2,)`.
-- The Alfeld split of a triangle, a macro element, is a topology with the
-  numbers of cells `(3,)`.
-- A mesh of a solver with triangles and quadrilaterals is a topology with two
-  cell types, both reference cells, and the numbers of cells are two
-  `AbstractExtent`s.
+- The unit square divided into two triangles has the cell types `(K,)`, for
+  the unit triangle `K`, and the numbers of cells `(2,)`.
+- The Alfeld split of a triangle, a macro element, has the numbers of cells
+  `(3,)`.
+- A mesh of a solver with triangles and quadrilaterals has two reference cells
+  as the cell types, and two `AbstractExtent`s as the numbers of cells.
 
 ### Facets
 
