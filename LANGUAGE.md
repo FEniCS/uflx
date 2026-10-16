@@ -91,6 +91,7 @@ content are explicitly marked.
 - [Topology of domains](#topology-of-domains)
   - [Cells](#cells)
   - [Facets](#facets)
+  - [Restriction](#restriction)
 - [Function spaces](#function-spaces)
 - [Functions](#functions)
 - [Geometry of decomposed domains](#geometry-of-decomposed-domains)
@@ -1128,7 +1129,7 @@ class AbstractExpression(Base, ABC):
     @property
     @abstractmethod
     def degree(self) -> tuple[int, ...]:
-        """The form degree of each slot, with every entry at least 1."""
+        """The differential form degree of each slot, with every entry at least 1."""
 
     # Operator overloading must be in the class.
     def __add__(self, other: AbstractExpression) -> AbstractExpression:
@@ -1514,7 +1515,7 @@ domain is a free function (see
 Requires: [Domains](#domains),
 [AbstractCoordinateDomain](#abstractcoordinatedomain),
 [Coordinate](#coordinate), [Support](#support), [Free indices](#free-indices),
-[Scalar type](#scalar-type).
+[Scalar type](#scalar-type), [Degree](#degree).
 
 See also: [PullBack](#pullback), [Example: an affinely mapped
 triangle](#example-an-affinely-mapped-triangle).
@@ -1527,9 +1528,9 @@ The domain $D$ = `ParameterisedDomain(P, psi, Q)` stores:
   property `parameter_domain`. The dimension $k$ of $P$ is the topological
   dimension of $D$.
 - The parameterisation $\psi$, an `AbstractExpression` on $P$ with value shape
-  `(n,)`, returned by the property `parameterisation`. The parameterisation
-  $\psi$ is built from the coordinate function $X$ of $P$, or is a constant
-  with no support. The parameterisation $\psi$ maps each point of $P$ to a point of
+  `(n,)` and the degree `()`, returned by the property `parameterisation`. The
+  parameterisation $\psi$ is a real expression on $P$, or is a constant with
+  no support. The parameterisation $\psi$ maps each point of $P$ to a point of
   $Q$, and the image $\psi(P)$ is $D$.
 - The ambient coordinate domain $Q$, an `AbstractCoordinateDomain`, returned by
   the property `ambient_domain`. The coordinates of $Q$ name the points of $D$.
@@ -1548,7 +1549,8 @@ once, such as the points of a quadrature rule.
 
 Construction raises `TypeError` if $P$ or $Q$ is not an
 `AbstractCoordinateDomain`. Construction raises `ValueError` if $\psi$ does not
-have value shape `(n,)` with $n$ the dimension of $Q$, if $\psi$ has a support
+have value shape `(n,)` with $n$ the dimension of $Q$, if $\psi$ does not have
+the degree `()`, if $\psi$ has a support
 other than $P$, if $\psi$ is complex, or if $k > n$. Construction does not check that $\psi(P)$ lies in $Q$.
 
 $Q$ is usually `RD(n)`. A domain in a smaller $Q$, such as an edge of the unit
@@ -2027,6 +2029,10 @@ by two cells is an interior facet.
 Cells and facets are topological. Defining cells and facets does not require a
 metric.
 
+### Restriction
+
+Requires: [Cells](#cells), [Facets](#facets), [Support](#support).
+
 ## Function spaces
 
 ## Functions
@@ -2040,7 +2046,8 @@ Requires: [Functions](#functions),
 
 ### Cells as parameterised domains
 
-Requires: [Cells](#cells), [Coordinate field](#coordinate-field).
+Requires: [Cells](#cells), [Restriction](#restriction),
+[Coordinate field](#coordinate-field).
 
 ## Variational forms
 
