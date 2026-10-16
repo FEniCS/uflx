@@ -89,6 +89,7 @@ content are explicitly marked.
   - [Example: integrating over the boundary of a triangle](#example-integrating-over-the-boundary-of-a-triangle)
   - [Points and point evaluation](#points-and-point-evaluation)
   - [Example: quadrature](#example-quadrature)
+  - [Example: integrating over a cut cell](#example-integrating-over-a-cut-cell)
   - [Example: the centroid of a triangle](#example-the-centroid-of-a-triangle)
 - [Topology of domains](#topology-of-domains)
   - [Reference cell](#reference-cell)
@@ -521,30 +522,31 @@ notation, a `EllipsisIndex` behaves as an `Index`.
 
 ### Extents
 
-Requires: [The base object `Base`](#the-base-object-base), [Index](#index).
+Requires: [The base object `Base`](#the-base-object-base).
 
 See also: [Free indices](#free-indices), [Indexed](#indexed),
-[Example: quadrature](#example-quadrature).
+[Example: quadrature](#example-quadrature), [Example: integrating over a cut
+cell](#example-integrating-over-a-cut-cell).
 
 An extent is the length of an axis of a value shape, or the extent of a free
-index. An extent is an `int` $n \ge 0$ or a `RuntimeExtent`.
+index. An extent is an `int` $n \ge 0$ or an `AbstractExtent`.
 
-`RuntimeExtent` is a concrete subclass of the base object for an extent whose
-value is known only when a form is assembled, such as the number of points of
-a quadrature rule that differs from cell to cell. A `RuntimeExtent` is not an
-expression. `RuntimeExtent(label)` stores the label, with the same rules as the
-label of an `Index`.
+An abstract subclass of the base object `AbstractExtent` for an extent whose
+value is not known during construction. An `AbstractExtent` is not an
+expression. A concrete `AbstractExtent` is a subclass outside the core, such as
+`RuntimeExtent` in the
+[cut cell example](#example-integrating-over-a-cut-cell).
 
-A `RuntimeExtent` has no arithmetic and no ordering, so the rules of the core,
-which compare extents by equality, accept a `RuntimeExtent` unchanged.
+An `AbstractExtent` has no arithmetic and no ordering, so the rules of the
+core, which compare extents by equality, accept an `AbstractExtent` unchanged.
 
 Example:
 
-- With `q = runtime_extent("q")`, an array of quadrature points of value shape
-  `(q, 2)` and an array of weights of value shape `(q,)` share the extent `q`,
-  so `weights[i] * points[i, 0]` is accepted. An array of weights of value
-  shape `(runtime_extent("r"),)` raises `ValueError`, because the index `i`
-  has two extents.
+- With an `AbstractExtent` `q`, an expression `points` of value shape `(q, 2)`
+  and an expression `weights` of value shape `(q,)` share the extent `q`, so
+  `weights[i] * points[i, 0]` is accepted. With a second `AbstractExtent` `r`,
+  an expression `weights` of value shape `(r,)` raises `ValueError` in
+  `weights[i] * points[i, 0]`, because the index `i` has two extents.
 
 ### Free indices
 
@@ -1019,7 +1021,7 @@ Construction of `Indexed` raises:
 | `IndexError` | A number of entries that does not cover exactly the rank. An expression with value shape `()` has rank 0. |
 | `ValueError` | More than one `EllipsisIndex` entry.                                                                      |
 | `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                                  |
-| `IndexError` | An `int` entry for an axis with a `RuntimeExtent`.                                                        |
+| `IndexError` | An `int` entry for an axis whose extent is not an `int`.                                                  |
 | `ValueError` | An `Index` that occurs twice, or that is already free.                                                    |
 
 A negative index is rejected rather than converted, so the stored indices are
@@ -1170,7 +1172,7 @@ class AbstractExpression(Base, ABC):
     """Abstract base class for expressions."""
     @property
     @abstractmethod
-    def value_shape(self) -> tuple[int | RuntimeExtent, ...]:
+    def value_shape(self) -> tuple[int | AbstractExtent, ...]:
         """The value shape of the expression."""
 
     @property
@@ -1180,7 +1182,7 @@ class AbstractExpression(Base, ABC):
     ) -> tuple[
         tuple[
             Index | EllipsisIndex,
-            int | RuntimeExtent | tuple[int | RuntimeExtent, ...],
+            int | AbstractExtent | tuple[int | AbstractExtent, ...],
         ],
         ...,
     ]:
@@ -2029,9 +2031,41 @@ tables.
 
 With `points` and `weights` given by leaves of a
 [language extension](#language-extensions), of value shapes `(q, 2)` and
-`(q,)` for a `RuntimeExtent` `q`, the same expression is runtime quadrature.
+`(q,)` for an `AbstractExtent` `q`, the same expression is runtime quadrature
+(see [Example: integrating over a cut
+cell](#example-integrating-over-a-cut-cell)).
 The number of points is known only at assembly, and the loop bound `q` is an
 input of the kernel.
+
+### Example: integrating over a cut cell
+
+Requires: [Example: quadrature](#example-quadrature), [Extents](#extents).
+
+In CutFEM, a level set $\phi$ cuts a cell, and an integral covers only the
+part of the cell where $\phi < 0$. The solver computes a quadrature rule for
+that part of each cut cell, so the number of points differs from cell to cell.
+
+> The points and the weights are leaves of a small
+> [language extension](#language-extensions) for kernel inputs:
+> `RuntimeExtent(label)`, an `AbstractExtent`, and
+> `RuntimeArray(label, value_shape)`, an array such as quadrature data, the
+> coefficients of a function on a cell, or a constant.
+
+With `T`, `f`, `i` and `k` of the quadrature example:
+
+```python
+# These are language extensions, not the core.
+q = runtime_extent("q")
+
+points = runtime_array("points", (q, 2))
+weights = runtime_array("weights", (q,))
+
+# The family of q points in the part of T where phi < 0.
+# At this point we have no Function (phi) or if().
+xs = parameterised_domain(RD(0), component_tensor(points[i, k], (k,)), T)
+
+a = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
+```
 
 ### Example: the centroid of a triangle
 
@@ -2466,7 +2500,7 @@ Base
 ├── AbstractExpression
 ├── Index                                 named by a label, not an expression
 ├── EllipsisIndex                         covers any number of axes
-└── RuntimeExtent                         extent known at assembly, not an expression
+└── AbstractExtent                        extent not known during construction
 
 # Algebra
 AbstractExpression
@@ -2509,7 +2543,6 @@ AbstractExpression
 | ------------------------------- | --------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------- | ----------------------------------- |
 | Expressions and static type     | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                       | `Index`                             |
 |                                 | [`ellipsis_index(label)`](#ellipsisindex)                       |                               | `label: str \| tuple`                                       | `EllipsisIndex`                     |
-|                                 | [`runtime_extent(label)`](#extents)                             |                               | `label: str \| tuple`                                       | `RuntimeExtent`                     |
 | Algebra                         | [`add(f, g)`](#sum)                                             | `+`                           | `f, g: AbstractExpression`                                  | `Sum`                               |
 |                                 | [`multiply(f, g)`](#product)                                    | `*`                           | `f, g: AbstractExpression`                                  | `Product`                           |
 |                                 | [`power(f, g)`](#power)                                         | `**`                          | `f, g: AbstractExpression`                                  | `Power`                             |
@@ -2555,7 +2588,7 @@ rules in the section of the concrete class.
 | ---------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
 | `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`     |                                                                   |
 | `AbstractExpression`                           |                                                          | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree` |
-| `Index`, `EllipsisIndex`, `RuntimeExtent`      | `label`                                                  |                                                                   |
+| `Index`, `EllipsisIndex`                       | `label`                                                  |                                                                   |
 | `Integer`, `Float`                             | `value`                                                  |                                                                   |
 | `Zero`                                         | `value_shape`, `free_indices`, `degree`                  |                                                                   |
 | `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                        |                                                                   |
