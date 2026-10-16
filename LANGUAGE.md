@@ -55,21 +55,18 @@ external library provides the concrete data behind the leaf nodes.
 - Strictness and expressivity, not brevity, is key in the core - brevity can be
   added later with higher-level APIs. The cost of writing code against a
   precise lower-level API has massively decreased with LLMs, and so the end
-  library could potentially more concise than it was in the past.
+  library could potentially be more concise than it was in the past.
 - The mathematical fields provide a rich foundation for writing variational
   problems in a uniform way across geometric dimensions, i.e. 'special cases'
   for particular dimensions do not exist, and so should not exist in the core.
 - The core does not contain algorithms for the convenience of a form
   compiler. A form compiler states the forms that the form compiler accepts.
-  A pass outside the core lowers a form to those forms, and the pass produces
-  only node classes of the core. So the core never changes to suit a form
-  compiler, and two form compilers may accept different forms. The result of
-  the lowering is a form of UFLx, so printing, hashing and structural
-  equality apply to the result. For example, a very basic form compiler
-  might only accept integrals over a reference cell, such as a unit simplex.
-  An integral over a domain with the legacy UFL measure `dx` is a sum over the
-  cells of the domain, and the integral over each cell is pulled back to the
-  reference cell.
+  A pass outside the core must lower a form to those forms and must produce
+  only node classes of the core and of the
+  [language extensions](#language-extensions) that the form compiler accepts.
+  For example, a very basic form compiler might only accept integrals over a
+  reference cell, such as a unit simplex, as in each cell term of a legacy UFL
+  `dx` integral.
 
 ## Rules of the language
 
@@ -488,8 +485,9 @@ See also: [Transpose and matrix product](#transpose-and-matrix-product), [Volume
 form](#volume-form), [ExteriorDerivative](#exteriorderivative),
 [Division](#division), [Elementary functions (very
 incomplete)](#elementary-functions-very-incomplete),
-[Determinant](#determinant), [Inverse](#inverse), [Tensor algebra with
-EllipsisIndex](#tensor-algebra-with-ellipsisindex).
+[Tensor algebra with
+EllipsisIndex](#tensor-algebra-with-ellipsisindex),
+[Language extensions](#language-extensions).
 
 A concept must be a free function, not a node class, if the free function can
 build the concept as one fixed composition of existing node classes for each
@@ -505,14 +503,21 @@ example, the transpose is always `component_tensor(A[k, l], (l, k))`, and
 `volume_form(P)` is the product of the $n$ coordinate 1-forms of a coordinate
 domain of dimension $n$, so both are free functions. No composition of
 existing nodes differentiates, so `ExteriorDerivative` is a node class.
-`Division`, `SquareRoot`, `Determinant` and `Inverse` are evaluated by a
-numerical algorithm that the user supplies, so each is a node class. A free
+`Division` and `SquareRoot` are evaluated by a numerical algorithm that the
+user supplies, so each is a node class. A free
 function that builds a fixed composition is a definition, not a
 simplification. The free function does not read the structure of the
 operands, so the free function never removes structure that the user built.
 A `EllipsisIndex` makes most tensor algebra one fixed composition for every
 value shape (see [EllipsisIndex](#tensor-algebra-with-ellipsisindex)), so a free function rarely
 needs to read a value shape.
+
+A node class is part of the core only if a definition or a rule of the core
+needs the node class. A rule for the node class itself does not count.
+Otherwise the node class belongs to a
+[language extension](#language-extensions). For example, the core writes a
+rational number as the `Division` of two `Integer`s, so `Division` is part of
+the core.
 
 ## Algebra
 
@@ -743,14 +748,15 @@ induces on $P$, the pull-back of the Euclidean metric.
 Requires: [`AbstractExpression`](#abstractexpression), [Power](#power),
 [Division](#division), [Literals](#literals).
 
-`SquareRoot` is a concrete subclass of `AbstractExpression` that stores one
-expression. The free function `square_root(f)` takes a scalar and returns a
-scalar.
+`SquareRoot` is the only elementary function so far. `SquareRoot` is a
+concrete subclass of `AbstractExpression` that stores one expression. The free
+function `square_root(f)` takes a scalar with the degree `()` and returns a
+scalar with the degree `()`.
 
 `SquareRoot` is a node class, not the composition `power(f, Integer(1) /
 Integer(2))`. IEEE 754 requires a correctly rounded square root but does not
-require a correctly rounded power, so the two differ in floating-point
-arithmetic (i.e. the compiler/machine provides a specific implementation).
+require a correctly rounded power. So the two differ in floating-point
+arithmetic, and the result of `power` depends on the math library.
 
 ### Tensor
 
@@ -924,54 +930,6 @@ composition. With derived ellipsis indices `r` and `s` and an ordinary index
 
 `A[r] + B[r]` raises `ValueError` if the value shapes of `A` and `B` differ,
 because the extents of `r` differ.
-
-### Determinant
-
-Requires: [`AbstractExpression`](#abstractexpression), [Degree](#degree).
-
-`Determinant` is a concrete subclass of `AbstractExpression` that stores one
-expression. The free function `determinant(f)` takes an expression of value
-shape `(n, n)` and returns a scalar. The determinant of an expression of
-value shape `(n, n)` is a polynomial of degree $n$ in the entries. For each
-$n$, the cofactor expansion is a fixed composition, but the determinant is
-evaluated by a numerical algorithm that the user supplies, such as a closed-form
-formula or an LU factorisation. So `Determinant` is a node class.
-
-Construction raises `ValueError` if the expression does not have rank 2, or if
-the two extents of the value shape differ.
-
-The determinant of an expression of value shape `(0, 0)` is 1, the empty
-product.
-
-### Inverse
-
-Requires: [Determinant](#determinant), [Division](#division).
-
-See also: [Components](#components).
-
-`Inverse` is a concrete subclass of `AbstractExpression` that stores one
-expression. The free function `inverse(f)` takes an expression of value shape
-`(n, n)` and returns the matrix inverse, with value shape `(n, n)`. The entries
-of the inverse are the cofactors divided by the determinant. For each $n$,
-that is a fixed composition, but the inverse is evaluated by a numerical
-algorithm that the user supplies, such as a closed form or an LU
-factorisation. So `Inverse` is a node class.
-
-Construction raises `ValueError` if the expression does not have rank 2, or if
-the two extents of the value shape differ. Both `Determinant` and `Inverse`
-require the degree `()`.
-
-The inverse is defined where the determinant is not zero. Construction does
-not check invertibility, as construction of `Division` does not check for a
-zero divisor. The inverse of an expression of value shape `(0, 0)` has value
-shape `(0, 0)`.
-
-Examples, with a matrix `A` of value shape `(2, 2)`:
-
-- `inverse(A) @ A` is the identity matrix where `A` is invertible, after a pass.
-- For a metric `g` on $P$, `inverse(components(components(g, P), P))` is the
-  matrix of the inverse metric, which raises the index of a 1-form.
-- In hyperelasticity, `inverse(F)` is the inverse of the deformation gradient.
 
 ### Transpose and matrix product
 
@@ -1414,10 +1372,6 @@ With `T = UnitSimplex(2)` and `X = coordinate(T)`:
   pass evaluates the integral to $1/6$.
 - `integral(X[0], T)` raises `ValueError`, because `X[0]` is a 0-form, not a
   2-form.
-- With `four, zero = Integer(4), Integer(0)` and the metric
-  `G = tensor((tensor((four, zero)), tensor((zero, Integer(1)))))` on `T`,
-  `integral(square_root(determinant(G)) * volume_form(T), T)` is the area of
-  `T` with the metric `G`, which is $\sqrt{4} \cdot 1/2 = 1$.
 - `integral(X[0] * volume_form(T), T) * integral(X[1] * volume_form(T), T)` is a
   product of two integrals, with value shape `()` and no support.
 
@@ -2050,9 +2004,7 @@ AbstractExpression
 ├── Tensor                                stacks entries along a new axis
 ├── Indexed                               full indexing, int or Index entries
 ├── ComponentTensor                       binds indices to tensor axes
-├── IndexSum                              sums over bound indices
-├── Determinant
-└── Inverse
+└── IndexSum                              sums over bound indices
 
 # Calculus on a coordinate domain
 AbstractExpression
@@ -2090,8 +2042,6 @@ AbstractExpression
 |                                 | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple`                   | `Indexed`                           |
 |                                 | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `ComponentTensor`                   |
 |                                 | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `IndexSum`                          |
-|                                 | [`determinant(f)`](#determinant)                                |                               | `f: AbstractExpression`                                     | `Determinant`                       |
-|                                 | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                     | `Inverse`                           |
 |                                 | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                     | `ComponentTensor` of an `Indexed`   |
 |                                 | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                  | `ComponentTensor` of an `IndexSum`  |
 | Calculus on a coordinate domain | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain`                               | `Coordinate`                        |
@@ -2132,7 +2082,6 @@ rules in the section of the concrete class.
 | `SquareRoot`                                   | `operand`                                                |                                                                   |
 | `Tensor`                                       | `entries`                                                |                                                                   |
 | `Indexed`, `ComponentTensor`, `IndexSum`       | `expression`, `indices`                                  |                                                                   |
-| `Determinant`, `Inverse`                       | `operand`                                                |                                                                   |
 | `Coordinate`                                   | `domain`                                                 |                                                                   |
 | `ExteriorDerivative`, `Components`, `Integral` | `expression`, `domain`                                   |                                                                   |
 | `ParameterisedDomain`                          | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                                   |
@@ -2151,7 +2100,6 @@ rules in the section of the concrete class.
 | `SquareRoot`                                 | The degree `()`                                           | `()`                                          |
 | `Tensor`                                     | Equal degrees                                             | The degree of the entries                     |
 | `Indexed`, `ComponentTensor`, `IndexSum`     | Any degree                                                | The degree of the expression                  |
-| `Determinant`, `Inverse`                     | The degree `()`                                           | `()`                                          |
 | `Coordinate`                                 | No such edges                                             | `()`                                          |
 | `ExteriorDerivative`                         | The degree `()` or `(k,)`                                 | `(1,)` for `()`, and `(k + 1,)` for `(k,)`    |
 | `Components`                                 | At least one slot                                         | The first slot lowered by 1, and removed at 0 |
