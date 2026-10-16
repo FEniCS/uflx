@@ -1574,7 +1574,8 @@ $$
 $$
 
 With `dX = exterior_derivative(coordinate(P), P)`, `volume_form(P)` is
-`dX[0] * ... * dX[n - 1]`, with the degree `(n,)`. For $n = 0$,
+`dX[0] * ... * dX[n - 1]`, nested to the left as Python evaluates `*`, so
+`volume_form(RD(3))` is `(dX[0] * dX[1]) * dX[2]`. The degree is `(n,)`. For $n = 0$,
 `volume_form(P)` is `Integer(1)`. The free function reads the dimension of
 $P$, so the free function is one fixed composition for each dimension. The
 volume form fixes the orientation of $P$ (see [Integral](#integral)). The
