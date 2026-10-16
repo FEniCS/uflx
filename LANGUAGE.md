@@ -2072,11 +2072,66 @@ pass evaluates both to $(2, 4/3)$.
 
 ### Reference cell
 
-Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain), [RD](#rd).
+Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain), [RD](#rd),
+[Tensor](#tensor), [ParameterisedDomain](#parameteriseddomain).
+
+See also: [Cells](#cells).
+
+An abstract subclass of `AbstractCoordinateDomain` for reference cells
+`AbstractReferenceCell`.
+
+A reference cell is a coordinate domain with numbered vertices and numbered
+facets. A reference cell is one way to describe the vertices and facets of a
+cell (see [Cells](#cells)). A concrete reference cell is a subclass outside the
+core, such as a reference cell version of
+[`UnitSimplex`](#example-the-unit-simplex).
+
+Every concrete `AbstractReferenceCell` $K$ of dimension $n \ge 1$ provides, in
+addition to the dimension:
+
+- The vertices, a constant expression with no support and value shape
+  `(m, n)`, provided by the property `vertices`. Row $v$ holds the coordinates
+  of vertex $v$.
+- The facets, a tuple provided by the property `facets`. Each facet is a pair
+  of a parameter domain $F$ and a tuple of vertex numbers of $K$. $F$ is an
+  `AbstractReferenceCell` of dimension $n - 1$ for $n \ge 2$, and `RD(0)` for
+  $n = 1$. For $n \ge 2$, the tuple lists one vertex number of $K$ for each
+  vertex of $F$, in the order of the vertices of $F$. For $n = 1$, the tuple
+  lists one vertex number. The boundary of $K$ is the union of the facets.
+
+A facet with the parameter domain $F$ and the vertex numbers
+$(w_0, w_1, \dots)$ is the domain `parameterised_domain(F, psi, K)`. For
+$n \ge 2$, $\psi$ is the affine map that sends vertex $j$ of $F$ to vertex
+$w_j$ of $K$ for $j < n$. The first $n$ vertices of $F$ must not lie in a
+hyperplane of $F$. For $n = 1$, $\psi$ is the constant vertex $w_0$ of $K$. The
+core does not check that $\psi(F)$ is the facet.
+
+> In UFLx, a downstream library such as Basix provides the same data through a
+> concrete `AbstractReferenceCell`, so a facet is an ordinary
+> `ParameterisedDomain` in the form, and an integral over a facet is the
+> integral of a pull-back, as in the [boundary
+> example](#example-integrating-over-the-boundary-of-a-triangle).
+
+A sub-entity of $K$ of dimension $d < n - 1$ is a facet of a facet, with the
+vertex numbers of $K$ found through each facet. Two sub-entities with the same
+set of vertex numbers are the same sub-entity. A vertex is a sub-entity of
+dimension 0.
+
+Example:
+
+- The unit triangle as a reference cell has the vertices $(0, 0)$, $(1, 0)$
+  and $(0, 1)$. The unit triangle has three facets. The parameter domain of
+  each facet is the unit interval, and the vertex numbers are $(1, 2)$,
+  $(0, 2)$ and $(0, 1)$. Facet $j$ is opposite vertex $j$. Facet 0 is the
+  hypotenuse, with $\psi(t) = (1 - t, t)$, as in the
+  [ParameterisedDomain](#parameteriseddomain) examples.
+- The unit interval as a reference cell has the vertices $(0)$ and $(1)$. The
+  unit interval has two facets. The parameter domain of each facet is `RD(0)`,
+  and the vertex numbers are $(1)$ and $(0)$.
 
 ### Cells
 
-Requires: [Domains](#domains), [Reference cell](#reference-cell).
+Requires: [Domains](#domains).
 
 A domain can be divided into finitely many cells. A cell is a piece of the
 domain with the same dimension as the domain. Two cells meet only on the
