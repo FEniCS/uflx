@@ -1084,7 +1084,8 @@ shape and never a slot.
 
 A value shape may contain the extent 0, for example the value shape `(0,)` of
 the coordinate function of `RD(0)`. `Tensor` cannot build an expression with
-the extent 0, because an empty `tuple` has no entry to give `s`.
+the extent 0, because an empty `tuple` has no entry to give `s`. An array with
+an extent 0 has no entries, so the array is the `Zero` of that value shape.
 
 Examples, with `zero, one, two = Integer(0), Integer(1), Integer(2)`:
 
@@ -1142,7 +1143,10 @@ An `Index` may occur in two or more entries, or may already be free in the
 expression. All the occurrences are the same index, so the indexed axes take
 the same value. `A[i, i]` is the diagonal entry of a matrix `A`, and
 `index_sum(A[i, i], (i,))` is the trace. All the occurrences must have the same
-extent. A `EllipsisIndex` must not already be free in the expression.
+extent. A `EllipsisIndex` may also already be free in the expression, with the
+same rule and the `tuple` of extents of the `EllipsisIndex`. So with a
+`EllipsisIndex` `r` that is free with the extents `(2, 3)` in an expression `B`
+of value shape `(2, 3)`, `B[r]` is the block diagonal of `B`.
 
 `Indexed(expression, indices)` derives the value shape `()`, the support of the
 expression, the degree of the expression, and the free indices of the
@@ -1163,8 +1167,7 @@ Construction of `Indexed` raises:
 | `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                                  |
 | `IndexError` | An `int` entry for an axis whose extent is not an `int`.                                                  |
 | `IndexError` | An `AbstractIndexValue` entry whose extent differs from the extent of the axis.                           |
-| `ValueError` | An `Index` with two extents, in two entries or in an entry and the expression.                            |
-| `ValueError` | An `EllipsisIndex` that is already free in the expression.                                                |
+| `ValueError` | An index with two extents, in two entries or in an entry and the expression.                              |
 
 A negative index is rejected rather than converted, so the stored indices are
 always the indices that the user wrote.
