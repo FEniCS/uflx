@@ -893,6 +893,9 @@ induces on $P$, the pull-back of the Euclidean metric.
 Requires: [`AbstractExpression`](#abstractexpression), [Power](#power),
 [Division](#division), [Literals](#literals).
 
+> UFLx core is likely to contain very few elementary functions - a language
+> extension e.g. `uflx.elementary` will implement them later.
+
 `SquareRoot` is the only elementary function so far. `SquareRoot` is a
 concrete subclass of `AbstractExpression` that stores one expression. The free
 function `square_root(f)` takes a scalar with the degree `()` and returns a
