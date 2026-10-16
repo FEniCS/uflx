@@ -1618,6 +1618,70 @@ E = parameterised_domain(S, pull_back(psi, e), RD(2))
 - `pull_back(f, parameterised_domain(S, tensor((one - t, t)), RD(2)))`
   raises `ValueError`, because that domain lies in `RD(2)`, not in `T`.
 
+### Example: integrating over an edge
+
+Requires: [PullBack](#pullback), [Integral](#integral),
+[Components](#components), [Elementary functions (very
+incomplete)](#elementary-functions-very-incomplete).
+
+The integral over the edge `e` of the [PullBack](#pullback) example is the
+integral over `S` of the pull-back by `e`. The examples use `T`, `X`, `one`,
+`S`, `t`, `e` and `dx` of that example.
+
+```python
+x, y = X[0], X[1]
+dy = exterior_derivative(y, T)
+```
+
+A 1-form integrates over the edge without a metric. On the edge,
+$x = 1 - t$ and $\mathrm{d}y$ pulls back to $\mathrm{d}t$, so
+
+```python
+# A later pass evaluates the integral to 1/2.
+integral(pull_back(x * dy, e), S)
+```
+
+is $\int_0^1 (1 - t) \, \mathrm{d}t = 1/2$.
+
+The flux of a vector field $u$ through the edge is the integral of the 1-form
+$u_0 \, \mathrm{d}y - u_1 \, \mathrm{d}x$, which also needs no metric. For
+$u = X$, the 1-form pulls back to $(1 - t) \, \mathrm{d}t + t \, \mathrm{d}t$:
+
+```python
+# A later pass evaluates the integral to 1.
+integral(pull_back(x * dy - y * dx, e), S)
+```
+
+The flux is 1. The divergence of $X$ is 2 and the area of `T` is $1/2$, so
+the flux of $X$ out of `T` is 1. The 1-form $x \, \mathrm{d}y - y \,
+\mathrm{d}x$ is zero on the other two edges of `T`, so the whole flux passes
+through `e`. This is the divergence theorem, without a normal vector and
+without a metric.
+
+The integral of a scalar function with respect to arc length needs the length
+element $|\psi'| \, \mathrm{d}t$, which comes from the Euclidean metric of
+`T`. The metric enters as an expression that the user writes:
+
+> This example writes the length element by hand, for a curve in the
+> Euclidean plane. The general concept is the volume form of the metric that
+> $\psi$ induces, $\sqrt{\det(J^T J)} \, \mathrm{d}t$. The core needs no
+> metric, so a downstream library could provide the general concept as free
+> functions (see [New operations](#new-operations)).
+
+```python
+# The Jacobian matrix of the edge, with value shape (2, 1).
+J = components(exterior_derivative(e.parameterisation, S), S)
+
+# The length element of the edge.
+ds = square_root(J[0, 0] * J[0, 0] + J[1, 0] * J[1, 0]) * volume_form(S)
+
+# A later pass evaluates the integral to the length sqrt(2) of e.
+integral(ds, S)
+
+# A later pass evaluates the integral to sqrt(2) / 6.
+integral(pull_back(x * y, e) * ds, S)
+```
+
 ### Points and point evaluation
 
 Requires: [RD](#rd), [ParameterisedDomain](#parameteriseddomain),
@@ -1666,6 +1730,40 @@ C = parameterised_domain(RD(0), pull_back(psi, c), RD(2))
   `ValueError`, because `q` lies in `RD(2)`, not in `T`.
 - `parameterised_domain(RD(0), X, T)` raises `ValueError`, because `X` has the
   support `T`, not `RD(0)`.
+
+### Example: quadrature
+
+Requires: [Points and point evaluation](#points-and-point-evaluation),
+[Integral](#integral), [Components](#components), [Tensor](#tensor),
+[ComponentTensor and IndexSum](#componenttensor-and-indexsum).
+
+A quadrature rule replaces the integral by the inner product of the weights
+with the values at the points. With `T`, `X` and `f = X[0] * X[1]` of
+[Points and point evaluation](#points-and-point-evaluation), the edge midpoint
+rule is:
+
+```python
+zero, half = Integer(0), Integer(1) / Integer(2)
+sixth = Integer(1) / Integer(6)
+
+def value_at(g, x):
+    return integral(pull_back(g, parameterised_domain(RD(0), x, T)), RD(0))
+
+points = (tensor((half, zero)), tensor((half, half)), tensor((zero, half)))
+values = tensor(tuple(value_at(f, x) for x in points))
+weights = tensor((sixth, sixth, sixth))
+
+i = index("i")
+q = index_sum(weights[i] * values[i], (i,))
+```
+
+A later pass evaluates `q` to $1/24$, which is
+`integral(f * volume_form(T), T)`, because the rule is exact for $f$. The two
+expressions are not equal, so quadrature is a pass, and the rule is an
+argument of the pass. The pass finds the coefficient $c$ of a top form
+$c \, \mathrm{d}X_0 \wedge \mathrm{d}X_1$ on `T` as
+`components(components(c * volume_form(T), T), T)[0, 1]`. The result is an
+expression of the core.
 
 ## Topology of domains
 
