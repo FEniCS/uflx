@@ -265,6 +265,14 @@ Objects must satisfy the following rules:
    the constructor does not accept.
 9. A constructor has no default values, so every construction argument is
    written at construction. A free function may supply a default value.
+10. A concrete class states an `identifier`, a `str` with the public name of
+    the class qualified by the package name, such as `"uflx.Sum"` for the core
+    or `"library.UnitSimplex"` for a library. The hash of rule 1, the total
+    order of rule 6 and serialisation use the identifier and the construction
+    arguments, and never the location of the class in the code. Construction
+    raises `TypeError` for a class with no identifier. The package name keeps
+    the identifiers of different libraries apart, and a library keeps the
+    identifiers of the classes of the library distinct.
 
 > Implementation note: Python randomises the hash of a `str` for each process,
 > so rule 1 needs a custom hash for `str` in an implementation in Python.
@@ -326,6 +334,11 @@ needed, immediately calls a free function.
 
 Free functions are not objects in the graph. A free function builds or returns
 objects in the graph. Operator overloads call the free functions.
+
+A constructor takes the construction arguments by position only, in order, and
+raises `TypeError` for an argument by name. So an object has one `tuple` of
+construction arguments. A free function may take arguments by name, such as
+`parameterised_domain(P=T, psi=psi, Q=RD(2))`.
 
 A stored property returns a construction argument. A derived property returns
 data derived from the class and the construction arguments. A concrete class
@@ -485,6 +498,8 @@ as a concrete `AbstractCoordinateDomain`.
 
 ```python
 class UnitSimplex(AbstractCoordinateDomain):
+    identifier = "library.UnitSimplex"
+
     def __init__(self, n: int):
         if type(n) is not int:
             raise TypeError("Dimension must be an int.")
@@ -537,8 +552,8 @@ has no extent of its own. An `Index` takes the extent of the axis that the
 
 The user names user indices. Two occurrences of one `Index` are the same
 index, so `a[i] * b[i]` is the component-wise product (see [Free
-indices](#free-indices)). An index that the user means to be new needs a new
-name.
+indices](#free-indices)), and `A[i, i]` is the diagonal entry (see
+[Indexed](#indexed)). An index that the user means to be new needs a new name.
 
 A free function that needs fresh indices derives the indices from the
 operands. The label of a derived index is the identifier of the free function,
@@ -553,6 +568,18 @@ contain `A`, and the graph is acyclic. Hence
 a derived index is fresh with respect to the operands, and the free function
 does not inspect the operands to find a fresh index. A global counter is not
 allowed, because a counter makes construction depend on global state.
+
+A pass that needs fresh indices derives the indices in the same way, with the
+identifier of the pass, the arguments of the rule and a number. For example,
+`expand_components` writes the new axis of `Components(g, P)` with the index
+`Index(("uflx.expand_components", g, P, 0))`. The renamed index of
+[Passes](#passes) follows the same rule.
+
+The edges of an index to the objects in the label of the index identify the
+index and are not operands. The label keeps the operands as the operands were
+when the index was derived, and a later pass may rewrite the operands. So a
+pass that computes or collects from the value of an expression does not walk
+into the label of an index.
 
 ### EllipsisIndex
 
@@ -890,8 +917,10 @@ IndexSum](#componenttensor-and-indexsum),
 two operands. For two 0-forms, the wedge product is the ordinary product.
 `Product` adds the degrees of the operands slot by slot, and an operand with
 the degree `()` adds 0 to every slot, so $f \wedge \omega = f \omega$. If both
-operands have a non-empty degree, the two degrees must have the same number of
-slots, or construction raises `ValueError`. A slot of the result may have a
+operands have a non-empty degree, each degree must have exactly one slot, or
+construction raises `ValueError`. With two slots in an operand, the interior
+product of [Expanding components](#expanding-components) removes a slot from
+one operand only, and the slots of the operands no longer align. A slot of the result may have a
 degree greater than the dimension of the support, and then the result is the zero
 form of that degree. The degree rules of the other node classes are in
 the [degree table](#appendix-degree-table).
@@ -1010,7 +1039,7 @@ Examples, with the setup of [ExteriorDerivative](#exteriorderivative) on
 | `tensor_product(dx, dy)`                          | `(1, 1)`            | $\mathrm{d}x \otimes \mathrm{d}y$                                                                       |
 | `index_sum(tensor_product(dX[i], dX[i]), (i,))`   | `(1, 1)`            | The Euclidean metric                                                                                    |
 | `tensor_product(dx * dy, dz)`                     | `(2, 1)`            | $(\mathrm{d}x \wedge \mathrm{d}y) \otimes \mathrm{d}z$                                                  |
-| `tensor_product(dx, dy) * tensor_product(dy, dz)` | `(2, 2)`            | $(\mathrm{d}x \wedge \mathrm{d}y) \otimes (\mathrm{d}y \wedge \mathrm{d}z)$, the slotwise wedge product |
+| `tensor_product(dx, dy) * tensor_product(dy, dz)` | raises `ValueError` | Each operand of `Product` with a slot has exactly one slot                                              |
 | `tensor_product(dX, dX)`                          | raises `ValueError` | `dX` has value shape `(3,)`                                                                             |
 
 For a parameterised domain $D$ with the parameter domain $P$ and
@@ -1109,9 +1138,16 @@ $n_j$. Each `Index` entry $i_j$ takes the extent $n_j$. A
 `EllipsisIndex` takes the `tuple` of the extents of the axes that the `EllipsisIndex`
 covers.
 
+An `Index` may occur in two or more entries, or may already be free in the
+expression. All the occurrences are the same index, so the indexed axes take
+the same value. `A[i, i]` is the diagonal entry of a matrix `A`, and
+`index_sum(A[i, i], (i,))` is the trace. All the occurrences must have the same
+extent. A `EllipsisIndex` must not already be free in the expression.
+
 `Indexed(expression, indices)` derives the value shape `()`, the support of the
 expression, the degree of the expression, and the free indices of the
-expression followed by the `Index` and `EllipsisIndex` entries. The rank $r$
+expression followed by the `Index` and `EllipsisIndex` entries, with each
+`Index` taken once. The rank $r$
 counts the axes of the value shape only. The indices select axes of the value
 shape and never a slot, so the slots of a differential form cannot be indexed.
 
@@ -1127,7 +1163,8 @@ Construction of `Indexed` raises:
 | `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                                  |
 | `IndexError` | An `int` entry for an axis whose extent is not an `int`.                                                  |
 | `IndexError` | An `AbstractIndexValue` entry whose extent differs from the extent of the axis.                           |
-| `ValueError` | An `Index` that occurs twice, or that is already free.                                                    |
+| `ValueError` | An `Index` with two extents, in two entries or in an entry and the expression.                            |
+| `ValueError` | An `EllipsisIndex` that is already free in the expression.                                                |
 
 A negative index is rejected rather than converted, so the stored indices are
 always the indices that the user wrote.
@@ -1192,7 +1229,10 @@ shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
   `(1,)`.
 - `a[i] + b[j]` has the free indices `((i, 3), (j, 3))`, the outer sum of `a`
   and `b`.
-- `A[i, i]` raises `ValueError`, because `i` occurs twice.
+- `A[i, i]` is the diagonal entry, with the free indices `((i, 2),)`.
+  `index_sum(A[i, i], (i,))` is the trace of `A`, and
+  `component_tensor(A[i, i], (i,))` is the diagonal of `A`, for every extent of
+  `A`, including an `AbstractExtent`.
 
 > Note: `opt_einsum` can directly plan a contract path for a given contraction,
 > but assumes dense operators.
@@ -1870,11 +1910,14 @@ operations, with the wedge product and with the exterior derivative, and
 replaces `PullBack(Coordinate(Q), D)` by $\psi$ (see
 [Expanding pull-backs](#expanding-pull-backs)). A `PullBack` of a downstream
 terminal remains, and the external library that supplies the terminal
-evaluates the terminal at $\psi(p)$ and transforms the slots.
+evaluates the terminal at $\psi(p)$ and transforms the slots. A `PullBack` of a
+constant by a family of domains also remains, if a free index of the family is
+not free in the constant.
 
 A domain $E$ in the parameter domain of $D$ has the image $\psi(E)$, a subset
 of $D$. The image is the parameterised domain with the parameterisation
-`pull_back(D.parameterisation, E)` on the parameter domain of $E$.
+`pull_back(D.parameterisation, E)` on the parameter domain of $E$, in the
+ambient coordinate domain of $D$, such as `E` in the example below.
 
 Example, with `T`, `X`, `psi`, `one` and `K` of the affinely mapped triangle:
 
@@ -2405,6 +2448,8 @@ is the numbering of Basix.
 
 ```python
 class ReferenceSimplex(AbstractReferenceCell):
+    identifier = "library.ReferenceSimplex"
+
     def __init__(self, n: int):
         if type(n) is not int:
             raise TypeError("Dimension must be an int.")
@@ -2522,6 +2567,8 @@ reference cells, so that each cell has numbered vertices.
 
 ```python
 class StaticTopology(AbstractTopology):
+    identifier = "library.StaticTopology"
+
     def __init__(
         self,
         cell_types: tuple[AbstractReferenceCell, ...],
@@ -2622,8 +2669,9 @@ evaluates one lazy node class:
 
 A rule of a core transformation rewrites a node of the evaluated class to a
 mathematically equal expression of node classes of the core, and never
-simplifies. The rule dispatches on the class of the operand and moves the
-evaluated node towards the leaves. The pass rewrites inner nodes first, until
+simplifies. The rewritten expression has the free indices of the node, with
+the same extents, possibly in another order. The rule dispatches on the class
+of the operand and moves the evaluated node towards the leaves. The pass rewrites inner nodes first, until
 no rule applies. A node without a rule is rebuilt on the rewritten edges.
 
 Each core transformation rewrites only the evaluated class, so the three run
@@ -2637,7 +2685,9 @@ towards the leaves, and never reverse a core rule, as moving an
 A terminal is a `Coordinate`, or an expression with a support whose class is a leaf
 class of a downstream library. After evaluation, every `PullBack`,
 `ExteriorDerivative` and `Components` applies to an expression that contains a
-downstream terminal, except the coordinate frame $\mathrm{d}X$. An expression
+downstream terminal, except the coordinate frame $\mathrm{d}X$ and a
+`PullBack` of a constant by a family of domains (see
+[Expanding pull-backs](#expanding-pull-backs)). An expression
 without a downstream terminal evaluates to a sum of products and tensor
 products of 0-forms and the coordinate 1-forms $\mathrm{d}X_i$.
 
@@ -2648,12 +2698,27 @@ Requires: [Core transformations](#core-transformations), [PullBack](#pullback),
 
 For a domain $D$ with the parameterisation $\psi$, the parameter domain $P$
 and the ambient coordinate domain $Q$, $\psi^*$ commutes with every node class
-of the core except `Components` and `PullBack`. Two rules are specific:
+of the core except `Components`. Four rules are specific. The rule for an
+expression with no support comes before commuting, so a pull-back never moves
+inside an `Integral`. The integral has no support, and the integrand stays on
+the coordinate domain of the integral.
 
-- $\psi^* X = \psi$ for `Coordinate(Q)`, and an expression with no support is
-  unchanged.
+- $\psi^* X = \psi$ for `Coordinate(Q)`.
+- $\psi^* c = c$ for an expression $c$ with no support, if every free index of
+  $D$ is free in $c$. Otherwise `PullBack(c, D)` remains, because
+  `PullBack(c, D)` has the free indices of the family $D$ and $c$ does not.
+  For example, with the family of quadrature points `xs` of
+  [Example: quadrature](#example-quadrature),
+  `index_sum(integral(pull_back(Integer(1), xs), RD(0)), (i,))` counts the
+  points, and $c$ alone has no free index `i` to sum over.
 - $\psi^* \mathrm{d}f = \mathrm{d}(\psi^* f)$, with the exterior derivative on
   $P$.
+- $\psi^* \psi_2^* g = (\psi_2 \circ \psi)^* g$ for `PullBack(g, D2)`. The
+  composition is the pull-back by the image of $D$ under `D2` (see
+  [PullBack](#pullback)),
+  `PullBack(g, parameterised_domain(P, pull_back(D2.parameterisation, D), D2.ambient_domain))`.
+  So every `PullBack` that remains applies to `g` directly, such as a function
+  on a physical cell pulled back to a facet of the reference cell.
 
 ### Applying derivatives
 
@@ -2662,14 +2727,24 @@ Requires: [Core transformations](#core-transformations),
 [TensorProduct](#tensorproduct), [Zero](#zero), [Conjugate](#conjugate).
 
 The exterior derivative is linear for the linear node classes and follows the
-chain rule for the node classes of the degree `()`. Three rules are specific:
+chain rule for the node classes of the degree `()`. Five rules are specific:
 
 - `Product` follows the graded Leibniz rule,
   $\mathrm{d}(\alpha \wedge \beta) = \mathrm{d}\alpha \wedge \beta + (-1)^k \alpha \wedge \mathrm{d}\beta$
   for a $k$-form $\alpha$. A `TensorProduct` under an exterior derivative has at
-  most one slot, so the same rule applies.
-- $\mathrm{d}\mathrm{d}\omega = 0$, and the exterior derivative of an
-  expression with no support is `Zero`, with the degree raised by one.
+  most one slot, so $\alpha \otimes \beta = \alpha \wedge \beta$, and the same
+  rule applies, written with `Product`. Written with `TensorProduct`, the two
+  terms would have different numbers of slots.
+- `Division` of a form $a$ by a 0-form $b$ follows
+  $\mathrm{d}(a / b) = \mathrm{d}a / b - (\mathrm{d}b \wedge a) / (b b)$.
+- `Absolute` follows
+  $\mathrm{d}|a| = (\bar{a} \, \mathrm{d}a + a \, \overline{\mathrm{d}a}) / (2 |a|)$,
+  because $|a|$ is not complex differentiable. For a real $a$, the rule is the
+  chain rule.
+- $\mathrm{d}\mathrm{d}\omega = 0$. The exterior derivative of an expression
+  with no support, or of a `PullBack` of an expression with no support, is
+  `Zero`, with the value shape and the free indices of the operand and the
+  degree raised by one.
 - $\mathrm{d}\bar{\omega} = \overline{\mathrm{d}\omega}$, because the
   exterior derivative is real.
 
@@ -2691,8 +2766,10 @@ are specific:
   $\iota_j(\alpha \otimes \beta) = (\iota_j\alpha) \otimes \beta$ if
   $\alpha$ has a slot, and $\iota_j(f \otimes \beta) = f \, \iota_j\beta$
   for a 0-form $f$.
-- $\iota_j \mathrm{d}X_i = \delta_{ij}$, and the components of a `Zero` are a
-  `Zero` with the new value shape and degree.
+- $\iota_j \mathrm{d}X_i = \delta_{ij}$, so the components of `dX` are the
+  identity matrix, the `Tensor` of `Integer(1)` and `Integer(0)` entries, or
+  `Zero((0, 0), (), ())` for $n = 0$. The components of a `Zero` are a `Zero`
+  with the new value shape and degree.
 - $\iota_j \bar{\alpha} = \overline{\iota_j \alpha}$, because $\partial_j$ is
   real.
 
@@ -2818,9 +2895,11 @@ A downstream library builds a new operation from existing node classes, as a
 free function. As in the core, the free function may read the static type of
 the operands, such as a value shape, to choose the composition (see
 [Node class or free function](#node-class-or-free-function)). For
-example, `trace(A)` reads the extent $n$ of `A` and returns the sum of the
-diagonal entries `A[0, 0] + ... + A[n - 1, n - 1]`. So `trace(A)` requires an
-`int` extent $n$ (see [Extents](#extents)). An operation that a
+example, `determinant(A)` reads the extent $n$ of `A` and returns the Leibniz
+formula for an $n \times n$ matrix. So `determinant(A)` requires an `int`
+extent $n$ (see [Extents](#extents)). `trace(A)` reads no extent, because
+`index_sum(A[k, k], (k,))`, with a derived index `k`, is the trace for every
+extent. An operation that a
 `EllipsisIndex` expresses, such as `scale(a, T)`, needs no value shape (see
 [EllipsisIndex](#tensor-algebra-with-ellipsisindex)).
 
@@ -3017,7 +3096,7 @@ rules in the section of the concrete class.
 | `Integer`, `Float`, `ImaginaryUnit`      | No such edges                                             | `()`                                          |
 | `Zero`                                   | No such edges                                             | The stored degree                             |
 | `Sum`                                    | Equal degrees                                             | The degree of the operands                    |
-| `Product`                                | The degree `()`, or equal numbers of slots                | The slotwise sum (see [Product](#product))    |
+| `Product`                                | The degree `()`, or exactly one slot each                 | The slotwise sum (see [Product](#product))    |
 | `Power`, `Absolute`                      | The degree `()`                                           | `()`                                          |
 | `Division`                               | The degree `()` for the second operand                    | The degree of the first operand               |
 | `Conjugate`                              | Any degree                                                | The degree of the operand                     |
