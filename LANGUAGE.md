@@ -521,7 +521,8 @@ value shape (see [EllipsisIndex](#tensor-algebra-with-ellipsisindex)), so a free
 needs to read a value shape.
 
 A node class is part of the core only if a definition or a rule of the core
-needs the node class. A rule for the node class itself does not count.
+needs the node class, or if the node class is an operation of the scalar
+field, such as conjugation. A rule for the node class itself does not count.
 Otherwise the node class belongs to a
 [language extension](#language-extensions). For example, the core writes a
 rational number as the `Division` of two `Integer`s, so `Division` is part of
@@ -702,13 +703,14 @@ modulus. `Absolute` is real for every argument.
 ### Conjugate
 
 Requires: [`AbstractExpression`](#abstractexpression), [Scalar
-type](#scalar-type).
+type](#scalar-type), [Degree](#degree).
 
 See also: [Variational forms](#variational-forms).
 
 `Conjugate` is a concrete subclass of `AbstractExpression` that stores one
-expression. The free function `conjugate(f)` takes a scalar and returns the
-complex conjugate of the scalar. No fixed composition of the other node classes
+expression. The free function `conjugate(f)` takes a scalar differential form
+of any degree and returns the complex conjugate, with the degree of the
+operand. Conjugation acts on the coefficients of the form. No fixed composition of the other node classes
 conjugates, so `Conjugate` is a node class. A sesquilinear variational form,
 such as the $L^2$ inner product $\int u \bar{v}$, needs `Conjugate`.
 
@@ -1979,7 +1981,7 @@ Requires: [Core transformations](#core-transformations),
 [TensorProduct](#tensorproduct), [Zero](#zero), [Conjugate](#conjugate).
 
 The exterior derivative is linear for the linear node classes and follows the
-chain rule for the node classes of the degree `()`. Two rules are specific:
+chain rule for the node classes of the degree `()`. Three rules are specific:
 
 - `Product` follows the graded Leibniz rule,
   $\mathrm{d}(\alpha \wedge \beta) = \mathrm{d}\alpha \wedge \beta + (-1)^k \alpha \wedge \mathrm{d}\beta$
@@ -1987,19 +1989,18 @@ chain rule for the node classes of the degree `()`. Two rules are specific:
   most one slot, so the same rule applies.
 - $\mathrm{d}\mathrm{d}\omega = 0$, and the exterior derivative of an
   expression with no support is `Zero`, with the degree raised by one.
-
-> Open: the rule for `Conjugate` is the conjugate of the exterior derivative,
-> which needs `Conjugate` of a differential form.
+- $\mathrm{d}\bar{\omega} = \overline{\mathrm{d}\omega}$, because the
+  exterior derivative is real.
 
 ### Expanding components
 
 Requires: [Core transformations](#core-transformations),
 [Components](#components), [Product](#product), [TensorProduct](#tensorproduct),
-[Zero](#zero).
+[Zero](#zero), [Conjugate](#conjugate).
 
 The interior product $\iota_j$ with $\partial_j$ is linear for the linear node
-classes, and the new axis stays the last axis of the value shape. Two rules are
-specific:
+classes, and the new axis stays the last axis of the value shape. Three rules
+are specific:
 
 - `Product` follows the graded rule,
   $\iota_j(\alpha \wedge \beta) = \iota_j\alpha \wedge \beta + (-1)^k \alpha \wedge \iota_j\beta$
@@ -2011,6 +2012,8 @@ specific:
   for a 0-form $f$.
 - $\iota_j \mathrm{d}X_i = \delta_{ij}$, and the components of a `Zero` are a
   `Zero` with the new value shape and degree.
+- $\iota_j \bar{\alpha} = \overline{\iota_j \alpha}$, because $\partial_j$ is
+  real.
 
 ## Extending the core
 
@@ -2310,19 +2313,20 @@ rules in the section of the concrete class.
 
 ## Appendix: Degree table
 
-| Class                                        | Edges that are expressions must have                      | Degree of the node                            |
-| -------------------------------------------- | --------------------------------------------------------- | --------------------------------------------- |
-| `Integer`, `Float`, `ImaginaryUnit`          | No such edges                                             | `()`                                          |
-| `Zero`                                       | No such edges                                             | The stored degree                             |
-| `Sum`                                        | Equal degrees                                             | The degree of the operands                    |
-| `Product`                                    | The degree `()`, or equal numbers of slots                | The slotwise sum (see [Product](#product))    |
-| `Power`, `Division`, `Absolute`, `Conjugate` | The degree `()`                                           | `()`                                          |
-| `TensorProduct`                              | Any degree                                                | The concatenated degrees                      |
-| `SquareRoot`                                 | The degree `()`                                           | `()`                                          |
-| `Tensor`                                     | Equal degrees                                             | The degree of the entries                     |
-| `Indexed`, `ComponentTensor`, `IndexSum`     | Any degree                                                | The degree of the expression                  |
-| `Coordinate`                                 | No such edges                                             | `()`                                          |
-| `ExteriorDerivative`                         | The degree `()` or `(k,)`                                 | `(1,)` for `()`, and `(k + 1,)` for `(k,)`    |
-| `Components`                                 | At least one slot                                         | The first slot lowered by 1, and removed at 0 |
-| `Integral`                                   | `(n,)` with $n$ the dimension of $P$, or `()` for $n = 0$ | `()`                                          |
-| `PullBack`                                   | Any degree                                                | The degree of the expression                  |
+| Class                                    | Edges that are expressions must have                      | Degree of the node                            |
+| ---------------------------------------- | --------------------------------------------------------- | --------------------------------------------- |
+| `Integer`, `Float`, `ImaginaryUnit`      | No such edges                                             | `()`                                          |
+| `Zero`                                   | No such edges                                             | The stored degree                             |
+| `Sum`                                    | Equal degrees                                             | The degree of the operands                    |
+| `Product`                                | The degree `()`, or equal numbers of slots                | The slotwise sum (see [Product](#product))    |
+| `Power`, `Division`, `Absolute`          | The degree `()`                                           | `()`                                          |
+| `Conjugate`                              | Any degree                                                | The degree of the operand                     |
+| `TensorProduct`                          | Any degree                                                | The concatenated degrees                      |
+| `SquareRoot`                             | The degree `()`                                           | `()`                                          |
+| `Tensor`                                 | Equal degrees                                             | The degree of the entries                     |
+| `Indexed`, `ComponentTensor`, `IndexSum` | Any degree                                                | The degree of the expression                  |
+| `Coordinate`                             | No such edges                                             | `()`                                          |
+| `ExteriorDerivative`                     | The degree `()` or `(k,)`                                 | `(1,)` for `()`, and `(k + 1,)` for `(k,)`    |
+| `Components`                             | At least one slot                                         | The first slot lowered by 1, and removed at 0 |
+| `Integral`                               | `(n,)` with $n$ the dimension of $P$, or `()` for $n = 0$ | `()`                                          |
+| `PullBack`                               | Any degree                                                | The degree of the expression                  |
