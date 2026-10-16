@@ -225,14 +225,20 @@ Objects must satisfy the following rules:
    arguments are therefore deeply immutable, have a hash that is deterministic
    across processes on the same machine, and are compared by type and value.
    `1`, `1.0` and `True` are distinct, `0.0` and `-0.0` are distinct, and every
-   value is equal to itself.
+   value is equal to itself. Construction raises `TypeError` for an argument of
+   any other type, and `ValueError` for a `float` that is not finite.
 2. Construction must depend only on the construction arguments, not on global
    state.
 3. The state of an object is immutable after construction. Every result that
    the object produces after construction depends only on the class and the
    construction arguments.
 4. An object must be reconstructible from its class and construction arguments,
-   and the reconstructed object must be equal to the original.
+   and the reconstructed object must be equal to the original. The base object
+   records the construction arguments, and the property
+   `construction_arguments` returns the construction arguments, in order, as a
+   `tuple`. The constructor of a subclass receives the construction arguments,
+   validates the construction arguments, and may store data derived from the
+   construction arguments.
 5. The edges of an object must be exactly the base objects among its
    construction arguments, including the base objects nested in `tuple`s, in
    order.
@@ -241,14 +247,22 @@ Objects must satisfy the following rules:
    serialisation or printing, follows the edges of each object in order (rule
    5). Where unrelated objects must be sorted, the sort uses a total order
    defined by the class and the construction arguments alone.
-7. Equality (`==` or `is`) must be structural and return a `bool`. Equality
-   does not decide mathematical equivalence, so $a + b$ and $b + a$ are not
-   equal. Mathematical equivalencies are applied in later graph algorithms.
+7. Equality (`==`) must be structural and return a `bool`. Whether `is` is
+   structural is implementation dependent. An implementation in which `is` is
+   structural must intern objects, so that equal objects are the same object.
+   Equality does not decide mathematical equivalence, so $a + b$ and $b + a$
+   are not equal. Mathematical equivalencies are applied in later graph
+   algorithms.
 8. All validation of an object happens in the constructor of the class of the
    object. This rule is a hard rule. A free function never validates and never
    converts arguments. A free function only reads derived properties of
    arguments and constructs objects. An invalid argument is rejected by the
    constructor of the first object that the argument makes invalid.
+9. A constructor has no default values, so every construction argument is
+   written at construction. A free function may supply a default value.
+
+> Implementation note: Python randomises the hash of a `str` for each process,
+> so rule 1 needs a custom hash for `str` in an implementation in Python.
 
 Hence two objects are equal if and only if the two objects have the same class
 and equal construction arguments.
@@ -445,6 +459,8 @@ as a concrete `AbstractCoordinateDomain`.
 ```python
 class UnitSimplex(AbstractCoordinateDomain):
     def __init__(self, n: int):
+        if type(n) is not int:
+            raise TypeError("Dimension must be an int.")
         if n < 0:
             raise ValueError("Dimension must be non-negative.")
         self._n = n
@@ -2336,6 +2352,8 @@ is the numbering of Basix.
 ```python
 class ReferenceSimplex(AbstractReferenceCell):
     def __init__(self, n: int):
+        if type(n) is not int:
+            raise TypeError("Dimension must be an int.")
         if n < 1:
             raise ValueError("Dimension must be at least 1.")
         self._n = n
@@ -2915,6 +2933,7 @@ rules in the section of the concrete class.
 
 | Class                                          | Stored properties                                        | Derived properties                                                |
 | ---------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
+| `Base`                                         | `construction_arguments`                                 |                                                                   |
 | `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`     |                                                                   |
 | `AbstractExpression`                           |                                                          | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree` |
 | `Index`, `EllipsisIndex`                       | `label`                                                  |                                                                   |
