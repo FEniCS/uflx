@@ -68,6 +68,13 @@ external library provides the concrete data behind the leaf nodes.
   reference cell, such as a unit simplex, as in each cell term of a legacy UFL
   `dx` integral.
 
+> Legacy note: TSFC lowers a UFL form to GEM, which repeats much of the
+> algebra of UFL, partly because UFL simplifies during construction. The UFLx
+> core does not simplify during construction, so my impression is that a form
+> compiler could use a lowered UFLx form directly, adding only leaves for
+> tables and kernel inputs. I have not checked this with the TSFC or FFCx
+> developers.
+
 ## Rules of the language
 
 ### Basic implementation principles
@@ -396,11 +403,12 @@ Terminals and literals have no free indices.
 The following node classes state otherwise:
 
 - `Sum` and `Tensor`: all operands, or all entries, must have the same free
-  indices, with the same extents and in the same order, or construction raises
-  `ValueError`.
+  indices with the same extents, or construction raises `ValueError`. The
+  order of the free indices follows the general rule.
 - `Indexed`: see [Indexed](#indexed).
 - `ComponentTensor` and `IndexSum`: see
   [ComponentTensor and IndexSum](#componenttensor-and-indexsum).
+- `PullBack`: see [PullBack](#pullback).
 
 Summation is never implicit. `a[i] * b[i]` has the free index `i` and denotes
 the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], (i,))`.
@@ -1424,11 +1432,18 @@ The domain $D$ = `ParameterisedDomain(P, psi, Q)` stores:
 The 'geometric dimension' is `D.ambient_domain.dimension`, and the 'topological
 dimension' is `D.parameter_domain.dimension`.
 
+The parameterisation $\psi$ may have free indices. Then $D$ is a family of
+domains, with one domain for each value of the free indices. $D$ derives the
+free indices of $\psi$, returned by the property `free_indices`. For example,
+with an array `x` of value shape `(m, n)` and indices `i` and `k`,
+`parameterised_domain(RD(0), component_tensor(x[i, k], (k,)), RD(n))` is a
+family of $m$ points in `RD(n)`. A family of domains writes a set of points
+once, such as the points of a quadrature rule.
+
 Construction raises `TypeError` if $P$ or $Q$ is not an
 `AbstractCoordinateDomain`. Construction raises `ValueError` if $\psi$ does not
 have value shape `(n,)` with $n$ the dimension of $Q$, if $\psi$ has a support
-other than $P$, if $\psi$ has free indices, if $\psi$ is complex, or if $k >
-n$. Construction does not check that $\psi(P)$ lies in $Q$.
+other than $P$, if $\psi$ is complex, or if $k > n$. Construction does not check that $\psi(P)$ lies in $Q$.
 
 $Q$ is usually `RD(n)`. A domain in a smaller $Q$, such as an edge of the unit
 triangle in the unit triangle, pulls back an expression on $Q$ (see
@@ -1540,7 +1555,8 @@ class records how the domain is built.
 ### PullBack
 
 Requires: [ParameterisedDomain](#parameteriseddomain), [Support](#support),
-[Degree](#degree), [ExteriorDerivative](#exteriorderivative), [Example: an
+[Free indices](#free-indices), [Degree](#degree),
+[ExteriorDerivative](#exteriorderivative), [Example: an
 affinely mapped triangle](#example-an-affinely-mapped-triangle).
 
 See also: [Expanding pull-backs](#expanding-pull-backs).
@@ -1550,8 +1566,11 @@ differential form $f$ on $Q$ by the parameterisation $\psi$ of a domain $D$,
 with $P$ the parameter domain and $Q$ the ambient coordinate domain of $D$.
 
 `PullBack(f, D)` stores $f$ and $D$ and derives the value shape of $f$, the
-degree of $f$ and the support $P$. The free indices and the scalar type follow the
-general rule. The second operand is a domain, not an expression, because a
+degree of $f$ and the support $P$. The free indices are the free indices of
+$f$ followed by the free indices of $D$, with each `Index` taken once. An
+`Index` that is free in both $f$ and $D$ must have the same extent in both, or
+construction raises `ValueError`. The scalar type follows the general rule.
+The second operand is a domain, not an expression, because a
 domain states $Q$. Construction raises `ValueError` unless $f$ has no support or
 the support of $f$ is $Q$. Construction raises `TypeError` if $D$ is not a
 `ParameterisedDomain`.
@@ -1682,6 +1701,40 @@ integral(ds, S)
 integral(pull_back(x * y, e) * ds, S)
 ```
 
+### Example: integrating over the boundary of a triangle
+
+Requires: [ParameterisedDomain](#parameteriseddomain),
+[ComponentTensor and IndexSum](#componenttensor-and-indexsum),
+[Example: integrating over an edge](#example-integrating-over-an-edge).
+
+The three edges of `T` are one family of domains, with a free index. The
+example uses the names of
+[Example: integrating over an edge](#example-integrating-over-an-edge).
+
+```python
+zero = Integer(0)
+i, k = index("i"), index("k")
+
+# The start and the end vertex of each edge, counterclockwise.
+starts = tensor((tensor((zero, zero)), tensor((one, zero)), tensor((zero, one))))
+ends = tensor((tensor((one, zero)), tensor((zero, one)), tensor((zero, zero))))
+
+# The family of the three edges of T, with the free index i.
+psi_edges = component_tensor(starts[i, k] + t * (ends[i, k] - starts[i, k]), (k,))
+edges = parameterised_domain(S, psi_edges, T)
+
+# A later pass evaluates the integral to 1/2.
+index_sum(integral(pull_back(x * dy, edges), S), (i,))
+```
+
+The result is the integral of $x \, \mathrm{d}y$ over the boundary of `T`,
+which is $\int_T \mathrm{d}x \wedge \mathrm{d}y = 1/2$ by Stokes' theorem.
+Without the `IndexSum`, the integral has the free index `i`, and the value
+for each `i` is the integral over one edge.
+
+The orientation of each edge comes from the order of `starts` and `ends`. Every
+domain of a family has the same parameter domain, here `S`.
+
 ### Points and point evaluation
 
 Requires: [RD](#rd), [ParameterisedDomain](#parameteriseddomain),
@@ -1733,9 +1786,18 @@ C = parameterised_domain(RD(0), pull_back(psi, c), RD(2))
 
 ### Example: quadrature
 
+> This is very much inspired by what GEM/TSFC does but expresses it in core
+> primitives. Clearly by combining these ideas UFLx has quite some additional
+> expressivity. Perhaps having this in UFLx will make TSFC simpler, if it
+> eventually targets UFLx.
+
 Requires: [Points and point evaluation](#points-and-point-evaluation),
+[ParameterisedDomain](#parameteriseddomain), [PullBack](#pullback),
 [Integral](#integral), [Components](#components), [Tensor](#tensor),
 [ComponentTensor and IndexSum](#componenttensor-and-indexsum).
+
+This example is a 'look ahead' to expressing the concept of quadrature
+integration in the core language.
 
 A quadrature rule replaces the integral by the inner product of the weights
 with the values at the points. With `T`, `X` and `f = X[0] * X[1]` of
@@ -1745,17 +1807,19 @@ rule is:
 ```python
 zero, half = Integer(0), Integer(1) / Integer(2)
 sixth = Integer(1) / Integer(6)
+i, k = index("i"), index("k")
 
-def value_at(g, x):
-    return integral(pull_back(g, parameterised_domain(RD(0), x, T)), RD(0))
-
-points = (tensor((half, zero)), tensor((half, half)), tensor((zero, half)))
-values = tensor(tuple(value_at(f, x) for x in points))
+points = tensor((tensor((half, zero)), tensor((half, half)), tensor((zero, half))))
 weights = tensor((sixth, sixth, sixth))
 
-i = index("i")
-q = index_sum(weights[i] * values[i], (i,))
+# A family of three points in T, with the free index i.
+xs = parameterised_domain(RD(0), component_tensor(points[i, k], (k,)), T)
+
+q = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
 ```
+
+The points are one domain with the free index `i`, so `f` occurs once in `q`,
+and a form compiler can evaluate `q` as a loop over the points.
 
 A later pass evaluates `q` to $1/24$, which is
 `integral(f * volume_form(T), T)`, because the rule is exact for $f$. The two
@@ -1764,6 +1828,63 @@ argument of the pass. The pass finds the coefficient $c$ of a top form
 $c \, \mathrm{d}X_0 \wedge \mathrm{d}X_1$ on `T` as
 `components(components(c * volume_form(T), T), T)[0, 1]`. The result is an
 expression of the core.
+
+After the passes, `q` is
+
+```python
+index_sum(weights[i] * (points[i, 0] * points[i, 1]), (i,))
+```
+
+`expand_pull_backs` replaces `X` by the parameterisation of `xs`. A pass
+replaces the integral over `RD(0)` of a 0-form by the 0-form, and a pass
+replaces `component_tensor(points[i, k], (k,))[0]` by `points[i, 0]`. A form
+compiler could generate:
+
+```python
+weights = (1 / 6, 1 / 6, 1 / 6)
+points = ((1 / 2, 0.0), (1 / 2, 1 / 2), (0.0, 1 / 2))
+
+
+def kernel() -> float:
+    q = 0.0
+    for i in range(3):
+        q += weights[i] * (points[i][0] * points[i][1])
+    return q
+```
+
+The `IndexSum` over `i` is the loop over the points, and the literals are
+tables.
+
+### Example: the centroid of a triangle
+
+> LLM generated example.
+
+Requires: [Example: an affinely mapped
+triangle](#example-an-affinely-mapped-triangle), [PullBack](#pullback),
+[Integral](#integral), [Division](#division),
+[ComponentTensor and IndexSum](#componenttensor-and-indexsum),
+[Points and point evaluation](#points-and-point-evaluation).
+
+An integral is an expression, so the centroid of `K` is a ratio of integrals.
+The example uses `T` and `K` of the affinely mapped triangle.
+
+```python
+Y = coordinate(RD(2))
+vol = volume_form(RD(2))
+k = index("k")
+
+# A later pass evaluates the area of K to 5/2.
+area = integral(pull_back(vol, K), T)
+
+# A later pass evaluates the centroid of K to (2, 4/3).
+centroid = component_tensor(integral(pull_back(Y[k] * vol, K), T) / area, (k,))
+```
+
+The pull-back of `vol` by `K` gives the factor $\det J = 5$, without a
+determinant. The centroid is the parameterisation of the point `C` of
+[Points and point evaluation](#points-and-point-evaluation), which is the
+image of the centroid of `T`. The two expressions are not equal, and a later
+pass evaluates both to $(2, 4/3)$.
 
 ## Topology of domains
 
@@ -2184,7 +2305,7 @@ rules in the section of the concrete class.
 | `Indexed`, `ComponentTensor`, `IndexSum`       | `expression`, `indices`                                  |                                                                   |
 | `Coordinate`                                   | `domain`                                                 |                                                                   |
 | `ExteriorDerivative`, `Components`, `Integral` | `expression`, `domain`                                   |                                                                   |
-| `ParameterisedDomain`                          | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                                   |
+| `ParameterisedDomain`                          | `parameter_domain`, `parameterisation`, `ambient_domain` | `free_indices`                                                    |
 | `PullBack`                                     | `expression`, `domain`                                   |                                                                   |
 
 ## Appendix: Degree table
