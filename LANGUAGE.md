@@ -2014,36 +2014,38 @@ form the following hierarchy.
 
 ```
 Base
+├── AbstractCoordinateDomain              parameter space, stores n
+│   └── RD                                R^n
+│
 ├── AbstractExpression
 │   ├── Integer                           literal
 │   ├── Float                             literal
 │   ├── ImaginaryUnit                     literal
 │   ├── Zero                              zero of any shape and degree, no support
-│   ├── Coordinate                        terminal, X on P
+│   ├── Sum                               +
+│   ├── Product                           *, the wedge product
+│   ├── Power                             **
+│   ├── Division                          /
+│   ├── Absolute                          abs
+│   ├── Conjugate
+│   ├── TensorProduct                     ⊗, concatenates slots
+│   ├── SquareRoot
 │   ├── Tensor                            stacks entries along a new axis
 │   ├── Indexed                           full indexing, int or Index entries
 │   ├── ComponentTensor                   binds indices to tensor axes
 │   ├── IndexSum                          sums over bound indices
+│   ├── Determinant
+│   ├── Inverse
+│   │
+│   ├── Coordinate                        terminal, X on P
 │   ├── ExteriorDerivative                d with respect to P
 │   ├── Components                        first slot to an axis, with the frame of P
-│   ├── PullBack                          pull-back of a differential form by a domain, support P of the domain
 │   ├── Integral                          integral of a top form over P, no support
-│   ├── Sum                               +
-│   ├── Product                           *, the wedge product
-│   ├── TensorProduct                     ⊗, concatenates slots
-│   ├── Division                          /
-│   ├── Power                             **
-│   ├── Absolute                          abs
-│   ├── Conjugate
-│   ├── SquareRoot
-│   ├── Determinant
-│   └── Inverse
+│   │
+│   └── PullBack                          pull-back of a differential form by a domain, support P of the domain
 │
 ├── Index                                 named by a label, not an expression
 ├── EllipsisIndex                         covers any number of axes
-│
-├── AbstractCoordinateDomain              parameter space, stores n
-│   └── RD                                R^n
 │
 └── ParameterisedDomain                   stores P, ψ and Q
 ```
@@ -2052,35 +2054,35 @@ Base
 
 > LLM generated table.
 
-| Group                 | Free function                                                   | `AbstractExpression` overload | Takes                                                       | Returns                             |
-| --------------------- | --------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------- | ----------------------------------- |
-| Arithmetic            | [`add(f, g)`](#sum)                                             | `+`                           | `f, g: AbstractExpression`                                  | `Sum`                               |
-|                       | [`subtract(f, g)`](#negation-and-subtraction)                   | `-`                           | `f, g: AbstractExpression`                                  | `Sum` of `f` and `negate(g)`        |
-|                       | [`multiply(f, g)`](#product)                                    | `*`                           | `f, g: AbstractExpression`                                  | `Product`                           |
-|                       | [`tensor_product(f, g)`](#tensorproduct)                        |                               | `f, g: AbstractExpression`                                  | `TensorProduct`                     |
-|                       | [`divide(f, g)`](#division)                                     | `/`                           | `f, g: AbstractExpression`                                  | `Division`                          |
-|                       | [`negate(f)`](#negation-and-subtraction)                        | unary `-`                     | `f: AbstractExpression`                                     | `Product` of `Integer(-1)` and `f`  |
-|                       | [`absolute(f)`](#absolute)                                      | `abs`                         | `f: AbstractExpression`                                     | `Absolute`                          |
-|                       | [`conjugate(f)`](#conjugate)                                    |                               | `f: AbstractExpression`                                     | `Conjugate`                         |
-|                       | [`power(f, g)`](#power)                                         | `**`                          | `f, g: AbstractExpression`                                  | `Power`                             |
-| Elementary functions  | [`square_root(f)`](#elementary-functions-very-incomplete)       |                               | `f: AbstractExpression`                                     | `SquareRoot`                        |
-| Coordinate domains    | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain`                               | `Coordinate`                        |
-|                       | [`volume_form(P)`](#volume-form)                                |                               | `P: AbstractCoordinateDomain`                               | `Product` of the coordinate 1-forms |
-| Tensors and indexing  | [`tensor(entries)`](#tensor)                                    |                               | `entries: tuple[AbstractExpression, ...]`                   | `Tensor`                            |
-|                       | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple`                   | `Indexed`                           |
-| Index notation        | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                       | `Index`                             |
-|                       | [`ellipsis_index(label)`](#ellipsisindex)                       |                               | `label: str \| tuple`                                       | `EllipsisIndex`                     |
-|                       | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `ComponentTensor`                   |
-|                       | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `IndexSum`                          |
-| Tensor algebra        | [`determinant(f)`](#determinant)                                |                               | `f: AbstractExpression`                                     | `Determinant`                       |
-|                       | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                     | `Inverse`                           |
-|                       | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                     | `ComponentTensor` of an `Indexed`   |
-|                       | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                  | `ComponentTensor` of an `IndexSum`  |
-| Differentiation       | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `ExteriorDerivative`                |
-|                       | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Components`                        |
-| Parameterised domains | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression` | `ParameterisedDomain`               |
-| Pull-back             | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain`           | `PullBack`                          |
-| Integration           | [`integral(f, P)`](#integral)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Integral`                          |
+| Group                           | Free function                                                   | `AbstractExpression` overload | Takes                                                       | Returns                             |
+| ------------------------------- | --------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------- | ----------------------------------- |
+| Expressions and static type     | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                       | `Index`                             |
+|                                 | [`ellipsis_index(label)`](#ellipsisindex)                       |                               | `label: str \| tuple`                                       | `EllipsisIndex`                     |
+| Algebra                         | [`add(f, g)`](#sum)                                             | `+`                           | `f, g: AbstractExpression`                                  | `Sum`                               |
+|                                 | [`multiply(f, g)`](#product)                                    | `*`                           | `f, g: AbstractExpression`                                  | `Product`                           |
+|                                 | [`power(f, g)`](#power)                                         | `**`                          | `f, g: AbstractExpression`                                  | `Power`                             |
+|                                 | [`negate(f)`](#negation-and-subtraction)                        | unary `-`                     | `f: AbstractExpression`                                     | `Product` of `Integer(-1)` and `f`  |
+|                                 | [`subtract(f, g)`](#negation-and-subtraction)                   | `-`                           | `f, g: AbstractExpression`                                  | `Sum` of `f` and `negate(g)`        |
+|                                 | [`divide(f, g)`](#division)                                     | `/`                           | `f, g: AbstractExpression`                                  | `Division`                          |
+|                                 | [`absolute(f)`](#absolute)                                      | `abs`                         | `f: AbstractExpression`                                     | `Absolute`                          |
+|                                 | [`conjugate(f)`](#conjugate)                                    |                               | `f: AbstractExpression`                                     | `Conjugate`                         |
+|                                 | [`tensor_product(f, g)`](#tensorproduct)                        |                               | `f, g: AbstractExpression`                                  | `TensorProduct`                     |
+|                                 | [`square_root(f)`](#elementary-functions-very-incomplete)       |                               | `f: AbstractExpression`                                     | `SquareRoot`                        |
+|                                 | [`tensor(entries)`](#tensor)                                    |                               | `entries: tuple[AbstractExpression, ...]`                   | `Tensor`                            |
+|                                 | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple`                   | `Indexed`                           |
+|                                 | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `ComponentTensor`                   |
+|                                 | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `IndexSum`                          |
+|                                 | [`determinant(f)`](#determinant)                                |                               | `f: AbstractExpression`                                     | `Determinant`                       |
+|                                 | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                     | `Inverse`                           |
+|                                 | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                     | `ComponentTensor` of an `Indexed`   |
+|                                 | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                  | `ComponentTensor` of an `IndexSum`  |
+| Calculus on a coordinate domain | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain`                               | `Coordinate`                        |
+|                                 | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `ExteriorDerivative`                |
+|                                 | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Components`                        |
+|                                 | [`volume_form(P)`](#volume-form)                                |                               | `P: AbstractCoordinateDomain`                               | `Product` of the coordinate 1-forms |
+|                                 | [`integral(f, P)`](#integral)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Integral`                          |
+| Maps between domains            | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression` | `ParameterisedDomain`               |
+|                                 | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain`           | `PullBack`                          |
 
 The value-shape and other constraints on the arguments are stated in the section
 of each free function. A free function and an operator overload accept only the
@@ -2099,34 +2101,41 @@ rules in the section of the concrete class.
 
 > LLM generated table.
 
-| Class                                                           | Stored properties                                        | Derived properties                                                |
-| --------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
-| `AbstractExpression`                                            |                                                          | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree` |
-| `Integer`, `Float`                                              | `value`                                                  |                                                                   |
-| `Zero`                                                          | `value_shape`, `free_indices`, `degree`                  |                                                                   |
-| `Coordinate`                                                    | `domain`                                                 |                                                                   |
-| `Tensor`                                                        | `entries`                                                |                                                                   |
-| `Indexed`, `ComponentTensor`, `IndexSum`                        | `expression`, `indices`                                  |                                                                   |
-| `ExteriorDerivative`, `Components`, `Integral`, `PullBack`      | `expression`, `domain`                                   |                                                                   |
-| `Absolute`, `Conjugate`, `SquareRoot`, `Determinant`, `Inverse` | `operand`                                                |                                                                   |
-| `Sum`, `Product`, `TensorProduct`, `Division`, `Power`          | `first`, `second`                                        |                                                                   |
-| `Index`, `EllipsisIndex`                                        | `label`                                                  |                                                                   |
-| `AbstractCoordinateDomain`                                      | `dimension`, in every concrete subclass such as `RD`     |                                                                   |
-| `ParameterisedDomain`                                           | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                                   |
+| Class                                          | Stored properties                                        | Derived properties                                                |
+| ---------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
+| `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`     |                                                                   |
+| `AbstractExpression`                           |                                                          | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree` |
+| `Index`, `EllipsisIndex`                       | `label`                                                  |                                                                   |
+| `Integer`, `Float`                             | `value`                                                  |                                                                   |
+| `Zero`                                         | `value_shape`, `free_indices`, `degree`                  |                                                                   |
+| `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                        |                                                                   |
+| `Absolute`, `Conjugate`                        | `operand`                                                |                                                                   |
+| `TensorProduct`                                | `first`, `second`                                        |                                                                   |
+| `SquareRoot`                                   | `operand`                                                |                                                                   |
+| `Tensor`                                       | `entries`                                                |                                                                   |
+| `Indexed`, `ComponentTensor`, `IndexSum`       | `expression`, `indices`                                  |                                                                   |
+| `Determinant`, `Inverse`                       | `operand`                                                |                                                                   |
+| `Coordinate`                                   | `domain`                                                 |                                                                   |
+| `ExteriorDerivative`, `Components`, `Integral` | `expression`, `domain`                                   |                                                                   |
+| `ParameterisedDomain`                          | `parameter_domain`, `parameterisation`, `ambient_domain` |                                                                   |
+| `PullBack`                                     | `expression`, `domain`                                   |                                                                   |
 
 ## Appendix: Degree table
 
-| Class                                                                                | Edges that are expressions must have                      | Degree of the node                            |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------------- | --------------------------------------------- |
-| `Integer`, `Float`, `ImaginaryUnit`, `Coordinate`                                    | No such edges                                             | `()`                                          |
-| `Zero`                                                                               | No such edges                                             | The stored degree                             |
-| `Sum`                                                                                | Equal degrees                                             | The degree of the operands                    |
-| `Product`                                                                            | The degree `()`, or equal numbers of slots                | The slotwise sum (see [Product](#product))    |
-| `TensorProduct`                                                                      | Any degree                                                | The concatenated degrees                      |
-| `Division`, `Power`, `Absolute`, `Conjugate`, `SquareRoot`, `Determinant`, `Inverse` | The degree `()`                                           | `()`                                          |
-| `ExteriorDerivative`                                                                 | The degree `()` or `(k,)`                                 | `(1,)` for `()`, and `(k + 1,)` for `(k,)`    |
-| `Components`                                                                         | At least one slot                                         | The first slot lowered by 1, and removed at 0 |
-| `Tensor`                                                                             | Equal degrees                                             | The degree of the entries                     |
-| `Indexed`, `ComponentTensor`, `IndexSum`                                             | Any degree                                                | The degree of the expression                  |
-| `PullBack`                                                                           | Any degree                                                | The degree of the expression                  |
-| `Integral`                                                                           | `(n,)` with $n$ the dimension of $P$, or `()` for $n = 0$ | `()`                                          |
+| Class                                        | Edges that are expressions must have                      | Degree of the node                            |
+| -------------------------------------------- | --------------------------------------------------------- | --------------------------------------------- |
+| `Integer`, `Float`, `ImaginaryUnit`          | No such edges                                             | `()`                                          |
+| `Zero`                                       | No such edges                                             | The stored degree                             |
+| `Sum`                                        | Equal degrees                                             | The degree of the operands                    |
+| `Product`                                    | The degree `()`, or equal numbers of slots                | The slotwise sum (see [Product](#product))    |
+| `Power`, `Division`, `Absolute`, `Conjugate` | The degree `()`                                           | `()`                                          |
+| `TensorProduct`                              | Any degree                                                | The concatenated degrees                      |
+| `SquareRoot`                                 | The degree `()`                                           | `()`                                          |
+| `Tensor`                                     | Equal degrees                                             | The degree of the entries                     |
+| `Indexed`, `ComponentTensor`, `IndexSum`     | Any degree                                                | The degree of the expression                  |
+| `Determinant`, `Inverse`                     | The degree `()`                                           | `()`                                          |
+| `Coordinate`                                 | No such edges                                             | `()`                                          |
+| `ExteriorDerivative`                         | The degree `()` or `(k,)`                                 | `(1,)` for `()`, and `(k + 1,)` for `(k,)`    |
+| `Components`                                 | At least one slot                                         | The first slot lowered by 1, and removed at 0 |
+| `Integral`                                   | `(n,)` with $n$ the dimension of $P$, or `()` for $n = 0$ | `()`                                          |
+| `PullBack`                                   | Any degree                                                | The degree of the expression                  |
