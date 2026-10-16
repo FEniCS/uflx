@@ -43,6 +43,7 @@ content are explicitly marked.
   - [`AbstractExpression`](#abstractexpression)
   - [Index](#index)
   - [EllipsisIndex](#ellipsisindex)
+  - [Extents](#extents)
   - [Free indices](#free-indices)
   - [Scalar type](#scalar-type)
   - [Support](#support)
@@ -396,7 +397,8 @@ objects.
 
 Every concrete `AbstractCoordinateDomain` $P$ stores:
 
-- The dimension $n$, provided by the property `dimension`.
+- The dimension $n$, an `int` with $n \ge 0$, provided by the property
+  `dimension`.
 
 Examples:
 
@@ -517,16 +519,43 @@ cover, so a `EllipsisIndex` may cover no axis. The extent of a `EllipsisIndex` i
 `tuple` of the extents of the covered axes. In every other rule of index
 notation, a `EllipsisIndex` behaves as an `Index`.
 
+### Extents
+
+Requires: [The base object `Base`](#the-base-object-base), [Index](#index).
+
+See also: [Free indices](#free-indices), [Indexed](#indexed),
+[Example: quadrature](#example-quadrature).
+
+An extent is the length of an axis of a value shape, or the extent of a free
+index. An extent is an `int` $n \ge 0$ or a `RuntimeExtent`.
+
+`RuntimeExtent` is a concrete subclass of the base object for an extent whose
+value is known only when a form is assembled, such as the number of points of
+a quadrature rule that differs from cell to cell. A `RuntimeExtent` is not an
+expression. `RuntimeExtent(label)` stores the label, with the same rules as the
+label of an `Index`.
+
+A `RuntimeExtent` has no arithmetic and no ordering, so the rules of the core,
+which compare extents by equality, accept a `RuntimeExtent` unchanged.
+
+Example:
+
+- With `q = runtime_extent("q")`, an array of quadrature points of value shape
+  `(q, 2)` and an array of weights of value shape `(q,)` share the extent `q`,
+  so `weights[i] * points[i, 0]` is accepted. An array of weights of value
+  shape `(runtime_extent("r"),)` raises `ValueError`, because the index `i`
+  has two extents.
+
 ### Free indices
 
 Requires: [`AbstractExpression`](#abstractexpression), [Index](#index),
-[EllipsisIndex](#ellipsisindex).
+[EllipsisIndex](#ellipsisindex), [Extents](#extents).
 
 See also: [Sum](#sum), [Tensor](#tensor), [Indexed](#indexed), [ComponentTensor
 and IndexSum](#componenttensor-and-indexsum).
 
 Every `AbstractExpression` derives the free indices, a `tuple` of pairs of an
-`Index` and an `int` extent, or of a `EllipsisIndex` and a `tuple` extent. The
+`Index` and an extent, or of a `EllipsisIndex` and a `tuple` of extents. The
 order is the order of first occurrence, never the order of a `set`.
 
 Unless a node class states otherwise, the free indices of a node are the free
@@ -947,8 +976,8 @@ Examples, with `zero, one, two = Integer(0), Integer(1), Integer(2)`:
 ### Indexed
 
 Requires: [`AbstractExpression`](#abstractexpression), [Index](#index),
-[EllipsisIndex](#ellipsisindex), [Free indices](#free-indices),
-[Support](#support), [Degree](#degree).
+[EllipsisIndex](#ellipsisindex), [Extents](#extents), [Free
+indices](#free-indices), [Support](#support), [Degree](#degree).
 
 See also: [Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative),
 [Example: a paraboloid](#example-a-paraboloid).
@@ -969,7 +998,8 @@ Indexing is full indexing only. Each `int` and each `Index` entry covers one
 axis, and a `EllipsisIndex` entry covers every axis that the other entries do not
 cover. Without a `EllipsisIndex`, the number of entries must equal $r$. With a
 `EllipsisIndex`, the number of other entries must be at most $r$. Each `int` entry
-$i_j$ must satisfy $0 \le i_j < n_j$, where `(n_0, ..., n_{r-1})` is the value
+$i_j$ must index an axis with an `int` extent $n_j$ and must satisfy
+$0 \le i_j < n_j$, where `(n_0, ..., n_{r-1})` is the value
 shape of the expression. Each `Index` entry $i_j$ takes the extent $n_j$. A
 `EllipsisIndex` takes the `tuple` of the extents of the axes that the `EllipsisIndex`
 covers.
@@ -989,6 +1019,7 @@ Construction of `Indexed` raises:
 | `IndexError` | A number of entries that does not cover exactly the rank. An expression with value shape `()` has rank 0. |
 | `ValueError` | More than one `EllipsisIndex` entry.                                                                      |
 | `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                                  |
+| `IndexError` | An `int` entry for an axis with a `RuntimeExtent`.                                                        |
 | `ValueError` | An `Index` that occurs twice, or that is already free.                                                    |
 
 A negative index is rejected rather than converted, so the stored indices are
@@ -1139,14 +1170,20 @@ class AbstractExpression(Base, ABC):
     """Abstract base class for expressions."""
     @property
     @abstractmethod
-    def value_shape(self) -> tuple[int, ...]:
+    def value_shape(self) -> tuple[int | RuntimeExtent, ...]:
         """The value shape of the expression."""
 
     @property
     @abstractmethod
     def free_indices(
         self,
-    ) -> tuple[tuple[Index | EllipsisIndex, int | tuple[int, ...]], ...]:
+    ) -> tuple[
+        tuple[
+            Index | EllipsisIndex,
+            int | RuntimeExtent | tuple[int | RuntimeExtent, ...],
+        ],
+        ...,
+    ]:
         """The free indices and extents, in order of first occurrence."""
 
     @property
@@ -1928,7 +1965,8 @@ C = parameterised_domain(RD(0), pull_back(psi, c), RD(2))
 Requires: [Points and point evaluation](#points-and-point-evaluation),
 [ParameterisedDomain](#parameteriseddomain), [PullBack](#pullback),
 [Integral](#integral), [Components](#components), [Tensor](#tensor),
-[ComponentTensor and IndexSum](#componenttensor-and-indexsum).
+[ComponentTensor and IndexSum](#componenttensor-and-indexsum),
+[Extents](#extents).
 
 This example is a 'look ahead' to expressing the concept of quadrature
 integration in the core language.
@@ -1988,6 +2026,12 @@ def kernel() -> float:
 
 The `IndexSum` over `i` is the loop over the points, and the literals are
 tables.
+
+With `points` and `weights` given by leaves of a
+[language extension](#language-extensions), of value shapes `(q, 2)` and
+`(q,)` for a `RuntimeExtent` `q`, the same expression is runtime quadrature.
+The number of points is known only at assembly, and the loop bound `q` is an
+input of the kernel.
 
 ### Example: the centroid of a triangle
 
@@ -2292,7 +2336,8 @@ free function. As in the core, the free function may read the static type of
 the operands, such as a value shape, to choose the composition (see
 [Node class or free function](#node-class-or-free-function)). For
 example, `trace(A)` reads the extent $n$ of `A` and returns the sum of the
-diagonal entries `A[0, 0] + ... + A[n - 1, n - 1]`. An operation that a
+diagonal entries `A[0, 0] + ... + A[n - 1, n - 1]`. So `trace(A)` requires an
+`int` extent $n$ (see [Extents](#extents)). An operation that a
 `EllipsisIndex` expresses, such as `scale(a, T)`, needs no value shape (see
 [EllipsisIndex](#tensor-algebra-with-ellipsisindex)).
 
@@ -2365,7 +2410,8 @@ Base
 Base
 ├── AbstractExpression
 ├── Index                                 named by a label, not an expression
-└── EllipsisIndex                         covers any number of axes
+├── EllipsisIndex                         covers any number of axes
+└── RuntimeExtent                         extent known at assembly, not an expression
 
 # Algebra
 AbstractExpression
@@ -2408,6 +2454,7 @@ AbstractExpression
 | ------------------------------- | --------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------- | ----------------------------------- |
 | Expressions and static type     | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                       | `Index`                             |
 |                                 | [`ellipsis_index(label)`](#ellipsisindex)                       |                               | `label: str \| tuple`                                       | `EllipsisIndex`                     |
+|                                 | [`runtime_extent(label)`](#extents)                             |                               | `label: str \| tuple`                                       | `RuntimeExtent`                     |
 | Algebra                         | [`add(f, g)`](#sum)                                             | `+`                           | `f, g: AbstractExpression`                                  | `Sum`                               |
 |                                 | [`multiply(f, g)`](#product)                                    | `*`                           | `f, g: AbstractExpression`                                  | `Product`                           |
 |                                 | [`power(f, g)`](#power)                                         | `**`                          | `f, g: AbstractExpression`                                  | `Power`                             |
@@ -2453,7 +2500,7 @@ rules in the section of the concrete class.
 | ---------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
 | `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`     |                                                                   |
 | `AbstractExpression`                           |                                                          | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree` |
-| `Index`, `EllipsisIndex`                       | `label`                                                  |                                                                   |
+| `Index`, `EllipsisIndex`, `RuntimeExtent`      | `label`                                                  |                                                                   |
 | `Integer`, `Float`                             | `value`                                                  |                                                                   |
 | `Zero`                                         | `value_shape`, `free_indices`, `degree`                  |                                                                   |
 | `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                        |                                                                   |
