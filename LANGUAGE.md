@@ -298,6 +298,11 @@ affinely mapped triangle is a free function that returns a
 `ParameterisedDomain`. A language extension is the one exception (see
 [Language extensions](#language-extensions)).
 
+A concrete class of the core is final. A library subclasses only an abstract
+class of the core, such as `AbstractCoordinateDomain`, so a pass that
+dispatches on a concrete class of the core never meets a subclass of the
+class.
+
 A parent class never constructs a subclass. A property of a parent class may
 return an object whose class is a subclass, because the property only
 returns an object that already exists. A subclass may narrow the return
@@ -341,6 +346,9 @@ adding the answer to `c`.
 
 Requires: [The base object `Base`](#the-base-object-base).
 
+See also: [Index](#index), [ComponentTensor and
+IndexSum](#componenttensor-and-indexsum).
+
 A pass is a pure free function that walks a graph after construction of the
 graph. The result of a pass depends only on the arguments of the pass. A pass
 returns a value, such as a unit, or a new graph. A pass builds a new graph by
@@ -348,6 +356,19 @@ constructing an object for each node that the pass replaces, and by
 reconstructing every object that depends on a replaced node, up to the root
 (see [The base object](#the-base-object-base)). A pass may cache results for
 each object, because objects are immutable.
+
+Substitution avoids capture. A `ComponentTensor` or an `IndexSum` binds
+indices (see [ComponentTensor and
+IndexSum](#componenttensor-and-indexsum)). If a pass substitutes an expression
+into the expression of a binding node, and a bound index of the binding node is
+free in the substituted expression, the pass renames the bound index. The new
+name is the derived index `Index(("uflx.rename", node, m))`, or the derived
+`EllipsisIndex` with the same label, with `node` the binding node before the
+substitution and `m` the position of the bound index. For example, replacing
+`c` by `b[i]` in `index_sum(a[i] * c, (i,))` gives
+`index_sum(a[j] * b[i], (j,))`, with `j` the renamed index, and the result has
+the free index `i`. Without the renaming, the result would be
+`index_sum(a[i] * b[i], (i,))`, with no free index.
 
 A pass does one thing, such as differentiating or lowering. Passes compose,
 and the user of the core chooses which passes run and in what order.
@@ -514,8 +535,10 @@ raises `TypeError` if the label is neither a `str` nor a `tuple`. An `Index`
 has no extent of its own. An `Index` takes the extent of the axis that the
 `Index` indexes.
 
-The user names user indices. The user is responsible for not reusing a name
-that is already free in an operand.
+The user names user indices. Two occurrences of one `Index` are the same
+index, so `a[i] * b[i]` is the component-wise product (see [Free
+indices](#free-indices)). An index that the user means to be new needs a new
+name.
 
 A free function that needs fresh indices derives the indices from the
 operands. The label of a derived index is the identifier of the free function,
@@ -651,6 +674,10 @@ The scalar type is real or complex. Unless a node class states otherwise, an
 expression is complex if and only if at least one edge is a complex
 expression. `ImaginaryUnit` is complex.
 
+The scalar type is the arithmetic in which the expression is evaluated, not a
+statement about the value. A real `SquareRoot` or a real `Power` whose value is
+not a real number, such as `square_root(Integer(-1))`, is undefined.
+
 ### Support
 
 Requires: [`AbstractExpression`](#abstractexpression),
@@ -707,8 +734,10 @@ See also: [Zero](#zero).
 An expression denotes an array-valued differential form, a multi-form, on the
 support of the expression, with the degree of the expression. A 0-form is an
 array-valued function. An expression with no support and the degree `()` denotes a
-single array. A `Zero` with a non-empty degree has no support and denotes the zero
-form of that degree on every support.
+single array. A leaf with a non-empty degree has a support, except `Zero`. So an
+expression with no support and a non-empty degree is built from `Zero`s, such as
+`Zero((), (), (1,)) + Zero((), (), (1,))`, and denotes the zero form of that
+degree on every support.
 
 ### Node class or free function
 
@@ -876,9 +905,11 @@ slot, so the product of two 1-forms is a 2-form with the degree `(2,)`, not a
 double form with the degree `(1, 1)`.
 
 No fixed composition of the other node classes multiplies, so `Product` is a
-node class. `Product` and [`TensorProduct`](#tensorproduct) are the node
-classes that combine the free indices of two operands that differ, so every
-contraction is an `IndexSum` of a `Product` or a `TensorProduct`.
+node class. `Product`, [`TensorProduct`](#tensorproduct),
+[`Division`](#division) and [`Power`](#power) combine the free indices of two
+operands that differ, by the general rule of [Free indices](#free-indices). So
+every contraction is an `IndexSum` of one of the four node classes, such as
+`index_sum(a[i] * b[i], (i,))` or `index_sum(a[i] / b[i], (i,))`.
 
 Examples, with a scalar $f$, the 1-forms $\mathrm{d}x$ and $\mathrm{d}y$ and a
 double form $S$ with the degree `(1, 1)`:
@@ -921,6 +952,10 @@ Requires: [Arithmetic](#arithmetic), [Product](#product), [Power](#power),
 
 Division is a node class, because `multiply(f, power(g, Integer(-1)))`
 rounds twice and differs from `f / g` in floating-point arithmetic.
+
+The first operand of `Division` may have any degree, and the second operand must
+have the degree `()`, or construction raises `ValueError`. The quotient has the
+degree of the first operand, so `dx / Integer(2)` is a 1-form.
 
 ### Absolute
 
@@ -2704,8 +2739,10 @@ Requires: [Leaves and subclassing](#leaves-and-subclassing), [Passes](#passes),
 product](#transpose-and-matrix-product).
 
 A language extension adds node classes that are not leaves, in a package
-outside the core. Each node class of a language extension provides, as part
-of the class:
+outside the core. A node class of a language extension subclasses
+`AbstractExpression`, never a concrete class of the core (see [Leaves and
+subclassing](#leaves-and-subclassing)). Each node class of a language
+extension provides, as part of the class:
 
 - a rule for each [core transformation](#core-transformations) that keeps
   the node, which produces only node classes of the core or of the language
@@ -2982,7 +3019,8 @@ rules in the section of the concrete class.
 | `Zero`                                   | No such edges                                             | The stored degree                             |
 | `Sum`                                    | Equal degrees                                             | The degree of the operands                    |
 | `Product`                                | The degree `()`, or equal numbers of slots                | The slotwise sum (see [Product](#product))    |
-| `Power`, `Division`, `Absolute`          | The degree `()`                                           | `()`                                          |
+| `Power`, `Absolute`                      | The degree `()`                                           | `()`                                          |
+| `Division`                               | The degree `()` for the second operand                    | The degree of the first operand               |
 | `Conjugate`                              | Any degree                                                | The degree of the operand                     |
 | `TensorProduct`                          | Any degree                                                | The concatenated degrees                      |
 | `SquareRoot`                             | The degree `()`                                           | `()`                                          |
