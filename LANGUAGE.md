@@ -62,7 +62,14 @@ external library provides the concrete data behind the leaf nodes.
 - The core does not contain algorithms for the convenience of a form
   compiler. A form compiler states the forms that the form compiler accepts.
   A pass outside the core lowers a form to those forms, and the pass produces
-  only node classes of the core.
+  only node classes of the core. So the core never changes to suit a form
+  compiler, and two form compilers may accept different forms. The result of
+  the lowering is a form of UFLx, so printing, hashing and structural
+  equality apply to the result. For example, a very basic form compiler
+  might only accept integrals over a reference cell, such as a unit simplex.
+  An integral over a domain with the legacy UFL measure `dx` is a sum over the
+  cells of the domain, and the integral over each cell is pulled back to the
+  reference cell.
 
 ## Rules of the language
 
