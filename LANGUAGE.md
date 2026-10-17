@@ -69,6 +69,7 @@ fully LLM generated content are explicitly marked.
   - [ComponentTensor and IndexSum](#componenttensor-and-indexsum)
   - [Tensor algebra with EllipsisIndex](#tensor-algebra-with-ellipsisindex)
   - [Transpose and matrix product](#transpose-and-matrix-product)
+  - [Inverse](#inverse)
   - [Operator overloads](#operator-overloads)
   - [Numbers in expressions](#numbers-in-expressions)
 - [Calculus on a coordinate domain](#calculus-on-a-coordinate-domain)
@@ -1291,6 +1292,49 @@ Examples, with a matrix `A` of value shape `(2, 2)`:
 - `transpose(A)` is not equal to `component_tensor(A[i, j], (j, i))` for user
   indices `i` and `j`, because the index labels differ.
 
+### Inverse
+
+Requires: [`AbstractExpression`](#abstractexpression), [Degree](#degree),
+[Division](#division), [Elementary
+functions](#elementary-functions-very-incomplete), [Transpose and matrix
+product](#transpose-and-matrix-product).
+
+See also: [Expanding pull-backs](#expanding-pull-backs), [Applying
+derivatives](#applying-derivatives).
+
+`Inverse` is a concrete subclass of `AbstractExpression` that stores one
+expression $A$. The free function `inverse(A)` returns `Inverse(A)`. $A$ must
+have value shape `(m, m)` and the degree `()`, or construction raises
+`ValueError`. `Inverse(A)` derives the value shape `(m, m)` and the degree
+`()`. The free indices, the support and the scalar type follow the general
+rule.
+
+`Inverse(A)` is the inverse matrix $A^{-1}$. If $A$ is singular, `Inverse(A)`
+is undefined. Construction does not check that $A$ is invertible.
+
+For each extent $m$, the adjugate of $A$ divided by the determinant of $A$ is
+a fixed composition. `Inverse` is a node class, not that composition, because
+the composition differs in floating-point arithmetic from a factorisation of
+$A$, as for `Division` and `SquareRoot`. A pass chooses how to evaluate
+`Inverse`.
+
+The pseudo-inverse of a matrix $J$ of value shape `(n, k)` with rank $k$ is the
+fixed composition `inverse(transpose(J) @ J) @ transpose(J)`, so the core has
+no node class for the pseudo-inverse. For $k = n$, the pseudo-inverse is equal
+to `inverse(J)`.
+
+Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
+
+- With the Jacobian matrix
+  `J = tensor((tensor((two, one)), tensor((one, three))))` of the [affinely
+  mapped triangle](#example-an-affinely-mapped-triangle), `inverse(J)` has
+  value shape `(2, 2)`, and a later pass evaluates `inverse(J)` to
+  $\frac{1}{5} \begin{pmatrix} 3 & -1 \\ -1 & 2 \end{pmatrix}$.
+- `inverse(tensor((one, two)))` raises `ValueError`, because the value shape
+  `(2,)` is not the value shape of a square matrix.
+- With the coordinate coframe `dX` of `RD(2)`, `inverse(tensor((dX, dX)))`
+  raises `ValueError`, because the degree is `(1,)`.
+
 ### Operator overloads
 
 Requires: [`AbstractExpression`](#abstractexpression), [Sum](#sum),
@@ -1611,11 +1655,14 @@ No fixed composition of the other node classes turns a slot into an axis, so
 `Components` is a node class. The reverse direction is a fixed composition,
 `index_sum(v[i] * dX[i], (i,))` for a vector `v` of value shape `(n,)`.
 
-The components depend on the coordinates of $P$. So a pull-back does not move
-inside `Components`. `PullBack(Components(f, Q), D)` is the array of the
-components of $f$ on $Q$, evaluated at $\psi(p)$, and remains until
-`expand_components` evaluates the `Components` (see
-[Expanding components](#expanding-components)).
+The components depend on the coordinates of $P$. So a pull-back does not
+commute with `Components`. `PullBack(Components(f, Q), D)` is the array of the
+components of $f$ on $Q$, evaluated at $\psi(p)$. If $P$ and $Q$ have the same
+dimension, `expand_pull_backs` moves the pull-back inside `Components` with the
+inverse of the Jacobian matrix (see
+[Expanding pull-backs](#expanding-pull-backs)). Otherwise
+`PullBack(Components(f, Q), D)` remains until `expand_components` evaluates the
+`Components` (see [Expanding components](#expanding-components)).
 
 With `Components`, the arrays of standard differential calculus are fixed
 compositions. With the examples of [ExteriorDerivative](#exteriorderivative)
@@ -2697,11 +2744,12 @@ products of 0-forms and the coordinate 1-forms $\mathrm{d}X_i$.
 ### Expanding pull-backs
 
 Requires: [Core transformations](#core-transformations), [PullBack](#pullback),
-[Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative).
+[Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative),
+[Components](#components), [Inverse](#inverse).
 
 For a domain $D$ with the parameterisation $\psi$, the parameter domain $P$
 and the ambient coordinate domain $Q$, $\psi^*$ commutes with every node class
-of the core except `Components`. Four rules are specific. The rule for an
+of the core except `Components`. Five rules are specific. The rule for an
 expression with no support comes before commuting, so a pull-back never moves
 inside an `Integral`. The integral has no support, and the integrand stays on
 the coordinate domain of the integral.
@@ -2722,6 +2770,18 @@ the coordinate domain of the integral.
   `PullBack(g, parameterised_domain(P, pull_back(D2.parameterisation, D), D2.ambient_domain))`.
   So every `PullBack` that remains applies to `g` directly, such as a function
   on a physical cell pulled back to a facet of the reference cell.
+- For $P$ and $Q$ of the same dimension $n$, with the Jacobian matrix
+  $J$ = `components(exterior_derivative(D.parameterisation, P), P)` and
+  $K$ = `inverse(J)`, the entry $j$ of the last axis of
+  `PullBack(Components(f, Q), D)` is
+  $\sum_i K_{ij} \, \mathrm{Components}(\psi^* f, P)_i$, because $\psi$ has a
+  local inverse near each point where $J$ is invertible, and the pull-back of
+  the coordinate vector field $\partial_j$ of $Q$ by $\psi$ is
+  $\sum_i K_{ij} \, \partial_i$. For $P$ of dimension $k < n$, the same
+  composition with the pseudo-inverse of $J$ in place of $K$ (see
+  [Inverse](#inverse)) is the array of the components of the part of $f$ that
+  is tangent to $D$, not the array of the components of $f$. So for $k < n$,
+  `PullBack(Components(f, Q), D)` remains.
 
 ### Applying derivatives
 
@@ -2730,7 +2790,7 @@ Requires: [Core transformations](#core-transformations),
 [TensorProduct](#tensorproduct), [Zero](#zero), [Conjugate](#conjugate).
 
 The exterior derivative is linear for the linear node classes and follows the
-chain rule for the node classes of the degree `()`. Five rules are specific:
+chain rule for the node classes of the degree `()`. Six rules are specific:
 
 - `Product` follows the graded Leibniz rule,
   $\mathrm{d}(\alpha \wedge \beta) = \mathrm{d}\alpha \wedge \beta + (-1)^k \alpha \wedge \mathrm{d}\beta$
@@ -2740,6 +2800,9 @@ chain rule for the node classes of the degree `()`. Five rules are specific:
   terms would have different numbers of slots.
 - `Division` of a form $a$ by a 0-form $b$ follows
   $\mathrm{d}(a / b) = \mathrm{d}a / b - (\mathrm{d}b \wedge a) / (b b)$.
+- `Inverse` follows $\mathrm{d}(A^{-1}) = -A^{-1} \, \mathrm{d}A \, A^{-1}$,
+  with the matrix products in the value shape and the wedge product of the
+  0-form $A^{-1}$ with the 1-form $\mathrm{d}A$.
 - `Absolute` follows
   $\mathrm{d}|a| = (\bar{a} \, \mathrm{d}a + a \, \overline{\mathrm{d}a}) / (2 |a|)$,
   because $|a|$ is not complex differentiable. For a real $a$, the rule is the
@@ -2993,6 +3056,7 @@ AbstractExpression
 ├── Conjugate
 ├── TensorProduct                         ⊗, concatenates slots
 ├── SquareRoot
+├── Inverse                               inverse of a square matrix
 ├── Tensor                                stacks entries along a new axis
 ├── Indexed                               full indexing, int, Index or index value entries
 ├── ComponentTensor                       binds indices to tensor axes
@@ -3043,6 +3107,7 @@ AbstractCoordinateDomain, AbstractCellType
 |                                 | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`       | `IndexSum`                          |
 |                                 | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                     | `ComponentTensor` of an `Indexed`   |
 |                                 | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                  | `ComponentTensor` of an `IndexSum`  |
+|                                 | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                     | `Inverse`                           |
 | Calculus on a coordinate domain | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain`                               | `Coordinate`                        |
 |                                 | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `ExteriorDerivative`                |
 |                                 | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`      | `Components`                        |
@@ -3081,7 +3146,7 @@ rules in the section of the concrete class.
 | `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                        |                                                                   |
 | `Absolute`, `Conjugate`                        | `operand`                                                |                                                                   |
 | `TensorProduct`                                | `first`, `second`                                        |                                                                   |
-| `SquareRoot`                                   | `operand`                                                |                                                                   |
+| `SquareRoot`, `Inverse`                        | `operand`                                                |                                                                   |
 | `Tensor`                                       | `entries`                                                |                                                                   |
 | `Indexed`, `ComponentTensor`, `IndexSum`       | `expression`, `indices`                                  |                                                                   |
 | `Coordinate`                                   | `domain`                                                 |                                                                   |
@@ -3104,7 +3169,7 @@ rules in the section of the concrete class.
 | `Division`                               | The degree `()` for the second operand                    | The degree of the first operand               |
 | `Conjugate`                              | Any degree                                                | The degree of the operand                     |
 | `TensorProduct`                          | Any degree                                                | The concatenated degrees                      |
-| `SquareRoot`                             | The degree `()`                                           | `()`                                          |
+| `SquareRoot`, `Inverse`                  | The degree `()`                                           | `()`                                          |
 | `Tensor`                                 | Equal degrees                                             | The degree of the entries                     |
 | `Indexed`, `ComponentTensor`, `IndexSum` | Any degree                                                | The degree of the expression                  |
 | `Coordinate`                             | No such edges                                             | `()`                                          |
