@@ -100,11 +100,9 @@ fully LLM generated content are explicitly marked.
   - [AbstractTopology](#abstracttopology)
   - [Parent of a topology](#parent-of-a-topology)
   - [Example: a static topology](#example-a-static-topology)
-- [Reference cells](#reference-cells)
+- [Reference cells and restriction](#reference-cells-and-restriction)
   - [Reference cell](#reference-cell)
   - [Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell)
-- [Expressions on topologies](#expressions-on-topologies)
-  - [Expressions on a topology](#expressions-on-a-topology)
   - [Restriction](#restriction)
 - [Function spaces](#function-spaces)
   - [AbstractFunctionSpace](#abstractfunctionspace)
@@ -2434,6 +2432,11 @@ The derived property `facet_types` pairs each distinct facet type $F$ of the
 facets with the number of facets with the facet type $F$, in the order of the
 first facet of each facet type.
 
+A sub-entity of a cell type $C$ is $C$, or a sub-entity of a facet of $C$. A
+sub-entity is identified by the set of the vertex numbers of $C$ of the
+sub-entity, and has the cell type of the facet, of the facet of the facet, and
+so on. A vertex is a sub-entity of dimension 0.
+
 A topology of polygons, as for the virtual element method, has a cell type for
 each number of vertices. A cell type whose number of facets is known only at
 run time is not yet covered.
@@ -2487,7 +2490,8 @@ $(0, 1, 3)$ and $(0, 1, 2)$. The facet types of `Simplex(n)` are
 ### AbstractTopology
 
 Requires: [The base object `Base`](#the-base-object-base), [Index](#index),
-[Extents](#extents), [AbstractCellType](#abstractcelltype).
+[Extents](#extents), [Free indices](#free-indices),
+[AbstractCellType](#abstractcelltype).
 
 See also: [Parent of a topology](#parent-of-a-topology),
 [Restriction](#restriction),
@@ -2518,8 +2522,12 @@ the topology, such as a label.
 The free function `cell_index(T, j)` returns the derived index
 `Index(("uflx.cell_index", T, j, 0))` for the cells of type $j$, numbered from
 0. The index has the extent `T.num_cells[j]`. The index differs between types
-and between topologies, even if the numbers of cells are equal. Restriction and the integral over a topology use the index,
-so user code rarely needs the index.
+and between topologies, even if the numbers of cells are equal. Restriction
+and the integral over a topology use the index, so user code rarely needs the
+index.
+
+By the rules of [free indices](#free-indices), an expression with the free
+index `cell_index(T, j)` has one value for each cell of type $j$.
 
 > Legacy note: In legacy UFL, a `Mesh` holds both the topology and the
 > coordinate element, and the measure `dx` hides the sum over the cells. In
@@ -2542,16 +2550,24 @@ Requires: [AbstractCellType](#abstractcelltype),
 
 See also: [Restriction](#restriction).
 
-A topology $S$ whose cells are facets or cells of a topology $T$ has the
+A topology $S$ whose cells are sub-entities of cells of a topology $T$ has the
 parent `(T, seen_from)`. Entry $i$ of `seen_from` is a `tuple` of one or two
 sides with distinct names, each a pair of a side name, a `str`, and a cell type
-number $j$ of $T$. Each cell of type $i$ of $S$ is seen from one cell of type $j$ of $T$
-on each side, and is either:
+number $j$ of $T$. Each cell of type $i$ of $S$ is seen from one cell of type
+$j$ of $T$ on each side, and is either:
 
-- a whole facet of the cell on each side, with cell type $i$ of $S$ a facet
-  type of the cell type of each side, or
-- the cell on the one side, with the vertices in the same order and cell type
-  $i$ of $S$ equal to cell type $j$ of $T$, such as a cell of a subdomain.
+- a whole facet of the cell on each side, with one or two sides, and cell type
+  $i$ of $S$ a facet type of the cell type of each side, or
+- a whole sub-entity of any other dimension of the cell on the one side, with
+  cell type $i$ of $S$ the cell type of the sub-entity. The sub-entity may be
+  the cell itself, with the vertices in the order of the cell, as for a cell of
+  a subdomain, an edge of a tetrahedron, or a vertex.
+
+For a sub-entity of lower dimension than a facet, such as a vertex of a
+triangle mesh, several cells contain the sub-entity, and the concrete mesh
+chooses the one cell. A function that is continuous across the cells has the same restriction
+from each of the cells, and the restriction of any other function depends on
+the choice.
 
 [Restriction](#restriction) picks the value of an expression on a cell of $S$
 by the side name, and checks the side name. The core does not check the rest
@@ -2571,11 +2587,16 @@ and the cell on the side `"fluid"` is the fluid triangle.
 > Legacy note: The legacy UFL measures `ds` and `dS` integrate over a topology
 > of facets with a parent whose `seen_from` entries have one and two sides, and
 > legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure
-> `dx(1)` integrates over a topology of the cells of a subdomain.
+> `dx(1)` integrates over a topology of the cells of a subdomain, and the
+> legacy UFL measure `dP` integrates over a topology of vertices.
 
 A cell of $S$ that is only part of a facet of a cell of $T$, as with hanging
 nodes or a non-matching interface, is not yet covered. Such a cell needs only
-another map in [Restriction](#restriction), onto part of a facet.
+another inclusion in [Restriction](#restriction), onto part of a facet. For a
+non-matching interface, the inclusion is expected to be
+$\phi_c^{-1} \circ \psi_e$, with $\psi_e$ the map of the cell $e$ of $S$ into
+the ambient coordinate domain and $\phi_c^{-1}$ the inverse of the map of the
+cell $c$ of $T$, a terminal that a downstream library provides.
 
 Examples, with a topology `T` of triangles with the cell types `(K,)`,
 `I = Simplex(1)` and `P = Simplex(0)`:
@@ -2590,6 +2611,12 @@ Examples, with a topology `T` of triangles with the cell types `(K,)`,
   facets of `B`.
 - A topology of the triangles of a marked subdomain of `T` has the cell types
   `(K,)` and the parent `(T, ((("inside", 0),),))`.
+- A topology of the vertices of `T`, such as for point loads, has the cell
+  types `(P,)` and the parent `(T, ((("inside", 0),),))`, with one triangle
+  chosen for each vertex.
+- For a topology of tetrahedra with the cell types `(Simplex(3),)`, a topology
+  of the edges along a line source has the cell types `(I,)` and a parent with
+  the one side `("inside", 0)` for the edges.
 - For a topology `U` of prisms with the cell types `(W,)`, a topology of the
   boundary facets has the cell types `(K, Q)`, with the quadrilateral cell type
   `Q`, and the parent `(U, ((("inside", 0),), (("inside", 0),)))`.
@@ -2671,7 +2698,7 @@ and `(1,)`.
 coordinates. The positions of the vertices come from the
 [coordinate field](#coordinate-field).
 
-## Reference cells
+## Reference cells and restriction
 
 ### Reference cell
 
@@ -2759,41 +2786,9 @@ of `Simplex(2)` cells has no reference cells. `ReferenceSimplex(2)` and
 expression on one is not an expression on the other. Likewise,
 `ReferenceSimplex(0)` and `RD(0)` are different coordinate domains.
 
-## Expressions on topologies
-
-### Expressions on a topology
-
-Requires: [AbstractTopology](#abstracttopology),
-[Reference cell](#reference-cell), [Free indices](#free-indices),
-[Support](#support), [Indexed](#indexed).
-
-See also: [Restriction](#restriction).
-
-An expression $f$ on the cells of type $j$ of a topology $T$ is an expression
-with the support $K_j$, the reference cell of type $j$, or no support. The free
-index `cell_index(T, j)` numbers the cells, and $f_c$ is the value of $f$ for
-the value $c$ of the index. An expression without the index is the same on
-every cell of type $j$. An expression on a topology needs no function space, so
-a product of two functions or an expression of the geometry is also an
-expression on a topology.
-
-Examples, with a topology `T` of `ReferenceSimplex(2)` cells,
-`K = ReferenceSimplex(2)`, `X = coordinate(K)`, `c = cell_index(T, 0)`, and an
-array `a` of value shape `(T.num_cells[0], 3)`, such as the coefficients of a
-function on each cell:
-
-- `a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]` is affine on each triangle, with
-  the coefficients in row `c` of `a`. The expression has the support `K` and
-  the free index `c`, and `c` takes the extent `T.num_cells[0]` of the axis of
-  `a`.
-- `a[c, 0]` has no support and the free index `c`, so `a[c, 0]` has one value
-  for each triangle.
-- `X[0]` has the support `K` and no cell index, so `X[0]` is the same on every
-  triangle.
-
 ### Restriction
 
-Requires: [Expressions on a topology](#expressions-on-a-topology),
+Requires: [AbstractTopology](#abstracttopology),
 [Parent of a topology](#parent-of-a-topology),
 [Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell),
 [PullBack](#pullback), [Free indices](#free-indices), [Support](#support),
@@ -2802,16 +2797,21 @@ Requires: [Expressions on a topology](#expressions-on-a-topology),
 See also: [Components](#components),
 [Integral over a topology](#integral-over-a-topology).
 
-Restriction moves an expression $f$ on a topology $T$ from the cells of $T$ to
-the cells of a topology $S$ with the parent `(T, seen_from)`. Let $e$ be a cell
-of type $i$ of $S$, with the cell type $F$, and let $c$ be the cell of type $j$
-of $T$ on the side $s$ of $e$. The inclusion $\iota_s$ is the map from $F$ onto the facet
-$e$ of $c$ that sends each vertex of $e$, numbered as in $S$, to the same
-vertex of $c$. $\iota_s$ is the facet map of the local facet of $c$ (see
-[Reference cell](#reference-cell)), composed with a permutation of the vertices
-of $F$. If the cells of $S$ are cells of $T$, $e$ is $c$, and $\iota_s$ is the
-identity map of $K_j$. The restriction of $f$ to $e$ from the side $s$ is the
-pull-back
+Restriction moves an expression $f$ on the cells of type $j$ of a topology $T$
+to the cells of a topology $S$ with the parent `(T, seen_from)`. $f$ has the
+support $K_j$ or no support, and may have the free index `cell_index(T, j)`.
+$f_c$ is the value of $f$ for the value $c$ of `cell_index(T, j)`, or $f$ if
+$f$ does not have the index. Let $e$ be a cell of type $i$ of $S$, with the
+cell type $F$, and let $c$ be the cell of type $j$ of $T$ on the side $s$ of
+$e$. The inclusion $\iota_s$ is the map from $F$ onto the sub-entity $e$ of $c$
+that sends each vertex of $e$, numbered as in $S$, to the same vertex of $c$.
+For a facet, $\iota_s$ is the facet map of the local facet of $c$ (see
+[Reference cell](#reference-cell)), composed with a permutation of the
+vertices of $F$. For a sub-entity of lower dimension, $\iota_s$ is the
+composition of the facet maps down to the sub-entity, composed with a
+permutation of the vertices of $F$. For the cell itself, $\iota_s$ is the
+identity map of $K_j$. For a vertex, $\iota_s$ is the constant vertex, so the
+restriction is the value at the vertex. The restriction of $f$ to $e$ from the side $s$ is the pull-back
 
 $$
 \iota_s^* f_c.
@@ -2835,21 +2835,30 @@ entry $i$ of `seen_from`, `Restriction(f, S, i, side)` requires:
 
 Otherwise construction raises `ValueError`. `Restriction(f, S, i, side)`
 derives the value shape, the degree and the scalar type of $f$, and the support
-`S.cell_types[i]`, or no support if $f$ has no support. If $f$ has the free
-index `cell_index(T, j)`, the free indices are the free indices of $f$ without
-`cell_index(T, j)`, followed by `cell_index(S, i)` with the extent
-`S.num_cells[i]`. Otherwise the free indices are the free indices of $f$. So
-the restriction is again an expression on a topology, and restricts to a topology
+`S.cell_types[i]`, or no support if $f$ has no support. If $f$ has a support
+or the free index `cell_index(T, j)`, the free indices are the free indices of
+$f$ without `cell_index(T, j)`, followed by `cell_index(S, i)` with the extent
+`S.num_cells[i]`. A support needs `cell_index(S, i)` even without
+`cell_index(T, j)`, because $\iota_s$ differs between the cells of $S$, such as
+between the local facets. Otherwise the free indices are the free indices of
+$f$. So
+the restriction is again an expression on the cells of $S$, and restricts to a topology
 with the parent `(S, ...)`. The pull-back of a 0-form with no support is the
 0-form, so the restriction of a function in a
 [ConstantSpace](#constantspace) has the value of the function.
 
 The pull-back gives the trace of each degree. The restriction of a 0-form is
 the value on $e$, and the restriction of the 1-form $\mathrm{d}u$ keeps only
-the derivatives along $e$. The restriction of `components(du, K_j)` keeps the
-whole array of $\mathrm{d}u$ in the frame of $K_j$. The frames of the two sides
-differ, so a comparison of the full arrays of the two sides needs the frame of
-the [coordinate field](#coordinate-field).
+the derivatives along $e$. To keep the whole array of $\mathrm{d}u$, as for a
+normal derivative, take the components of $\mathrm{d}u$ in the frame of the
+ambient coordinate domain of the [coordinate field](#coordinate-field), and
+restrict the components. The components are 0-forms, whose axes keep the
+frame, so the restrictions from the two sides are arrays in the same frame.
+The components in the frame of $K_j$ differ between the two sides.
+
+The normal of a cell of $S$ is expected to take a side name, as the outward
+normal of the cell on that side, so the side name also fixes the sign of the
+normal.
 
 `Restriction` is lazy. For each cell $e$ of $S$, the concrete mesh gives the
 cell on each side, the local facet number and the permutation, so a later pass
@@ -2870,8 +2879,11 @@ K, I = ReferenceSimplex(2), ReferenceSimplex(1)
 square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), None)
 diagonal = StaticTopology((I,), (((1, 2),),), (square, ((("+", 0), ("-", 0)),)))
 
-# f is an expression on square, on K with the free index
-# cell_index(square, 0) of the extent 2.
+# An affine function on each triangle, with the coefficients in row c of an
+# array a of value shape (2, 3), with one value for each cell of square.
+X = coordinate(K)
+c = cell_index(square, 0)
+f = a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]
 
 # The values of f on the diagonal, from the two triangles.
 f_plus = restriction(f, diagonal, 0, "+")
@@ -2894,8 +2906,9 @@ argument of a variational form.
 
 ### AbstractFunctionSpace
 
-Requires: [Expressions on a topology](#expressions-on-a-topology),
-[Degree](#degree), [Scalar type](#scalar-type).
+Requires: [AbstractTopology](#abstracttopology),
+[Reference cell](#reference-cell), [Degree](#degree),
+[Scalar type](#scalar-type).
 
 See also: [PullBack](#pullback), [Coordinate field](#coordinate-field).
 
@@ -2910,10 +2923,10 @@ and provides:
 - `value_shape`, a `tuple` of extents.
 - `scalar_type`, real or complex.
 
-A function in $V$ is an expression on $T$ (see
-[Expressions on a topology](#expressions-on-a-topology)) with the degree, the
-value shape and the scalar type of $V$, or a single array for the topology
-`None` (see [ConstantSpace](#constantspace)). The core does not represent the
+A function in $V$ is, on the cells of type $j$ of $T$, an expression on $K_j$,
+the reference cell of type $j$, with the degree, the value shape and the scalar
+type of $V$, and possibly the free index `cell_index(T, j)`. For the topology `None`, a function in $V$ is a single
+array (see [ConstantSpace](#constantspace)). The core does not represent the
 polynomials, the degrees of freedom or the basis of $V$, which belong to the
 concrete subclass. Two spaces are the same space only if the two spaces are
 equal as base objects, so a concrete `AbstractFunctionSpace` stores the
@@ -2960,7 +2973,7 @@ Examples, with a topology `T` of `ReferenceSimplex(2)` cells, so $n = 2$:
 ### ConstantSpace
 
 Requires: [AbstractFunctionSpace](#abstractfunctionspace),
-[Expressions on a topology](#expressions-on-a-topology), [Extents](#extents).
+[Extents](#extents).
 
 See also: [Restriction](#restriction).
 
@@ -3418,11 +3431,9 @@ Base
 ├── AbstractCellType                      numbered vertices and facets
 └── AbstractTopology                      cells without coordinates
 
-# Reference cells
+# Reference cells and restriction
 AbstractCoordinateDomain, AbstractCellType
 └── AbstractReferenceCell                 coordinates of the vertices
-
-# Expressions on topologies
 AbstractExpression
 └── Restriction                           pull-back to a facet from one side
 
@@ -3465,7 +3476,7 @@ Base
 | Maps between domains            | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression`           | `ParameterisedDomain`               |
 |                                 | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain`                     | `PullBack`                          |
 | Topology                        | [`cell_index(T, j)`](#abstracttopology)                         |                               | `T: AbstractTopology`, `j: int`                                       | `Index`                             |
-| Expressions on topologies       | [`restriction(f, S, i, side)`](#restriction)                    |                               | `f: AbstractExpression`, `S: AbstractTopology`, `i: int`, `side: str` | `Restriction`                       |
+| Reference cells and restriction | [`restriction(f, S, i, side)`](#restriction)                    |                               | `f: AbstractExpression`, `S: AbstractTopology`, `i: int`, `side: str` | `Restriction`                       |
 | Function spaces                 | [`constant_space(value_shape, scalar_type)`](#constantspace)    |                               | `value_shape: tuple`, `scalar_type: str`                              | `ConstantSpace`                     |
 
 The value-shape and other constraints on the arguments are stated in the section
