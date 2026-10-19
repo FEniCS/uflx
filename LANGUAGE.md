@@ -2679,6 +2679,11 @@ Requires: [Integral](#integral),
 
 ## Functions
 
+Requires: [Degree](#degree), [ParameterisedDomain](#parameteriseddomain).
+
+A function on a domain $D$ with the parameter domain $P$ has a degree and a
+value shape. The function is defined through $P$.
+
 ## Geometry of decomposed domains
 
 ### Coordinate field
@@ -2696,9 +2701,13 @@ Requires: [AbstractTopology](#abstracttopology), [Restriction](#restriction),
 Requires: [Integral](#integral), [Degree](#degree), [Functions](#functions).
 
 A variational form is an `Integral`, or a combination of `Integral`s. The arity
-of a variational form is the number of test and trial functions in the
-integrand, and the integrand depends linearly on each of them. A functional has
-the arity 0, a linear form the arity 1 and a bilinear form the arity 2. The
+of a variational form is the number of argument slots of the variational form.
+Each argument has a slot number, and the slot numbers in the integrand of a
+variational form of arity $r$ are $0, \dots, r - 1$. The integrand is
+antilinear in the arguments of slot 0 and linear in the arguments of every
+other slot. For a real scalar type, antilinear and linear coincide. A
+functional has the arity 0, a linear form the arity 1 and a bilinear form the
+arity 2. The
 integrand of every variational form is a top form, so the degree of a
 differential form and the arity of a variational form are independent.
 
