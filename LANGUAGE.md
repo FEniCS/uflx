@@ -98,15 +98,18 @@ fully LLM generated content are explicitly marked.
   - [AbstractCellType](#abstractcelltype)
   - [Example: the simplex as a cell type](#example-the-simplex-as-a-cell-type)
   - [AbstractTopology](#abstracttopology)
-  - [Facets of a topology](#facets-of-a-topology)
+  - [Parent of a topology](#parent-of-a-topology)
   - [Example: a static topology](#example-a-static-topology)
-- [Function spaces](#function-spaces)
-- [Functions](#functions)
-- [Functions on topologies](#functions-on-topologies)
+- [Reference cells](#reference-cells)
   - [Reference cell](#reference-cell)
   - [Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell)
-  - [Functions on a topology](#functions-on-a-topology)
+- [Expressions on topologies](#expressions-on-topologies)
+  - [Expressions on a topology](#expressions-on-a-topology)
   - [Restriction](#restriction)
+- [Function spaces](#function-spaces)
+  - [AbstractFunctionSpace](#abstractfunctionspace)
+  - [ConstantSpace](#constantspace)
+- [Decomposed domains](#decomposed-domains)
   - [Coordinate field](#coordinate-field)
   - [Cells as parameterised domains](#cells-as-parameterised-domains)
   - [Integral over a topology](#integral-over-a-topology)
@@ -639,7 +642,7 @@ Example:
 
 Requires: [The base object `Base`](#the-base-object-base), [Extents](#extents).
 
-See also: [Indexed](#indexed), [Facets of a topology](#facets-of-a-topology).
+See also: [Indexed](#indexed), [Parent of a topology](#parent-of-a-topology).
 
 An abstract subclass of the base object `AbstractIndexValue` for an index whose
 value is fixed but not known during construction, such as the local number of
@@ -2486,7 +2489,7 @@ $(0, 1, 3)$ and $(0, 1, 2)$. The facet types of `Simplex(n)` are
 Requires: [The base object `Base`](#the-base-object-base), [Index](#index),
 [Extents](#extents), [AbstractCellType](#abstractcelltype).
 
-See also: [Facets of a topology](#facets-of-a-topology),
+See also: [Parent of a topology](#parent-of-a-topology),
 [Restriction](#restriction),
 [Integral over a topology](#integral-over-a-topology),
 [Cells as parameterised domains](#cells-as-parameterised-domains).
@@ -2504,8 +2507,8 @@ a solver, and provides:
   for a macro element, or an `AbstractExtent`, such as for the mesh of a
   solver. For the mesh of a solver, the solver loops over the cells, and a
   kernel computes the terms of one cell.
-- `parent`, `None` for a topology whose cells are not seen as facets, or the
-  pair described in [Facets of a topology](#facets-of-a-topology).
+- `parent`, `None`, or the pair described in
+  [Parent of a topology](#parent-of-a-topology).
 
 The derived property `dimension` is the dimension of the cell types. Two
 topologies are the same topology only if the two topologies are equal as base
@@ -2514,9 +2517,8 @@ the topology, such as a label.
 
 The free function `cell_index(T, j)` returns the derived index
 `Index(("uflx.cell_index", T, j, 0))` for the cells of type $j$, numbered from
-0. The index has the extent `T.num_cells[j]`.
-The index differs between types and between topologies, even if the numbers of
-cells are equal. Restriction and the integral over a topology use the index,
+0. The index has the extent `T.num_cells[j]`. The index differs between types
+and between topologies, even if the numbers of cells are equal. Restriction and the integral over a topology use the index,
 so user code rarely needs the index.
 
 > Legacy note: In legacy UFL, a `Mesh` holds both the topology and the
@@ -2533,28 +2535,33 @@ Examples:
 - A mesh of a solver with triangles and quadrilaterals has two cell types, and
   two `AbstractExtent`s as the numbers of cells.
 
-### Facets of a topology
+### Parent of a topology
 
 Requires: [AbstractCellType](#abstractcelltype),
 [AbstractTopology](#abstracttopology).
 
 See also: [Restriction](#restriction).
 
-A topology $S$ whose cells are facets of cells of a topology $T$ has the
+A topology $S$ whose cells are facets or cells of a topology $T$ has the
 parent `(T, seen_from)`. Entry $i$ of `seen_from` is a `tuple` of one or two
-sides, each a pair of a side name, a `str`, and a cell type number $j$ of $T$.
-Each cell of type $i$ of $S$ is seen from one cell of $T$ on each side, and the
-cell on a side has the type $j$ of the side. The side names of an entry are
-distinct. Cell type $i$ of $S$ is a facet type of the cell type of each side,
-and each cell of $S$ is a whole facet of the cell on each side. The core does
-not check the parent, and [Restriction](#restriction) checks the side name.
-Restriction picks the value of an expression on a cell of $S$ by the side
-name.
+sides with distinct names, each a pair of a side name, a `str`, and a cell type
+number $j$ of $T$. Each cell of type $i$ of $S$ is seen from one cell of type $j$ of $T$
+on each side, and is either:
 
-The concrete mesh decides which facets are the cells of $S$, and from which
-cells each facet is seen. For example, the cells of $S$ may be the facets of a
-marked boundary, and a facet of two cells may be seen from one cell only. $T$
-may itself have a parent, so the cells of $S$ may be facets of facets.
+- a whole facet of the cell on each side, with cell type $i$ of $S$ a facet
+  type of the cell type of each side, or
+- the cell on the one side, with the vertices in the same order and cell type
+  $i$ of $S$ equal to cell type $j$ of $T$, such as a cell of a subdomain.
+
+[Restriction](#restriction) picks the value of an expression on a cell of $S$
+by the side name, and checks the side name. The core does not check the rest
+of the parent.
+
+The concrete mesh decides which facets or cells are the cells of $S$, and from
+which cells each facet is seen. For example, the cells of $S$ may be the facets
+of a marked boundary or the cells of a marked subdomain, and a facet of two
+cells may be seen from one cell only. $T$ may itself have a parent, so the
+cells of $S$ may be facets of facets.
 
 The concrete mesh also names the sides, and decides which cell is on which
 side. For example, the facets of an interface between fluid and solid
@@ -2562,14 +2569,13 @@ triangles of the one cell type 0 have the sides `(("fluid", 0), ("solid", 0))`,
 and the cell on the side `"fluid"` is the fluid triangle.
 
 > Legacy note: The legacy UFL measures `ds` and `dS` integrate over a topology
-> with a parent whose `seen_from` entries have one and two sides, and legacy
-> UFL names the two sides `'+'` and `'-'`.
+> of facets with a parent whose `seen_from` entries have one and two sides, and
+> legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure
+> `dx(1)` integrates over a topology of the cells of a subdomain.
 
 A cell of $S$ that is only part of a facet of a cell of $T$, as with hanging
-nodes or a non-matching interface, is not yet covered.
-[Restriction](#restriction) maps a cell of $S$ seen from two cells into a facet
-of each of the two cells, and a cell of $S$ that is only part of a facet needs
-only other maps, such as a map onto part of a facet.
+nodes or a non-matching interface, is not yet covered. Such a cell needs only
+another map in [Restriction](#restriction), onto part of a facet.
 
 Examples, with a topology `T` of triangles with the cell types `(K,)`,
 `I = Simplex(1)` and `P = Simplex(0)`:
@@ -2582,6 +2588,8 @@ Examples, with a topology `T` of triangles with the cell types `(K,)`,
 - A topology of the corners of the boundary has the cell types `(P,)` and the
   parent `(B, ((("+", 0), ("-", 0)),))`, since each corner is seen from two
   facets of `B`.
+- A topology of the triangles of a marked subdomain of `T` has the cell types
+  `(K,)` and the parent `(T, ((("inside", 0),),))`.
 - For a topology `U` of prisms with the cell types `(W,)`, a topology of the
   boundary facets has the cell types `(K, Q)`, with the quadrilateral cell type
   `Q`, and the parent `(U, ((("inside", 0),), (("inside", 0),)))`.
@@ -2592,7 +2600,7 @@ Examples, with a topology `T` of triangles with the cell types `(K,)`,
 
 Requires: [AbstractTopology](#abstracttopology),
 [Example: the simplex as a cell type](#example-the-simplex-as-a-cell-type),
-[Facets of a topology](#facets-of-a-topology).
+[Parent of a topology](#parent-of-a-topology).
 
 `StaticTopology(cell_types, cells, parent)` is a topology whose cells are known
 during construction. Entry $j$ of `cells` is a `tuple` with the vertices of
@@ -2659,21 +2667,11 @@ that contain vertex 3 are facets of two cells, and the three other facets are
 facets of one cell. `boundary` and `diagonal` have the numbers of cells `(4,)`
 and `(1,)`.
 
-`StaticTopology` does not check that the cells of a topology with a parent are
-facets of cells of the parent. A
-`StaticTopology` has no coordinates. The positions of the vertices come from the
+`StaticTopology` does not check the parent. A `StaticTopology` has no
+coordinates. The positions of the vertices come from the
 [coordinate field](#coordinate-field).
 
-## Function spaces
-
-## Functions
-
-Requires: [Degree](#degree), [ParameterisedDomain](#parameteriseddomain).
-
-A function on a domain $D$ with the parameter domain $P$ has a degree and a
-value shape. The function is defined through $P$.
-
-## Functions on topologies
+## Reference cells
 
 ### Reference cell
 
@@ -2686,14 +2684,14 @@ See also: [AbstractTopology](#abstracttopology).
 An abstract subclass of `AbstractCoordinateDomain` and of `AbstractCellType`
 for a reference cell `AbstractReferenceCell`, a cell type whose vertices have
 coordinates. A concrete reference cell is a subclass outside the core, such as
-a reference cell version of [`UnitSimplex`](#example-the-unit-simplex). A
+[`ReferenceSimplex`](#example-the-unit-simplex-as-a-reference-cell). A
 concrete `AbstractReferenceCell` $K$ of dimension $n$ with $m$ vertices also
 provides:
 
 - `vertices`, a constant expression with no support and value shape `(m, n)`.
   Row $v$ holds the coordinates of vertex $v$.
 
-The facet types of $K$ are `AbstractReferenceCell`s. The boundary of $K$ is the
+The facet types of $K$ must be `AbstractReferenceCell`s. The boundary of $K$ is the
 union of the facets.
 
 The facet with the facet type $F$ and the vertex numbers
@@ -2761,23 +2759,42 @@ of `Simplex(2)` cells has no reference cells. `ReferenceSimplex(2)` and
 expression on one is not an expression on the other. Likewise,
 `ReferenceSimplex(0)` and `RD(0)` are different coordinate domains.
 
-### Functions on a topology
+## Expressions on topologies
 
-Requires: [Functions](#functions), [AbstractTopology](#abstracttopology),
-[Reference cell](#reference-cell), [Free indices](#free-indices).
+### Expressions on a topology
+
+Requires: [AbstractTopology](#abstracttopology),
+[Reference cell](#reference-cell), [Free indices](#free-indices),
+[Support](#support), [Indexed](#indexed).
 
 See also: [Restriction](#restriction).
 
-A function on a topology $T$ is given cell by cell. On the cells of type $j$,
-the function is an expression $f$ on the reference cell $K_j$ of type $j$, with
-the free index `cell_index(T, j)` of the extent `T.num_cells[j]`. The value of
-$f$ for a value $c$ of the index is the function on the cell $c$, pulled back
-to $K_j$, written $f_c$.
+An expression $f$ on the cells of type $j$ of a topology $T$ is an expression
+with the support $K_j$, the reference cell of type $j$, or no support. The free
+index `cell_index(T, j)` numbers the cells, and $f_c$ is the value of $f$ for
+the value $c$ of the index. An expression without the index is the same on
+every cell of type $j$. An expression on a topology needs no function space, so
+a product of two functions or an expression of the geometry is also an
+expression on a topology.
+
+Examples, with a topology `T` of `ReferenceSimplex(2)` cells,
+`K = ReferenceSimplex(2)`, `X = coordinate(K)`, `c = cell_index(T, 0)`, and an
+array `a` of value shape `(T.num_cells[0], 3)`, such as the coefficients of a
+function on each cell:
+
+- `a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]` is affine on each triangle, with
+  the coefficients in row `c` of `a`. The expression has the support `K` and
+  the free index `c`, and `c` takes the extent `T.num_cells[0]` of the axis of
+  `a`.
+- `a[c, 0]` has no support and the free index `c`, so `a[c, 0]` has one value
+  for each triangle.
+- `X[0]` has the support `K` and no cell index, so `X[0]` is the same on every
+  triangle.
 
 ### Restriction
 
-Requires: [Functions on a topology](#functions-on-a-topology),
-[Facets of a topology](#facets-of-a-topology),
+Requires: [Expressions on a topology](#expressions-on-a-topology),
+[Parent of a topology](#parent-of-a-topology),
 [Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell),
 [PullBack](#pullback), [Free indices](#free-indices), [Support](#support),
 [Degree](#degree).
@@ -2785,14 +2802,16 @@ Requires: [Functions on a topology](#functions-on-a-topology),
 See also: [Components](#components),
 [Integral over a topology](#integral-over-a-topology).
 
-Restriction moves a function $f$ on a topology $T$ from the cells of $T$ to
-the cells of a topology $S$ with the parent `(T, seen_from)`. Let $e$ be a cell of type $i$ of
-$S$, with the cell type $F$, and let $c$ be the cell of type $j$ of $T$ on the
-side $s$ of $e$. The inclusion $\iota_s$ is the map from $F$ onto the facet
+Restriction moves an expression $f$ on a topology $T$ from the cells of $T$ to
+the cells of a topology $S$ with the parent `(T, seen_from)`. Let $e$ be a cell
+of type $i$ of $S$, with the cell type $F$, and let $c$ be the cell of type $j$
+of $T$ on the side $s$ of $e$. The inclusion $\iota_s$ is the map from $F$ onto the facet
 $e$ of $c$ that sends each vertex of $e$, numbered as in $S$, to the same
 vertex of $c$. $\iota_s$ is the facet map of the local facet of $c$ (see
 [Reference cell](#reference-cell)), composed with a permutation of the vertices
-of $F$. The restriction of $f$ to $e$ from the side $s$ is the pull-back
+of $F$. If the cells of $S$ are cells of $T$, $e$ is $c$, and $\iota_s$ is the
+identity map of $K_j$. The restriction of $f$ to $e$ from the side $s$ is the
+pull-back
 
 $$
 \iota_s^* f_c.
@@ -2805,21 +2824,25 @@ The difference of the two restrictions is the jump of $f$ across $e$.
 A concrete subclass of `AbstractExpression` for the restriction,
 `Restriction(f, S, i, side)`, stores $f$, the topology $S$, the cell type
 number $i$ of $S$ and the side name `side`, returned by the properties
-`expression`, `topology`, `cell_type_number` and `side`. With the parent `(T, seen_from)` of
-$S$ and the cell type number $j$ of the side `side` in entry $i$ of
-`seen_from`, `Restriction(f, S, i, side)` requires:
+`expression`, `topology`, `cell_type_number` and `side`. With the parent
+`(T, seen_from)` of $S$ and the cell type number $j$ of the side `side` in
+entry $i$ of `seen_from`, `Restriction(f, S, i, side)` requires:
 
 - $S$ has a parent, and `side` is a side name of entry $i$ of `seen_from`.
 - Cell type $j$ of $T$ and cell type $i$ of $S$ are reference cells.
-- $f$ has the support `T.cell_types[j]`, and the free index
-  `cell_index(T, j)` with the extent `T.num_cells[j]`.
+- $f$ has the support `T.cell_types[j]` or no support, and if the free indices
+  of $f$ contain `cell_index(T, j)`, the extent `T.num_cells[j]`.
 
 Otherwise construction raises `ValueError`. `Restriction(f, S, i, side)`
 derives the value shape, the degree and the scalar type of $f$, and the support
-`S.cell_types[i]`. The free indices are the free indices of $f$ without
+`S.cell_types[i]`, or no support if $f$ has no support. If $f$ has the free
+index `cell_index(T, j)`, the free indices are the free indices of $f$ without
 `cell_index(T, j)`, followed by `cell_index(S, i)` with the extent
-`S.num_cells[i]`, so the restriction is again a function on a topology, and
-restricts to a topology with the parent `(S, ...)`.
+`S.num_cells[i]`. Otherwise the free indices are the free indices of $f$. So
+the restriction is again an expression on a topology, and restricts to a topology
+with the parent `(S, ...)`. The pull-back of a 0-form with no support is the
+0-form, so the restriction of a function in a
+[ConstantSpace](#constantspace) has the value of the function.
 
 The pull-back gives the trace of each degree. The restriction of a 0-form is
 the value on $e$, and the restriction of the 1-form $\mathrm{d}u$ keeps only
@@ -2847,7 +2870,7 @@ K, I = ReferenceSimplex(2), ReferenceSimplex(1)
 square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), None)
 diagonal = StaticTopology((I,), (((1, 2),),), (square, ((("+", 0), ("-", 0)),)))
 
-# f is a function on square, an expression on K with the free index
+# f is an expression on square, on K with the free index
 # cell_index(square, 0) of the extent 2.
 
 # The values of f on the diagonal, from the two triangles.
@@ -2864,9 +2887,123 @@ facets list the vertices 1 and 2 of `square` in the order of `diagonal`, so
 both permutations are the identity. $\iota_+(t) = (1 - t, t)$ and
 $\iota_-(t) = (0, t)$.
 
+## Function spaces
+
+A function is a member of a function space, such as a coefficient or an
+argument of a variational form.
+
+### AbstractFunctionSpace
+
+Requires: [Expressions on a topology](#expressions-on-a-topology),
+[Degree](#degree), [Scalar type](#scalar-type).
+
+See also: [PullBack](#pullback), [Coordinate field](#coordinate-field).
+
+An abstract subclass of the base object `AbstractFunctionSpace` for a space of
+functions on a topology. A concrete `AbstractFunctionSpace` $V$ is a subclass
+outside the core, such as a subclass for the finite element spaces of Basix,
+and provides:
+
+- `topology`, an `AbstractTopology` $T$ whose cell types are reference cells,
+  or `None` for a space whose functions do not depend on a topology.
+- `degree`, a degree (see [Degree](#degree)).
+- `value_shape`, a `tuple` of extents.
+- `scalar_type`, real or complex.
+
+A function in $V$ is an expression on $T$ (see
+[Expressions on a topology](#expressions-on-a-topology)) with the degree, the
+value shape and the scalar type of $V$, or a single array for the topology
+`None` (see [ConstantSpace](#constantspace)). The core does not represent the
+polynomials, the degrees of freedom or the basis of $V$, which belong to the
+concrete subclass. Two spaces are the same space only if the two spaces are
+equal as base objects, so a concrete `AbstractFunctionSpace` stores the
+arguments that identify the space, such as the finite element.
+
+The degree and the value shape fix how a function in $V$ transforms between a
+cell and the reference cell. A function on the cell $c$ is pulled back to the
+reference cell, and the pull-back transforms each slot and keeps the frame of
+each axis of the value shape (see [PullBack](#pullback)). So a space needs no
+separate map to the reference cell:
+
+| Space                             | Degree     | Value shape | Legacy UFL map      |
+| --------------------------------- | ---------- | ----------- | ------------------- |
+| Lagrange                          | `()`       | `()`        | identity            |
+| Vector Lagrange                   | `()`       | `(n,)`      | identity            |
+| Nédélec, $H(\mathrm{curl})$       | `(1,)`     | `()`        | covariant Piola     |
+| Raviart–Thomas, $H(\mathrm{div})$ | `(n - 1,)` | `()`        | contravariant Piola |
+| Discontinuous densities           | `(n,)`     | `()`        | $L^2$ Piola         |
+| Regge                             | `(1, 1)`   | `()`        | double covariant    |
+
+> Legacy note: In legacy UFL, a `FunctionSpace` holds a mesh and an element,
+> and the element states the value shape, the map to the reference cell and
+> the Sobolev space. In UFLx, the degree and the value shape replace the map,
+> and the space holds a topology, not a mesh, so the coordinate field is a
+> function in a space.
+
+The Sobolev space of $V$ and a mixed space of several spaces are not yet
+covered. The Sobolev space is expected to be stated through the
+[restrictions](#restriction) of the functions of $V$ to the facets of $T$ from
+the two sides of each facet.
+
+Examples, with a topology `T` of `ReferenceSimplex(2)` cells, so $n = 2$:
+
+- The Lagrange space of polynomial degree 1 on `T` has the degree `()` and the
+  value shape `()`.
+- The Nédélec and the Raviart–Thomas spaces on `T` both have the degree `(1,)`,
+  because $n - 1 = 1$. A Raviart–Thomas function is the vector field of legacy
+  UFL contracted with the volume form.
+- The discontinuous Lagrange space of polynomial degree 0 on `T`, as densities,
+  has the degree `(2,)`.
+- The space of the coordinate field of `T` in `RD(2)` is a vector Lagrange
+  space with the degree `()` and the value shape `(2,)`.
+
+### ConstantSpace
+
+Requires: [AbstractFunctionSpace](#abstractfunctionspace),
+[Expressions on a topology](#expressions-on-a-topology), [Extents](#extents).
+
+See also: [Restriction](#restriction).
+
+A concrete subclass of `AbstractFunctionSpace` for a space of constants,
+`ConstantSpace(value_shape, scalar_type)`. The space stores the value shape, a
+`tuple` of extents, and the scalar type, `"real"` or `"complex"`, and derives
+the topology `None` and the degree `()`. Construction raises `TypeError` if the
+value shape is not a `tuple` of extents, and `ValueError` if the scalar type is
+neither `"real"` nor `"complex"`. The free function
+`constant_space(value_shape, scalar_type)` returns `ConstantSpace(value_shape,
+scalar_type)`.
+
+A function in a `ConstantSpace` is an expression with no support, without a
+cell index, with the degree `()` and with the value shape and the scalar type
+of the space, so a single array. The space has no topology, because the value
+of a function in the space depends on no cell. The integrals of a form decide
+the cells on which a constant acts. The degree is `()`, because the
+components of a $k$-form with $k \ge 1$ are in the frame of a cell, which
+differs between cells. The components of a constant 0-form with a non-empty value shape are in the frame
+of the ambient coordinate domain, as for the vector Lagrange space of
+[AbstractFunctionSpace](#abstractfunctionspace).
+
+> Legacy note: The legacy UFL `Constant` is a function in a `ConstantSpace`,
+> and an unknown in the legacy UFL `Real` space, such as a Lagrange multiplier,
+> is also a function in a `ConstantSpace`. The scalar type of a
+> `ConstantSpace` may be complex, so UFLx does not call the space `Real`.
+
+Examples:
+
+- A viscosity $\mu$ is a function in `constant_space((), "real")`.
+- With a topology `F` of fluid triangles and a topology `S` of solid triangles,
+  both with the parent `(T, ((("inside", 0),),))`, two functions `mu_f` and
+  `mu_s` in `constant_space((), "real")` are the viscosities of the fluid and
+  of the solid. An integral over `F` uses `mu_f`, and an integral over `S` uses
+  `mu_s`.
+- The Lagrange multiplier of a constraint on the mean value of a function is
+  an unknown in `constant_space((), "real")`.
+
+## Decomposed domains
+
 ### Coordinate field
 
-Requires: [Functions](#functions),
+Requires: [AbstractFunctionSpace](#abstractfunctionspace),
 [ParameterisedDomain](#parameteriseddomain).
 
 ### Cells as parameterised domains
@@ -2889,7 +3026,8 @@ Requires: [Integral](#integral),
 
 ## Variational forms
 
-Requires: [Integral](#integral), [Degree](#degree), [Functions](#functions).
+Requires: [Integral](#integral), [Degree](#degree),
+[AbstractFunctionSpace](#abstractfunctionspace).
 
 A variational form is an `Integral`, or a combination of `Integral`s. The arity
 of a variational form is the number of argument slots of the variational form.
@@ -3280,11 +3418,18 @@ Base
 ├── AbstractCellType                      numbered vertices and facets
 └── AbstractTopology                      cells without coordinates
 
-# Functions on topologies
+# Reference cells
 AbstractCoordinateDomain, AbstractCellType
 └── AbstractReferenceCell                 coordinates of the vertices
+
+# Expressions on topologies
 AbstractExpression
 └── Restriction                           pull-back to a facet from one side
+
+# Function spaces
+Base
+└── AbstractFunctionSpace                 degree and value shape of functions
+    └── ConstantSpace                     single arrays, no topology
 ```
 
 ## Appendix: Free functions
@@ -3320,7 +3465,8 @@ AbstractExpression
 | Maps between domains            | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression`           | `ParameterisedDomain`               |
 |                                 | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain`                     | `PullBack`                          |
 | Topology                        | [`cell_index(T, j)`](#abstracttopology)                         |                               | `T: AbstractTopology`, `j: int`                                       | `Index`                             |
-| Functions on topologies         | [`restriction(f, S, i, side)`](#restriction)                    |                               | `f: AbstractExpression`, `S: AbstractTopology`, `i: int`, `side: str` | `Restriction`                       |
+| Expressions on topologies       | [`restriction(f, S, i, side)`](#restriction)                    |                               | `f: AbstractExpression`, `S: AbstractTopology`, `i: int`, `side: str` | `Restriction`                       |
+| Function spaces                 | [`constant_space(value_shape, scalar_type)`](#constantspace)    |                               | `value_shape: tuple`, `scalar_type: str`                              | `ConstantSpace`                     |
 
 The value-shape and other constraints on the arguments are stated in the section
 of each free function. A free function and an operator overload accept only the
@@ -3339,29 +3485,31 @@ rules in the section of the concrete class.
 
 > LLM generated table.
 
-| Class                                          | Stored properties                                                 | Derived properties                                                |
-| ---------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `Base`                                         | `construction_arguments`                                          |                                                                   |
-| `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`              |                                                                   |
-| `AbstractExpression`                           |                                                                   | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree` |
-| `Index`, `EllipsisIndex`                       | `label`                                                           |                                                                   |
-| `AbstractIndexValue`                           | `extent`, in every concrete subclass                              |                                                                   |
-| `Integer`, `Float`                             | `value`                                                           |                                                                   |
-| `Zero`                                         | `value_shape`, `free_indices`, `degree`                           |                                                                   |
-| `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                                 |                                                                   |
-| `Absolute`, `Conjugate`                        | `operand`                                                         |                                                                   |
-| `TensorProduct`                                | `first`, `second`                                                 |                                                                   |
-| `SquareRoot`, `Inverse`                        | `operand`                                                         |                                                                   |
-| `Tensor`                                       | `entries`                                                         |                                                                   |
-| `Indexed`, `ComponentTensor`, `IndexSum`       | `expression`, `indices`                                           |                                                                   |
-| `Coordinate`                                   | `domain`                                                          |                                                                   |
-| `ExteriorDerivative`, `Components`, `Integral` | `expression`, `domain`                                            |                                                                   |
-| `ParameterisedDomain`                          | `parameter_domain`, `parameterisation`, `ambient_domain`          | `free_indices`                                                    |
-| `PullBack`                                     | `expression`, `domain`                                            |                                                                   |
-| `AbstractCellType`                             | `dimension`, `num_vertices`, `facets`, in every concrete subclass | `facet_types`                                                     |
-| `AbstractReferenceCell`                        | `vertices`, in every concrete subclass                            |                                                                   |
-| `AbstractTopology`                             | `cell_types`, `num_cells`, `parent`, in every concrete subclass   | `dimension`                                                       |
-| `Restriction`                                  | `expression`, `topology`, `cell_type_number`, `side`              |                                                                   |
+| Class                                          | Stored properties                                                              | Derived properties                                                |
+| ---------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| `Base`                                         | `construction_arguments`                                                       |                                                                   |
+| `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`                           |                                                                   |
+| `AbstractExpression`                           |                                                                                | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree` |
+| `Index`, `EllipsisIndex`                       | `label`                                                                        |                                                                   |
+| `AbstractIndexValue`                           | `extent`, in every concrete subclass                                           |                                                                   |
+| `Integer`, `Float`                             | `value`                                                                        |                                                                   |
+| `Zero`                                         | `value_shape`, `free_indices`, `degree`                                        |                                                                   |
+| `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                                              |                                                                   |
+| `Absolute`, `Conjugate`                        | `operand`                                                                      |                                                                   |
+| `TensorProduct`                                | `first`, `second`                                                              |                                                                   |
+| `SquareRoot`, `Inverse`                        | `operand`                                                                      |                                                                   |
+| `Tensor`                                       | `entries`                                                                      |                                                                   |
+| `Indexed`, `ComponentTensor`, `IndexSum`       | `expression`, `indices`                                                        |                                                                   |
+| `Coordinate`                                   | `domain`                                                                       |                                                                   |
+| `ExteriorDerivative`, `Components`, `Integral` | `expression`, `domain`                                                         |                                                                   |
+| `ParameterisedDomain`                          | `parameter_domain`, `parameterisation`, `ambient_domain`                       | `free_indices`                                                    |
+| `PullBack`                                     | `expression`, `domain`                                                         |                                                                   |
+| `AbstractCellType`                             | `dimension`, `num_vertices`, `facets`, in every concrete subclass              | `facet_types`                                                     |
+| `AbstractReferenceCell`                        | `vertices`, in every concrete subclass                                         |                                                                   |
+| `AbstractTopology`                             | `cell_types`, `num_cells`, `parent`, in every concrete subclass                | `dimension`                                                       |
+| `Restriction`                                  | `expression`, `topology`, `cell_type_number`, `side`                           |                                                                   |
+| `AbstractFunctionSpace`                        | `topology`, `degree`, `value_shape`, `scalar_type`, in every concrete subclass |                                                                   |
+| `ConstantSpace`                                | `value_shape`, `scalar_type`                                                   | `topology`, `degree`                                              |
 
 ## Appendix: Degree table
 
