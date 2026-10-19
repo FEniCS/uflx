@@ -45,6 +45,7 @@ fully LLM generated content are explicitly marked.
   - [EllipsisIndex](#ellipsisindex)
   - [Extents](#extents)
   - [AbstractIndexValue](#abstractindexvalue)
+  - [GatheredIndex](#gatheredindex)
   - [Free indices](#free-indices)
   - [Scalar type](#scalar-type)
   - [Support](#support)
@@ -100,12 +101,12 @@ fully LLM generated content are explicitly marked.
   - [AbstractTopology](#abstracttopology)
   - [Sides of a topology](#sides-of-a-topology)
   - [Example: a static topology](#example-a-static-topology)
-- [Reference cells and restriction](#reference-cells-and-restriction)
+- [Reference cells](#reference-cells)
   - [Reference cell](#reference-cell)
   - [Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell)
-  - [Restriction](#restriction)
 - [Decomposed domains](#decomposed-domains)
   - [DecomposedDomain](#decomposeddomain)
+  - [Restriction](#restriction)
   - [Integral over a decomposed domain](#integral-over-a-decomposed-domain)
 - [Function spaces](#function-spaces)
   - [AbstractFunctionSpace](#abstractfunctionspace)
@@ -634,12 +635,10 @@ Example:
   an expression `weights` of value shape `(r,)` raises `ValueError` in
   `weights[i] * points[i, 0]`, because the index `i` has two extents.
 
-> Open: ragged and indirect indexing. An axis whose length depends on another
-> index, such as the quadrature points of each cut cell, cannot be written. A
-> dependent extent, an `AbstractExtent` whose label contains the other index,
-> would cover it. Reading the data of a mesh-chosen entity, such as the cells
-> around a vertex, also needs a gathered index, an index value read from an
-> integer array.
+> Open: ragged indexing. An axis whose length depends on another index, such
+> as the quadrature points of each cut cell, cannot be written. A dependent
+> extent, an `AbstractExtent` whose label contains the other index, would cover
+> it. An index value read from a table is a [GatheredIndex](#gatheredindex).
 
 ### AbstractIndexValue
 
@@ -652,11 +651,15 @@ value is fixed but not known during construction, such as the local number of
 the facet of a cell in a facet integral, which the solver gives for each facet.
 An `AbstractIndexValue` is not an expression and not a free index. A concrete
 `AbstractIndexValue` is a subclass outside the core and provides `extent`, an
-extent. The value is an `int` $v$ with $0 \le v <$ `extent`.
+extent, and `shape`, a `tuple` of extents. An `AbstractIndexValue` with the
+shape `()` is one value, an `int` $v$ with $0 \le v <$ `extent`. An
+`AbstractIndexValue` with a non-empty shape is a table of such values, such as
+the cell on one side of each facet, which the mesh gives, and is read through a
+[GatheredIndex](#gatheredindex).
 
-An `AbstractIndexValue` is an entry of [Indexed](#indexed). The entry covers
-one axis, as an `int` entry does, and the extent of the entry must equal the
-extent of the axis.
+An `AbstractIndexValue` with the shape `()` is an entry of [Indexed](#indexed).
+The entry covers one axis, as an `int` entry does, and the extent of the entry
+must equal the extent of the axis.
 
 > Legacy note: GEM, the intermediate language of TSFC, has `VariableIndex` for
 > the same purpose -- not fact checked.
@@ -669,6 +672,36 @@ Example:
   `starts[l, k]` is the start of edge `l`, with the free index `k`. With an
   `AbstractIndexValue` with the extent 4, the same expression raises
   `IndexError`.
+
+### GatheredIndex
+
+Requires: [AbstractIndexValue](#abstractindexvalue), [Index](#index),
+[Extents](#extents).
+
+See also: [Indexed](#indexed), [Restriction](#restriction).
+
+A concrete subclass of the base object for an index value read from a table.
+`GatheredIndex(table, indices)` stores an `AbstractIndexValue` table and a
+`tuple` of entries, an `int` or an `Index` for each axis of the shape of the
+table. A `GatheredIndex` is not an expression and not a free index. The value
+is the entry of the table at the indices, and `GatheredIndex(table, indices)`
+derives the extent of the table, and the free indices of the `Index` entries,
+each with the extent of the axis. Construction raises `TypeError` for an entry
+that is neither exactly `int` nor `Index`, and `IndexError` if the number of
+entries differs from the number of axes, or for an `int` entry out of range.
+The free function `gathered_index(table, indices)` returns
+`GatheredIndex(table, indices)`.
+
+A `GatheredIndex` is an entry of [Indexed](#indexed), and covers one axis
+whose extent equals the extent of the `GatheredIndex`. The free indices of the
+`GatheredIndex` are free in the `Indexed`.
+
+Example:
+
+- With a table `cells` of the shape `(m,)` and the extent `n`, an array `a` of
+  value shape `(n,)` and an index `e`, `a[gathered_index(cells, (e,))]` has the
+  free index `e` with the extent `m`, and is the value of `a` at the cell
+  `cells[e]` for each `e`.
 
 ### Free indices
 
@@ -1133,19 +1166,19 @@ tensor-valued expression.
 
 - The expression, an `AbstractExpression` of rank $r$.
 - The indices, a `tuple` of entries. Each entry is an `int`, an `Index`, a
-  `EllipsisIndex` or an `AbstractIndexValue` (see [Index](#index),
-  [EllipsisIndex](#ellipsisindex) and
-  [AbstractIndexValue](#abstractindexvalue)). At most one entry is a
-  `EllipsisIndex`.
+  `EllipsisIndex`, an `AbstractIndexValue` or a `GatheredIndex` (see
+  [Index](#index), [EllipsisIndex](#ellipsisindex),
+  [AbstractIndexValue](#abstractindexvalue) and
+  [GatheredIndex](#gatheredindex)). At most one entry is a `EllipsisIndex`.
 
-Indexing is full indexing only. Each `int`, each `Index` and each
-`AbstractIndexValue` entry covers one axis, and a `EllipsisIndex` entry covers every axis that the other entries do not
+Indexing is full indexing only. Each `int`, each `Index`, each
+`AbstractIndexValue` and each `GatheredIndex` entry covers one axis, and a `EllipsisIndex` entry covers every axis that the other entries do not
 cover. Without a `EllipsisIndex`, the number of entries must equal $r$. With a
 `EllipsisIndex`, the number of other entries must be at most $r$. Each `int` entry
 $i_j$ must index an axis with an `int` extent $n_j$ and must satisfy
 $0 \le i_j < n_j$, where `(n_0, ..., n_{r-1})` is the value
-shape of the expression. Each `AbstractIndexValue` entry must have the extent
-$n_j$. Each `Index` entry $i_j$ takes the extent $n_j$. A
+shape of the expression. Each `AbstractIndexValue` and each `GatheredIndex`
+entry must have the extent $n_j$. Each `Index` entry $i_j$ takes the extent $n_j$. A
 `EllipsisIndex` takes the `tuple` of the extents of the axes that the `EllipsisIndex`
 covers.
 
@@ -1160,24 +1193,24 @@ of value shape `(2, 3)`, `B[r]` is the block diagonal of `B`.
 
 `Indexed(expression, indices)` derives the value shape `()`, the support of the
 expression, the degree of the expression, and the free indices of the
-expression followed by the `Index` and `EllipsisIndex` entries, with each
-`Index` taken once. The rank $r$
+expression followed by the `Index` and `EllipsisIndex` entries and the free
+indices of the `GatheredIndex` entries, with each `Index` taken once. The rank $r$
 counts the axes of the value shape only. The indices select axes of the value
 shape and never a slot, so the slots of a differential form cannot be indexed.
 
 `X[0]` and `A[0, 1]` are `indexed(X, (0,))` and `indexed(A, (0, 1))`.
 Construction of `Indexed` raises:
 
-| Error        | Cause                                                                                                     |
-| ------------ | --------------------------------------------------------------------------------------------------------- |
-| `TypeError`  | An entry that is neither exactly `int`, `Index`, `EllipsisIndex` nor `AbstractIndexValue`.                |
-| `ValueError` | No entries.                                                                                               |
-| `IndexError` | A number of entries that does not cover exactly the rank. An expression with value shape `()` has rank 0. |
-| `ValueError` | More than one `EllipsisIndex` entry.                                                                      |
-| `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                                  |
-| `IndexError` | An `int` entry for an axis whose extent is not an `int`.                                                  |
-| `IndexError` | An `AbstractIndexValue` entry whose extent differs from the extent of the axis.                           |
-| `ValueError` | An index with two extents, in two entries or in an entry and the expression.                              |
+| Error        | Cause                                                                                                       |
+| ------------ | ----------------------------------------------------------------------------------------------------------- |
+| `TypeError`  | An entry that is neither exactly `int`, `Index`, `EllipsisIndex`, `AbstractIndexValue` nor `GatheredIndex`. |
+| `ValueError` | No entries.                                                                                                 |
+| `IndexError` | A number of entries that does not cover exactly the rank. An expression with value shape `()` has rank 0.   |
+| `ValueError` | More than one `EllipsisIndex` entry.                                                                        |
+| `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                                    |
+| `IndexError` | An `int` entry for an axis whose extent is not an `int`.                                                    |
+| `IndexError` | An `AbstractIndexValue` or `GatheredIndex` entry whose extent differs from the extent of the axis.          |
+| `ValueError` | An index with two extents, in two entries or in an entry and the expression.                                |
 
 A negative index is rejected rather than converted, so the stored indices are
 always the indices that the user wrote.
@@ -1960,9 +1993,10 @@ $f$ followed by the free indices of $D$, with each `Index` taken once. An
 `Index` that is free in both $f$ and $D$ must have the same extent in both, or
 construction raises `ValueError`. The scalar type follows the general rule.
 The second operand is a domain, not an expression, because a
-domain states $Q$. Construction raises `TypeError` if $D$ is not a
-`ParameterisedDomain`. `PullBack(f, D)` requires a valid pair $(f, Q)$ (see
-[Valid pair](#valid-pair)).
+domain states $Q$. Construction raises `TypeError` if $D$ is neither a
+`ParameterisedDomain` nor a [`SideMap`](#restriction). `PullBack(f, D)`
+requires a valid pair $(f, Q)$ (see [Valid pair](#valid-pair)). The pull-back
+by a `SideMap` is a [restriction](#restriction).
 
 For a 0-form $f$, the pull-back is the composition $f \circ \psi$, the
 expression on $P$ with the value $f(\psi(p))$ at each point $p$ of $P$. For a
@@ -2592,9 +2626,20 @@ cell of $S$ with a vertex of the cell on each side, the same vertex for a
 matching facet, and a vertex one period away for a periodic boundary. A
 topology whose cells are not seen from other cells has the sides `()`.
 
-[Restriction](#restriction) picks the value of an expression on a cell of $S$
-by the side name, and checks the side name. The core does not check the rest
-of the sides.
+A concrete topology with sides also provides `side_tables(i, side)`, a pair of
+[`AbstractIndexValue`](#abstractindexvalue) tables `(cells, vertices)` for the
+side named `side` of group $i$, with the side `(side, T, j)`:
+
+- `cells`, of the shape `(S.num_cells[i],)` and the extent `T.num_cells[j]`.
+  Entry $e$ is the cell of type $j$ of $T$ on the side of the cell $e$ of $S$.
+- `vertices`, of the shape `(S.num_cells[i], m)`, with $m$ the number of
+  vertices of cell type $i$ of $S$, and the extent the number of vertices of
+  cell type $j$ of $T$. Entry $(e, v)$ is the local vertex of the cell on the
+  side that is paired with vertex $v$ of the cell $e$.
+
+[Restriction](#restriction) reads the tables, and picks the value of an
+expression on a cell of $S$ by the side name. The core does not check the
+sides or the tables.
 
 The concrete mesh decides which sub-entities are the cells of $S$, and from
 which cells on each side each cell of $S$ is seen. For example, the cells of
@@ -2680,7 +2725,8 @@ during construction. Entry $j$ of `cells` is a `tuple` with the vertices of
 each cell of type $j$, as vertex numbers of the topology. Local vertex $i$ of
 cell $c$ of type $j$ is the vertex `cells[j][c][i]` of the topology. A
 `StaticTopology` with sides has one topology on every side, uses the vertex
-numbers of that topology, and pairs each vertex with the same vertex. For a
+numbers of that topology, pairs each vertex with the same vertex, and computes
+the side tables from the vertex numbers. For a
 cell seen from two cells of the same group, the cell with the lower number is
 on the first side, and otherwise the group of each side decides.
 For a sub-entity of lower dimension than a facet, the cell with the lowest
@@ -2749,13 +2795,13 @@ and `(1,)`.
 coordinates. The positions of the vertices come from the
 [coordinates of a decomposed domain](#decomposeddomain).
 
-## Reference cells and restriction
+## Reference cells
 
 ### Reference cell
 
 Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain), [RD](#rd),
 [Tensor](#tensor), [ParameterisedDomain](#parameteriseddomain),
-[AbstractCellType](#abstractcelltype).
+[Inverse](#inverse), [AbstractCellType](#abstractcelltype).
 
 See also: [AbstractTopology](#abstracttopology).
 
@@ -2772,12 +2818,24 @@ provides:
 The facet types of $K$ must be `AbstractReferenceCell`s. The boundary of $K$ is the
 union of the facets.
 
-The facet with the facet type $F$ and the vertex numbers
-$(w_0, w_1, \dots)$ is `parameterised_domain(F, psi, K)`. $\psi$ is the affine
-map that sends vertex $j$ of $F$ to vertex $w_j$ of $K$ for $j < n$, which is
-the constant vertex $w_0$ of $K$ for $n = 1$. The first $n$ vertices of $F$ must
-not lie in a hyperplane of $F$. The core does not check that $\psi(F)$ is the
-facet.
+The free function `affine_map(F, points)` returns the affine map on a reference
+cell $F$ of dimension $k$ that sends vertex $v$ of $F$ to row $v$ of `points`
+for $v \le k$, with `points` of value shape `(k + 1, m)`. With the vertices
+$V_v$ of $F$, the matrix $E$ with the columns $V_{d+1} - V_0$, and the rows
+$p_v$ of `points`, the map is
+
+$$
+X \mapsto p_0 + \sum_{d < k} (p_{d+1} - p_0) \, \big(E^{-1} (X - V_0)\big)_d,
+$$
+
+an expression on $F$ with value shape `(m,)`, a fixed composition for each $k$
+with [Inverse](#inverse). For $k = 0$ the map is the constant $p_0$. The first
+$k + 1$ vertices of $F$ must not lie in a hyperplane of $F$.
+
+The facet with the facet type $F$ and the vertex numbers $(w_0, w_1, \dots)$ is
+`parameterised_domain(F, affine_map(F, points), K)`, with row $v$ of `points`
+the vertex $w_v$ of $K$ for $v < n$. The core does not check that the image is
+the facet.
 
 > In UFLx, a downstream library such as Basix provides the same data through a
 > concrete `AbstractReferenceCell`, so a facet is an ordinary
@@ -2837,144 +2895,13 @@ of `Simplex(2)` cells has no reference cells. `ReferenceSimplex(2)` and
 expression on one is not an expression on the other. Likewise,
 `ReferenceSimplex(0)` and `RD(0)` are different coordinate domains.
 
-### Restriction
-
-Requires: [AbstractTopology](#abstracttopology),
-[Sides of a topology](#sides-of-a-topology),
-[Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell),
-[PullBack](#pullback), [Free indices](#free-indices), [Support](#support),
-[Degree](#degree).
-
-See also: [Components](#components),
-[DecomposedDomain](#decomposeddomain),
-[Integral over a decomposed domain](#integral-over-a-decomposed-domain).
-
-Restriction moves an expression $f$ on the cells of type $j$ of a topology $T$
-to the cells of a topology $S$ with sides. $f$ has the support $K_j$ or no
-support, and may have the free index `cell_index(T, j)`. $f_c$ is the value of
-$f$ for the value $c$ of `cell_index(T, j)`, or $f$ if $f$ does not have the
-index. Let $e$ be a cell of type $i$ of $S$, with the cell type $F$, and let
-$c$ be the cell of type $j$ of $T$ on the side $s$ of $e$, with the side
-`(s, T, j)` in entry $i$ of `S.sides`. The inclusion $\iota_s$ is the map from $F$
-onto the sub-entity $e$ of $c$ that sends each vertex of $e$, numbered as in
-$S$, to the paired vertex of $c$. For a facet, $\iota_s$ is the facet map of
-the local facet of $c$ (see [Reference cell](#reference-cell)), composed with a
-permutation of the vertices of $F$. For a sub-entity of lower dimension,
-$\iota_s$ is the composition of the facet maps down to the sub-entity, composed
-with a permutation of the vertices of $F$. For the cell itself, $\iota_s$ is
-the identity map of $K_j$. For a vertex, $\iota_s$ is the constant vertex, so
-the restriction is the value at the vertex. The restriction of $f$ to $e$ from
-the side $s$ is the pull-back
-
-$$
-\iota_s^* f_c.
-$$
-
-Each side uses the vertex numbering of $e$ in $S$, so the restrictions from the
-two sides of $e$ are expressions on the same $F$, with the same coordinates.
-The difference of the two restrictions is the jump of $f$ across $e$. A cell of
-$S$ with more than two sides, such as an edge where three triangles meet, has
-no jump, and a form uses the restriction from each side.
-
-A concrete subclass of `AbstractExpression` for the restriction,
-`Restriction(f, S, i, side)`, stores $f$, the topology $S$, the cell type
-number $i$ of $S$ and the side name `side`, returned by the properties
-`expression`, `topology`, `cell_type_number` and `side`. With the side
-`(side, T, j)` in entry $i$ of `S.sides`, `Restriction(f, S, i, side)`
-requires:
-
-- `side` is a side name of entry $i$ of `S.sides`.
-- Cell type $j$ of $T$ and cell type $i$ of $S$ are reference cells.
-- $f$ has the support `T.cell_types[j]` or no support, and if the free indices
-  of $f$ contain `cell_index(T, j)`, the extent `T.num_cells[j]`.
-- $f$ has no free index `cell_index(T, k)` with $k \ne j$, which would be the
-  cells of another group of $T$, even of the same cell type.
-
-Otherwise construction raises `ValueError`. `Restriction(f, S, i, side)`
-derives the value shape, the degree and the scalar type of $f$, and the support
-`S.cell_types[i]`, or no support if $f$ has no support. If $f$ has a support
-or the free index `cell_index(T, j)`, the free indices are the free indices of
-$f$ without `cell_index(T, j)`, followed by `cell_index(S, i)` with the extent
-`S.num_cells[i]`. A support needs `cell_index(S, i)` even without
-`cell_index(T, j)`, because $\iota_s$ differs between the cells of $S$, such as
-between the local facets. Otherwise the free indices are the free indices of
-$f$. So the restriction is again an expression on the cells of $S$, and
-restricts to a topology with a side of the topology $S$. The pull-back of a
-0-form with no support is the 0-form, so the restriction of a constant is the
-constant.
-
-The pull-back gives the trace of each degree. The restriction of a 0-form is
-the value on $e$, and the restriction of the 1-form $\mathrm{d}u$ keeps only
-the derivatives along $e$. To keep the whole array of $\mathrm{d}u$, as for a
-normal derivative, restrict the components of $\mathrm{d}u$ in the frame of a
-[decomposed domain](#decomposeddomain), which is the same from every side.
-
-The normal of a cell of $S$ is expected to take a side name, as the outward
-normal of the cell on that side, so the side name also fixes the sign of the
-normal.
-
-`Restriction` is lazy. For each cell $e$ of $S$, the concrete mesh gives the
-cell on each side, the local facet number and the permutation, so a later pass
-can write $\iota_s$ as a `ParameterisedDomain` that selects a facet map by
-an [AbstractIndexValue](#abstractindexvalue), as `starts[l, k]` selects an
-edge in the [AbstractIndexValue](#abstractindexvalue) example.
-
-> Legacy note: The legacy UFL restriction `f('+')` is
-> `restriction(f, S, i, "+")` on a topology $S$ whose sides are named `'+'` and
-> `'-'`.
-
-Example, with the square and the diagonal of the
-[static topology example](#example-a-static-topology) built from reference
-cells:
-
-```python
-K, I = ReferenceSimplex(2), ReferenceSimplex(1)
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
-diagonal = StaticTopology(
-    (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
-)
-
-# An affine function on each triangle, with the coefficients in row c of an
-# array a of value shape (2, 3), with one value for each cell of square.
-X = coordinate(K)
-c = cell_index(square, 0)
-f = a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]
-
-# The values of f on the diagonal, from the two triangles.
-f_plus = restriction(f, diagonal, 0, "+")
-f_minus = restriction(f, diagonal, 0, "-")
-
-# The jump of f across the diagonal, on I with the free index cell_index(diagonal, 0).
-jump = f_plus - f_minus
-```
-
-The diagonal $\{1, 2\}$ is local facet 0 of cell 0, with the vertex numbers
-$(1, 2)$, and local facet 1 of cell 1, with the vertex numbers $(0, 2)$. Both
-facets list the vertices 1 and 2 of `square` in the order of `diagonal`, so
-both permutations are the identity. $\iota_+(t) = (1 - t, t)$ and
-$\iota_-(t) = (0, t)$. So, from the sides `"+"` and `"-"`:
-
-- `a[c, 0]` restricts to `a[0, 0]` and `a[1, 0]`, with no support.
-- `X[0]` restricts to $1 - t$ and $0$. The restriction has the free index
-  `cell_index(diagonal, 0)`, although `X[0]` has no cell index.
-- `f` restricts to $a_{0,0} + a_{0,1}(1 - t) + a_{0,2} t$ and
-  $a_{1,0} + a_{1,2} t$, which are equal for all $t$ if `f` is continuous at
-  the vertices 1 and 2, so the jump of a continuous `f` is zero.
-- With the diagonal listed as `(2, 1)`, $\iota_+(t) = (t, 1 - t)$, and the
-  restriction of $\mathrm{d}X_0$ from the side `"+"` changes sign, from
-  $-\mathrm{d}t$ to $\mathrm{d}t$.
-- On the topology of the vertices of `square`, with the cell type
-  `ReferenceSimplex(0)`, vertex 3 is seen from cell 1 as local vertex 1, so
-  `f` restricts to $a_{1,0} + a_{1,1}$ there.
-
 ## Decomposed domains
 
 ### DecomposedDomain
 
 Requires: [AbstractTopology](#abstracttopology),
-[Reference cell](#reference-cell), [Restriction](#restriction),
-[ParameterisedDomain](#parameteriseddomain), [PullBack](#pullback),
-[Free indices](#free-indices).
+[Reference cell](#reference-cell), [ParameterisedDomain](#parameteriseddomain),
+[PullBack](#pullback), [Free indices](#free-indices).
 
 See also: [Sides of a topology](#sides-of-a-topology),
 [AbstractFunctionSpace](#abstractfunctionspace).
@@ -3014,20 +2941,16 @@ on each cell of type $j$. The pull-back of `coordinate(D)` is $x_j$, and the
 pull-back of a function in a space on $D$ is evaluated by the library of the
 space (see [PullBack](#pullback)).
 
-For an $f$ with the support $D$, and the side `(side, T, j)` in entry $i$ of
-`S.sides`, the free function `restriction(f, S, i, side)` returns
-`Restriction(pull_back(f, cell_domain(D, j)), S, i, side)`. So a function on a
-decomposed domain with several cell types restricts through the cell type of
-each side. The axes of the value shape of $f$ are in the frame of $Q$, which
-the pull-backs keep, so the restrictions from two sides are arrays in the same
-frame, such as the restrictions of `components(du, D)` for a normal
-derivative.
+[Restriction](#restriction) moves an expression on $D$ to the cells of a
+topology with sides.
 
 > Legacy note: In legacy UFL, a `Mesh` is a decomposed domain, and
 > `SpatialCoordinate(mesh)` is `coordinate(D)`.
 
-Example, with `K`, `square` and `diagonal` of the
-[Restriction](#restriction) example, and a constant `p` of value shape
+Example, with `K = ReferenceSimplex(2)`, the topology
+`square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())` of the
+[static topology example](#example-a-static-topology) on reference cells, and
+a constant `p` of value shape
 `(2, 3, 2)` with the position of each local vertex of each triangle, triangle 0
 at $(0, 0)$, $(1, 0)$ and $(0, 1)$, and triangle 1 at $(1, 0)$, $(1, 1)$ and
 $(0, 1)$:
@@ -3049,8 +2972,6 @@ D = decomposed_domain(square, (x,), RD(2))
   `c`.
 - `pull_back(coordinate(D), cell_domain(D, 0))` is `x`, which a later pass
   evaluates on triangle 1 to $(1 - X_1, X_0 + X_1)$.
-- For a function `u` on `D`, `restriction(u, diagonal, 0, "+")` is
-  `Restriction(pull_back(u, cell_domain(D, 0)), diagonal, 0, "+")`.
 - With `x` of value shape `(3,)` and `RD(3)`, the decomposed domain is a
   surface of dimension 2 in `RD(3)`, and `components(du, D)` raises
   `ValueError`, because the frame of `RD(3)` is not a frame of the surface.
@@ -3065,11 +2986,110 @@ D = decomposed_domain(M, (x_tri, x_quad), RD(2))
 # On Kt with the free index cell_index(M, 0), and on Kq with cell_index(M, 1).
 u_tri = pull_back(u, cell_domain(D, 0))
 u_quad = pull_back(u, cell_domain(D, 1))
-
-# On a topology S of the edges between triangles and quadrilaterals, with the
-# sides (("tri", M, 0), ("quad", M, 1)), both restrictions are on the interval.
-jump = restriction(u, S, 0, "tri") - restriction(u, S, 0, "quad")
 ```
+
+### Restriction
+
+Requires: [DecomposedDomain](#decomposeddomain),
+[Sides of a topology](#sides-of-a-topology), [GatheredIndex](#gatheredindex),
+[PullBack](#pullback), [Reference cell](#reference-cell).
+
+See also: [Integral over a decomposed domain](#integral-over-a-decomposed-domain).
+
+The restriction of an expression on a decomposed domain $D$ to the cells of a
+topology $S$ with sides, from the side $s$, is the pull-back along the
+inclusion of each cell of $S$ into the cell on the side $s$. The side tables of
+$S$ give the cell and the vertices of the inclusion, through
+[GatheredIndex](#gatheredindex) entries, so the restriction is a pull-back and
+needs no node class of its own.
+
+For the group $i$ of $S$ with the side `(s, T, j)`, the topology $T$ of $D$,
+the side tables `(cells, vertices)`, the cell type $F$ of group $i$ and
+`e = cell_index(S, i)`, two families of domains with the free index `e` make
+the inclusion:
+
+- The cell on the side, $B_i$, is `cell_domain(D, j)` with every `Indexed`
+  entry `cell_index(T, j)` of the coordinates replaced by
+  `gathered_index(cells, (e,))`. The library of a function in a space on $D$
+  evaluates the pull-back by $B_i$ on the cell `cells[e]`.
+- The inclusion into the cell, $A_i$, is
+  `parameterised_domain(F, affine_map(F, points), K_j)`, with row $v$ of
+  `points` the vertex `gathered_index(vertices, (e, v))` of $K_j$. $A_i$ sends
+  each vertex of the cell $e$ to the paired vertex of the cell on the side. For
+  a vertex, $A_i$ is the constant vertex, and for the cell itself with the
+  vertices in order, $A_i$ is the identity map.
+
+The restriction of $f$ to group $i$ from the side $s$ is
+`pull_back(pull_back(f, B_i), A_i)`, an expression on $F$ with the free index
+`e`. Each side uses the vertex numbering of the cell $e$, so the restrictions
+from two sides are expressions on the same $F$, with the same coordinates, and
+the difference is the jump. A cell of $S$ with more than two sides, such as an
+edge where three triangles meet, has no jump, and a form uses the restriction
+from each side.
+
+A concrete subclass of the base object for the map of the cells of a decomposed
+domain $E$ with the topology $S$ into $D$ through the side $s$,
+`SideMap(D, E, s)`, stores $E$, $D$ and the side name, returned by the
+properties `parameter_domain`, `ambient_domain` and `side`. Every group of $S$
+must have a side named $s$ with the topology of $D$, or construction raises
+`ValueError`. `pull_back(f, SideMap(D, E, s))` is an expression with the
+support $E$, the restriction of $f$ to all the groups at once. The pull-back of
+it by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)`, and
+`expand_pull_backs` rewrites the first into the second. The free function
+`side_map(D, E, s)` returns `SideMap(D, E, s)`.
+
+The free function `side_domain(D, S)` returns the decomposed domain of $S$ with
+the geometry of the first side of each group,
+`decomposed_domain(S, coordinates, Q)`, with $Q$ the ambient coordinate domain
+of $D$ and entry $i$ of the coordinates `pull_back(pull_back(coordinate(D), B_i), A_i)`
+for the first side. The core does not check that the other sides have the same
+geometry. The free function `restriction(f, E, s)` returns
+`pull_back(f, side_map(D, E, s))` with $D$ the support of $f$, or $f$ if $f$
+has no support.
+
+The pull-back gives the trace of each degree. The restriction of a 0-form is
+the value on the cell of $S$, and the restriction of the 1-form $\mathrm{d}u$
+keeps only the derivatives along the cell of $S$. To keep the whole array of
+$\mathrm{d}u$, as for a normal derivative, restrict `components(du, D)`, whose
+axes are in the frame of the ambient coordinate domain from every side. The
+normal of a cell of $S$ is expected to take a side name, as the outward normal
+of the cell on that side.
+
+> Legacy note: The legacy UFL restriction `f('+')` is `restriction(f, E, "+")`
+> on the decomposed domain $E$ of the interior facets, whose sides are named
+> `'+'` and `'-'`.
+
+Example, with `D` and `square` of the [DecomposedDomain](#decomposeddomain)
+example, `I = ReferenceSimplex(1)`, a function `u` on `D`, and the diagonal of
+`square`:
+
+```python
+diagonal = StaticTopology(
+    (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
+)
+E = side_domain(D, diagonal)
+jump = restriction(u, E, "+") - restriction(u, E, "-")
+```
+
+- The side tables from `"+"` are the cells `(0,)` and the vertices `((1, 2),)`,
+  and from `"-"` the cells `(1,)` and the vertices `((0, 2),)`, so
+  $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$. The coordinates of `E` are
+  $(1 - t, t)$.
+- If `pull_back(u, cell_domain(D, 0))` is
+  `a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]`, the two restrictions pulled
+  back to the diagonal are $a_{0,0} + a_{0,1}(1 - t) + a_{0,2} t$ and
+  $a_{1,0} + a_{1,2} t$, equal for all $t$ if `u` is continuous at the
+  vertices 1 and 2.
+- With the diagonal listed as `(2, 1)`, the vertices from `"+"` are
+  `((2, 1),)`, $A_+(t) = (t, 1 - t)$, and the restriction of
+  $\mathrm{d}x_0$ from `"+"` changes sign, from $-\mathrm{d}t$ to
+  $\mathrm{d}t$.
+- On the topology of the vertices of `square`, with the cell type
+  `ReferenceSimplex(0)`, vertex 3 is seen from cell 1 as local vertex 1, so
+  `u` restricts to $a_{1,0} + a_{1,1}$ there.
+- For the facets `S` of a triangle and quadrilateral mesh, with the three
+  groups of [Sides of a topology](#sides-of-a-topology), the same two lines
+  with `E = side_domain(D, S)` give one jump for all three groups.
 
 ### Integral over a decomposed domain
 
@@ -3514,7 +3534,8 @@ Base
 ├── Index                                 named by a label, not an expression
 ├── EllipsisIndex                         covers any number of axes
 ├── AbstractExtent                        extent not known during construction
-└── AbstractIndexValue                    index value not known during construction
+├── AbstractIndexValue                    index value or table not known during construction
+└── GatheredIndex                         index value read from a table
 
 # Algebra
 AbstractExpression
@@ -3554,15 +3575,14 @@ Base
 ├── AbstractCellType                      numbered vertices and facets
 └── AbstractTopology                      cells without coordinates
 
-# Reference cells and restriction
+# Reference cells
 AbstractCoordinateDomain, AbstractCellType
 └── AbstractReferenceCell                 coordinates of the vertices
-AbstractExpression
-└── Restriction                           pull-back to a facet from one side
 
 # Decomposed domains
 Base
-└── DecomposedDomain                      union of the cells of a topology
+├── DecomposedDomain                      union of the cells of a topology
+└── SideMap                               the cells of a topology with sides into the cells on one side
 
 # Function spaces
 Base
@@ -3573,38 +3593,42 @@ Base
 
 > LLM generated table.
 
-| Group                           | Free function                                                   | `AbstractExpression` overload | Takes                                                                      | Returns                                                       |
-| ------------------------------- | --------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Expressions and static type     | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                                      | `Index`                                                       |
-|                                 | [`ellipsis_index(label)`](#ellipsisindex)                       |                               | `label: str \| tuple`                                                      | `EllipsisIndex`                                               |
-| Algebra                         | [`add(f, g)`](#sum)                                             | `+`                           | `f, g: AbstractExpression`                                                 | `Sum`                                                         |
-|                                 | [`multiply(f, g)`](#product)                                    | `*`                           | `f, g: AbstractExpression`                                                 | `Product`                                                     |
-|                                 | [`power(f, g)`](#power)                                         | `**`                          | `f, g: AbstractExpression`                                                 | `Power`                                                       |
-|                                 | [`negate(f)`](#negation-and-subtraction)                        | unary `-`                     | `f: AbstractExpression`                                                    | `Product` of `Integer(-1)` and `f`                            |
-|                                 | [`subtract(f, g)`](#negation-and-subtraction)                   | `-`                           | `f, g: AbstractExpression`                                                 | `Sum` of `f` and `negate(g)`                                  |
-|                                 | [`divide(f, g)`](#division)                                     | `/`                           | `f, g: AbstractExpression`                                                 | `Division`                                                    |
-|                                 | [`absolute(f)`](#absolute)                                      | `abs`                         | `f: AbstractExpression`                                                    | `Absolute`                                                    |
-|                                 | [`conjugate(f)`](#conjugate)                                    |                               | `f: AbstractExpression`                                                    | `Conjugate`                                                   |
-|                                 | [`tensor_product(f, g)`](#tensorproduct)                        |                               | `f, g: AbstractExpression`                                                 | `TensorProduct`                                               |
-|                                 | [`square_root(f)`](#elementary-functions-very-incomplete)       |                               | `f: AbstractExpression`                                                    | `SquareRoot`                                                  |
-|                                 | [`tensor(entries)`](#tensor)                                    |                               | `entries: tuple[AbstractExpression, ...]`                                  | `Tensor`                                                      |
-|                                 | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple`                                  | `Indexed`                                                     |
-|                                 | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                      | `ComponentTensor`                                             |
-|                                 | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                      | `IndexSum`                                                    |
-|                                 | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                                    | `ComponentTensor` of an `Indexed`                             |
-|                                 | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                                 | `ComponentTensor` of an `IndexSum`                            |
-|                                 | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                                    | `Inverse`                                                     |
-| Calculus on a coordinate domain | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain`                                              | `Coordinate`                                                  |
-|                                 | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`                     | `ExteriorDerivative`                                          |
-|                                 | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`                     | `Components`                                                  |
-|                                 | [`volume_form(P)`](#volume-form)                                |                               | `P: AbstractCoordinateDomain`                                              | `Product` of the coordinate 1-forms                           |
-|                                 | [`integral(f, P)`](#integral)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`                     | `Integral`                                                    |
-| Maps between domains            | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression`                | `ParameterisedDomain`                                         |
-|                                 | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain`                          | `PullBack`                                                    |
-| Topology                        | [`cell_index(T, j)`](#abstracttopology)                         |                               | `T: AbstractTopology`, `j: int`                                            | `Index`                                                       |
-| Reference cells and restriction | [`restriction(f, S, i, side)`](#restriction)                    |                               | `f: AbstractExpression`, `S: AbstractTopology`, `i: int`, `side: str`      | `Restriction`, of a pull-back for `f` on a `DecomposedDomain` |
-| Decomposed domains              | [`decomposed_domain(T, coordinates, Q)`](#decomposeddomain)     |                               | `T: AbstractTopology`, `coordinates: tuple`, `Q: AbstractCoordinateDomain` | `DecomposedDomain`                                            |
-|                                 | [`cell_domain(D, j)`](#decomposeddomain)                        |                               | `D: DecomposedDomain`, `j: int`                                            | `ParameterisedDomain` of the cells of type `j`                |
+| Group                           | Free function                                                   | `AbstractExpression` overload | Takes                                                                      | Returns                                                             |
+| ------------------------------- | --------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Expressions and static type     | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                                      | `Index`                                                             |
+|                                 | [`ellipsis_index(label)`](#ellipsisindex)                       |                               | `label: str \| tuple`                                                      | `EllipsisIndex`                                                     |
+|                                 | [`gathered_index(table, indices)`](#gatheredindex)              |                               | `table: AbstractIndexValue`, `indices: tuple`                              | `GatheredIndex`                                                     |
+| Algebra                         | [`add(f, g)`](#sum)                                             | `+`                           | `f, g: AbstractExpression`                                                 | `Sum`                                                               |
+|                                 | [`multiply(f, g)`](#product)                                    | `*`                           | `f, g: AbstractExpression`                                                 | `Product`                                                           |
+|                                 | [`power(f, g)`](#power)                                         | `**`                          | `f, g: AbstractExpression`                                                 | `Power`                                                             |
+|                                 | [`negate(f)`](#negation-and-subtraction)                        | unary `-`                     | `f: AbstractExpression`                                                    | `Product` of `Integer(-1)` and `f`                                  |
+|                                 | [`subtract(f, g)`](#negation-and-subtraction)                   | `-`                           | `f, g: AbstractExpression`                                                 | `Sum` of `f` and `negate(g)`                                        |
+|                                 | [`divide(f, g)`](#division)                                     | `/`                           | `f, g: AbstractExpression`                                                 | `Division`                                                          |
+|                                 | [`absolute(f)`](#absolute)                                      | `abs`                         | `f: AbstractExpression`                                                    | `Absolute`                                                          |
+|                                 | [`conjugate(f)`](#conjugate)                                    |                               | `f: AbstractExpression`                                                    | `Conjugate`                                                         |
+|                                 | [`tensor_product(f, g)`](#tensorproduct)                        |                               | `f, g: AbstractExpression`                                                 | `TensorProduct`                                                     |
+|                                 | [`square_root(f)`](#elementary-functions-very-incomplete)       |                               | `f: AbstractExpression`                                                    | `SquareRoot`                                                        |
+|                                 | [`tensor(entries)`](#tensor)                                    |                               | `entries: tuple[AbstractExpression, ...]`                                  | `Tensor`                                                            |
+|                                 | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple`                                  | `Indexed`                                                           |
+|                                 | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                      | `ComponentTensor`                                                   |
+|                                 | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                      | `IndexSum`                                                          |
+|                                 | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                                    | `ComponentTensor` of an `Indexed`                                   |
+|                                 | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                                 | `ComponentTensor` of an `IndexSum`                                  |
+|                                 | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                                    | `Inverse`                                                           |
+| Calculus on a coordinate domain | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain`                                              | `Coordinate`                                                        |
+|                                 | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`                     | `ExteriorDerivative`                                                |
+|                                 | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`                     | `Components`                                                        |
+|                                 | [`volume_form(P)`](#volume-form)                                |                               | `P: AbstractCoordinateDomain`                                              | `Product` of the coordinate 1-forms                                 |
+|                                 | [`integral(f, P)`](#integral)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`                     | `Integral`                                                          |
+| Maps between domains            | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression`                | `ParameterisedDomain`                                               |
+|                                 | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain`                          | `PullBack`                                                          |
+| Topology                        | [`cell_index(T, j)`](#abstracttopology)                         |                               | `T: AbstractTopology`, `j: int`                                            | `Index`                                                             |
+| Reference cells                 | [`affine_map(F, points)`](#reference-cell)                      |                               | `F: AbstractReferenceCell`, `points: AbstractExpression`                   | The affine map of the vertices                                      |
+| Decomposed domains              | [`decomposed_domain(T, coordinates, Q)`](#decomposeddomain)     |                               | `T: AbstractTopology`, `coordinates: tuple`, `Q: AbstractCoordinateDomain` | `DecomposedDomain`                                                  |
+|                                 | [`cell_domain(D, j)`](#decomposeddomain)                        |                               | `D: DecomposedDomain`, `j: int`                                            | `ParameterisedDomain` of the cells of type `j`                      |
+|                                 | [`side_domain(D, S)`](#restriction)                             |                               | `D: DecomposedDomain`, `S: AbstractTopology`                               | `DecomposedDomain` of the cells of `S`                              |
+|                                 | [`side_map(D, E, side)`](#restriction)                          |                               | `D, E: DecomposedDomain`, `side: str`                                      | `SideMap`                                                           |
+|                                 | [`restriction(f, E, side)`](#restriction)                       |                               | `f: AbstractExpression`, `E: DecomposedDomain`, `side: str`                | `PullBack` of `f` by `side_map(D, E, side)`, or `f` with no support |
 
 The value-shape and other constraints on the arguments are stated in the section
 of each free function. A free function and an operator overload accept only the
@@ -3629,7 +3653,8 @@ rules in the section of the concrete class.
 | `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`                         |                                                                   |
 | `AbstractExpression`                           |                                                                              | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree` |
 | `Index`, `EllipsisIndex`                       | `label`                                                                      |                                                                   |
-| `AbstractIndexValue`                           | `extent`, in every concrete subclass                                         |                                                                   |
+| `AbstractIndexValue`                           | `extent`, `shape`, in every concrete subclass                                |                                                                   |
+| `GatheredIndex`                                | `table`, `indices`                                                           | `extent`, `free_indices`                                          |
 | `Integer`, `Float`                             | `value`                                                                      |                                                                   |
 | `Zero`                                         | `value_shape`, `free_indices`, `degree`                                      |                                                                   |
 | `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                                            |                                                                   |
@@ -3645,7 +3670,7 @@ rules in the section of the concrete class.
 | `AbstractCellType`                             | `dimension`, `num_vertices`, `facets`, in every concrete subclass            | `facet_types`                                                     |
 | `AbstractReferenceCell`                        | `vertices`, in every concrete subclass                                       |                                                                   |
 | `AbstractTopology`                             | `cell_types`, `num_cells`, `sides`, in every concrete subclass               | `dimension`                                                       |
-| `Restriction`                                  | `expression`, `topology`, `cell_type_number`, `side`                         |                                                                   |
+| `SideMap`                                      | `parameter_domain`, `ambient_domain`, `side`                                 |                                                                   |
 | `DecomposedDomain`                             | `topology`, `coordinates`, `ambient_domain`                                  | `dimension`                                                       |
 | `AbstractFunctionSpace`                        | `domain`, `degree`, `value_shape`, `scalar_type`, in every concrete subclass |                                                                   |
 
@@ -3669,4 +3694,3 @@ rules in the section of the concrete class.
 | `Components`                             | At least one slot                                         | The first slot lowered by 1, and removed at 0 |
 | `Integral`                               | `(n,)` with $n$ the dimension of $P$, or `()` for $n = 0$ | `()`                                          |
 | `PullBack`                               | Any degree                                                | The degree of the expression                  |
-| `Restriction`                            | Any degree                                                | The degree of the expression                  |
