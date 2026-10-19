@@ -26,6 +26,7 @@ fully LLM generated content are explicitly marked.
 - [Scope](#scope)
   - [What UFLx is and isn't](#what-uflx-is-and-isnt)
   - [Basic principles](#basic-principles)
+  - [A tour: the Poisson problem](#a-tour-the-poisson-problem)
 - [Rules of the language](#rules-of-the-language)
   - [Basic implementation principles](#basic-implementation-principles)
   - [The base object `Base`](#the-base-object-base)
@@ -199,6 +200,74 @@ external library provides the concrete data behind the leaf nodes.
 > compiler could use a lowered UFLx form directly, adding only leaves for
 > tables and kernel inputs. I have not checked this with the TSFC or FFCx
 > developers.
+
+### A tour: the Poisson problem
+
+The bilinear form $\int_\Omega \nabla u \cdot \nabla v \,\mathrm{d}x$ and the
+linear form $\int_\Omega f v \,\mathrm{d}x$, on a square divided into two
+triangles, touch most chapters of the core. Each step links to the section
+that defines it.
+
+```python
+# Topology: two triangles, and the mesh as a decomposed domain.
+K = ReferenceSimplex(2)
+T = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+D = decomposed_domain(T, (x,), RD(2))
+
+# Functions in a space of a library, such as Lagrange of polynomial degree 1.
+u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
+
+# The integrands on D, with the gradient in the frame of RD(2).
+i = index("i")
+grad_u = components(exterior_derivative(u, D), D)
+grad_v = components(exterior_derivative(v, D), D)
+a_D = index_sum(grad_u[i] * grad_v[i], (i,))
+L_D = f * v
+
+# The integral over D, cell by cell on the reference triangle.
+c = cell_index(T, 0)
+J = components(exterior_derivative(x, K), K)
+det_J = J[0, 0] * J[1, 1] - J[0, 1] * J[1, 0]
+
+def integrate(g):
+    g_K = pull_back(g, cell_domain(D, 0)) * abs(det_J) * volume_form(K)
+    return index_sum(integral(g_K, K), (c,))
+
+# The forms bind the arguments.
+a = form(integrate(a_D), (v, u))
+L = form(integrate(L_D), (v,))
+```
+
+- **Topology and geometry.** `T` is a [static
+  topology](#example-a-static-topology), and `x` is the affine map of each
+  triangle of the [DecomposedDomain](#decomposeddomain) example, with the free
+  index `c`. `D` is the mesh.
+- **Functions.** `V` is an [`AbstractFunctionSpace`](#abstractfunctionspace) of
+  a library on `D`, with the degree `()` and the value shape `()`. `u`, `v` and
+  `f` are [functions](#function). None is a test or trial function by itself.
+- **Calculus.** The gradient is the [exterior
+  derivative](#exteriorderivative), a 1-form, turned into an array by
+  [`Components`](#components). `i` is an [index](#index), and
+  [`IndexSum`](#componenttensor-and-indexsum) contracts.
+- **Integration.** An [`Integral`](#integral) is over a coordinate domain, so
+  `integrate` [pulls back](#pullback) to the reference triangle `K` of each
+  cell, and sums over the cell index `c`. The integral over a decomposed domain
+  and its volume form are not yet in the core, so the tour writes the cell sum
+  by hand.
+- **Forms.** [`form`](#form) binds `v` in slot 0 and `u` in slot 1. `f` stays
+  fixed. `a` and `L` are expressions with the [argument
+  spaces](#argument-spaces) `(V, V)` and `(V,)`.
+
+Nothing is evaluated during construction. The [core
+transformations](#core-transformations) then rewrite the graph:
+`apply_derivatives` and `expand_pull_backs` move the derivatives and the
+pull-backs to the leaves, and turn the components on `D` into the inverse
+Jacobian times the components on `K`. `pull_back(u, cell_domain(D, 0))`
+remains, because the library of `V` gives `u` on each cell. A form compiler
+then splits the graph at the cell index (see [Concept: kernels](#concept-kernels)).
+The `IndexSum` over `c` becomes the loop of the assembler, the gathers of the
+vertex positions become the packing of the kernel inputs, and the rest is the
+kernel.
 
 ## Rules of the language
 
