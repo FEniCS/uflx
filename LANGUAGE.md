@@ -111,6 +111,7 @@ fully LLM generated content are explicitly marked.
   - [Concept: kernels](#concept-kernels)
 - [Function spaces](#function-spaces)
   - [AbstractFunctionSpace](#abstractfunctionspace)
+  - [Function](#function)
 - [Variational forms](#variational-forms)
 - [Core transformations](#core-transformations)
   - [Expanding pull-backs](#expanding-pull-backs)
@@ -2036,8 +2037,9 @@ curve, and a 1-form pulled back to a point, are zero.
 operations, with the wedge product and with the exterior derivative, and
 replaces `PullBack(Coordinate(Q), D)` by $\psi$ (see
 [Expanding pull-backs](#expanding-pull-backs)). A `PullBack` of a downstream
-terminal remains, and the external library that supplies the terminal
-evaluates the terminal at $\psi(p)$ and transforms the slots. A `PullBack` of a
+terminal or of a [`Function`](#function) remains, and the external library that
+supplies the terminal, or the space of the function, evaluates the terminal at
+$\psi(p)$ and transforms the slots. A `PullBack` of a
 constant by a family of domains also remains, if a free index of the family is
 not free in the constant.
 
@@ -3240,39 +3242,90 @@ Examples, with a decomposed domain `D` of `ReferenceSimplex(2)` cells in
 - The discontinuous Lagrange space of polynomial degree 0 on `D`, as densities,
   has the degree `(2,)`.
 
-The library of a space may write the pull-back of a function with core nodes.
-For the Lagrange space of polynomial degree 1 on `D` of the
-[DecomposedDomain](#decomposeddomain) example, with `X`, `c`, `v` and
-`cell_vertices` of that example, an array `U` of value shape `(4,)` with the
-value of a function `u` at each vertex, and the table `cell_vertices` as the
-map from the local to the global degrees of freedom:
+### Function
 
-```python
-# The basis of the Lagrange space of polynomial degree 1 on K.
-phi = tensor((Integer(1) - X[0] - X[1], X[0], X[1]))
+Requires: [AbstractFunctionSpace](#abstractfunctionspace),
+[`AbstractExpression`](#abstractexpression), [Support](#support),
+[Degree](#degree).
 
-# pull_back(u, cell_domain(D, 0)), on K with the free index c.
-u_c = index_sum(U[gathered_index(cell_vertices, (c, v))] * phi[v], (v,))
-```
+See also: [PullBack](#pullback), [Restriction](#restriction),
+[Variational forms](#variational-forms).
 
-Assembly adds the values of a kernel into a global array through the same
-table, the reverse of the gather, and is outside the language.
+A concrete subclass of `AbstractExpression` for a function, a member of a
+function space. `Function(V, label)` stores the space $V$ and a label, returned
+by the properties `space` and `label`. The label is a `str` or a `tuple`, with
+the rules of the label of an [Index](#index), and identifies the function, so
+two functions are the same only if the spaces and the labels are equal.
+`Function(V, label)` derives the value shape, the degree and the scalar type of
+$V$, the support `V.domain`, or no support for the domain `None`, and no free
+indices. Construction raises `TypeError` if $V$ is not an
+`AbstractFunctionSpace` or the label is neither a `str` nor a `tuple`. The free
+function `function(V, label)` returns `Function(V, label)`.
+
+A `Function` is a terminal. The core does not represent the values of a
+function. The pull-back of a function by a cell of the domain is evaluated by
+the library of the space (see [PullBack](#pullback)), so a library chooses how
+a function is represented on a cell. The exterior derivative of a function
+remains after [applying derivatives](#applying-derivatives).
+
+A function is not an argument or a coefficient by itself. Whether a function is
+an argument of a form is stated by the form (see
+[Variational forms](#variational-forms)).
+
+> Legacy note: The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction`
+> are all functions. A test function and a trial function are the functions
+> that a form states as the arguments in the slots 0 and 1.
+
+Examples, with a decomposed domain `D` and a space `V` on `D` of the degree
+`()` and the value shape `()`:
+
+- `u = function(V, "u")` has the support `D`, the degree `()` and the value
+  shape `()`, and `function(V, "u") == u` is `True`.
+- `exterior_derivative(u, D)` is the 1-form $\mathrm{d}u$ on `D`.
+- With the decomposed domain `E` of the interior facets of `D`,
+  `restriction(u, E, "+")` is `u` from the side `"+"`.
 
 ## Variational forms
 
-Requires: [Integral](#integral), [Degree](#degree),
-[AbstractFunctionSpace](#abstractfunctionspace).
+Requires: [Integral](#integral), [Degree](#degree), [Function](#function).
 
-A variational form is an `Integral`, or a combination of `Integral`s. The arity
-of a variational form is the number of argument slots of the variational form.
-Each argument has a slot number, and the slot numbers in the integrand of a
-variational form of arity $r$ are $0, \dots, r - 1$. The integrand is
-antilinear in the arguments of slot 0 and linear in the arguments of every
-other slot. For a real scalar type, antilinear and linear coincide. A
-functional has the arity 0, a linear form the arity 1 and a bilinear form the
-arity 2. The
-integrand of every variational form is a top form, so the degree of a
+A variational form is an expression of integrals that is abstracted over some
+functions, the arguments, as a multilinear map is over the arguments of the
+map. `Form(integrand, arguments)` is a concrete subclass of the base object,
+not an expression, and stores:
+
+- The integrand, an expression with the value shape `()`, the degree `()`, no
+  support and no free indices, such as an integral or a combination of
+  integrals.
+- The arguments, a `tuple` of distinct [functions](#function).
+
+The arity of a form is the number of arguments, and the slot number of an
+argument is the position of the argument in the `tuple`. A functional has the
+arity 0, a linear form the arity 1 and a bilinear form the arity 2. The
+integrand is antilinear in the argument of slot 0 and linear in the argument of
+every other slot. For a real scalar type, antilinear and linear coincide.
+Construction does not check the linearity, which a pass may check. Every other
+function in the integrand is fixed, so the same function may be an argument of
+one form and fixed in another, such as when a derivative with respect to a
+function adds an argument. The free function `form(integrand, arguments)`
+returns `Form(integrand, arguments)`.
+
+The integrand of every integral of a form is a top form, so the degree of a
 differential form and the arity of a variational form are independent.
+
+> Legacy note: In legacy UFL, the arguments of a form are the test functions
+> and the trial functions in the integrand, with the slot numbers of the
+> functions. In UFLx, a function has no slot number, and the form states the
+> arguments.
+
+Example, with `u = function(V, "u")`, `v = function(V, "v")` and a fixed
+function `w = function(V, "w")` on a decomposed domain `D`:
+
+- With an integrand `a` that is linear in `u` and in `v` and contains `w`,
+  `form(a, (v, u))` is a bilinear form with `v` in slot 0 and `u` in slot 1,
+  and `w` is fixed.
+- `form(a, (v,))` with the same integrand is a linear form in `v`, with `u`
+  and `w` fixed, such as the residual of a nonlinear problem.
 
 ## Core transformations
 
@@ -3304,8 +3357,8 @@ evaluation if the rules of the class rewrite only that class, move the node
 towards the leaves, and never reverse a core rule, as moving an
 `ExteriorDerivative` inside a `PullBack` would.
 
-A terminal is a `Coordinate`, or an expression with a support whose class is a leaf
-class of a downstream library. After evaluation, every `PullBack`,
+A terminal is a `Coordinate`, a [`Function`](#function), or an expression with a
+support whose class is a leaf class of a downstream library. After evaluation, every `PullBack`,
 `ExteriorDerivative` and `Components` applies to an expression that contains a
 downstream terminal, except the coordinate frame $\mathrm{d}X$ and a
 `PullBack` of a constant by a family of domains (see
@@ -3665,6 +3718,12 @@ Base
 # Function spaces
 Base
 └── AbstractFunctionSpace                 degree and value shape of functions
+AbstractExpression
+└── Function                              a member of a space, a terminal
+
+# Variational forms
+Base
+└── Form                                  an integrand abstracted over arguments
 ```
 
 ## Appendix: Free functions
@@ -3707,6 +3766,8 @@ Base
 |                                 | [`side_domain(D, S)`](#restriction)                             |                               | `D: DecomposedDomain`, `S: AbstractTopology`                               | `DecomposedDomain` of the cells of `S`                              |
 |                                 | [`side_map(D, E, side)`](#restriction)                          |                               | `D, E: DecomposedDomain`, `side: str`                                      | `SideMap`                                                           |
 |                                 | [`restriction(f, E, side)`](#restriction)                       |                               | `f: AbstractExpression`, `E: DecomposedDomain`, `side: str`                | `PullBack` of `f` by `side_map(D, E, side)`, or `f` with no support |
+| Function spaces                 | [`function(V, label)`](#function)                               |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                          | `Function`                                                          |
+| Variational forms               | [`form(integrand, arguments)`](#variational-forms)              |                               | `integrand: AbstractExpression`, `arguments: tuple[Function, ...]`         | `Form`                                                              |
 
 The value-shape and other constraints on the arguments are stated in the section
 of each free function. A free function and an operator overload accept only the
@@ -3751,6 +3812,8 @@ rules in the section of the concrete class.
 | `SideMap`                                      | `parameter_domain`, `ambient_domain`, `side`                                 |                                                                   |
 | `DecomposedDomain`                             | `topology`, `coordinates`, `ambient_domain`                                  | `dimension`                                                       |
 | `AbstractFunctionSpace`                        | `domain`, `degree`, `value_shape`, `scalar_type`, in every concrete subclass |                                                                   |
+| `Function`                                     | `space`, `label`                                                             |                                                                   |
+| `Form`                                         | `integrand`, `arguments`                                                     | `arity`                                                           |
 
 ## Appendix: Degree table
 
@@ -3768,6 +3831,7 @@ rules in the section of the concrete class.
 | `Tensor`                                 | Equal degrees                                             | The degree of the entries                     |
 | `Indexed`, `ComponentTensor`, `IndexSum` | Any degree                                                | The degree of the expression                  |
 | `Coordinate`                             | No such edges                                             | `()`                                          |
+| `Function`                               | No such edges                                             | The degree of the space                       |
 | `ExteriorDerivative`                     | The degree `()` or `(k,)`                                 | `(1,)` for `()`, and `(k + 1,)` for `(k,)`    |
 | `Components`                             | At least one slot                                         | The first slot lowered by 1, and removed at 0 |
 | `Integral`                               | `(n,)` with $n$ the dimension of $P$, or `()` for $n = 0$ | `()`                                          |
