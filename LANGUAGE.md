@@ -98,7 +98,7 @@ fully LLM generated content are explicitly marked.
   - [AbstractCellType](#abstractcelltype)
   - [Example: the simplex as a cell type](#example-the-simplex-as-a-cell-type)
   - [AbstractTopology](#abstracttopology)
-  - [Parent of a topology](#parent-of-a-topology)
+  - [Sides of a topology](#sides-of-a-topology)
   - [Example: a static topology](#example-a-static-topology)
 - [Reference cells and restriction](#reference-cells-and-restriction)
   - [Reference cell](#reference-cell)
@@ -647,7 +647,7 @@ Example:
 
 Requires: [The base object `Base`](#the-base-object-base), [Extents](#extents).
 
-See also: [Indexed](#indexed), [Parent of a topology](#parent-of-a-topology).
+See also: [Indexed](#indexed), [Sides of a topology](#sides-of-a-topology).
 
 An abstract subclass of the base object `AbstractIndexValue` for an index whose
 value is fixed but not known during construction, such as the local number of
@@ -2503,7 +2503,7 @@ Requires: [The base object `Base`](#the-base-object-base), [Index](#index),
 [Extents](#extents), [Free indices](#free-indices),
 [AbstractCellType](#abstractcelltype).
 
-See also: [Parent of a topology](#parent-of-a-topology),
+See also: [Sides of a topology](#sides-of-a-topology),
 [Restriction](#restriction),
 [Integral over a topology](#integral-over-a-topology),
 [Cells as parameterised domains](#cells-as-parameterised-domains).
@@ -2521,8 +2521,8 @@ a solver, and provides:
   for a macro element, or an `AbstractExtent`, such as for the mesh of a
   solver. For the mesh of a solver, the solver loops over the cells, and a
   kernel computes the terms of one cell.
-- `parent`, `None`, or the pair described in
-  [Parent of a topology](#parent-of-a-topology).
+- `sides`, `()`, or the sides described in
+  [Sides of a topology](#sides-of-a-topology).
 
 The derived property `dimension` is the dimension of the cell types. Two
 topologies are the same topology only if the two topologies are equal as base
@@ -2553,83 +2553,92 @@ Examples:
 - A mesh of a solver with triangles and quadrilaterals has two cell types, and
   two `AbstractExtent`s as the numbers of cells.
 
-### Parent of a topology
+### Sides of a topology
 
 Requires: [AbstractCellType](#abstractcelltype),
 [AbstractTopology](#abstracttopology).
 
 See also: [Restriction](#restriction).
 
-A topology $S$ whose cells are sub-entities of cells of a topology $T$ has the
-parent `(T, seen_from)`. Entry $i$ of `seen_from` is a `tuple` of one or two
-sides with distinct names, each a pair of a side name, a `str`, and a cell type
-number $j$ of $T$. Each cell of type $i$ of $S$ is seen from one cell of type
-$j$ of $T$ on each side, and is either:
-
-- a whole facet of the cell on each side, with one or two sides, and cell type
-  $i$ of $S$ a facet type of the cell type of each side, or
-- a whole sub-entity of any other dimension of the cell on the one side, with
-  cell type $i$ of $S$ the cell type of the sub-entity. The sub-entity may be
-  the cell itself, with the vertices in the order of the cell, as for a cell of
-  a subdomain, an edge of a tetrahedron, or a vertex.
-
-For a sub-entity of lower dimension than a facet, such as a vertex of a
-triangle mesh, several cells contain the sub-entity, and the concrete mesh
-chooses the one cell. A function that is continuous across the cells has the same restriction
-from each of the cells, and the restriction of any other function depends on
-the choice.
+A topology $S$ whose cells are sub-entities of cells of other topologies has
+sides. `S.sides` has one entry for each cell type of $S$. Entry $i$ is a
+`tuple` of one or more sides with distinct names, each a triple `(name, T, j)`
+of a side name, a `str`, a topology $T$ and a cell type number $j$ of $T$. Each
+cell of type $i$ of $S$ is seen from one cell of type $j$ of $T$ on each side,
+and is a whole sub-entity of that cell, with cell type $i$ of $S$ the cell type
+of the sub-entity. The sub-entity may be the cell itself, with the vertices in
+the order of the cell, a facet, or a sub-entity of lower dimension, such as an
+edge of a tetrahedron or a vertex. The concrete mesh pairs each vertex of a
+cell of $S$ with a vertex of the cell on each side, the same vertex for a
+matching facet, and a vertex one period away for a periodic boundary. A
+topology whose cells are not seen from other cells has the sides `()`.
 
 [Restriction](#restriction) picks the value of an expression on a cell of $S$
 by the side name, and checks the side name. The core does not check the rest
-of the parent.
+of the sides.
 
-The concrete mesh decides which facets or cells are the cells of $S$, and from
-which cells each facet is seen. For example, the cells of $S$ may be the facets
-of a marked boundary or the cells of a marked subdomain, and a facet of two
-cells may be seen from one cell only. $T$ may itself have a parent, so the
-cells of $S$ may be facets of facets.
+The concrete mesh decides which sub-entities are the cells of $S$, and from
+which cells on each side each cell of $S$ is seen. For example, the cells of
+$S$ may be the facets of a marked boundary or the cells of a marked subdomain,
+and a facet of two cells may be seen from one cell only. The sides may have
+different topologies, such as a mesh and a submesh, or two meshes that meet.
+The topology of a side may itself have sides, so the cells of $S$ may be
+facets of facets.
+
+For a sub-entity of lower dimension than a facet, such as a vertex of a
+triangle mesh, several cells contain the sub-entity, and the concrete mesh
+chooses the one cell on a side. A function that is continuous across the cells
+has the same restriction from each of the cells, and the restriction of any
+other function depends on the choice.
 
 The concrete mesh also names the sides, and decides which cell is on which
 side. For example, the facets of an interface between fluid and solid
-triangles of the one cell type 0 have the sides `(("fluid", 0), ("solid", 0))`,
-and the cell on the side `"fluid"` is the fluid triangle.
+triangles of the one cell type 0 of `T` have the sides
+`(("fluid", T, 0), ("solid", T, 0))`, and the cell on the side `"fluid"` is the
+fluid triangle.
 
 > Legacy note: The legacy UFL measures `ds` and `dS` integrate over a topology
-> of facets with a parent whose `seen_from` entries have one and two sides, and
-> legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure
-> `dx(1)` integrates over a topology of the cells of a subdomain, and the
-> legacy UFL measure `dP` integrates over a topology of vertices.
+> of facets with one and two sides, and legacy UFL names the two sides `'+'`
+> and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the
+> cells of a subdomain, and the legacy UFL measure `dP` integrates over a
+> topology of vertices.
 
-A cell of $S$ that is only part of a facet of a cell of $T$, as with hanging
-nodes or a non-matching interface, is not yet covered. Such a cell needs only
-another inclusion in [Restriction](#restriction), onto part of a facet. For a
-non-matching interface, the inclusion is expected to be
-$\phi_c^{-1} \circ \psi_e$, with $\psi_e$ the map of the cell $e$ of $S$ into
-the ambient coordinate domain and $\phi_c^{-1}$ the inverse of the map of the
-cell $c$ of $T$, a terminal that a downstream library provides.
+A cell of $S$ that is not a whole sub-entity of the cell on a side, as with
+hanging nodes, a mortar interface or a line through the cells of a 3D mesh, is
+not yet covered. For such a side, the inclusion of
+[Restriction](#restriction) is expected to be $\phi_c^{-1} \circ \psi_e$, with
+$\psi_e$ the map of the cell $e$ of $S$ into the ambient coordinate domain and
+$\phi_c^{-1}$ the inverse of the map of the cell $c$ on the side, a terminal
+that a downstream library provides. Which parts of a cell of $S$ meet which
+cells of a side stays outside the language.
 
 Examples, with a topology `T` of triangles with the cell types `(K,)`,
 `I = Simplex(1)` and `P = Simplex(0)`:
 
 - A topology `B` of the boundary facets of `T` has the cell types `(I,)` and
-  the parent `(T, ((("inside", 0),),))`, since each facet is seen from one
-  triangle. `cell_index(B, 0)` is the index of the facets.
+  the sides `((("inside", T, 0),),)`. `cell_index(B, 0)` is the index of the
+  facets.
 - A topology of the facets shared by two triangles has the cell types `(I,)`
-  and the parent `(T, ((("+", 0), ("-", 0)),))`.
+  and the sides `((("+", T, 0), ("-", T, 0)),)`.
 - A topology of the corners of the boundary has the cell types `(P,)` and the
-  parent `(B, ((("+", 0), ("-", 0)),))`, since each corner is seen from two
+  sides `((("+", B, 0), ("-", B, 0)),)`, since each corner is seen from two
   facets of `B`.
 - A topology of the triangles of a marked subdomain of `T` has the cell types
-  `(K,)` and the parent `(T, ((("inside", 0),),))`.
+  `(K,)` and the sides `((("inside", T, 0),),)`.
 - A topology of the vertices of `T`, such as for point loads, has the cell
-  types `(P,)` and the parent `(T, ((("inside", 0),),))`, with one triangle
-  chosen for each vertex.
-- For a topology of tetrahedra with the cell types `(Simplex(3),)`, a topology
-  of the edges along a line source has the cell types `(I,)` and a parent with
-  the one side `("inside", 0)` for the edges.
-- For a topology `U` of prisms with the cell types `(W,)`, a topology of the
+  types `(P,)` and the sides `((("inside", T, 0),),)`, with one triangle chosen
+  for each vertex.
+- With a submesh `M` of the boundary facets of `T`, with the cell types
+  `(I,)`, a topology of the facets has the sides
+  `((("mesh", T, 0), ("submesh", M, 0)),)`, and each facet is a cell of `M`.
+- A topology of the left boundary facets of a periodic `T` has the sides
+  `((("left", T, 0), ("right", T, 0)),)`, with each vertex paired with the
+  vertex one period to the right.
+- For a surface mesh `U` of triangles in $R^3$, a topology of the edges where
+  three triangles meet has the sides `((("a", U, 0), ("b", U, 0), ("c", U, 0)),)`.
+- For a topology `U3` of prisms with the cell types `(W,)`, a topology of the
   boundary facets has the cell types `(K, Q)`, with the quadrilateral cell type
-  `Q`, and the parent `(U, ((("inside", 0),), (("inside", 0),)))`.
+  `Q`, and the sides `((("inside", U3, 0),), (("inside", U3, 0),))`.
 
 ### Example: a static topology
 
@@ -2637,15 +2646,17 @@ Examples, with a topology `T` of triangles with the cell types `(K,)`,
 
 Requires: [AbstractTopology](#abstracttopology),
 [Example: the simplex as a cell type](#example-the-simplex-as-a-cell-type),
-[Parent of a topology](#parent-of-a-topology).
+[Sides of a topology](#sides-of-a-topology).
 
-`StaticTopology(cell_types, cells, parent)` is a topology whose cells are known
+`StaticTopology(cell_types, cells, sides)` is a topology whose cells are known
 during construction. Entry $j$ of `cells` is a `tuple` with the vertices of
 each cell of type $j$, as vertex numbers of the topology. Local vertex $i$ of
 cell $c$ of type $j$ is the vertex `cells[j][c][i]` of the topology. A
-`StaticTopology` with a parent uses the vertex numbers of the parent. For a
-cell seen from two cells, the cell with the lower number in the parent is on
-the first side.
+`StaticTopology` with sides has one topology on every side, uses the vertex
+numbers of that topology, and pairs each vertex with the same vertex. For a
+cell seen from two cells, the cell with the lower number is on the first side.
+For a sub-entity of lower dimension than a facet, the cell with the lowest
+number that contains the sub-entity is chosen.
 
 > This is primarily useful for testing UFLx ideas later, but also covers
 > Alfeld splits.
@@ -2658,13 +2669,13 @@ class StaticTopology(AbstractTopology):
         self,
         cell_types: tuple[AbstractCellType, ...],
         cells: tuple[tuple[tuple[int, ...], ...], ...],
-        parent: tuple[AbstractTopology, tuple[tuple[tuple[str, int], ...], ...]] | None,
+        sides: tuple[tuple[tuple[str, AbstractTopology, int], ...], ...],
     ):
         if len(cells) != len(cell_types):
             raise ValueError("Need one tuple of cells for each cell type.")
         self._cell_types = cell_types
         self._cells = cells
-        self._parent = parent
+        self._sides = sides
 
     @property
     def cell_types(self) -> tuple[AbstractCellType, ...]:
@@ -2675,26 +2686,28 @@ class StaticTopology(AbstractTopology):
         return tuple(len(c) for c in self._cells)
 
     @property
-    def parent(self) -> tuple[AbstractTopology, tuple[tuple[tuple[str, int], ...], ...]] | None:
-        return self._parent
+    def sides(self) -> tuple[tuple[tuple[str, AbstractTopology, int], ...], ...]:
+        return self._sides
 ```
 
 With `K = Simplex(2)` and `I = Simplex(1)`:
 
 ```python
 # A square divided into two triangles, with the numbers of cells (2,).
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), None)
+square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
 
 # The Alfeld split of a triangle at vertex 3, with the numbers of cells (3,).
-alfeld = StaticTopology((K,), (((0, 1, 3), (1, 2, 3), (2, 0, 3)),), None)
+alfeld = StaticTopology((K,), (((0, 1, 3), (1, 2, 3), (2, 0, 3)),), ())
 
 # The facets of the boundary of the square, each seen from one triangle.
 boundary = StaticTopology(
-    (I,), (((0, 1), (1, 3), (3, 2), (2, 0)),), (square, ((("inside", 0),),))
+    (I,), (((0, 1), (1, 3), (3, 2), (2, 0)),), ((("inside", square, 0),),)
 )
 
 # The facet of the diagonal of the square, seen from two triangles.
-diagonal = StaticTopology((I,), (((1, 2),),), (square, ((("+", 0), ("-", 0)),)))
+diagonal = StaticTopology(
+    (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
+)
 ```
 
 A facet of a cell is a set of vertex numbers of the topology, found through the
@@ -2704,7 +2717,7 @@ that contain vertex 3 are facets of two cells, and the three other facets are
 facets of one cell. `boundary` and `diagonal` have the numbers of cells `(4,)`
 and `(1,)`.
 
-`StaticTopology` does not check the parent. A `StaticTopology` has no
+`StaticTopology` does not check the sides. A `StaticTopology` has no
 coordinates. The positions of the vertices come from the
 [coordinate field](#coordinate-field).
 
@@ -2799,7 +2812,7 @@ expression on one is not an expression on the other. Likewise,
 ### Restriction
 
 Requires: [AbstractTopology](#abstracttopology),
-[Parent of a topology](#parent-of-a-topology),
+[Sides of a topology](#sides-of-a-topology),
 [Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell),
 [PullBack](#pullback), [Free indices](#free-indices), [Support](#support),
 [Degree](#degree).
@@ -2808,20 +2821,21 @@ See also: [Components](#components),
 [Integral over a topology](#integral-over-a-topology).
 
 Restriction moves an expression $f$ on the cells of type $j$ of a topology $T$
-to the cells of a topology $S$ with the parent `(T, seen_from)`. $f$ has the
-support $K_j$ or no support, and may have the free index `cell_index(T, j)`.
-$f_c$ is the value of $f$ for the value $c$ of `cell_index(T, j)`, or $f$ if
-$f$ does not have the index. Let $e$ be a cell of type $i$ of $S$, with the
-cell type $F$, and let $c$ be the cell of type $j$ of $T$ on the side $s$ of
-$e$. The inclusion $\iota_s$ is the map from $F$ onto the sub-entity $e$ of $c$
-that sends each vertex of $e$, numbered as in $S$, to the same vertex of $c$.
-For a facet, $\iota_s$ is the facet map of the local facet of $c$ (see
-[Reference cell](#reference-cell)), composed with a permutation of the
-vertices of $F$. For a sub-entity of lower dimension, $\iota_s$ is the
-composition of the facet maps down to the sub-entity, composed with a
-permutation of the vertices of $F$. For the cell itself, $\iota_s$ is the
-identity map of $K_j$. For a vertex, $\iota_s$ is the constant vertex, so the
-restriction is the value at the vertex. The restriction of $f$ to $e$ from the side $s$ is the pull-back
+to the cells of a topology $S$ with sides. $f$ has the support $K_j$ or no
+support, and may have the free index `cell_index(T, j)`. $f_c$ is the value of
+$f$ for the value $c$ of `cell_index(T, j)`, or $f$ if $f$ does not have the
+index. Let $e$ be a cell of type $i$ of $S$, with the cell type $F$, and let
+$c$ be the cell of type $j$ of $T$ on the side $s$ of $e$, with the side
+`(s, T, j)` in entry $i$ of `S.sides`. The inclusion $\iota_s$ is the map from $F$
+onto the sub-entity $e$ of $c$ that sends each vertex of $e$, numbered as in
+$S$, to the paired vertex of $c$. For a facet, $\iota_s$ is the facet map of
+the local facet of $c$ (see [Reference cell](#reference-cell)), composed with a
+permutation of the vertices of $F$. For a sub-entity of lower dimension,
+$\iota_s$ is the composition of the facet maps down to the sub-entity, composed
+with a permutation of the vertices of $F$. For the cell itself, $\iota_s$ is
+the identity map of $K_j$. For a vertex, $\iota_s$ is the constant vertex, so
+the restriction is the value at the vertex. The restriction of $f$ to $e$ from
+the side $s$ is the pull-back
 
 $$
 \iota_s^* f_c.
@@ -2829,16 +2843,18 @@ $$
 
 Each side uses the vertex numbering of $e$ in $S$, so the restrictions from the
 two sides of $e$ are expressions on the same $F$, with the same coordinates.
-The difference of the two restrictions is the jump of $f$ across $e$.
+The difference of the two restrictions is the jump of $f$ across $e$. A cell of
+$S$ with more than two sides, such as an edge where three triangles meet, has
+no jump, and a form uses the restriction from each side.
 
 A concrete subclass of `AbstractExpression` for the restriction,
 `Restriction(f, S, i, side)`, stores $f$, the topology $S$, the cell type
 number $i$ of $S$ and the side name `side`, returned by the properties
-`expression`, `topology`, `cell_type_number` and `side`. With the parent
-`(T, seen_from)` of $S$ and the cell type number $j$ of the side `side` in
-entry $i$ of `seen_from`, `Restriction(f, S, i, side)` requires:
+`expression`, `topology`, `cell_type_number` and `side`. With the side
+`(side, T, j)` in entry $i$ of `S.sides`, `Restriction(f, S, i, side)`
+requires:
 
-- $S$ has a parent, and `side` is a side name of entry $i$ of `seen_from`.
+- `side` is a side name of entry $i$ of `S.sides`.
 - Cell type $j$ of $T$ and cell type $i$ of $S$ are reference cells.
 - $f$ has the support `T.cell_types[j]` or no support, and if the free indices
   of $f$ contain `cell_index(T, j)`, the extent `T.num_cells[j]`.
@@ -2853,7 +2869,7 @@ $f$ without `cell_index(T, j)`, followed by `cell_index(S, i)` with the extent
 between the local facets. Otherwise the free indices are the free indices of
 $f$. So
 the restriction is again an expression on the cells of $S$, and restricts to a topology
-with the parent `(S, ...)`. The pull-back of a 0-form with no support is the
+with a side of the topology $S$. The pull-back of a 0-form with no support is the
 0-form, so the restriction of a function in a
 [ConstantSpace](#constantspace) has the value of the function.
 
@@ -2886,8 +2902,10 @@ cells:
 
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), None)
-diagonal = StaticTopology((I,), (((1, 2),),), (square, ((("+", 0), ("-", 0)),)))
+square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+diagonal = StaticTopology(
+    (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
+)
 
 # An affine function on each triangle, with the coefficients in row c of an
 # array a of value shape (2, 3), with one value for each cell of square.
@@ -2907,7 +2925,20 @@ The diagonal $\{1, 2\}$ is local facet 0 of cell 0, with the vertex numbers
 $(1, 2)$, and local facet 1 of cell 1, with the vertex numbers $(0, 2)$. Both
 facets list the vertices 1 and 2 of `square` in the order of `diagonal`, so
 both permutations are the identity. $\iota_+(t) = (1 - t, t)$ and
-$\iota_-(t) = (0, t)$.
+$\iota_-(t) = (0, t)$. So, from the sides `"+"` and `"-"`:
+
+- `a[c, 0]` restricts to `a[0, 0]` and `a[1, 0]`, with no support.
+- `X[0]` restricts to $1 - t$ and $0$. The restriction has the free index
+  `cell_index(diagonal, 0)`, although `X[0]` has no cell index.
+- `f` restricts to $a_{0,0} + a_{0,1}(1 - t) + a_{0,2} t$ and
+  $a_{1,0} + a_{1,2} t$, which are equal for all $t$ if `f` is continuous at
+  the vertices 1 and 2, so the jump of a continuous `f` is zero.
+- With the diagonal listed as `(2, 1)`, $\iota_+(t) = (t, 1 - t)$, and the
+  restriction of $\mathrm{d}X_0$ from the side `"+"` changes sign, from
+  $-\mathrm{d}t$ to $\mathrm{d}t$.
+- On the topology of the vertices of `square`, with the cell type
+  `ReferenceSimplex(0)`, vertex 3 is seen from cell 1 as local vertex 1, so
+  `f` restricts to $a_{1,0} + a_{1,1}$ there.
 
 ## Function spaces
 
@@ -3015,7 +3046,7 @@ Examples:
 
 - A viscosity $\mu$ is a function in `constant_space((), "real")`.
 - With a topology `F` of fluid triangles and a topology `S` of solid triangles,
-  both with the parent `(T, ((("inside", 0),),))`, two functions `mu_f` and
+  both with the sides `((("inside", T, 0),),)`, two functions `mu_f` and
   `mu_s` in `constant_space((), "real")` are the viscosities of the fluid and
   of the solid. An integral over `F` uses `mu_f`, and an integral over `S` uses
   `mu_s`.
@@ -3527,7 +3558,7 @@ rules in the section of the concrete class.
 | `PullBack`                                     | `expression`, `domain`                                                         |                                                                   |
 | `AbstractCellType`                             | `dimension`, `num_vertices`, `facets`, in every concrete subclass              | `facet_types`                                                     |
 | `AbstractReferenceCell`                        | `vertices`, in every concrete subclass                                         |                                                                   |
-| `AbstractTopology`                             | `cell_types`, `num_cells`, `parent`, in every concrete subclass                | `dimension`                                                       |
+| `AbstractTopology`                             | `cell_types`, `num_cells`, `sides`, in every concrete subclass                 | `dimension`                                                       |
 | `Restriction`                                  | `expression`, `topology`, `cell_type_number`, `side`                           |                                                                   |
 | `AbstractFunctionSpace`                        | `topology`, `degree`, `value_shape`, `scalar_type`, in every concrete subclass |                                                                   |
 | `ConstantSpace`                                | `value_shape`, `scalar_type`                                                   | `topology`, `degree`                                              |
