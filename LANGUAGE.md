@@ -108,6 +108,7 @@ fully LLM generated content are explicitly marked.
   - [DecomposedDomain](#decomposeddomain)
   - [Restriction](#restriction)
   - [Integral over a decomposed domain](#integral-over-a-decomposed-domain)
+  - [Concept: kernels](#concept-kernels)
 - [Function spaces](#function-spaces)
   - [AbstractFunctionSpace](#abstractfunctionspace)
 - [Variational forms](#variational-forms)
@@ -696,12 +697,29 @@ A `GatheredIndex` is an entry of [Indexed](#indexed), and covers one axis
 whose extent equals the extent of the `GatheredIndex`. The free indices of the
 `GatheredIndex` are free in the `Indexed`.
 
-Example:
+Example, with a table `cells` of the shape `(4,)`, the extent 2 and the values
+`(0, 1, 1, 0)`, such as the cell of each of the four boundary edges of the
+square divided into two triangles, and an array `a` of value shape `(2,)` with
+one value for each triangle:
 
-- With a table `cells` of the shape `(m,)` and the extent `n`, an array `a` of
-  value shape `(n,)` and an index `e`, `a[gathered_index(cells, (e,))]` has the
-  free index `e` with the extent `m`, and is the value of `a` at the cell
-  `cells[e]` for each `e`.
+```python
+e = index("e")
+g = gathered_index(cells, (e,))
+
+# The value of a on the triangle of each edge, with the free index e of extent 4.
+a_e = a[g]
+
+# The array (a[0], a[1], a[1], a[0]) of value shape (4,).
+b = component_tensor(a_e, (e,))
+
+# The sum over the edges, 2 * (a[0] + a[1]) after evaluation.
+total = index_sum(a_e, (e,))
+```
+
+- `gathered_index(cells, (2,))` has no free index and the value 1, so
+  `a[gathered_index(cells, (2,))]` is `a[1]`.
+- For an array `c` of value shape `(3,)`, `c[g]` raises `IndexError`, because
+  the extent 2 of `g` differs from the extent 3 of the axis.
 
 ### Free indices
 
@@ -2949,16 +2967,20 @@ topology with sides.
 
 Example, with `K = ReferenceSimplex(2)`, the topology
 `square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())` of the
-[static topology example](#example-a-static-topology) on reference cells, and
-a constant `p` of value shape
-`(2, 3, 2)` with the position of each local vertex of each triangle, triangle 0
-at $(0, 0)$, $(1, 0)$ and $(0, 1)$, and triangle 1 at $(1, 0)$, $(1, 1)$ and
-$(0, 1)$:
+[static topology example](#example-a-static-topology) on reference cells, an
+array `y` of value shape `(4, 2)` with the positions $(0, 0)$, $(1, 0)$,
+$(0, 1)$ and $(1, 1)$ of the vertices, and a table `cell_vertices` of the shape
+`(2, 3)`, the extent 4 and the values `((0, 1, 2), (1, 3, 2))`, the vertices of
+each triangle:
 
 ```python
 X = coordinate(K)
 c = cell_index(square, 0)
-k = index("k")
+k, v = index("k"), index("v")
+
+# The position of each local vertex of each triangle, of value shape (2, 3, 2),
+# gathered from the vertex positions.
+p = component_tensor(y[gathered_index(cell_vertices, (c, v)), k], (c, v, k))
 
 # The affine map of each triangle.
 x = component_tensor(
@@ -3097,6 +3119,44 @@ Requires: [Integral](#integral),
 [Concept: orientation of a domain](#concept-orientation-of-a-domain),
 [DecomposedDomain](#decomposeddomain), [Restriction](#restriction).
 
+### Concept: kernels
+
+Requires: [DecomposedDomain](#decomposeddomain), [GatheredIndex](#gatheredindex),
+[Integral over a decomposed domain](#integral-over-a-decomposed-domain).
+
+> This section describes how a downstream library is expected to use the core,
+> not a rule of the core.
+
+An integral over a decomposed domain is an `IndexSum` over the cell index of
+each group, of an expression on a reference cell that reads arrays through
+gathered indices with the cell index. A form compiler splits the integral
+there:
+
+- The `IndexSum` over the cell index is the loop of an assembler over the
+  cells, or over the cells of a topology with sides.
+- A gathered index with the cell index, such as of a map from the local to the
+  global degrees of freedom, of the coordinates or of the side tables, is the
+  data of one cell, which the assembler packs and gives to a kernel.
+- The rest, an expression on a reference cell without the cell index, is the
+  kernel.
+
+The inputs of a kernel are the leaves that remain after the split, each with
+the gathered index that reads the leaf, such as the coefficients of a function
+through a map of degrees of freedom on one side, or a runtime extent. So the
+interface of a kernel follows from the expression, and a form compiler may
+describe the interface beyond a fixed convention, such as for two sides of
+different cell types.
+
+The assembler adds the result of a kernel into a global array through the same
+tables, which is outside the language. A whole-array compiler may instead keep
+the integral whole, as a batched gather, one kernel for all the cells and a
+scatter-add.
+
+A kernel depends on no particular mesh. Before compiling a kernel, a pass
+replaces the topologies, the tables, the arrays and the extents of a mesh by
+placeholders numbered in the order of appearance, so one compiled kernel
+serves every mesh with the same cell types and spaces.
+
 ## Function spaces
 
 A function is a member of a function space, such as a coefficient or an
@@ -3179,6 +3239,24 @@ Examples, with a decomposed domain `D` of `ReferenceSimplex(2)` cells in
   UFL contracted with the volume form.
 - The discontinuous Lagrange space of polynomial degree 0 on `D`, as densities,
   has the degree `(2,)`.
+
+The library of a space may write the pull-back of a function with core nodes.
+For the Lagrange space of polynomial degree 1 on `D` of the
+[DecomposedDomain](#decomposeddomain) example, with `X`, `c`, `v` and
+`cell_vertices` of that example, an array `U` of value shape `(4,)` with the
+value of a function `u` at each vertex, and the table `cell_vertices` as the
+map from the local to the global degrees of freedom:
+
+```python
+# The basis of the Lagrange space of polynomial degree 1 on K.
+phi = tensor((Integer(1) - X[0] - X[1], X[0], X[1]))
+
+# pull_back(u, cell_domain(D, 0)), on K with the free index c.
+u_c = index_sum(U[gathered_index(cell_vertices, (c, v))] * phi[v], (v,))
+```
+
+Assembly adds the values of a kernel into a global array through the same
+table, the reverse of the gather, and is outside the language.
 
 ## Variational forms
 
