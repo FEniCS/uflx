@@ -120,6 +120,7 @@ fully LLM generated content are explicitly marked.
   - [Expanding pull-backs](#expanding-pull-backs)
   - [Applying derivatives](#applying-derivatives)
   - [Expanding components](#expanding-components)
+  - [Applying actions](#applying-actions)
 - [Extending the core](#extending-the-core)
   - [Language extensions](#language-extensions)
   - [New questions](#new-questions)
@@ -129,7 +130,8 @@ fully LLM generated content are explicitly marked.
 - [Appendix: Class hierarchy](#appendix-class-hierarchy)
 - [Appendix: Free functions](#appendix-free-functions)
 - [Appendix: Properties](#appendix-properties)
-- [Appendix: Degree table](#appendix-degree-table)
+- [Appendix: Static type table](#appendix-static-type-table)
+- [Appendix: Pass table](#appendix-pass-table)
 
 ## Scope
 
@@ -380,12 +382,15 @@ each object, because objects are immutable.
 
 Substitution avoids capture. A `ComponentTensor` or an `IndexSum` binds
 indices (see [ComponentTensor and
-IndexSum](#componenttensor-and-indexsum)). If a pass substitutes an expression
+IndexSum](#componenttensor-and-indexsum)), and a [`Form`](#form) binds
+functions. If a pass substitutes an expression
 into the expression of a binding node, and a bound index of the binding node is
 free in the substituted expression, the pass renames the bound index. The new
 name is the derived index `Index(("uflx.rename", node, m))`, or the derived
-`EllipsisIndex` with the same label, with `node` the binding node before the
-substitution and `m` the position of the bound index. For example, replacing
+`EllipsisIndex` with the same label, or the function
+`Function(V, ("uflx.rename", node, m))` in the space $V$ of a bound function,
+with `node` the binding node before the substitution and `m` the position of
+the bound index or function. For example, replacing
 `c` by `b[i]` in `index_sum(a[i] * c, (i,))` gives
 `index_sum(a[j] * b[i], (j,))`, with `j` the renamed index, and the result has
 the free index `i`. Without the renaming, the result would be
@@ -463,10 +468,10 @@ A new coordinate domain, such as a reference cell, is a subclass of
 `AbstractCoordinateDomain`, because the core cannot build the set from smaller
 objects.
 
-Every concrete `AbstractCoordinateDomain` $P$ stores:
-
-- The dimension $n$, an `int` with $n \ge 0$, provided by the property
-  `dimension`.
+| `AbstractCoordinateDomain` |                                              |
+| -------------------------- | -------------------------------------------- |
+| Provides                   | `dimension`, an `int` $n \ge 0$              |
+| Defined by                 | A subclass, such as `RD` or a reference cell |
 
 Examples:
 
@@ -484,8 +489,10 @@ See also: [Example: a paraboloid](#example-a-paraboloid).
 
 A concrete subclass of `AbstractCoordinateDomain` for the whole of $R^n$.
 
-`RD(n)` stores the dimension $n$, an `int` with $n \ge 0$. Construction raises
-`TypeError` if $n$ is not an `int`, and `ValueError` if $n < 0$.
+| `RD(n)`    |                                                                 |
+| ---------- | --------------------------------------------------------------- |
+| Properties | `dimension`, an `int` $n \ge 0$                                 |
+| Raises     | `TypeError` if $n$ is not an `int`, and `ValueError` if $n < 0$ |
 
 Example:
 
@@ -552,11 +559,13 @@ classes.
 A concrete subclass of the base object for a free index. An `Index` is not an
 expression.
 
-`Index(label)` stores the label. The label is either a `str`, for an index
-that the user names, or a `tuple` that contains graph objects, for an index
-that a free function derives from the free function's operands. Construction
-raises `TypeError` if the label is neither a `str` nor a `tuple`. An `Index`
-has no extent of its own. An `Index` takes the extent of the axis that the
+| `Index(label)` |                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| Free function  | `index(label)`                                                                                  |
+| Properties     | `label`, a `str` for a user index, or a `tuple` that contains graph objects for a derived index |
+| Raises         | `TypeError` if the label is neither a `str` nor a `tuple`                                       |
+
+An `Index` has no extent of its own, and takes the extent of the axis that the
 `Index` indexes.
 
 The user names user indices. Two occurrences of one `Index` are the same
@@ -602,8 +611,13 @@ EllipsisIndex](#tensor-algebra-with-ellipsisindex).
 > Legacy UFL: This numpy-like concept does not appear to be in legacy UFL.
 
 A concrete subclass of the base object for an index that covers any number of
-axes. A `EllipsisIndex` is not an expression. `EllipsisIndex(label)` stores the label,
-with the same rules as the label of an `Index`.
+axes. A `EllipsisIndex` is not an expression.
+
+| `EllipsisIndex(label)` |                                                           |
+| ---------------------- | --------------------------------------------------------- |
+| Free function          | `ellipsis_index(label)`                                   |
+| Properties             | `label`, with the rules of the label of an `Index`        |
+| Raises                 | `TypeError` if the label is neither a `str` nor a `tuple` |
 
 A `EllipsisIndex` covers every axis of an `Indexed` that the other entries do not
 cover, so a `EllipsisIndex` may cover no axis. The extent of a `EllipsisIndex` is the
@@ -655,13 +669,17 @@ See also: [Indexed](#indexed), [Sides of a topology](#sides-of-a-topology).
 An abstract subclass of the base object `AbstractIndexValue` for an index whose
 value is fixed but not known during construction, such as the local number of
 the facet of a cell in a facet integral, which the solver gives for each facet.
-An `AbstractIndexValue` is not an expression and not a free index. A concrete
-`AbstractIndexValue` is a subclass outside the core and provides `extent`, an
-extent, and `shape`, a `tuple` of extents. An `AbstractIndexValue` with the
-shape `()` is one value, an `int` $v$ with $0 \le v <$ `extent`. An
-`AbstractIndexValue` with a non-empty shape is a table of such values, such as
-the cell on one side of each facet, which the mesh gives, and is read through a
-[GatheredIndex](#gatheredindex).
+An `AbstractIndexValue` is not an expression and not a free index.
+
+| `AbstractIndexValue` |                                                        |
+| -------------------- | ------------------------------------------------------ |
+| Provides             | `extent`, an extent, and `shape`, a `tuple` of extents |
+| Defined by           | A subclass outside the core                            |
+
+An `AbstractIndexValue` with the shape `()` is one value, an `int` $v$ with
+$0 \le v <$ `extent`. An `AbstractIndexValue` with a non-empty shape is a table
+of such values, such as the cell on one side of each facet, which the mesh
+gives, and is read through a [GatheredIndex](#gatheredindex).
 
 An `AbstractIndexValue` with the shape `()` is an entry of [Indexed](#indexed).
 The entry covers one axis, as an `int` entry does, and the extent of the entry
@@ -687,16 +705,16 @@ Requires: [AbstractIndexValue](#abstractindexvalue), [Index](#index),
 See also: [Indexed](#indexed), [Restriction](#restriction).
 
 A concrete subclass of the base object for an index value read from a table.
-`GatheredIndex(table, indices)` stores an `AbstractIndexValue` table and a
-`tuple` of entries, an `int` or an `Index` for each axis of the shape of the
-table. A `GatheredIndex` is not an expression and not a free index. The value
-is the entry of the table at the indices, and `GatheredIndex(table, indices)`
-derives the extent of the table, and the free indices of the `Index` entries,
-each with the extent of the axis. Construction raises `TypeError` for an entry
-that is neither exactly `int` nor `Index`, and `IndexError` if the number of
-entries differs from the number of axes, or for an `int` entry out of range.
-The free function `gathered_index(table, indices)` returns
-`GatheredIndex(table, indices)`.
+A `GatheredIndex` is not an expression and not a free index.
+
+| `GatheredIndex(table, indices)` |                                                                                                                                                                                   |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free function                   | `gathered_index(table, indices)`                                                                                                                                                  |
+| Properties                      | `table`, an `AbstractIndexValue`, and `indices`, an `int` or an `Index` for each axis of the shape of the table                                                                   |
+| Static type                     | The extent of the table, and the free indices of the `Index` entries, each with the extent of the axis                                                                            |
+| Raises                          | `TypeError` for an entry that is neither exactly `int` nor `Index`, and `IndexError` if the number of entries differs from the number of axes, or for an `int` entry out of range |
+
+The value is the entry of the table at the indices.
 
 A `GatheredIndex` is an entry of [Indexed](#indexed), and covers one axis
 whose extent equals the extent of the `GatheredIndex`. The free indices of the
@@ -761,9 +779,9 @@ Requires: [`AbstractExpression`](#abstractexpression).
 
 See also: [Literals](#literals), [Absolute](#absolute).
 
-The scalar type is real or complex. Unless a node class states otherwise, an
-expression is complex if and only if at least one edge is a complex
-expression. `ImaginaryUnit` is complex.
+The scalar type is real or complex. Unless the [static type
+table](#appendix-static-type-table) states otherwise, an expression is complex
+if and only if at least one edge is a complex expression.
 
 The scalar type is the arithmetic in which the expression is evaluated, not a
 statement about the value. A real `SquareRoot` or a real `Power` whose value is
@@ -776,7 +794,8 @@ Requires: [`AbstractExpression`](#abstractexpression),
 
 The support is an `AbstractCoordinateDomain` or a
 [`DecomposedDomain`](#decomposeddomain). The support is absent for an expression
-with no support, such as a literal. Unless a node class states otherwise, the support
+with no support, such as a literal. Unless the [static type
+table](#appendix-static-type-table) states otherwise, the support
 of a node is the support of the edges of the node that are expressions with a support.
 All such edges must have the same support, or construction raises `ValueError`. A
 node with no such edge has no support.
@@ -785,7 +804,7 @@ node with no such edge has no support.
 
 Requires: [`AbstractExpression`](#abstractexpression).
 
-See also: [Appendix: Degree table](#appendix-degree-table), [New
+See also: [Appendix: Static type table](#appendix-static-type-table), [New
 subclasses](#new-subclasses), [ExteriorDerivative](#exteriorderivative).
 
 The degree is a `tuple` with the form degree of each slot of the expression,
@@ -797,7 +816,7 @@ degree as part of the contract of the class (see
 [New subclasses](#new-subclasses)).
 
 The degree of every node class of the core is in the
-[degree table](#appendix-degree-table). If the
+[static type table](#appendix-static-type-table). If the
 degree of an edge breaks the rule of the node, construction raises
 `ValueError`. A rule that requires the degree `()` of an edge is a deliberate
 statement, such as for `SquareRoot`, because the square root of a differential
@@ -925,16 +944,15 @@ indices](#free-indices), [Support](#support), [Degree](#degree).
 
 See also: [Indexed](#indexed), [Applying derivatives](#applying-derivatives).
 
-`Zero(value_shape, free_indices, degree, argument_spaces)` is the zero with the
-given value shape, free indices, degree and [argument
-spaces](#argument-spaces), and has no support. The value shape, the free
-indices and the degree have the forms of [Extents](#extents), [Free
-indices](#free-indices) and [Degree](#degree), and the argument spaces are a
-`tuple` of `AbstractFunctionSpace`s. Construction raises `TypeError`
-for an argument of another form, and `ValueError` for a negative extent, an
-index that occurs twice, or a slot degree less than 1. `Zero` is real. `apply_derivatives` produces
-`Zero` (see [Applying derivatives](#applying-derivatives)). No fixed
-composition gives a zero with free indices or with a non-empty degree, because
+| `Zero(value_shape, free_indices, degree, argument_spaces)` |                                                                                                                                                                                    |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Properties                                                 | `value_shape`, `free_indices`, `degree` and `argument_spaces`, as in [Extents](#extents), [Free indices](#free-indices), [Degree](#degree) and [Argument spaces](#argument-spaces) |
+| Static type                                                | The stored properties, with no support                                                                                                                                             |
+| Raises                                                     | `TypeError` for an argument of another form, and `ValueError` for a negative extent, an index that occurs twice, or a slot degree less than 1                                      |
+
+`Zero` is the zero of any static type. `apply_derivatives` produces `Zero`
+(see [Applying derivatives](#applying-derivatives)). No fixed composition gives
+a zero with free indices or with a non-empty degree, because
 `Integer(0) * a[i]` has edges to `a`, and $0 \, \mathrm{d}x$ has edges to
 $\mathrm{d}x$. So `Zero` is a node class. For example,
 `Zero((), (), (1,), ())` is the zero 1-form, `Zero((3,), (), (), ())` is the
@@ -971,10 +989,15 @@ Requires: [Arithmetic](#arithmetic), [Degree](#degree).
 
 See also: [ExteriorDerivative](#exteriorderivative).
 
-`Sum(first, second)` adds two differential forms of the same degree. Both
-operands must have the same degree, or construction raises `ValueError`, and
-the sum has that degree. For example, $\mathrm{d}x + \mathrm{d}y$ has the
-degree `(1,)`, and $f + \mathrm{d}x$ raises `ValueError`.
+| `Sum(first, second)` |                                                                 |
+| -------------------- | --------------------------------------------------------------- |
+| Free function        | `add(first, second)`, with the overload `+`                     |
+| Requires             | The operands of [Arithmetic](#arithmetic), with the same degree |
+| Raises               | `ValueError` if a requirement fails                             |
+
+`Sum` adds two differential forms of the same degree. For example,
+$\mathrm{d}x + \mathrm{d}y$ has the degree `(1,)`, and $f + \mathrm{d}x$
+raises `ValueError`.
 
 ### Product
 
@@ -986,17 +1009,20 @@ See also: [TensorProduct](#tensorproduct), [ComponentTensor and
 IndexSum](#componenttensor-and-indexsum),
 [ExteriorDerivative](#exteriorderivative).
 
-`Product(first, second)` is the wedge product $\alpha \wedge \beta$ of the
-two operands. For two 0-forms, the wedge product is the ordinary product.
-`Product` adds the degrees of the operands slot by slot, and an operand with
-the degree `()` adds 0 to every slot, so $f \wedge \omega = f \omega$. If both
-operands have a non-empty degree, each degree must have exactly one slot, or
-construction raises `ValueError`. With two slots in an operand, the interior
-product of [Expanding components](#expanding-components) removes a slot from
-one operand only, and the slots of the operands no longer align. A slot of the result may have a
-degree greater than the dimension of the support, and then the result is the zero
-form of that degree. The degree rules of the other node classes are in
-the [degree table](#appendix-degree-table).
+| `Product(first, second)` |                                                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Free function            | `multiply(first, second)`, with the overload `*`                                                               |
+| Requires                 | The operands of [Arithmetic](#arithmetic). If both operands have a non-empty degree, each has exactly one slot |
+| Static type              | The degrees added slot by slot, where the degree `()` adds 0 to every slot                                     |
+| Raises                   | `ValueError` if a requirement fails                                                                            |
+
+`Product` is the wedge product $\alpha \wedge \beta$. For two 0-forms, the
+wedge product is the ordinary product, and $f \wedge \omega = f \omega$. With
+two slots in an operand, the interior product of [Expanding
+components](#expanding-components) removes a slot from one operand only, and
+the slots of the operands no longer align. A slot of the result may have a
+degree greater than the dimension of the support, and then the result is the
+zero form of that degree.
 
 The wedge product is graded commutative,
 $\alpha \wedge \beta = (-1)^{kl} \beta \wedge \alpha$ for a $k$-form $\alpha$
@@ -1029,9 +1055,14 @@ Requires: [Arithmetic](#arithmetic), [Support](#support).
 
 See also: [Applying derivatives](#applying-derivatives).
 
-The exponent of `Power` has no support, or construction raises `ValueError`. The
-derivative of a power whose exponent has a support needs a logarithm, which the
-core does not have.
+| `Power(first, second)` |                                                                             |
+| ---------------------- | --------------------------------------------------------------------------- |
+| Free function          | `power(first, second)`, with the overload `**`                              |
+| Requires               | The operands of [Arithmetic](#arithmetic), with an exponent with no support |
+| Raises                 | `ValueError` if a requirement fails                                         |
+
+The derivative of a power whose exponent has a support needs a logarithm,
+which the core does not have.
 
 ### Negation and subtraction
 
@@ -1053,19 +1084,28 @@ Requires: [Arithmetic](#arithmetic), [Product](#product), [Power](#power),
 Division is a node class, because `multiply(f, power(g, Integer(-1)))`
 rounds twice and differs from `f / g` in floating-point arithmetic.
 
-The first operand of `Division` may have any degree, and the second operand must
-have the degree `()`, or construction raises `ValueError`. The quotient has the
-degree of the first operand, so `dx / Integer(2)` is a 1-form.
+| `Division(first, second)` |                                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------------- |
+| Free function             | `divide(first, second)`, with the overload `/`                                         |
+| Requires                  | The operands of [Arithmetic](#arithmetic), with the degree `()` for the second operand |
+| Raises                    | `ValueError` if a requirement fails                                                    |
+
+The quotient has the degree of the first operand, so `dx / Integer(2)` is a
+1-form.
 
 ### Absolute
 
 Requires: [`AbstractExpression`](#abstractexpression), [Scalar
 type](#scalar-type).
 
-`Absolute` is a concrete subclass of `AbstractExpression` that stores one
-expression. The free function `absolute(f)`, with the overload `abs(f)`, takes
-a scalar and returns a scalar. For a complex argument, `Absolute` is the
-modulus. `Absolute` is real for every argument.
+| `Absolute(f)` |                                           |
+| ------------- | ----------------------------------------- |
+| Free function | `absolute(f)`, with the overload `abs(f)` |
+| Requires      | A scalar $f$                              |
+| Static type   | Value shape `()`, real                    |
+| Raises        | `ValueError` if a requirement fails       |
+
+For a complex argument, `Absolute` is the modulus.
 
 ### Conjugate
 
@@ -1074,12 +1114,16 @@ type](#scalar-type), [Degree](#degree).
 
 See also: [Variational forms](#variational-forms).
 
-`Conjugate` is a concrete subclass of `AbstractExpression` that stores one
-expression. The free function `conjugate(f)` takes a scalar differential form
-of any degree and returns the complex conjugate, with the degree of the
-operand. Conjugation acts on the coefficients of the form. No fixed composition of the other node classes
-conjugates, so `Conjugate` is a node class. A sesquilinear variational form,
-such as the $L^2$ inner product $\int u \bar{v}$, needs `Conjugate`.
+| `Conjugate(f)` |                                              |
+| -------------- | -------------------------------------------- |
+| Free function  | `conjugate(f)`                               |
+| Requires       | A scalar differential form $f$ of any degree |
+| Raises         | `ValueError` if a requirement fails          |
+
+`Conjugate` is the complex conjugate, acting on the coefficients of the form.
+No fixed composition of the other node classes conjugates, so `Conjugate` is a
+node class. A sesquilinear variational form, such as the $L^2$ inner product
+$\int u \bar{v}$, needs `Conjugate`.
 
 ### TensorProduct
 
@@ -1089,15 +1133,16 @@ indices](#free-indices), [Degree](#degree).
 See also: [ExteriorDerivative](#exteriorderivative),
 [ParameterisedDomain](#parameteriseddomain).
 
-`TensorProduct(first, second)` is a concrete subclass of `AbstractExpression`
-for the tensor product $\alpha \otimes \beta$ of two differential forms. The
-free function is `tensor_product(f, g)`, with no overload.
+| `TensorProduct(first, second)` |                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------------- |
+| Free function                  | `tensor_product(first, second)`, with no overload                               |
+| Requires                       | Two operands with value shape `()`, as in [Arithmetic](#arithmetic)             |
+| Static type                    | The degree `first.degree + second.degree`, and the free indices as in `Product` |
+| Raises                         | `ValueError` if a requirement fails                                             |
 
-`TensorProduct` concatenates the degrees of the operands, so the degree of the
-result is `first.degree + second.degree`. An operand with the degree `()` adds
-no slot, so $f \otimes \omega = f \omega$. Both operands must have value shape
-`()`, as in [Arithmetic](#arithmetic), or construction raises `ValueError`.
-The free indices combine as in `Product`.
+`TensorProduct` is the tensor product $\alpha \otimes \beta$ of two
+differential forms. An operand with the degree `()` adds no slot, so
+$f \otimes \omega = f \omega$.
 
 The tensor product is not commutative, and `TensorProduct` never reorders the
 operands. No fixed composition of the other node classes adds a slot, so
@@ -1128,10 +1173,14 @@ Requires: [`AbstractExpression`](#abstractexpression), [Power](#power),
 > UFLx core is likely to contain very few elementary functions - a language
 > extension e.g. `uflx.elementary` will implement them later.
 
-`SquareRoot` is the only elementary function so far. `SquareRoot` is a
-concrete subclass of `AbstractExpression` that stores one expression. The free
-function `square_root(f)` takes a scalar with the degree `()` and returns a
-scalar with the degree `()`.
+`SquareRoot` is the only elementary function so far.
+
+| `SquareRoot(f)` |                                     |
+| --------------- | ----------------------------------- |
+| Free function   | `square_root(f)`                    |
+| Requires        | A scalar $f$ with the degree `()`   |
+| Static type     | Value shape `()`                    |
+| Raises          | `ValueError` if a requirement fails |
 
 `SquareRoot` is a node class, not the composition `power(f, Integer(1) /
 Integer(2))`. IEEE 754 requires a correctly rounded square root but does not
@@ -1147,13 +1196,16 @@ See also: [Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative).
 A concrete subclass of `AbstractExpression` that stacks expressions along a
 new first axis.
 
-`Tensor(entries)` stores the entries, a non-empty `tuple` of
-`AbstractExpression`s that all have the same value shape `s` and the same
-degree, or construction raises `ValueError`. `Tensor(entries)` derives the
-value shape `(n,) + s`, with $n$ the number of entries, and the degree of the
-entries. A matrix is a `Tensor` of `Tensor`s. A `Tensor` of differential forms
-is an array-valued differential form, so the new axis is an axis of the value
-shape and never a slot.
+| `Tensor(entries)` |                                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------------------------------- |
+| Free function     | `tensor(entries)`                                                                                         |
+| Properties        | `entries`, a non-empty `tuple` of `AbstractExpression`s with the same value shape `s` and the same degree |
+| Static type       | Value shape `(n,) + s`, with $n$ the number of entries                                                    |
+| Raises            | `ValueError` if a requirement fails                                                                       |
+
+A matrix is a `Tensor` of `Tensor`s. A `Tensor` of differential forms is an
+array-valued differential form, so the new axis is an axis of the value shape
+and never a slot.
 
 A value shape may contain the extent 0, for example the value shape `(0,)` of
 the coordinate function of `RD(0)`. `Tensor` cannot build an expression with
@@ -1192,14 +1244,12 @@ See also: [Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative),
 A concrete subclass of `AbstractExpression` that selects one component of a
 tensor-valued expression.
 
-`Indexed(expression, indices)` stores:
-
-- The expression, an `AbstractExpression` of rank $r$.
-- The indices, a `tuple` of entries. Each entry is an `int`, an `Index`, a
-  `EllipsisIndex`, an `AbstractIndexValue` or a `GatheredIndex` (see
-  [Index](#index), [EllipsisIndex](#ellipsisindex),
-  [AbstractIndexValue](#abstractindexvalue) and
-  [GatheredIndex](#gatheredindex)). At most one entry is a `EllipsisIndex`.
+| `Indexed(expression, indices)` |                                                                                                                                                                                                                                                 |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free function                  | `indexed(expression, indices)`, with the overload `expression[indices]`                                                                                                                                                                         |
+| Properties                     | `expression`, of rank $r$, and `indices`, a `tuple` of `int`, [`Index`](#index), [`EllipsisIndex`](#ellipsisindex), [`AbstractIndexValue`](#abstractindexvalue) and [`GatheredIndex`](#gatheredindex) entries, with at most one `EllipsisIndex` |
+| Static type                    | Value shape `()`, and the free indices of the expression followed by the `Index` and `EllipsisIndex` entries and the free indices of the `GatheredIndex` entries, with each `Index` taken once                                                  |
+| Raises                         | See the table below                                                                                                                                                                                                                             |
 
 Indexing is full indexing only. Each `int`, each `Index`, each
 `AbstractIndexValue` and each `GatheredIndex` entry covers one axis, and a `EllipsisIndex` entry covers every axis that the other entries do not
@@ -1221,11 +1271,7 @@ same rule and the `tuple` of extents of the `EllipsisIndex`. So with a
 `EllipsisIndex` `r` that is free with the extents `(2, 3)` in an expression `B`
 of value shape `(2, 3)`, `B[r]` is the block diagonal of `B`.
 
-`Indexed(expression, indices)` derives the value shape `()`, the support of the
-expression, the degree of the expression, and the free indices of the
-expression followed by the `Index` and `EllipsisIndex` entries and the free
-indices of the `GatheredIndex` entries, with each `Index` taken once. The rank $r$
-counts the axes of the value shape only. The indices select axes of the value
+The rank $r$ counts the axes of the value shape only. The indices select axes of the value
 shape and never a slot, so the slots of a differential form cannot be indexed.
 
 `X[0]` and `A[0, 1]` are `indexed(X, (0,))` and `indexed(A, (0, 1))`.
@@ -1271,18 +1317,16 @@ See also: [ExteriorDerivative](#exteriorderivative).
 `ComponentTensor(expression, indices)` turns the indices into tensor axes.
 `IndexSum(expression, indices)` sums over the indices.
 
-Both store a scalar expression and a non-empty `tuple` of distinct `Index` and
-`EllipsisIndex` entries that are free in the expression. Construction raises
-`ValueError` if the expression is not scalar, if the indices are empty, if an
-index is repeated, or if an index is not free in the expression. Both derive the
-free indices of the expression without the bound indices, and the degree of the
-expression. The indices bind axes of the value shape, so a `ComponentTensor` of
-a differential form is an array-valued differential form, and an `IndexSum` of
-differential forms is a sum of differential forms of the same degree.
+| `ComponentTensor(expression, indices)`, `IndexSum(expression, indices)` |                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free function                                                           | `component_tensor(expression, indices)`, `index_sum(expression, indices)`                                                                                                                                         |
+| Properties                                                              | `expression`, a scalar, and `indices`, a non-empty `tuple` of distinct `Index` and `EllipsisIndex` entries free in the expression                                                                                 |
+| Static type                                                             | The free indices of the expression without the indices. `ComponentTensor` has the value shape of the extents of the indices in order, with every extent of a `EllipsisIndex`, and `IndexSum` the value shape `()` |
+| Raises                                                                  | `ValueError` if a requirement fails                                                                                                                                                                               |
 
-`ComponentTensor` derives the value shape from the extents of the indices, in
-the order of the indices. A `EllipsisIndex` contributes every extent in the
-`tuple` extent of the `EllipsisIndex`. `IndexSum` derives the value shape `()`.
+The indices bind axes of the value shape, so a `ComponentTensor` of a
+differential form is an array-valued differential form, and an `IndexSum` of
+differential forms is a sum of differential forms of the same degree.
 
 One `IndexSum` holds a whole contraction, such as the sum over both indices of
 `A[i, j] * B[i, j]`. A pass that chooses the order of summation then finds the
@@ -1374,12 +1418,12 @@ product](#transpose-and-matrix-product).
 See also: [Expanding pull-backs](#expanding-pull-backs), [Applying
 derivatives](#applying-derivatives).
 
-`Inverse` is a concrete subclass of `AbstractExpression` that stores one
-expression $A$. The free function `inverse(A)` returns `Inverse(A)`. $A$ must
-have value shape `(m, m)` and the degree `()`, or construction raises
-`ValueError`. `Inverse(A)` derives the value shape `(m, m)` and the degree
-`()`. The free indices, the support and the scalar type follow the general
-rule.
+| `Inverse(A)`  |                                                   |
+| ------------- | ------------------------------------------------- |
+| Free function | `inverse(A)`                                      |
+| Requires      | $A$ with value shape `(m, m)` and the degree `()` |
+| Static type   | Value shape `(m, m)`                              |
+| Raises        | `ValueError` if a requirement fails               |
 
 `Inverse(A)` is the inverse matrix $A^{-1}$. If $A$ is singular, `Inverse(A)`
 is undefined. Construction does not check that $A$ is invertible.
@@ -1592,8 +1636,13 @@ that maps each point of $P$ to the $n$-tuple of that point:
 
 $X : P \to R^n$, $X(p) = p$.
 
-`Coordinate(P)` stores the coordinate domain $P$ and derives the value shape
-`(n,)`, the support $P$ and the degree `()`. The coordinate function is a 0-form.
+| `Coordinate(P)` |                                                          |
+| --------------- | -------------------------------------------------------- |
+| Free function   | `coordinate(P)`                                          |
+| Properties      | `domain`, a coordinate domain or a decomposed domain $P$ |
+| Static type     | Value shape `(n,)`, real                                 |
+
+The coordinate function is a 0-form.
 The 1-forms $\mathrm{d}X_i$ come from the exterior derivative, not from
 `Coordinate`.
 
@@ -1635,11 +1684,16 @@ See also: [Applying derivatives](#applying-derivatives).
 A concrete subclass of `AbstractExpression` for the exterior derivative
 $\mathrm{d}\omega$ of a differential form $\omega$ on a coordinate domain $P$.
 
-`ExteriorDerivative(f, P)` stores $f$ and $P$ and derives the value shape of
-$f$ and the support $P$. The free indices and the scalar type follow the general
-rule. `ExteriorDerivative(f, P)` requires a valid pair $(f, P)$ (see
-[Valid pair](#valid-pair)). An $f$ with no support is a constant on
-$P$.
+| `ExteriorDerivative(f, P)` |                                                                     |
+| -------------------------- | ------------------------------------------------------------------- |
+| Free function              | `exterior_derivative(f, P)`                                         |
+| Properties                 | `expression` $f$ and `domain` $P$                                   |
+| Requires                   | A [valid pair](#valid-pair) $(f, P)$, and $f$ with at most one slot |
+| Static type                | The value shape of $f$                                              |
+| Raises                     | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails |
+| Evaluated by               | [`apply_derivatives`](#applying-derivatives)                        |
+
+An $f$ with no support is a constant on $P$.
 
 The exterior derivative acts on differential forms with at most one slot. If
 $f$ has the degree `()`, the exterior derivative has the degree `(1,)`. If $f$
@@ -1652,14 +1706,10 @@ The exterior derivative acts on each component of an array-valued differential
 form, so the axes of the value shape pass through unchanged.
 
 No fixed composition of the other node classes differentiates, so
-`ExteriorDerivative` is a node class. `ExteriorDerivative` is lazy.
-Construction does not evaluate the derivative. The core transformation
-`apply_derivatives` evaluates the derivative with linearity, the graded
-Leibniz rule
-$\mathrm{d}(\alpha \wedge \beta) = \mathrm{d}\alpha \wedge \beta + (-1)^k \alpha \wedge \mathrm{d}\beta$
-for a $k$-form $\alpha$, and $\mathrm{d}\mathrm{d}\omega = 0$ (see
-[Applying derivatives](#applying-derivatives)). The exterior derivative of
-`Coordinate(P)` is the vector-valued 1-form $\mathrm{d}X$ and remains.
+`ExteriorDerivative` is a node class. `ExteriorDerivative` is lazy, and
+[`apply_derivatives`](#applying-derivatives) evaluates the derivative. The
+exterior derivative of `Coordinate(P)` is the vector-valued 1-form
+$\mathrm{d}X$ and remains.
 
 Examples on $R^3$:
 
@@ -1714,14 +1764,17 @@ A concrete subclass of `AbstractExpression` that turns the first slot of a
 differential form into an axis of the value shape, with the coordinate frame of
 a coordinate domain $P$ of dimension $n$.
 
-`Components(f, P)` stores $f$ and $P$ and derives the support $P$. The free
-indices and the scalar type follow the general rule. `Components(f, P)`
-requires a valid pair $(f, P)$ (see [Valid pair](#valid-pair)),
-and $f$ must have at least one slot, or construction raises `ValueError`. For a
-[`DecomposedDomain`](#decomposeddomain) $P$, the frame is the coordinate frame
-of the ambient coordinate domain of $P$, which is a frame of $P$ only if $P$
-has the dimension of the ambient coordinate domain, or construction raises
-`ValueError`.
+| `Components(f, P)` |                                                                                                                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free function      | `components(f, P)`                                                                                                                                                      |
+| Properties         | `expression` $f$ and `domain` $P$ of dimension $n$                                                                                                                      |
+| Requires           | A [valid pair](#valid-pair) $(f, P)$, $f$ with at least one slot, and for a [`DecomposedDomain`](#decomposeddomain) $P$, the dimension of the ambient coordinate domain |
+| Static type        | Value shape `f.value_shape + (n,)`                                                                                                                                      |
+| Raises             | `ValueError` if a requirement fails                                                                                                                                     |
+| Evaluated by       | [`expand_components`](#expanding-components)                                                                                                                            |
+
+For a decomposed domain $P$, the frame is the coordinate frame of the ambient
+coordinate domain of $P$, which is a frame of $P$ only for the same dimension.
 
 With $\partial_j$ the coordinate vector fields of $P$, dual to the coordinate
 1-forms $\mathrm{d}X_j$, the entry $j$ of the new axis is the interior product
@@ -1731,8 +1784,7 @@ $$
 \mathrm{Components}(f, P)_j(v_2, \dots, v_k) = f(\partial_j, v_2, \dots, v_k).
 $$
 
-`Components(f, P)` derives the value shape `f.value_shape + (n,)`. If the
-first slot of $f$ has the degree $k > 1$, the first slot of the result has the
+If the first slot of $f$ has the degree $k > 1$, the first slot of the result has the
 degree $k - 1$. If the first slot of $f$ has the degree 1, the result does not
 have that slot. For example, the degree `(1,)` gives `()`, the degree `(2,)`
 gives `(1,)`, and the degree `(1, 1)` gives `(1,)`.
@@ -1824,19 +1876,19 @@ $$
 with the Lebesgue measure $\mathrm{d}X$ on $P$. For $n = 0$, the top form is a
 0-form, and the integral is the value of $f$ at the single point of $R^0$.
 
-`Integral(f, P)` requires a valid pair $(f, P)$ (see
-[Valid pair](#valid-pair)) with $P$ an `AbstractCoordinateDomain`, and $f$
-must have the degree `(n,)`, or the degree `()` for $n = 0$, or construction
-raises `TypeError` for $P$ or `ValueError` for $f$. An integral over a
-decomposed domain is a sum of integrals over the reference cells (see
-[Integral over a decomposed domain](#integral-over-a-decomposed-domain)).
+| `Integral(f, P)` |                                                                                          |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| Free function    | `integral(f, P)`                                                                         |
+| Properties       | `expression` $f$ and `domain` $P$, an `AbstractCoordinateDomain` of dimension $n$        |
+| Requires         | A [valid pair](#valid-pair) $(f, P)$, with $f$ of the degree `(n,)`, or `()` for $n = 0$ |
+| Static type      | The value shape and the free indices of $f$                                              |
+| Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                      |
 
-`Integral(f, P)` stores $f$ and $P$ and derives the value shape, the free
-indices and the scalar type of $f$, and the degree `()`. `Integral(f, P)` has
-no support. An array-valued differential form integrates component by component.
-
-`Integral` is lazy. Construction does not evaluate the integral. A later pass
-might evaluate the integral, for example by quadrature.
+An array-valued differential form integrates component by component. An
+integral over a decomposed domain is a sum of integrals over the reference
+cells (see [Integral over a decomposed
+domain](#integral-over-a-decomposed-domain)). `Integral` is lazy, and a later
+pass might evaluate the integral, for example by quadrature.
 
 Note that an `Integral` is an expression, so integrals can be added,
 multiplied and used wherever an expression is accepted.
@@ -1883,41 +1935,30 @@ Requires: [Domains](#domains),
 See also: [PullBack](#pullback), [Example: an affinely mapped
 triangle](#example-an-affinely-mapped-triangle).
 
-A concrete subclass of `Base`.
+A concrete subclass of `Base` for a domain $D$, the image of a parameter
+domain $P$ under a parameterisation $\psi$ into an ambient coordinate domain
+$Q$.
 
-The domain $D$ = `ParameterisedDomain(P, psi, Q)` stores:
+| `ParameterisedDomain(P, psi, Q)` |                                                                                                                                                                                                                                 |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free function                    | `parameterised_domain(P, psi, Q)`                                                                                                                                                                                               |
+| Properties                       | `parameter_domain` $P$, an `AbstractCoordinateDomain` of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractCoordinateDomain` or a [`DecomposedDomain`](#decomposeddomain)                         |
+| Requires                         | A [valid pair](#valid-pair) $(\psi, P)$, $\psi$ real with value shape `(n,)` for the dimension $n$ of $Q$, or of the ambient coordinate domain of a decomposed $Q$, the degree `()` and the argument spaces `()`, and $k \le n$ |
+| Static type                      | `free_indices`, the free indices of $\psi$                                                                                                                                                                                      |
+| Raises                           | `TypeError` for $Q$, and `ValueError` if another requirement fails                                                                                                                                                              |
 
-- The parameter domain $P$, an `AbstractCoordinateDomain`, returned by the
-  property `parameter_domain`. The dimension $k$ of $P$ is the topological
-  dimension of $D$.
-- The parameterisation $\psi$, an `AbstractExpression` on $P$ with value shape
-  `(n,)`, the degree `()` and the argument spaces `()`, returned by the
-  property `parameterisation`. The parameterisation $\psi$ is a real
-  expression on $P$, or is a constant with no support. The parameterisation $\psi$ maps each point of $P$ to a point of
-  $Q$, and the image $\psi(P)$ is $D$.
-- The ambient coordinate domain $Q$, an `AbstractCoordinateDomain`, returned by
-  the property `ambient_domain`. The coordinates of $Q$ name the points of $D$.
-  The dimension $n$ of $Q$ is the geometric dimension of $D$.
+$\psi$ maps each point of $P$ to a point of $Q$, and the image $\psi(P)$ is
+$D$. The coordinates of $Q$ name the points of $D$. The 'topological dimension'
+of $D$ is $k$, `D.parameter_domain.dimension`, and the 'geometric dimension' is
+$n$, `D.ambient_domain.dimension`. Construction does not check that $\psi(P)$
+lies in $Q$.
 
-The 'geometric dimension' is `D.ambient_domain.dimension`, and the 'topological
-dimension' is `D.parameter_domain.dimension`.
-
-The parameterisation $\psi$ may have free indices. Then $D$ is a family of
-domains, with one domain for each value of the free indices. $D$ derives the
-free indices of $\psi$, returned by the property `free_indices`. For example,
-with an array `x` of value shape `(m, n)` and indices `i` and `k`,
+A $\psi$ with free indices makes $D$ a family of domains, with one domain for
+each value of the free indices. For example, with an array `x` of value shape
+`(m, n)` and indices `i` and `k`,
 `parameterised_domain(RD(0), component_tensor(x[i, k], (k,)), RD(n))` is a
 family of $m$ points in `RD(n)`. A family of domains writes a set of points
 once, such as the points of a quadrature rule.
-
-`ParameterisedDomain(P, psi, Q)` requires a valid pair $(\psi, P)$ (see
-[Valid pair](#valid-pair)). Construction raises `TypeError` if $Q$ is neither an
-`AbstractCoordinateDomain` nor a [`DecomposedDomain`](#decomposeddomain).
-Construction raises `ValueError` if $\psi$ does not have value shape `(n,)`
-with $n$ the dimension of $Q$, or of the ambient coordinate domain of a
-decomposed domain $Q$, if $\psi$ does not have the degree `()`, if $\psi$ is
-complex, or if $k$ is greater than the dimension of $Q$. Construction does not
-check that $\psi(P)$ lies in $Q$.
 
 $Q$ is usually `RD(n)`. A domain in a smaller $Q$, such as an edge of the unit
 triangle in the unit triangle, or a cell of a decomposed domain in the
@@ -2022,16 +2063,17 @@ A concrete subclass of `AbstractExpression` for the pull-back $\psi^* f$ of a
 differential form $f$ on $Q$ by the parameterisation $\psi$ of a domain $D$,
 with $P$ the parameter domain and $Q$ the ambient coordinate domain of $D$.
 
-`PullBack(f, D)` stores $f$ and $D$ and derives the value shape of $f$, the
-degree of $f$ and the support $P$. The free indices are the free indices of
-$f$ followed by the free indices of $D$, with each `Index` taken once. An
-`Index` that is free in both $f$ and $D$ must have the same extent in both, or
-construction raises `ValueError`. The scalar type follows the general rule.
-The second operand is a domain, not an expression, because a
-domain states $Q$. Construction raises `TypeError` if $D$ is neither a
-`ParameterisedDomain` nor a [`SideMap`](#restriction). `PullBack(f, D)`
-requires a valid pair $(f, Q)$ (see [Valid pair](#valid-pair)). The pull-back
-by a `SideMap` is a [restriction](#restriction).
+| `PullBack(f, D)` |                                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| Free function    | `pull_back(f, D)`                                                                                          |
+| Properties       | `expression` $f$, and `domain` $D$, a `ParameterisedDomain` or a [`SideMap`](#restriction)                 |
+| Requires         | A [valid pair](#valid-pair) $(f, Q)$, and an equal extent for an `Index` free in both $f$ and $D$          |
+| Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
+| Raises           | `TypeError` for $D$, and `ValueError` if another requirement fails                                         |
+| Evaluated by     | [`expand_pull_backs`](#expanding-pull-backs)                                                               |
+
+The second operand is a domain, not an expression, because a domain states
+$Q$. The pull-back by a `SideMap` is a [restriction](#restriction).
 
 For a 0-form $f$, the pull-back is the composition $f \circ \psi$, the
 expression on $P$ with the value $f(\psi(p))$ at each point $p$ of $P$. For a
@@ -2048,16 +2090,10 @@ frame of $Q$. A slot with a degree greater
 than the dimension of $P$ gives the zero form, so a 2-form pulled back to a
 curve, and a 1-form pulled back to a point, are zero.
 
-`PullBack` is lazy. The core transformation `expand_pull_backs` moves a
-`PullBack` towards the leaves, because the pull-back commutes with pointwise
-operations, with the wedge product and with the exterior derivative, and
-replaces `PullBack(Coordinate(Q), D)` by $\psi$ (see
-[Expanding pull-backs](#expanding-pull-backs)). A `PullBack` of a downstream
-terminal or of a [`Function`](#function) remains, and the external library that
-supplies the terminal, or the space of the function, evaluates the terminal at
-$\psi(p)$ and transforms the slots. A `PullBack` of a
-constant by a family of domains also remains, if a free index of the family is
-not free in the constant.
+`PullBack` is lazy, and [`expand_pull_backs`](#expanding-pull-backs)
+evaluates the pull-back. A `PullBack` of a downstream terminal or of a
+[`Function`](#function) remains, and the library of the terminal evaluates the
+terminal at $\psi(p)$ and transforms the slots.
 
 A domain $E$ in the parameter domain of $D$ has the image $\psi(E)$, a subset
 of $D$. The image is the parameterised domain with the parameterisation
@@ -2513,19 +2549,18 @@ See also: [Reference cell](#reference-cell),
 [AbstractTopology](#abstracttopology).
 
 An abstract subclass of the base object `AbstractCellType` for the type of a
-cell, with numbered vertices and numbered facets. A concrete `AbstractCellType`
-is a subclass outside the core and provides:
+cell, with numbered vertices and numbered facets.
 
-- `dimension`, an `int` $n \ge 0$.
-- `num_vertices`, an `int` $m \ge 1$.
-- `facets`, a `tuple` of pairs of a facet type $F$ and a `tuple` of vertex
-  numbers of the cell type, one for each vertex of $F$, in the order of the
-  vertices of $F$. $F$ is an `AbstractCellType` of dimension $n - 1$. A cell
-  type of dimension 0 is a point, with one vertex and no facets.
+| `AbstractCellType` |                                                                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provides           | `dimension`, an `int` $n \ge 0$, `num_vertices`, an `int` $m \ge 1$, and `facets`, a `tuple` of pairs of a facet type and the vertex numbers of the facet |
+| Derived            | `facet_types`, each distinct facet type with the number of facets of that type, in the order of the first facet of each type                              |
+| Defined by         | A subclass outside the core, such as `Simplex`                                                                                                            |
 
-The derived property `facet_types` pairs each distinct facet type $F$ of the
-facets with the number of facets with the facet type $F$, in the order of the
-first facet of each facet type.
+A facet is a pair of a facet type $F$, an `AbstractCellType` of dimension
+$n - 1$, and a `tuple` of vertex numbers of the cell type, one for each vertex
+of $F$, in the order of the vertices of $F$. A cell type of dimension 0 is a
+point, with one vertex and no facets.
 
 A sub-entity of a cell type $C$ is $C$, or a sub-entity of a facet of $C$. A
 sub-entity is identified by the set of the vertex numbers of $C$ of the
@@ -2594,27 +2629,28 @@ See also: [Sides of a topology](#sides-of-a-topology),
 [DecomposedDomain](#decomposeddomain).
 
 An abstract subclass of the base object `AbstractTopology` for a set of cells
-of given cell types, without coordinates. A concrete `AbstractTopology` is a
-subclass outside the core, such as a subclass for the topology of the mesh of
-a solver, and provides:
+of given cell types, without coordinates.
 
-- `cell_types`, a `tuple` of `AbstractCellType`s $C_0, C_1, \dots$ of the same
-  dimension, one for each group of cells. A cell of type $j$, a cell of group
-  $j$, has the vertices and the facets of $C_j$, numbered as in $C_j$. The cell
-  types are distinct, except that two groups with different sides may have the
-  same cell type (see [Sides of a topology](#sides-of-a-topology)).
-- `num_cells`, a `tuple` with the number of cells of each type, so the length
-  of the `tuple` is known during construction. Entry $j$ is an `int`, such as
-  for a macro element, or an `AbstractExtent`, such as for the mesh of a
-  solver. For the mesh of a solver, the solver loops over the cells, and a
+| `AbstractTopology` |                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| Provides           | `cell_types`, `num_cells` and `sides`, and `side_tables(i, side)` for a topology with sides |
+| Derived            | `dimension`, the dimension of the cell types                                                |
+| Defined by         | A subclass outside the core, such as the topology of the mesh of a solver                   |
+
+- `cell_types` is a `tuple` of `AbstractCellType`s $C_0, C_1, \dots$ of the
+  same dimension, one for each group of cells. A cell of type $j$, a cell of
+  group $j$, has the vertices and the facets of $C_j$, numbered as in $C_j$.
+  The cell types are distinct, except that two groups with different sides may
+  have the same cell type (see [Sides of a topology](#sides-of-a-topology)).
+- `num_cells` is a `tuple` with the number of cells of each type, an `int`,
+  such as for a macro element, or an `AbstractExtent`, such as for the mesh of
+  a solver. For the mesh of a solver, the solver loops over the cells, and a
   kernel computes the terms of one cell.
-- `sides`, `()`, or the sides described in
-  [Sides of a topology](#sides-of-a-topology).
+- `sides` is `()`, or the sides of [Sides of a topology](#sides-of-a-topology).
 
-The derived property `dimension` is the dimension of the cell types. Two
-topologies are the same topology only if the two topologies are equal as base
-objects, so a concrete `AbstractTopology` stores the arguments that identify
-the topology, such as a label.
+Two topologies are the same topology only if the two topologies are equal as
+base objects, so a concrete `AbstractTopology` stores the arguments that
+identify the topology, such as a label.
 
 The free function `cell_index(T, j)` returns the derived index
 `Index(("uflx.cell_index", T, j, 0))` for the cells of type $j$, numbered from
@@ -2843,16 +2879,15 @@ See also: [AbstractTopology](#abstracttopology).
 
 An abstract subclass of `AbstractCoordinateDomain` and of `AbstractCellType`
 for a reference cell `AbstractReferenceCell`, a cell type whose vertices have
-coordinates. A concrete reference cell is a subclass outside the core, such as
-[`ReferenceSimplex`](#example-the-unit-simplex-as-a-reference-cell). A
-concrete `AbstractReferenceCell` $K$ of dimension $n$ with $m$ vertices also
-provides:
+coordinates.
 
-- `vertices`, a constant expression with no support and value shape `(m, n)`.
-  Row $v$ holds the coordinates of vertex $v$.
+| `AbstractReferenceCell` |                                                                                                                                                            |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provides                | `vertices`, a constant expression with no support and value shape `(m, n)`, with row $v$ the coordinates of vertex $v$, for dimension $n$ and $m$ vertices |
+| Requires                | Facet types that are `AbstractReferenceCell`s                                                                                                              |
+| Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](#example-the-unit-simplex-as-a-reference-cell)                                                   |
 
-The facet types of $K$ must be `AbstractReferenceCell`s. The boundary of $K$ is the
-union of the facets.
+The boundary of a reference cell is the union of the facets.
 
 The free function `affine_map(F, points)` returns the affine map on a reference
 cell $F$ of dimension $k$ that sends vertex $v$ of $F$ to row $v$ of `points`
@@ -2943,23 +2978,17 @@ See also: [Sides of a topology](#sides-of-a-topology),
 [AbstractFunctionSpace](#abstractfunctionspace).
 
 A concrete subclass of `Base` for a domain that is the union of the cells of a
-topology. `DecomposedDomain(T, coordinates, Q)` stores, returned by the
-properties `topology`, `coordinates` and `ambient_domain`:
+topology.
 
-- The topology $T$, whose cell types are reference cells.
-- The coordinates, a `tuple` with one entry $x_j$ for each cell type $j$. $x_j$
-  is a real expression on the reference cell $K_j$ of type $j$, with the degree
-  `()`, the value shape `(n,)`, the argument spaces `()`, and the free index `cell_index(T, j)` or no
-  cell index. The value $x_c$ of $x_j$ for the cell $c$ maps $K_j$ onto the
-  cell $c$.
-- The ambient coordinate domain $Q$ of dimension $n$, usually `RD(n)`.
+| `DecomposedDomain(T, coordinates, Q)` |                                                                                                                                                                                                                            |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free function                         | `decomposed_domain(T, coordinates, Q)`                                                                                                                                                                                     |
+| Properties                            | `topology` $T$, whose cell types are reference cells, `coordinates`, one $x_j$ for each cell type $j$, and `ambient_domain` $Q$ of dimension $n$, usually `RD(n)`                                                          |
+| Requires                              | Each $x_j$ real, on the reference cell $K_j$ of type $j$, with value shape `(n,)`, the degree `()`, the argument spaces `()`, and the free index `cell_index(T, j)` or no cell index, and the dimension of $T$ at most $n$ |
+| Derived                               | `dimension`, the dimension of $T$                                                                                                                                                                                          |
+| Raises                                | `ValueError` if a requirement fails                                                                                                                                                                                        |
 
-`DecomposedDomain(T, coordinates, Q)` derives the property `dimension`, the
-dimension of $T$. Construction raises `ValueError` if a cell type of $T$ is not
-a reference cell, if the number of coordinates differs from the number of cell
-types, if an $x_j$ breaks the rules above, or if the dimension of $T$ is
-greater than $n$. The free function `decomposed_domain(T, coordinates, Q)`
-returns `DecomposedDomain(T, coordinates, Q)`.
+The value $x_c$ of $x_j$ for the cell $c$ maps $K_j$ onto the cell $c$.
 
 A decomposed domain $D$ is a domain, not a coordinate domain. The points of $D$
 are named by the coordinates of $Q$, and $D$ may have a lower dimension than
@@ -3067,16 +3096,18 @@ the difference is the jump. A cell of $S$ with more than two sides, such as an
 edge where three triangles meet, has no jump, and a form uses the restriction
 from each side.
 
-A concrete subclass of the base object for the map of the cells of a decomposed
-domain $E$ with the topology $S$ into $D$ through the side $s$,
-`SideMap(D, E, s)`, stores $E$, $D$ and the side name, returned by the
-properties `parameter_domain`, `ambient_domain` and `side`. Every group of $S$
-must have a side named $s$ with the topology of $D$, or construction raises
-`ValueError`. `pull_back(f, SideMap(D, E, s))` is an expression with the
-support $E$, the restriction of $f$ to all the groups at once. The pull-back of
-it by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)`, and
-`expand_pull_backs` rewrites the first into the second. The free function
-`side_map(D, E, s)` returns `SideMap(D, E, s)`.
+| `SideMap(D, E, s)` |                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| Free function      | `side_map(D, E, s)`                                                                                     |
+| Properties         | `ambient_domain` $D$, `parameter_domain` $E$, a decomposed domain with the topology $S$, and `side` $s$ |
+| Requires           | Every group of $S$ has a side named $s$ with the topology of $D$                                        |
+| Raises             | `ValueError` if a requirement fails                                                                     |
+
+A `SideMap` maps the cells of $E$ into $D$ through the side $s$.
+`pull_back(f, SideMap(D, E, s))` is an expression with the support $E$, the
+restriction of $f$ to all the groups at once. The pull-back of it by
+`cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)` (see [Expanding
+pull-backs](#expanding-pull-backs)).
 
 The free function `side_domain(D, S)` returns the decomposed domain of $S$ with
 the geometry of the first side of each group,
@@ -3189,18 +3220,14 @@ Requires: [DecomposedDomain](#decomposeddomain), [Degree](#degree),
 See also: [PullBack](#pullback).
 
 An abstract subclass of the base object `AbstractFunctionSpace` for a space of
-functions on a decomposed domain. A concrete `AbstractFunctionSpace` $V$ is a subclass
-outside the core, such as a subclass for the finite element spaces of Basix,
-and provides:
+functions on a decomposed domain.
 
-- `domain`, a [`DecomposedDomain`](#decomposeddomain) $D$, or `None` for a
-  space whose functions do not depend on a domain.
-- `degree`, a degree (see [Degree](#degree)).
-- `value_shape`, a `tuple` of extents.
-- `scalar_type`, real or complex.
-- `argument_spaces`, the [argument spaces](#argument-spaces) of the functions
-  in $V$, `()` for a space of fields on a domain.
-- `dual`, the dual space of $V$, for a $V$ with the argument spaces `()`.
+| `AbstractFunctionSpace` |                                                                                                                                                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provides                | `domain`, a [`DecomposedDomain`](#decomposeddomain) $D$ or `None`, `degree`, `value_shape`, `scalar_type`, `argument_spaces`, `()` for a space of fields, and `dual`, for a space with the argument spaces `()` |
+| Defined by              | A subclass outside the core, such as a subclass for the finite element spaces of Basix                                                                                                                          |
+
+A space with the domain `None` has functions that do not depend on a domain.
 
 The dual space of $V$ is a space of linear forms on $V$, linear and not
 antilinear, with the domain `None`,
@@ -3279,16 +3306,18 @@ See also: [PullBack](#pullback), [Restriction](#restriction),
 [Variational forms](#variational-forms).
 
 A concrete subclass of `AbstractExpression` for a function, a member of a
-function space. `Function(V, label)` stores the space $V$ and a label, returned
-by the properties `space` and `label`. The label is a `str` or a `tuple`, with
-the rules of the label of an [Index](#index), and identifies the function, so
-two functions are the same only if the spaces and the labels are equal.
-`Function(V, label)` derives the value shape, the degree, the scalar type and
-the argument spaces of $V$, the support `V.domain`, or no support for the
-domain `None`, and no free indices. So a function in a dual space is a linear
-form, such as a known load. Construction raises `TypeError` if $V$ is not an
-`AbstractFunctionSpace` or the label is neither a `str` nor a `tuple`. The free
-function `function(V, label)` returns `Function(V, label)`.
+function space.
+
+| `Function(V, label)` |                                                                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Free function        | `function(V, label)`                                                                                                         |
+| Properties           | `space` $V$, an `AbstractFunctionSpace`, and `label`, a `str` or a `tuple` with the rules of the label of an [Index](#index) |
+| Static type          | The value shape of $V$, and no free indices                                                                                  |
+| Raises               | `TypeError` if a requirement fails                                                                                           |
+
+The label identifies the function, so two functions are the same only if the
+spaces and the labels are equal. A function in a dual space is a linear form,
+such as a known load.
 
 A `Function` is a terminal. The core does not represent the values of a
 function. The pull-back of a function by a cell of the domain is evaluated by
@@ -3330,32 +3359,12 @@ space of each slot of a form, and `()` for an expression that is not a form.
 The arity is the number of argument spaces. A functional has the arity 0, a
 linear form the arity 1 and a bilinear form the arity 2.
 
-Unless a node class states otherwise, every edge of a node that is an
-expression must have the argument spaces `()`, or construction raises
-`ValueError`, and the node has the argument spaces `()`. The following node
-classes state otherwise:
-
-- `Sum` and `Tensor`: the operands have the same argument spaces, and the node
-  has the argument spaces of the operands.
-- `Product` and `TensorProduct`: the argument spaces of the first operand
-  followed by those of the second operand, so a product with a functional
-  scales a form, and the product of two linear forms is a bilinear form. A pass
-  that swaps the operands of a `Product` by graded commutativity also swaps
-  the slots.
-- `Division`: the argument spaces of the numerator.
-- `Conjugate`, `Indexed`, `ComponentTensor`, `IndexSum`, `ExteriorDerivative`,
-  `Components`, `Integral` and `PullBack`: the argument spaces of the
-  expression that the node transforms.
-- `Form` and `Action`: see [Form](#form) and
-  [Action](#action).
-
-So a node passes on the argument spaces of an operand in which the node is
-linear or antilinear, and an operand in which the node is neither has the
-argument spaces `()`.
-
-A leaf class states the argument spaces as part of the contract of the class,
-as the degree. A `Zero` stores the argument spaces, and a `Function` has the
-argument spaces of the space of the function.
+A node passes on the argument spaces of an operand in which the node is linear
+or antilinear, and every other operand must have the argument spaces `()`, or
+construction raises `ValueError`. The [static type
+table](#appendix-static-type-table) gives the rule of each node class. A leaf
+class states the argument spaces as part of the contract of the class, as the
+degree.
 
 The argument spaces are static, as the value shape and the degree are, so a
 form with a wrong arity is rejected during construction. The arity and the
@@ -3366,36 +3375,23 @@ and the arity counts the functions that a form binds.
 
 Requires: [Argument spaces](#argument-spaces), [Function](#function).
 
-See also: [Action](#action).
+| `Form(expression, arguments)` |                                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Free function                 | `form(expression, arguments)`                                                                                                        |
+| Properties                    | `expression`, an expression with the argument spaces `()`, and `arguments`, a `tuple` of distinct [functions](#function)             |
+| Static type                   | That of the expression, with the argument spaces of the arguments in order.                                                                |
+| Raises                        | `TypeError` for an argument that is not a `Function`, and `ValueError` for a repeated argument or an expression with argument spaces |
 
-A concrete subclass of `AbstractExpression` that binds functions.
-`Form(expression, arguments)` stores an expression with the argument spaces
-`()` and a `tuple` of distinct [functions](#function), the arguments, returned
-by the properties `expression` and `arguments`. `Form(expression, arguments)`
-derives the value shape, the degree, the support, the free indices and the
-scalar type of the expression, and the argument spaces, the spaces of the
-arguments in order. The support of the expression replaces the rule of
-[Support](#support), so a form of integrals has no support, although the
-arguments have a support. The slot number of an argument is the position of the
-argument in the `tuple`. Construction raises `TypeError` for an argument that
-is not a `Function`, and `ValueError` for a repeated argument or for an
-expression with argument spaces other than `()`. The free function
-`form(expression, arguments)` returns `Form(expression, arguments)`.
+A form binds the arguments, as a `ComponentTensor` binds indices. The slot of an
+argument is the position in `arguments`. The expression is linear or
+antilinear in each argument, as the expression makes it, such as antilinear
+under a `Conjugate`. Construction does not check the linearity. Every other
+function in the expression is fixed, so one function may be an argument of one
+form and fixed in another.
 
-The expression is linear or antilinear in each argument, as the expression
-makes it, such as antilinear in an argument under a `Conjugate`. The slot
-number does not decide the linearity. Construction does not check the
-linearity, which a pass may check.
-Every other function in the expression is fixed, so the same function may be
-an argument of one form and fixed in another, such as when a derivative with
-respect to a function adds an argument.
-
-The arguments are bound, as the indices of a `ComponentTensor` are. If a pass
-substitutes an expression that contains a bound argument into the expression of
-a form, the pass renames the bound argument to
-`Function(V, ("uflx.rename", node, m))`, with $V$ the space of the argument,
-`node` the form before the substitution and `m` the slot, as for the indices of
-[Passes](#passes).
+The support is that of the expression, so a form of integrals has no support,
+although the arguments have one. A substitution renames a bound argument to avoid capture, as for indices (see
+[Passes](#passes)).
 
 > Legacy note: In legacy UFL, the arguments of a form are the test functions
 > and the trial functions in the integrand, with the slot numbers of the
@@ -3403,108 +3399,95 @@ a form, the pass renames the bound argument to
 > number, the form states the arguments, and a functional is any expression
 > with the argument spaces `()`.
 
-Examples, with `u = function(V, "u")`, `v = function(V, "v")` and a fixed
-function `w = function(V, "w")` on a decomposed domain `D`, and an expression
-`a` that is linear in `u` and in `v` and contains `w`:
+Examples, with `u`, `v` and a fixed `w` in a space `V` on `D`, and an
+expression `a` linear in `u` and `v`:
 
-- `form(a, (v, u))` is a bilinear form with `v` in slot 0 and `u` in slot 1,
-  and the argument spaces `(V, V)`. `w` is fixed.
-- `form(a, (v,))` is a linear form in `v`, with `u` and `w` fixed, such as a
-  residual.
-- `form(a, (v, u)) + form(a, (v,))` raises `ValueError`, because the argument
-  spaces differ.
+- `form(a, (v, u))` is a bilinear form with the argument spaces `(V, V)`.
+- `form(a, (v,))` is a linear form in `v`, such as a residual.
+- `form(a, (v, u)) + form(a, (v,))` raises `ValueError`.
 
 ### Action
 
 Requires: [Form](#form).
 
-A concrete subclass of `AbstractExpression` that gives an expression to one
-slot of a form. `Action(f, slot, g)` stores an expression $f$ with more than
-`slot` argument spaces, a slot number and an expression $g$, returned by the
-properties `form`, `slot` and `argument`. $g$ must have the value shape, the
-free indices, the degree, the scalar type, the support and the argument spaces
-of a function in the space of the slot, or construction raises `ValueError`. So a slot of a dual
-space takes a linear form. `Action(f, slot, g)` derives the value shape, the
-degree, the support, the free indices and the scalar type of $f$, and the
-argument spaces of $f$ without the slot. The support of $f$ replaces the rule of
-[Support](#support), because $g$ is in a slot. The free function
-`action(f, slot, g)` returns `Action(f, slot, g)`.
+| `Action(f, slot, g)` |                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Free function        | `action(f, slot, g)`                                                                                                |
+| Properties           | `form`, an expression with more than `slot` argument spaces, `slot`, and `argument`, the expression $g$             |
+| Requires             | $g$ has the static type of a function in the space of the slot                                                      |
+| Static type          | That of $f$, with the argument spaces of $f$ without the slot.                                                     |
+| Raises               | `ValueError` if a requirement fails                                                                                 |
+| Evaluated by         | [`apply_actions`](#applying-actions)                                                                                |
 
-`Action` is lazy. A pass replaces `Action(Form(e, arguments), slot, g)`
-by the form of the other arguments over $e$ with the argument of the slot
-replaced by $g$, or by $e$ with the argument replaced by $g$ for a form of
-arity 1. The substitution avoids capture (see [Form](#form)). The pass evaluates inner
-actions first. For any other node, the pass moves the action into
-every operand of a `Sum` or a `Tensor`, and into the operand that carries the
-slot otherwise, with the slot counted within the operand for a `Product` or a
-`TensorProduct`. An action on a leaf, such as on a function in a dual space,
-remains, and the library of the leaf evaluates the action.
+`Action` is lazy, and an action on a leaf, such as a function in a dual
+space, remains for the library of the leaf.
 
-The legacy UFL operations on forms are actions and rebindings:
+Legacy UFL operations are actions and rebindings:
 
-- The legacy action of a bilinear form on a function `w`, on the last argument, is
-  `action(f, 1, w)`.
-- The adjoint of a bilinear form `form(e, (v, u))` is
-  `form(conjugate(e), (u, v))`, and `form(e, (u, v))` for a real scalar type.
+- The action on the last argument of a bilinear form is `action(f, 1, w)`.
+- The adjoint of `form(e, (v, u))` is `form(conjugate(e), (u, v))`.
 - A derivative with respect to a function is expected to add an argument.
 
-Examples, with `a`, `u`, `v` and `w` of the [Form](#form) examples:
+Examples, with `a`, `u`, `v` and `w` of the [Form](#form) examples and
+`l = function(V.dual, "l")`:
 
-- `action(form(a, (v, u)), 1, w)` is a linear form in `v`, which a later pass
-  evaluates to `form(b, (v,))`, with `b` the expression `a` with `u`
-  replaced by `w`.
-- `action(action(form(a, (v, u)), 1, w), 0, w)` is a functional, an expression
-  with the argument spaces `()`.
-- With `l = function(V.dual, "l")`, `action(l, 0, w)` is the pairing of `l`
-  with `w`, with no support, which the library of `V.dual` evaluates.
-- `action(form(a, (v, u)) + 2 * form(a, (v, u)), 1, w)` is moved into both
+- `action(form(a, (v, u)), 1, w)` is a linear form in `v`, which a pass
+  evaluates to `form(b, (v,))`, with `b` the expression `a` with `u` replaced
+  by `w`.
+- `action(action(form(a, (v, u)), 1, w), 0, w)` is a functional.
+- `action(l, 0, w)` is the pairing of `l` with `w`, with no support.
+- `action(form(a, (v, u)) + 2 * form(a, (v, u)), 1, w)` moves into both
   operands of the sum, and into the form of the product.
 
 ## Core transformations
 
 Requires: [Passes](#passes), [PullBack](#pullback),
-[ExteriorDerivative](#exteriorderivative), [Components](#components).
+[ExteriorDerivative](#exteriorderivative), [Components](#components),
+[Action](#action).
 
-The core has three transformations, each a pass (see
-[Passes](#passes)) that
-evaluates one lazy node class:
+The core has four transformations, each a pass (see [Passes](#passes)) that
+evaluates one lazy node class. Each has a default for the node classes of the
+operand, and a table of the operand classes with a rule of their own. The
+[pass table](#appendix-pass-table) gives every node class for every core
+transformation.
 
-| Core transformation                             | Evaluates            |
-| ----------------------------------------------- | -------------------- |
-| [`expand_pull_backs(f)`](#expanding-pull-backs) | `PullBack`           |
-| [`apply_derivatives(f)`](#applying-derivatives) | `ExteriorDerivative` |
-| [`expand_components(f)`](#expanding-components) | `Components`         |
+| Core transformation                             | Evaluates            | Default                                                     |
+| ----------------------------------------------- | -------------------- | ----------------------------------------------------------- |
+| [`expand_pull_backs(f)`](#expanding-pull-backs) | `PullBack`           | Commutes with every node class                              |
+| [`apply_derivatives(f)`](#applying-derivatives) | `ExteriorDerivative` | Linear for the linear node classes, the chain rule for `()` |
+| [`expand_components(f)`](#expanding-components) | `Components`         | Linear for the linear node classes                          |
+| [`apply_actions(f)`](#applying-actions)         | `Action`             | Moves into the operand that carries the slot                |
 
-A rule of a core transformation rewrites a node of the evaluated class to a
-mathematically equal expression of node classes of the core, and never
-simplifies. The rewritten expression has the free indices of the node, with
-the same extents, possibly in another order, and the argument spaces of the
-node. The rule dispatches on the class
-of the operand and moves the evaluated node towards the leaves. The pass rewrites inner nodes first, until
-no rule applies. A node without a rule is rebuilt on the rewritten edges.
-In a `Form`, the evaluated node moves only into the expression, and in an
+A rule rewrites a node of the evaluated class to a mathematically equal
+expression of node classes of the core, and never simplifies. The rewritten
+expression has the free indices of the node, with the same extents, possibly
+in another order, and the argument spaces of the node. The rule dispatches on
+the class of the operand and moves the evaluated node towards the leaves. The
+pass rewrites inner nodes first, until no rule applies. A node without a rule
+is rebuilt on the rewritten edges, and the evaluated node remains on it.
+
+In a `Form`, an evaluated node moves only into the expression, and in an
 `Action` only into the form $f$, because the arguments and $g$ are in a slot,
 not on the support. For example,
 $\psi^* \mathrm{action}(f, s, g) = \mathrm{action}(\psi^* f, s, g)$,
 because the action replaces $\psi^* u$ in $\psi^* f$ by $\psi^* g$.
 
-Each core transformation rewrites only the evaluated class, so the three run
-separately or together. Evaluation runs the three together until no rule
+Each core transformation rewrites only the evaluated class, so the four run
+separately or together. Evaluation runs the four together until no rule
 applies. A `PullBack` moves inside an `ExteriorDerivative`, and never the
-reverse, so evaluation terminates. A downstream lazy node class may join
-evaluation if the rules of the class rewrite only that class, move the node
-towards the leaves, and never reverse a core rule, as moving an
-`ExteriorDerivative` inside a `PullBack` would.
+reverse, and an action removes an `Action`, so evaluation terminates. A
+downstream lazy node class may join evaluation if the rules of the class
+rewrite only that class, move the node towards the leaves, and never reverse a
+core rule, as moving an `ExteriorDerivative` inside a `PullBack` would.
 
 A terminal is a `Coordinate`, a [`Function`](#function), or an expression with a
-support whose class is a leaf class of a downstream library. After evaluation, every `PullBack`,
-`ExteriorDerivative` and `Components` applies to an expression that contains a
-downstream terminal, except the coordinate frame $\mathrm{d}X$ and a
-`PullBack` of a constant by a family of domains (see
-[Expanding pull-backs](#expanding-pull-backs)). An expression
-without a downstream terminal evaluates to a sum of products and tensor
-products of 0-forms and the coordinate 1-forms $\mathrm{d}X_i$, inside any
-`Form` and `Action`, which the core transformations do not evaluate.
+support whose class is a leaf class of a downstream library. After evaluation,
+every `PullBack`, `ExteriorDerivative`, `Components` and `Action` applies to an
+expression that contains a downstream terminal, except the coordinate frame
+$\mathrm{d}X$ and a `PullBack` of a constant by a family of domains. An
+expression without a downstream terminal evaluates to a sum of products and
+tensor products of 0-forms and the coordinate 1-forms $\mathrm{d}X_i$, inside
+any `Form`.
 
 ### Expanding pull-backs
 
@@ -3514,39 +3497,42 @@ Requires: [Core transformations](#core-transformations), [PullBack](#pullback),
 
 For a domain $D$ with the parameterisation $\psi$, the parameter domain $P$
 and the ambient coordinate domain $Q$, $\psi^*$ commutes with every node class
-of the core except `Components`. Five rules are specific. The rule for an
-expression with no support comes before commuting, so a pull-back never moves
-inside an `Integral`. The integral has no support, and the integrand stays on
-the coordinate domain of the integral.
+of the core, with these rules:
 
-- $\psi^* X = \psi$ for `Coordinate(Q)`.
-- $\psi^* c = c$ for an expression $c$ with no support, if every free index of
-  $D$ is free in $c$. Otherwise `PullBack(c, D)` remains, because
-  `PullBack(c, D)` has the free indices of the family $D$ and $c$ does not.
-  For example, with the family of quadrature points `xs` of
-  [Example: quadrature](#example-quadrature),
-  `index_sum(integral(pull_back(Integer(1), xs), RD(0)), (i,))` counts the
-  points, and $c$ alone has no free index `i` to sum over.
-- $\psi^* \mathrm{d}f = \mathrm{d}(\psi^* f)$, with the exterior derivative on
-  $P$.
-- $\psi^* \psi_2^* g = (\psi_2 \circ \psi)^* g$ for `PullBack(g, D2)`. The
-  composition is the pull-back by the image of $D$ under `D2` (see
-  [PullBack](#pullback)),
-  `PullBack(g, parameterised_domain(P, pull_back(D2.parameterisation, D), D2.ambient_domain))`.
-  So every `PullBack` that remains applies to `g` directly, such as a function
-  on a physical cell pulled back to a facet of the reference cell.
-- For $P$ and $Q$ of the same dimension $n$, with the Jacobian matrix
-  $J$ = `components(exterior_derivative(D.parameterisation, P), P)` and
-  $K$ = `inverse(J)`, the entry $j$ of the last axis of
-  `PullBack(Components(f, Q), D)` is
-  $\sum_i K_{ij} \, \mathrm{Components}(\psi^* f, P)_i$, because $\psi$ has a
-  local inverse near each point where $J$ is invertible, and the pull-back of
-  the coordinate vector field $\partial_j$ of $Q$ by $\psi$ is
-  $\sum_i K_{ij} \, \partial_i$. For $P$ of dimension $k < n$, the same
-  composition with the pseudo-inverse of $J$ in place of $K$ (see
-  [Inverse](#inverse)) is the array of the components of the part of $f$ that
-  is tangent to $D$, not the array of the components of $f$. So for $k < n$,
-  `PullBack(Components(f, Q), D)` remains.
+| Operand                                                   | Rewrite of $\psi^*$ applied to the operand                                           |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| An expression $c$ with no support                         | $c$, if every free index of $D$ is free in $c$, and otherwise remains                |
+| `Coordinate(Q)`                                           | $\psi$                                                                               |
+| `ExteriorDerivative(f, Q)`                                | $\mathrm{d}(\psi^* f)$, with the exterior derivative on $P$                          |
+| `PullBack(g, D2)`                                         | The pull-back of $g$ by the image of $D$ under `D2`                                  |
+| `PullBack(f, SideMap(D2, E, s))`, for `cell_domain(E, i)` | `pull_back(pull_back(f, B_i), A_i)` (see [Restriction](#restriction))                |
+| `Components(f, Q)`, $P$ and $Q$ of dimension $n$          | $\sum_i K_{ij} \, \mathrm{Components}(\psi^* f, P)_i$ for entry $j$ of the last axis |
+| `Components(f, Q)`, $P$ of dimension $k < n$              | Remains                                                                              |
+| `Function` or a downstream terminal                       | Remains, for the library of the terminal                                             |
+
+The rule for an expression with no support comes before commuting, so a
+pull-back never moves inside an `Integral`. The integral has no support, and
+the integrand stays on the coordinate domain of the integral. A pull-back of a
+constant by a family remains, because `PullBack(c, D)` has the free indices of
+the family $D$ and $c$ does not. For example, with the family of quadrature
+points `xs` of [Example: quadrature](#example-quadrature),
+`index_sum(integral(pull_back(Integer(1), xs), RD(0)), (i,))` counts the
+points.
+
+The image of $D$ under `D2` is
+`parameterised_domain(P, pull_back(D2.parameterisation, D), D2.ambient_domain)`
+(see [PullBack](#pullback)). So every `PullBack` that remains applies to `g`
+directly, such as a function on a physical cell pulled back to a facet of the
+reference cell.
+
+In the rule for `Components`, $J$ is
+`components(exterior_derivative(D.parameterisation, P), P)` and $K$ is
+`inverse(J)`. $\psi$ has a local inverse near each point where $J$ is
+invertible, and the pull-back of the coordinate vector field $\partial_j$ of
+$Q$ by $\psi$ is $\sum_i K_{ij} \, \partial_i$. For $k < n$, the same
+composition with the pseudo-inverse of $J$ (see [Inverse](#inverse)) is the
+array of the components of the part of $f$ tangent to $D$, not the array of
+the components of $f$, so the pull-back remains.
 
 ### Applying derivatives
 
@@ -3555,29 +3541,27 @@ Requires: [Core transformations](#core-transformations),
 [TensorProduct](#tensorproduct), [Zero](#zero), [Conjugate](#conjugate).
 
 The exterior derivative is linear for the linear node classes and follows the
-chain rule for the node classes of the degree `()`. Six rules are specific:
+chain rule for the node classes of the degree `()`, with these rules:
 
-- `Product` follows the graded Leibniz rule,
-  $\mathrm{d}(\alpha \wedge \beta) = \mathrm{d}\alpha \wedge \beta + (-1)^k \alpha \wedge \mathrm{d}\beta$
-  for a $k$-form $\alpha$. A `TensorProduct` under an exterior derivative has at
-  most one slot, so $\alpha \otimes \beta = \alpha \wedge \beta$, and the same
-  rule applies, written with `Product`. Written with `TensorProduct`, the two
-  terms would have different numbers of slots.
-- `Division` of a form $a$ by a 0-form $b$ follows
-  $\mathrm{d}(a / b) = \mathrm{d}a / b - (\mathrm{d}b \wedge a) / (b b)$.
-- `Inverse` follows $\mathrm{d}(A^{-1}) = -A^{-1} \, \mathrm{d}A \, A^{-1}$,
-  with the matrix products in the value shape and the wedge product of the
-  0-form $A^{-1}$ with the 1-form $\mathrm{d}A$.
-- `Absolute` follows
-  $\mathrm{d}|a| = (\bar{a} \, \mathrm{d}a + a \, \overline{\mathrm{d}a}) / (2 |a|)$,
-  because $|a|$ is not complex differentiable. For a real $a$, the rule is the
-  chain rule.
-- $\mathrm{d}\mathrm{d}\omega = 0$. The exterior derivative of an expression
-  with no support, or of a `PullBack` of an expression with no support, is
-  `Zero`, with the value shape, the free indices and the argument spaces of
-  the operand and the degree raised by one.
-- $\mathrm{d}\bar{\omega} = \overline{\mathrm{d}\omega}$, because the
-  exterior derivative is real.
+| Operand                                                                     | Rewrite of $\mathrm{d}$ applied to the operand                                                                     |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `Product` $\alpha \wedge \beta$, with $\alpha$ a $k$-form                   | $\mathrm{d}\alpha \wedge \beta + (-1)^k \alpha \wedge \mathrm{d}\beta$                                             |
+| `TensorProduct` $\alpha \otimes \beta$                                      | The rule of `Product`, written with `Product`                                                                      |
+| `Division` $a / b$                                                          | $\mathrm{d}a / b - (\mathrm{d}b \wedge a) / (b b)$                                                                 |
+| `Inverse` $A^{-1}$                                                          | $-A^{-1} \, \mathrm{d}A \, A^{-1}$                                                                                 |
+| `Absolute` $\lvert a \rvert$                                                | $(\bar{a} \, \mathrm{d}a + a \, \overline{\mathrm{d}a}) / (2 \lvert a \rvert)$                                     |
+| `Conjugate` $\bar{\omega}$                                                  | $\overline{\mathrm{d}\omega}$                                                                                      |
+| `ExteriorDerivative`, an expression with no support, or a `PullBack` of one | `Zero`, with the value shape, the free indices and the argument spaces of the operand and the degree raised by one |
+| `Coordinate(P)`, `Function` or a downstream terminal                        | Remains                                                                                                            |
+
+A `TensorProduct` under an exterior derivative has at most one slot, so
+$\alpha \otimes \beta = \alpha \wedge \beta$. Written with `TensorProduct`,
+the two terms would have different numbers of slots. In the rule for
+`Inverse`, the matrix products are in the value shape, with the wedge product
+of the 0-form $A^{-1}$ with the 1-form $\mathrm{d}A$. `Absolute` is not
+complex differentiable, and for a real $a$ the rule is the chain rule. The
+rule for `Conjugate` holds because the exterior derivative is real. The
+exterior derivative of `Coordinate(P)` is the coordinate frame $\mathrm{d}X$.
 
 ### Expanding components
 
@@ -3586,23 +3570,40 @@ Requires: [Core transformations](#core-transformations),
 [Zero](#zero), [Conjugate](#conjugate).
 
 The interior product $\iota_j$ with $\partial_j$ is linear for the linear node
-classes, and the new axis stays the last axis of the value shape. Three rules
-are specific:
+classes, and the new axis stays the last axis of the value shape, with these
+rules:
 
-- `Product` follows the graded rule,
-  $\iota_j(\alpha \wedge \beta) = \iota_j\alpha \wedge \beta + (-1)^k \alpha \wedge \iota_j\beta$
-  for an $\alpha$ whose first slot has the degree $k$, and
-  $\iota_j(f \wedge \beta) = f \, \iota_j\beta$ for a 0-form $f$.
-  `TensorProduct` acts on the first slot only, so
-  $\iota_j(\alpha \otimes \beta) = (\iota_j\alpha) \otimes \beta$ if
-  $\alpha$ has a slot, and $\iota_j(f \otimes \beta) = f \, \iota_j\beta$
-  for a 0-form $f$.
-- $\iota_j \mathrm{d}X_i = \delta_{ij}$, so the components of `dX` are the
-  identity matrix, the `Tensor` of `Integer(1)` and `Integer(0)` entries, or
-  `Zero((0, 0), (), (), ())` for $n = 0$. The components of a `Zero` are a
-  `Zero` with the new value shape and degree.
-- $\iota_j \bar{\alpha} = \overline{\iota_j \alpha}$, because $\partial_j$ is
-  real.
+| Operand                                                                            | Rewrite of $\iota_j$ applied to the operand                                                                |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `Product` $\alpha \wedge \beta$, with the first slot of $\alpha$ of the degree $k$ | $\iota_j\alpha \wedge \beta + (-1)^k \alpha \wedge \iota_j\beta$, and $f \, \iota_j\beta$ for a 0-form $f$ |
+| `TensorProduct` $\alpha \otimes \beta$                                             | $(\iota_j\alpha) \otimes \beta$ if $\alpha$ has a slot, and $f \, \iota_j\beta$ for a 0-form $f$           |
+| $\mathrm{d}X_i$                                                                    | $\delta_{ij}$                                                                                              |
+| `Zero`                                                                             | `Zero` with the new value shape and degree                                                                 |
+| `Conjugate` $\bar{\alpha}$                                                         | $\overline{\iota_j \alpha}$                                                                                |
+| `Function` or a downstream terminal                                                | Remains                                                                                                    |
+
+The components of `dX` are the identity matrix, the `Tensor` of `Integer(1)`
+and `Integer(0)` entries, or `Zero((0, 0), (), (), ())` for $n = 0$. The rule
+for `Conjugate` holds because $\partial_j$ is real.
+
+### Applying actions
+
+Requires: [Core transformations](#core-transformations), [Action](#action),
+[Form](#form), [Passes](#passes).
+
+An action moves into the operand that carries the slot, with these rules:
+
+| Operand                                                  | Rewrite of `Action(f, slot, g)` with $f$ the operand                                                |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `Form(e, arguments)`                                     | $e$ with the argument of the slot replaced by $g$, in a `Form` of the other arguments if any remain |
+| `Sum`, `Tensor`                                          | The action of every operand                                                                         |
+| `Product`, `TensorProduct`                               | The action of the operand that carries the slot, with the slot counted within that operand          |
+| `Zero`                                                   | `Zero` with the argument spaces without the slot                                                    |
+| `Function` or a downstream leaf, such as in a dual space | Remains, for the library of the leaf                                                                |
+
+The substitution into a `Form` avoids capture (see [Passes](#passes)). The
+pass rewrites inner actions first, so an outer action meets an `Action` only on
+a leaf, and the outer action remains.
 
 ## Extending the core
 
@@ -3958,25 +3959,73 @@ rules in the section of the concrete class.
 | `Form`                                         | `expression`, `arguments`                                                                               | `argument_spaces`                                                                    |
 | `Action`                                       | `form`, `slot`, `argument`                                                                              | `argument_spaces`                                                                    |
 
-## Appendix: Degree table
+## Appendix: Static type table
 
-| Class                                    | Edges that are expressions must have                      | Degree of the node                            |
-| ---------------------------------------- | --------------------------------------------------------- | --------------------------------------------- |
-| `Integer`, `Float`, `ImaginaryUnit`      | No such edges                                             | `()`                                          |
-| `Zero`                                   | No such edges                                             | The stored degree                             |
-| `Sum`                                    | Equal degrees                                             | The degree of the operands                    |
-| `Product`                                | The degree `()`, or exactly one slot each                 | The slotwise sum (see [Product](#product))    |
-| `Power`, `Absolute`                      | The degree `()`                                           | `()`                                          |
-| `Division`                               | The degree `()` for the second operand                    | The degree of the first operand               |
-| `Conjugate`                              | Any degree                                                | The degree of the operand                     |
-| `TensorProduct`                          | Any degree                                                | The concatenated degrees                      |
-| `SquareRoot`, `Inverse`                  | The degree `()`                                           | `()`                                          |
-| `Tensor`                                 | Equal degrees                                             | The degree of the entries                     |
-| `Indexed`, `ComponentTensor`, `IndexSum` | Any degree                                                | The degree of the expression                  |
-| `Coordinate`                             | No such edges                                             | `()`                                          |
-| `Function`                               | No such edges                                             | The degree of the space                       |
-| `Form`, `Action`                         | Any degree                                                | The degree of the expression                  |
-| `ExteriorDerivative`                     | The degree `()` or `(k,)`                                 | `(1,)` for `()`, and `(k + 1,)` for `(k,)`    |
-| `Components`                             | At least one slot                                         | The first slot lowered by 1, and removed at 0 |
-| `Integral`                               | `(n,)` with $n$ the dimension of $P$, or `()` for $n = 0$ | `()`                                          |
-| `PullBack`                               | Any degree                                                | The degree of the expression                  |
+The degree and the argument spaces of each node class of the core. An operand
+not named in the argument spaces column must have the argument spaces `()`.
+
+| Class                                    | Edges that are expressions must have                      | Degree of the node                            | Argument spaces of the node                     |
+| ---------------------------------------- | --------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------- |
+| `Integer`, `Float`, `ImaginaryUnit`      | No such edges                                             | `()`                                          | `()`                                            |
+| `Zero`                                   | No such edges                                             | The stored degree                             | The stored argument spaces                      |
+| `Sum`                                    | Equal degrees                                             | The degree of the operands                    | Those of the operands, which must be equal      |
+| `Product`                                | The degree `()`, or exactly one slot each                 | The slotwise sum (see [Product](#product))    | Those of the operands, concatenated             |
+| `Power`, `Absolute`                      | The degree `()`                                           | `()`                                          | `()`                                            |
+| `Division`                               | The degree `()` for the second operand                    | The degree of the first operand               | Those of the first operand                      |
+| `Conjugate`                              | Any degree                                                | The degree of the operand                     | Those of the operand                            |
+| `TensorProduct`                          | Any degree                                                | The concatenated degrees                      | Those of the operands, concatenated             |
+| `SquareRoot`, `Inverse`                  | The degree `()`                                           | `()`                                          | `()`                                            |
+| `Tensor`                                 | Equal degrees                                             | The degree of the entries                     | Those of the entries, which must be equal       |
+| `Indexed`, `ComponentTensor`, `IndexSum` | Any degree                                                | The degree of the expression                  | Those of the expression                         |
+| `Coordinate`                             | No such edges                                             | `()`                                          | `()`                                            |
+| `Function`                               | No such edges                                             | The degree of the space                       | Those of the space                              |
+| `Form`                                   | Any degree                                                | The degree of the expression                  | The spaces of the arguments                     |
+| `Action`                                 | Any degree                                                | The degree of the form                        | Those of the form without the slot              |
+| `ExteriorDerivative`                     | The degree `()` or `(k,)`                                 | `(1,)` for `()`, and `(k + 1,)` for `(k,)`    | Those of the operand                            |
+| `Components`                             | At least one slot                                         | The first slot lowered by 1, and removed at 0 | Those of the operand                            |
+| `Integral`                               | `(n,)` with $n$ the dimension of $P$, or `()` for $n = 0$ | `()`                                          | Those of the integrand                          |
+| `PullBack`                               | Any degree                                                | The degree of the expression                  | Those of the expression                         |
+
+The support and the scalar type of the node classes that differ from the
+default rules of [Support](#support) and [Scalar type](#scalar-type):
+
+| Class                                            | Support of the node                | Scalar type of the node           |
+| ------------------------------------------------ | ---------------------------------- | --------------------------------- |
+| `ImaginaryUnit`                                  | None                               | Complex                           |
+| `Zero`                                           | None                               | Real                              |
+| `Absolute`                                       | The default                        | Real                              |
+| `Coordinate`, `ExteriorDerivative`, `Components` | The coordinate domain $P$          | The default                       |
+| `Integral`                                       | None                               | The default                       |
+| `PullBack`                                       | The parameter domain of the domain | The default                       |
+| `Function`                                       | The domain of the space, or none   | The scalar type of the space      |
+| `Form`                                           | The support of the expression      | The scalar type of the expression |
+| `Action`                                         | The support of the form            | The scalar type of the form       |
+
+## Appendix: Pass table
+
+What each core transformation does with each node class as the operand of the
+evaluated node. "In" moves the evaluated node into the operands, by linearity
+or commuting. "Chain" is the chain rule. "Rule" is a rule of the transformation. "Slot" moves the
+evaluated node into the expression or the form only. "Remains" keeps the
+evaluated node on the operand. "—" cannot occur, because the static type rules
+out the pair.
+
+| Class                                    | `expand_pull_backs` | `apply_derivatives` | `expand_components` | `apply_actions` |
+| ---------------------------------------- | ------------------- | ------------------- | ------------------- | --------------- |
+| `Integer`, `Float`, `ImaginaryUnit`      | Rule                | Rule                | —                   | —               |
+| `Zero`                                   | Rule                | Rule                | Rule                | Rule            |
+| `Sum`, `Tensor`                          | In                  | In                  | In                  | In              |
+| `Product`, `TensorProduct`               | In                  | Rule                | Rule                | In              |
+| `Division`                               | In                  | Rule                | In                  | In              |
+| `Power`, `SquareRoot`                    | In                  | Chain               | —                   | —               |
+| `Absolute`, `Inverse`                    | In                  | Rule                | —                   | —               |
+| `Conjugate`                              | In                  | Rule                | Rule                | In              |
+| `Indexed`, `ComponentTensor`, `IndexSum` | In                  | In                  | In                  | In              |
+| `Coordinate`                             | Rule                | Remains             | —                   | —               |
+| `Function`                               | Remains             | Remains             | Remains             | Remains         |
+| `Form`                                   | Slot                | Slot                | Slot                | Rule            |
+| `Action`                                 | Slot                | Slot                | Slot                | Remains         |
+| `ExteriorDerivative`                     | Rule                | Rule                | Rule                | In              |
+| `Components`                             | Rule                | Remains             | Remains             | In              |
+| `Integral`                               | Rule                | Rule                | —                   | In              |
+| `PullBack`                               | Rule                | Rule                | Remains             | In              |
