@@ -636,6 +636,13 @@ Example:
   an expression `weights` of value shape `(r,)` raises `ValueError` in
   `weights[i] * points[i, 0]`, because the index `i` has two extents.
 
+> Open: ragged and indirect indexing. An axis whose length depends on another
+> index, such as the quadrature points of each cut cell, cannot be written. A
+> dependent extent, an `AbstractExtent` whose label contains the other index,
+> would cover it. Reading the data of a mesh-chosen entity, such as the cells
+> around a vertex, also needs a gathered index, an index value read from an
+> integer array.
+
 ### AbstractIndexValue
 
 Requires: [The base object `Base`](#the-base-object-base), [Extents](#extents).
@@ -2372,6 +2379,9 @@ xs = parameterised_domain(RD(0), component_tensor(points[i, k], (k,)), T)
 
 a = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
 ```
+
+For all the cells of a topology, see the open item on ragged indexing in
+[Extents](#extents).
 
 ### Example: the centroid of a triangle
 
