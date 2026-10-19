@@ -109,7 +109,6 @@ fully LLM generated content are explicitly marked.
   - [Integral over a decomposed domain](#integral-over-a-decomposed-domain)
 - [Function spaces](#function-spaces)
   - [AbstractFunctionSpace](#abstractfunctionspace)
-  - [ConstantSpace](#constantspace)
 - [Variational forms](#variational-forms)
 - [Core transformations](#core-transformations)
   - [Expanding pull-backs](#expanding-pull-backs)
@@ -2529,9 +2528,11 @@ of given cell types, without coordinates. A concrete `AbstractTopology` is a
 subclass outside the core, such as a subclass for the topology of the mesh of
 a solver, and provides:
 
-- `cell_types`, a `tuple` of distinct `AbstractCellType`s $C_0, C_1, \dots$ of
-  the same dimension. A cell of type $j$ has the vertices and the facets of
-  $C_j$, numbered as in $C_j$.
+- `cell_types`, a `tuple` of `AbstractCellType`s $C_0, C_1, \dots$ of the same
+  dimension, one for each group of cells. A cell of type $j$, a cell of group
+  $j$, has the vertices and the facets of $C_j$, numbered as in $C_j$. The cell
+  types are distinct, except that two groups with different sides may have the
+  same cell type (see [Sides of a topology](#sides-of-a-topology)).
 - `num_cells`, a `tuple` with the number of cells of each type, so the length
   of the `tuple` is known during construction. Entry $j$ is an `int`, such as
   for a macro element, or an `AbstractExtent`, such as for the mesh of a
@@ -2579,7 +2580,9 @@ See also: [Restriction](#restriction).
 A topology $S$ whose cells are sub-entities of cells of other topologies has
 sides. `S.sides` has one entry for each cell type of $S$. Entry $i$ is a
 `tuple` of one or more sides with distinct names, each a triple `(name, T, j)`
-of a side name, a `str`, a topology $T$ and a cell type number $j$ of $T$. Each
+of a side name, a `str`, a topology $T$ and a cell type number $j$ of $T$. Two
+entries of the same cell type of $S$ differ, so a group of cells of $S$ is
+fixed by the cell type and the sides together. Each
 cell of type $i$ of $S$ is seen from one cell of type $j$ of $T$ on each side,
 and is a whole sub-entity of that cell, with cell type $i$ of $S$ the cell type
 of the sub-entity. The sub-entity may be the cell itself, with the vertices in
@@ -2652,6 +2655,14 @@ Examples, with a topology `T` of triangles with the cell types `(K,)`,
   vertex one period to the right.
 - For a surface mesh `U` of triangles in $R^3$, a topology of the edges where
   three triangles meet has the sides `((("a", U, 0), ("b", U, 0), ("c", U, 0)),)`.
+- For a topology `M` of triangles and quadrilaterals with the cell types
+  `(Kt, Kq)`, a topology of all the facets shared by two cells has three
+  groups of the cell type `I`, with the cell types `(I, I, I)` and the sides
+  `((("+", M, 0), ("-", M, 0)), (("+", M, 0), ("-", M, 1)), (("+", M, 1), ("-", M, 1)))`,
+  for the facets between two triangles, between a triangle and a
+  quadrilateral, and between two quadrilaterals. An integral over the topology
+  has one term for each group, and a form compiler may generate one kernel for
+  each group or one kernel for all of them.
 - For a topology `U3` of prisms with the cell types `(W,)`, a topology of the
   boundary facets has the cell types `(K, Q)`, with the quadrilateral cell type
   `Q`, and the sides `((("inside", U3, 0),), (("inside", U3, 0),))`.
@@ -2670,7 +2681,8 @@ each cell of type $j$, as vertex numbers of the topology. Local vertex $i$ of
 cell $c$ of type $j$ is the vertex `cells[j][c][i]` of the topology. A
 `StaticTopology` with sides has one topology on every side, uses the vertex
 numbers of that topology, and pairs each vertex with the same vertex. For a
-cell seen from two cells, the cell with the lower number is on the first side.
+cell seen from two cells of the same group, the cell with the lower number is
+on the first side, and otherwise the group of each side decides.
 For a sub-entity of lower dimension than a facet, the cell with the lowest
 number that contains the sub-entity is chosen.
 
@@ -2875,6 +2887,8 @@ requires:
 - Cell type $j$ of $T$ and cell type $i$ of $S$ are reference cells.
 - $f$ has the support `T.cell_types[j]` or no support, and if the free indices
   of $f$ contain `cell_index(T, j)`, the extent `T.num_cells[j]`.
+- $f$ has no free index `cell_index(T, k)` with $k \ne j$, which would be the
+  cells of another group of $T$, even of the same cell type.
 
 Otherwise construction raises `ValueError`. `Restriction(f, S, i, side)`
 derives the value shape, the degree and the scalar type of $f$, and the support
@@ -2884,11 +2898,10 @@ $f$ without `cell_index(T, j)`, followed by `cell_index(S, i)` with the extent
 `S.num_cells[i]`. A support needs `cell_index(S, i)` even without
 `cell_index(T, j)`, because $\iota_s$ differs between the cells of $S$, such as
 between the local facets. Otherwise the free indices are the free indices of
-$f$. So
-the restriction is again an expression on the cells of $S$, and restricts to a topology
-with a side of the topology $S$. The pull-back of a 0-form with no support is the
-0-form, so the restriction of a function in a
-[ConstantSpace](#constantspace) has the value of the function.
+$f$. So the restriction is again an expression on the cells of $S$, and
+restricts to a topology with a side of the topology $S$. The pull-back of a
+0-form with no support is the 0-form, so the restriction of a constant is the
+constant.
 
 The pull-back gives the trace of each degree. The restriction of a 0-form is
 the value on $e$, and the restriction of the 1-form $\mathrm{d}u$ keeps only
@@ -3042,6 +3055,22 @@ D = decomposed_domain(square, (x,), RD(2))
   surface of dimension 2 in `RD(3)`, and `components(du, D)` raises
   `ValueError`, because the frame of `RD(3)` is not a frame of the surface.
 
+For a topology `M` of triangles and quadrilaterals, with the cell types
+`(Kt, Kq)`, the coordinates have one entry for each cell type, and a function
+`u` on `D` is one expression, pulled back through each cell type:
+
+```python
+D = decomposed_domain(M, (x_tri, x_quad), RD(2))
+
+# On Kt with the free index cell_index(M, 0), and on Kq with cell_index(M, 1).
+u_tri = pull_back(u, cell_domain(D, 0))
+u_quad = pull_back(u, cell_domain(D, 1))
+
+# On a topology S of the edges between triangles and quadrilaterals, with the
+# sides (("tri", M, 0), ("quad", M, 1)), both restrictions are on the interval.
+jump = restriction(u, S, 0, "tri") - restriction(u, S, 0, "quad")
+```
+
 ### Integral over a decomposed domain
 
 Requires: [Integral](#integral),
@@ -3073,12 +3102,28 @@ and provides:
 
 A function in $V$ is an expression with the support $D$ and with the degree,
 the value shape and the scalar type of $V$, defined through the cells of $D$
-(see [DecomposedDomain](#decomposeddomain)). For the domain `None`, a function
-in $V$ is a single array (see [ConstantSpace](#constantspace)). The core does not represent the
-polynomials, the degrees of freedom or the basis of $V$, which belong to the
+(see [DecomposedDomain](#decomposeddomain)). The concrete subclass defines the
+pull-back of a function in $V$ by `cell_domain(D, j)` for every cell type $j$
+of $D$, such as with one finite element for each cell type. The core does not
+represent the polynomials, the degrees of freedom or the basis of $V$, which belong to the
 concrete subclass. Two spaces are the same space only if the two spaces are
 equal as base objects, so a concrete `AbstractFunctionSpace` stores the
 arguments that identify the space, such as the finite element.
+
+A space with the domain `None` is a space of constants. A function in the space
+is an expression with no support and the degree `()`, a single array with the
+value shape and the scalar type of $V$. The degree is `()`, because an
+expression with no support and a non-empty degree is a `Zero` (see
+[Expressions as differential forms](#expressions-as-differential-forms)), and
+a constant $k$-form is a constant array times the coordinate $k$-forms of a
+domain. The integrals of a form decide the cells on which a constant acts. A
+space of constants is needed for a constant unknown, such as a Lagrange
+multiplier, because an argument comes from a space. Constant data needs no
+space, because an expression with no support, such as a literal or an array
+that a kernel receives, is already a constant.
+
+> Legacy note: The legacy UFL `Real` space is a space of constants, and the
+> legacy UFL `Constant` is constant data.
 
 The degree and the value shape fix how a function in $V$ transforms between a
 cell and the reference cell. The pull-back by a cell transforms each slot and
@@ -3114,50 +3159,6 @@ Examples, with a decomposed domain `D` of `ReferenceSimplex(2)` cells in
   UFL contracted with the volume form.
 - The discontinuous Lagrange space of polynomial degree 0 on `D`, as densities,
   has the degree `(2,)`.
-
-### ConstantSpace
-
-Requires: [AbstractFunctionSpace](#abstractfunctionspace),
-[Extents](#extents).
-
-See also: [Restriction](#restriction).
-
-A concrete subclass of `AbstractFunctionSpace` for a space of constants,
-`ConstantSpace(value_shape, scalar_type)`. The space stores the value shape, a
-`tuple` of extents, and the scalar type, `"real"` or `"complex"`, and derives
-the domain `None` and the degree `()`. Construction raises `TypeError` if the
-value shape is not a `tuple` of extents, and `ValueError` if the scalar type is
-neither `"real"` nor `"complex"`. The free function
-`constant_space(value_shape, scalar_type)` returns `ConstantSpace(value_shape,
-scalar_type)`.
-
-A function in a `ConstantSpace` is an expression with no support, without a
-cell index, with the degree `()` and with the value shape and the scalar type
-of the space, so a single array. The space has no domain, because the value of
-a function in the space depends on no point. The integrals of a form decide
-the cells on which a constant acts. The degree is `()`, because an expression
-with no support and a non-empty degree is a `Zero` (see
-[Expressions as differential forms](#expressions-as-differential-forms)), and
-a constant $k$-form is a constant array times the coordinate $k$-forms of a
-domain. The components of a constant 0-form with a non-empty value shape are in the frame
-of the ambient coordinate domain, as for the vector Lagrange space of
-[AbstractFunctionSpace](#abstractfunctionspace).
-
-> Legacy note: The legacy UFL `Constant` is a function in a `ConstantSpace`,
-> and an unknown in the legacy UFL `Real` space, such as a Lagrange multiplier,
-> is also a function in a `ConstantSpace`. The scalar type of a
-> `ConstantSpace` may be complex, so UFLx does not call the space `Real`.
-
-Examples:
-
-- A viscosity $\mu$ is a function in `constant_space((), "real")`.
-- With a topology `F` of fluid triangles and a topology `S` of solid triangles,
-  both with the sides `((("inside", T, 0),),)`, two functions `mu_f` and
-  `mu_s` in `constant_space((), "real")` are the viscosities of the fluid and
-  of the solid. An integral over `F` uses `mu_f`, and an integral over `S` uses
-  `mu_s`.
-- The Lagrange multiplier of a constraint on the mean value of a function is
-  an unknown in `constant_space((), "real")`.
 
 ## Variational forms
 
@@ -3566,7 +3567,6 @@ Base
 # Function spaces
 Base
 └── AbstractFunctionSpace                 degree and value shape of functions
-    └── ConstantSpace                     single arrays, no topology
 ```
 
 ## Appendix: Free functions
@@ -3605,7 +3605,6 @@ Base
 | Reference cells and restriction | [`restriction(f, S, i, side)`](#restriction)                    |                               | `f: AbstractExpression`, `S: AbstractTopology`, `i: int`, `side: str`      | `Restriction`, of a pull-back for `f` on a `DecomposedDomain` |
 | Decomposed domains              | [`decomposed_domain(T, coordinates, Q)`](#decomposeddomain)     |                               | `T: AbstractTopology`, `coordinates: tuple`, `Q: AbstractCoordinateDomain` | `DecomposedDomain`                                            |
 |                                 | [`cell_domain(D, j)`](#decomposeddomain)                        |                               | `D: DecomposedDomain`, `j: int`                                            | `ParameterisedDomain` of the cells of type `j`                |
-| Function spaces                 | [`constant_space(value_shape, scalar_type)`](#constantspace)    |                               | `value_shape: tuple`, `scalar_type: str`                                   | `ConstantSpace`                                               |
 
 The value-shape and other constraints on the arguments are stated in the section
 of each free function. A free function and an operator overload accept only the
@@ -3649,7 +3648,6 @@ rules in the section of the concrete class.
 | `Restriction`                                  | `expression`, `topology`, `cell_type_number`, `side`                         |                                                                   |
 | `DecomposedDomain`                             | `topology`, `coordinates`, `ambient_domain`                                  | `dimension`                                                       |
 | `AbstractFunctionSpace`                        | `domain`, `degree`, `value_shape`, `scalar_type`, in every concrete subclass |                                                                   |
-| `ConstantSpace`                                | `value_shape`, `scalar_type`                                                 | `domain`, `degree`                                                |
 
 ## Appendix: Degree table
 
