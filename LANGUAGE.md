@@ -530,7 +530,8 @@ triangle with vertices $(0, 0)$, $(1, 0)$ and $(0, 1)$.
 Requires: [The base object `Base`](#the-base-object-base).
 
 Every `AbstractExpression` derives the value shape, the free indices, the
-scalar type, the support and the degree of the expression. The value shape is
+scalar type, the support, the degree and the [argument
+spaces](#argument-spaces) of the expression. The value shape is
 a `tuple` of [extents](#extents), one for each axis. An expression with value
 shape `()` is a scalar.
 
@@ -825,9 +826,12 @@ See also: [Zero](#zero).
 An expression denotes an array-valued differential form, a multi-form, on the
 support of the expression, with the degree of the expression. A 0-form is an
 array-valued function. An expression with no support and the degree `()` denotes a
-single array. A leaf with a non-empty degree has a support, except `Zero`. So an
+single array. An expression with argument spaces other than `()` denotes a
+multilinear map from the argument spaces to such differential forms (see
+[Variational forms](#variational-forms)). A leaf with a non-empty degree has a
+support, except `Zero`. So an
 expression with no support and a non-empty degree is built from `Zero`s, such as
-`Zero((), (), (1,)) + Zero((), (), (1,))`, and denotes the zero form of that
+`Zero((), (), (1,), ()) + Zero((), (), (1,), ())`, and denotes the zero form of that
 degree on every support.
 
 ### Node class or free function
@@ -848,7 +852,8 @@ EllipsisIndex](#tensor-algebra-with-ellipsisindex),
 A concept must be a free function, not a node class, if the free function can
 build the concept as one fixed composition of existing node classes for each
 static type of the arguments. The static type of an expression is the value
-shape, the free indices, the scalar type, the support and the degree, and the
+shape, the free indices, the scalar type, the support, the degree and the
+argument spaces, and the
 static type of a coordinate domain is the dimension. A free function may read
 the static type to choose the composition, and never reads the structure of
 an argument, such as the class, the edges or the values. Otherwise the concept
@@ -920,18 +925,21 @@ indices](#free-indices), [Support](#support), [Degree](#degree).
 
 See also: [Indexed](#indexed), [Applying derivatives](#applying-derivatives).
 
-`Zero(value_shape, free_indices, degree)` is the zero with the given value
-shape, free indices and degree, and has no support. The value shape, the free
+`Zero(value_shape, free_indices, degree, argument_spaces)` is the zero with the
+given value shape, free indices, degree and [argument
+spaces](#argument-spaces), and has no support. The value shape, the free
 indices and the degree have the forms of [Extents](#extents), [Free
-indices](#free-indices) and [Degree](#degree). Construction raises `TypeError`
+indices](#free-indices) and [Degree](#degree), and the argument spaces are a
+`tuple` of `AbstractFunctionSpace`s. Construction raises `TypeError`
 for an argument of another form, and `ValueError` for a negative extent, an
 index that occurs twice, or a slot degree less than 1. `Zero` is real. `apply_derivatives` produces
 `Zero` (see [Applying derivatives](#applying-derivatives)). No fixed
 composition gives a zero with free indices or with a non-empty degree, because
 `Integer(0) * a[i]` has edges to `a`, and $0 \, \mathrm{d}x$ has edges to
 $\mathrm{d}x$. So `Zero` is a node class. For example,
-`Zero((), (), (1,))` is the zero 1-form, and `Zero((3,), (), ())` is the zero
-array of value shape `(3,)`.
+`Zero((), (), (1,), ())` is the zero 1-form, `Zero((3,), (), (), ())` is the
+zero array of value shape `(3,)`, and `Zero((), (), (), (V,))` is the zero
+linear form on a space `V`.
 
 ### Arithmetic
 
@@ -1456,13 +1464,18 @@ class AbstractExpression(Base, ABC):
 
     @property
     @abstractmethod
-    def support(self) -> AbstractCoordinateDomain | None:
+    def support(self) -> AbstractCoordinateDomain | DecomposedDomain | None:
         """The support of the expression, or None for an expression with no support."""
 
     @property
     @abstractmethod
     def degree(self) -> tuple[int, ...]:
         """The differential form degree of each slot, with every entry at least 1."""
+
+    @property
+    @abstractmethod
+    def argument_spaces(self) -> tuple[AbstractFunctionSpace, ...]:
+        """The space of each slot of a form, or () for an expression that is not a form."""
 
     # Operator overloading must be in the class.
     def __add__(self, other: AbstractExpression) -> AbstractExpression:
@@ -1878,9 +1891,9 @@ The domain $D$ = `ParameterisedDomain(P, psi, Q)` stores:
   property `parameter_domain`. The dimension $k$ of $P$ is the topological
   dimension of $D$.
 - The parameterisation $\psi$, an `AbstractExpression` on $P$ with value shape
-  `(n,)` and the degree `()`, returned by the property `parameterisation`. The
-  parameterisation $\psi$ is a real expression on $P$, or is a constant with
-  no support. The parameterisation $\psi$ maps each point of $P$ to a point of
+  `(n,)`, the degree `()` and the argument spaces `()`, returned by the
+  property `parameterisation`. The parameterisation $\psi$ is a real
+  expression on $P$, or is a constant with no support. The parameterisation $\psi$ maps each point of $P$ to a point of
   $Q$, and the image $\psi(P)$ is $D$.
 - The ambient coordinate domain $Q$, an `AbstractCoordinateDomain`, returned by
   the property `ambient_domain`. The coordinates of $Q$ name the points of $D$.
@@ -2898,7 +2911,7 @@ class ReferenceSimplex(Simplex, AbstractReferenceCell):
     def vertices(self) -> AbstractExpression:
         n = self.dimension
         if n == 0:
-            return Zero((1, 0), (), ())
+            return Zero((1, 0), (), (), ())
         return tensor(
             tuple(
                 tensor(tuple(Integer(1 if k == v - 1 else 0) for k in range(n)))
@@ -2936,7 +2949,7 @@ properties `topology`, `coordinates` and `ambient_domain`:
 - The topology $T$, whose cell types are reference cells.
 - The coordinates, a `tuple` with one entry $x_j$ for each cell type $j$. $x_j$
   is a real expression on the reference cell $K_j$ of type $j$, with the degree
-  `()`, the value shape `(n,)`, and the free index `cell_index(T, j)` or no
+  `()`, the value shape `(n,)`, the argument spaces `()`, and the free index `cell_index(T, j)` or no
   cell index. The value $x_c$ of $x_j$ for the cell $c$ maps $K_j$ onto the
   cell $c$.
 - The ambient coordinate domain $Q$ of dimension $n$, usually `RD(n)`.
@@ -3159,8 +3172,9 @@ scatter-add.
 
 A kernel depends on no particular mesh. Before compiling a kernel, a pass
 replaces the topologies, the tables, the arrays and the extents of a mesh by
-placeholders numbered in the order of appearance, so one compiled kernel
-serves every mesh with the same cell types and spaces.
+placeholders numbered in the order of appearance, and renames the arguments of
+each form by the slot, so one compiled kernel serves every mesh with the same
+cell types and spaces, and every naming of the arguments.
 
 ## Function spaces
 
@@ -3184,6 +3198,15 @@ and provides:
 - `degree`, a degree (see [Degree](#degree)).
 - `value_shape`, a `tuple` of extents.
 - `scalar_type`, real or complex.
+- `argument_spaces`, the [argument spaces](#argument-spaces) of the functions
+  in $V$, `()` for a space of fields on a domain.
+- `dual`, the dual space of $V$, for a $V$ with the argument spaces `()`.
+
+The dual space of $V$ is a space of linear forms on $V$, linear and not
+antilinear, with the domain `None`,
+the degree `()`, the value shape `()`, the scalar type of $V$ and the argument
+spaces `(V,)`. The core fixes these properties, and the concrete subclass
+chooses only which `AbstractFunctionSpace` is the dual space.
 
 A function in $V$ is an expression with the support $D$ and with the degree,
 the value shape and the scalar type of $V$, defined through the cells of $D$
@@ -3195,7 +3218,8 @@ concrete subclass. Two spaces are the same space only if the two spaces are
 equal as base objects, so a concrete `AbstractFunctionSpace` stores the
 arguments that identify the space, such as the finite element.
 
-A space with the domain `None` is a space of constants. A function in the space
+A space with the domain `None` and the argument spaces `()` is a space of
+constants. A function in the space
 is an expression with no support and the degree `()`, a single array with the
 value shape and the scalar type of $V$. The degree is `()`, because an
 expression with no support and a non-empty degree is a `Zero` (see
@@ -3259,9 +3283,10 @@ function space. `Function(V, label)` stores the space $V$ and a label, returned
 by the properties `space` and `label`. The label is a `str` or a `tuple`, with
 the rules of the label of an [Index](#index), and identifies the function, so
 two functions are the same only if the spaces and the labels are equal.
-`Function(V, label)` derives the value shape, the degree and the scalar type of
-$V$, the support `V.domain`, or no support for the domain `None`, and no free
-indices. Construction raises `TypeError` if $V$ is not an
+`Function(V, label)` derives the value shape, the degree, the scalar type and
+the argument spaces of $V$, the support `V.domain`, or no support for the
+domain `None`, and no free indices. So a function in a dual space is a linear
+form, such as a known load. Construction raises `TypeError` if $V$ is not an
 `AbstractFunctionSpace` or the label is neither a `str` nor a `tuple`. The free
 function `function(V, label)` returns `Function(V, label)`.
 
@@ -3310,16 +3335,27 @@ expression must have the argument spaces `()`, or construction raises
 `ValueError`, and the node has the argument spaces `()`. The following node
 classes state otherwise:
 
-- `Sum`: the operands have the same argument spaces, and the sum has the
-  argument spaces of the operands.
-- `Product`: at most one operand has argument spaces other than `()`, and the
-  product has the argument spaces of that operand, so a product scales a form.
-- `TensorProduct`: the argument spaces of the first operand followed by those
-  of the second operand, so the tensor product of two linear forms is a
-  bilinear form.
-- `Integral` and `IndexSum`: the argument spaces of the expression.
+- `Sum` and `Tensor`: the operands have the same argument spaces, and the node
+  has the argument spaces of the operands.
+- `Product` and `TensorProduct`: the argument spaces of the first operand
+  followed by those of the second operand, so a product with a functional
+  scales a form, and the product of two linear forms is a bilinear form. A pass
+  that swaps the operands of a `Product` by graded commutativity also swaps
+  the slots.
+- `Division`: the argument spaces of the numerator.
+- `Conjugate`, `Indexed`, `ComponentTensor`, `IndexSum`, `ExteriorDerivative`,
+  `Components`, `Integral` and `PullBack`: the argument spaces of the
+  expression that the node transforms.
 - `Form` and `Action`: see [Form](#form) and
   [Action](#action).
+
+So a node passes on the argument spaces of an operand in which the node is
+linear or antilinear, and an operand in which the node is neither has the
+argument spaces `()`.
+
+A leaf class states the argument spaces as part of the contract of the class,
+as the degree. A `Zero` stores the argument spaces, and a `Function` has the
+argument spaces of the space of the function.
 
 The argument spaces are static, as the value shape and the degree are, so a
 form with a wrong arity is rejected during construction. The arity and the
@@ -3338,15 +3374,18 @@ A concrete subclass of `AbstractExpression` that binds functions.
 by the properties `expression` and `arguments`. `Form(expression, arguments)`
 derives the value shape, the degree, the support, the free indices and the
 scalar type of the expression, and the argument spaces, the spaces of the
-arguments in order. The slot number of an argument is the position of the
+arguments in order. The support of the expression replaces the rule of
+[Support](#support), so a form of integrals has no support, although the
+arguments have a support. The slot number of an argument is the position of the
 argument in the `tuple`. Construction raises `TypeError` for an argument that
 is not a `Function`, and `ValueError` for a repeated argument or for an
 expression with argument spaces other than `()`. The free function
 `form(expression, arguments)` returns `Form(expression, arguments)`.
 
-The expression is antilinear in the argument of slot 0 and linear in the
-argument of every other slot. For a real scalar type, antilinear and linear
-coincide. Construction does not check the linearity, which a pass may check.
+The expression is linear or antilinear in each argument, as the expression
+makes it, such as antilinear in an argument under a `Conjugate`. The slot
+number does not decide the linearity. Construction does not check the
+linearity, which a pass may check.
 Every other function in the expression is fixed, so the same function may be
 an argument of one form and fixed in another, such as when a derivative with
 respect to a function adds an argument.
@@ -3370,8 +3409,8 @@ function `w = function(V, "w")` on a decomposed domain `D`, and an expression
 
 - `form(a, (v, u))` is a bilinear form with `v` in slot 0 and `u` in slot 1,
   and the argument spaces `(V, V)`. `w` is fixed.
-- `form(a, (v,))` is a linear form in `v`, with `u` and `w` fixed, such as the
-  residual of a nonlinear problem.
+- `form(a, (v,))` is a linear form in `v`, with `u` and `w` fixed, such as a
+  residual.
 - `form(a, (v, u)) + form(a, (v,))` raises `ValueError`, because the argument
   spaces differ.
 
@@ -3380,26 +3419,33 @@ function `w = function(V, "w")` on a decomposed domain `D`, and an expression
 Requires: [Form](#form).
 
 A concrete subclass of `AbstractExpression` that gives an expression to one
-slot of a form. `Action(f, slot, g)` stores a form $f$, a slot number and
-an expression $g$, returned by the properties `form`, `slot` and `argument`.
-$g$ must have the argument spaces `()`, and the value shape, the degree, the
-scalar type and the support of a function in the space of the slot, or
-construction raises `ValueError`. `Action(f, slot, g)` derives the value
-shape, the degree, the support, the free indices of $f$ and $g$, and the scalar
-type of $f$, and the argument spaces of $f$ without the slot. The free function
+slot of a form. `Action(f, slot, g)` stores an expression $f$ with more than
+`slot` argument spaces, a slot number and an expression $g$, returned by the
+properties `form`, `slot` and `argument`. $g$ must have the value shape, the
+free indices, the degree, the scalar type, the support and the argument spaces
+of a function in the space of the slot, or construction raises `ValueError`. So a slot of a dual
+space takes a linear form. `Action(f, slot, g)` derives the value shape, the
+degree, the support, the free indices and the scalar type of $f$, and the
+argument spaces of $f$ without the slot. The support of $f$ replaces the rule of
+[Support](#support), because $g$ is in a slot. The free function
 `action(f, slot, g)` returns `Action(f, slot, g)`.
 
 `Action` is lazy. A pass replaces `Action(Form(e, arguments), slot, g)`
 by the form of the other arguments over $e$ with the argument of the slot
 replaced by $g$, or by $e$ with the argument replaced by $g$ for a form of
-arity 1. The substitution avoids capture (see [Form](#form)).
+arity 1. The substitution avoids capture (see [Form](#form)). The pass evaluates inner
+actions first. For any other node, the pass moves the action into
+every operand of a `Sum` or a `Tensor`, and into the operand that carries the
+slot otherwise, with the slot counted within the operand for a `Product` or a
+`TensorProduct`. An action on a leaf, such as on a function in a dual space,
+remains, and the library of the leaf evaluates the action.
 
 The legacy UFL operations on forms are actions and rebindings:
 
 - The legacy action of a bilinear form on a function `w`, on the last argument, is
   `action(f, 1, w)`.
-- The adjoint of a bilinear form `form(e, (v, u))` is `form(e, (u, v))`, with
-  the conjugate for a complex scalar type.
+- The adjoint of a bilinear form `form(e, (v, u))` is
+  `form(conjugate(e), (u, v))`, and `form(e, (u, v))` for a real scalar type.
 - A derivative with respect to a function is expected to add an argument.
 
 Examples, with `a`, `u`, `v` and `w` of the [Form](#form) examples:
@@ -3409,6 +3455,10 @@ Examples, with `a`, `u`, `v` and `w` of the [Form](#form) examples:
   replaced by `w`.
 - `action(action(form(a, (v, u)), 1, w), 0, w)` is a functional, an expression
   with the argument spaces `()`.
+- With `l = function(V.dual, "l")`, `action(l, 0, w)` is the pairing of `l`
+  with `w`, with no support, which the library of `V.dual` evaluates.
+- `action(form(a, (v, u)) + 2 * form(a, (v, u)), 1, w)` is moved into both
+  operands of the sum, and into the form of the product.
 
 ## Core transformations
 
@@ -3428,9 +3478,15 @@ evaluates one lazy node class:
 A rule of a core transformation rewrites a node of the evaluated class to a
 mathematically equal expression of node classes of the core, and never
 simplifies. The rewritten expression has the free indices of the node, with
-the same extents, possibly in another order. The rule dispatches on the class
+the same extents, possibly in another order, and the argument spaces of the
+node. The rule dispatches on the class
 of the operand and moves the evaluated node towards the leaves. The pass rewrites inner nodes first, until
 no rule applies. A node without a rule is rebuilt on the rewritten edges.
+In a `Form`, the evaluated node moves only into the expression, and in an
+`Action` only into the form $f$, because the arguments and $g$ are in a slot,
+not on the support. For example,
+$\psi^* \mathrm{action}(f, s, g) = \mathrm{action}(\psi^* f, s, g)$,
+because the action replaces $\psi^* u$ in $\psi^* f$ by $\psi^* g$.
 
 Each core transformation rewrites only the evaluated class, so the three run
 separately or together. Evaluation runs the three together until no rule
@@ -3447,7 +3503,8 @@ downstream terminal, except the coordinate frame $\mathrm{d}X$ and a
 `PullBack` of a constant by a family of domains (see
 [Expanding pull-backs](#expanding-pull-backs)). An expression
 without a downstream terminal evaluates to a sum of products and tensor
-products of 0-forms and the coordinate 1-forms $\mathrm{d}X_i$.
+products of 0-forms and the coordinate 1-forms $\mathrm{d}X_i$, inside any
+`Form` and `Action`, which the core transformations do not evaluate.
 
 ### Expanding pull-backs
 
@@ -3517,8 +3574,8 @@ chain rule for the node classes of the degree `()`. Six rules are specific:
   chain rule.
 - $\mathrm{d}\mathrm{d}\omega = 0$. The exterior derivative of an expression
   with no support, or of a `PullBack` of an expression with no support, is
-  `Zero`, with the value shape and the free indices of the operand and the
-  degree raised by one.
+  `Zero`, with the value shape, the free indices and the argument spaces of
+  the operand and the degree raised by one.
 - $\mathrm{d}\bar{\omega} = \overline{\mathrm{d}\omega}$, because the
   exterior derivative is real.
 
@@ -3542,8 +3599,8 @@ are specific:
   for a 0-form $f$.
 - $\iota_j \mathrm{d}X_i = \delta_{ij}$, so the components of `dX` are the
   identity matrix, the `Tensor` of `Integer(1)` and `Integer(0)` entries, or
-  `Zero((0, 0), (), ())` for $n = 0$. The components of a `Zero` are a `Zero`
-  with the new value shape and degree.
+  `Zero((0, 0), (), (), ())` for $n = 0$. The components of a `Zero` are a
+  `Zero` with the new value shape and degree.
 - $\iota_j \bar{\alpha} = \overline{\iota_j \alpha}$, because $\partial_j$ is
   real.
 
@@ -3871,35 +3928,35 @@ rules in the section of the concrete class.
 
 > LLM generated table.
 
-| Class                                          | Stored properties                                                            | Derived properties                                                                   |
-| ---------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `Base`                                         | `construction_arguments`                                                     |                                                                                      |
-| `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`                         |                                                                                      |
-| `AbstractExpression`                           |                                                                              | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree`, `argument_spaces` |
-| `Index`, `EllipsisIndex`                       | `label`                                                                      |                                                                                      |
-| `AbstractIndexValue`                           | `extent`, `shape`, in every concrete subclass                                |                                                                                      |
-| `GatheredIndex`                                | `table`, `indices`                                                           | `extent`, `free_indices`                                                             |
-| `Integer`, `Float`                             | `value`                                                                      |                                                                                      |
-| `Zero`                                         | `value_shape`, `free_indices`, `degree`                                      |                                                                                      |
-| `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                                            |                                                                                      |
-| `Absolute`, `Conjugate`                        | `operand`                                                                    |                                                                                      |
-| `TensorProduct`                                | `first`, `second`                                                            |                                                                                      |
-| `SquareRoot`, `Inverse`                        | `operand`                                                                    |                                                                                      |
-| `Tensor`                                       | `entries`                                                                    |                                                                                      |
-| `Indexed`, `ComponentTensor`, `IndexSum`       | `expression`, `indices`                                                      |                                                                                      |
-| `Coordinate`                                   | `domain`                                                                     |                                                                                      |
-| `ExteriorDerivative`, `Components`, `Integral` | `expression`, `domain`                                                       |                                                                                      |
-| `ParameterisedDomain`                          | `parameter_domain`, `parameterisation`, `ambient_domain`                     | `free_indices`                                                                       |
-| `PullBack`                                     | `expression`, `domain`                                                       |                                                                                      |
-| `AbstractCellType`                             | `dimension`, `num_vertices`, `facets`, in every concrete subclass            | `facet_types`                                                                        |
-| `AbstractReferenceCell`                        | `vertices`, in every concrete subclass                                       |                                                                                      |
-| `AbstractTopology`                             | `cell_types`, `num_cells`, `sides`, in every concrete subclass               | `dimension`                                                                          |
-| `SideMap`                                      | `parameter_domain`, `ambient_domain`, `side`                                 |                                                                                      |
-| `DecomposedDomain`                             | `topology`, `coordinates`, `ambient_domain`                                  | `dimension`                                                                          |
-| `AbstractFunctionSpace`                        | `domain`, `degree`, `value_shape`, `scalar_type`, in every concrete subclass |                                                                                      |
-| `Function`                                     | `space`, `label`                                                             |                                                                                      |
-| `Form`                                         | `expression`, `arguments`                                                    | `argument_spaces`                                                                    |
-| `Action`                                       | `form`, `slot`, `argument`                                                   | `argument_spaces`                                                                    |
+| Class                                          | Stored properties                                                                                       | Derived properties                                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `Base`                                         | `construction_arguments`                                                                                |                                                                                      |
+| `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`                                                    |                                                                                      |
+| `AbstractExpression`                           |                                                                                                         | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree`, `argument_spaces` |
+| `Index`, `EllipsisIndex`                       | `label`                                                                                                 |                                                                                      |
+| `AbstractIndexValue`                           | `extent`, `shape`, in every concrete subclass                                                           |                                                                                      |
+| `GatheredIndex`                                | `table`, `indices`                                                                                      | `extent`, `free_indices`                                                             |
+| `Integer`, `Float`                             | `value`                                                                                                 |                                                                                      |
+| `Zero`                                         | `value_shape`, `free_indices`, `degree`, `argument_spaces`                                              |                                                                                      |
+| `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                                                                       |                                                                                      |
+| `Absolute`, `Conjugate`                        | `operand`                                                                                               |                                                                                      |
+| `TensorProduct`                                | `first`, `second`                                                                                       |                                                                                      |
+| `SquareRoot`, `Inverse`                        | `operand`                                                                                               |                                                                                      |
+| `Tensor`                                       | `entries`                                                                                               |                                                                                      |
+| `Indexed`, `ComponentTensor`, `IndexSum`       | `expression`, `indices`                                                                                 |                                                                                      |
+| `Coordinate`                                   | `domain`                                                                                                |                                                                                      |
+| `ExteriorDerivative`, `Components`, `Integral` | `expression`, `domain`                                                                                  |                                                                                      |
+| `ParameterisedDomain`                          | `parameter_domain`, `parameterisation`, `ambient_domain`                                                | `free_indices`                                                                       |
+| `PullBack`                                     | `expression`, `domain`                                                                                  |                                                                                      |
+| `AbstractCellType`                             | `dimension`, `num_vertices`, `facets`, in every concrete subclass                                       | `facet_types`                                                                        |
+| `AbstractReferenceCell`                        | `vertices`, in every concrete subclass                                                                  |                                                                                      |
+| `AbstractTopology`                             | `cell_types`, `num_cells`, `sides`, in every concrete subclass                                          | `dimension`                                                                          |
+| `SideMap`                                      | `parameter_domain`, `ambient_domain`, `side`                                                            |                                                                                      |
+| `DecomposedDomain`                             | `topology`, `coordinates`, `ambient_domain`                                                             | `dimension`                                                                          |
+| `AbstractFunctionSpace`                        | `domain`, `degree`, `value_shape`, `scalar_type`, `argument_spaces`, `dual`, in every concrete subclass |                                                                                      |
+| `Function`                                     | `space`, `label`                                                                                        |                                                                                      |
+| `Form`                                         | `expression`, `arguments`                                                                               | `argument_spaces`                                                                    |
+| `Action`                                       | `form`, `slot`, `argument`                                                                              | `argument_spaces`                                                                    |
 
 ## Appendix: Degree table
 
