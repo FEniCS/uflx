@@ -99,8 +99,8 @@ fully LLM generated content are explicitly marked.
   - [Reference cell](#reference-cell)
   - [Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell)
   - [AbstractTopology](#abstracttopology)
-  - [Example: a static topology](#example-a-static-topology)
   - [Facets of a topology](#facets-of-a-topology)
+  - [Example: a static topology](#example-a-static-topology)
   - [Restriction](#restriction)
   - [Integral over a topology](#integral-over-a-topology)
 - [Function spaces](#function-spaces)
@@ -2409,26 +2409,33 @@ pass evaluates both to $(2, 4/3)$.
 
 ### AbstractCellType
 
-Requires: [The base object `Base`](#the-base-object-base), [RD](#rd),
-[Extents](#extents).
+Requires: [The base object `Base`](#the-base-object-base).
 
 See also: [Reference cell](#reference-cell),
 [AbstractTopology](#abstracttopology).
 
 An abstract subclass of the base object `AbstractCellType` for the type of a
-cell. A concrete `AbstractCellType` is a subclass outside the core and
-provides:
+cell, with numbered vertices and numbered facets. A concrete `AbstractCellType`
+is a subclass outside the core and provides:
 
-- `dimension`, an `int` $n \ge 1$.
-- `facet_types`, a `tuple` of pairs of a facet type $F$ and the number of
-  facets of the type $F$, an extent. $F$ is an `AbstractCellType` of dimension
-  $n - 1$, or `RD(0)` for $n = 1$. The facet types are distinct.
+- `dimension`, an `int` $n \ge 0$.
+- `num_vertices`, an `int` $m \ge 1$.
+- `facets`, a `tuple` of pairs of a facet type $F$ and a `tuple` of vertex
+  numbers of the cell type, one for each vertex of $F$, in the order of the
+  vertices of $F$. $F$ is an `AbstractCellType` of dimension $n - 1$. A cell
+  type of dimension 0 is a point, with one vertex and no facets.
 
-A number of facets that is an `AbstractExtent` may differ from cell to cell, as
-the number of points does in the
-[cut cell example](#example-integrating-over-a-cut-cell). A cell type without
-a reference cell, such as a polygon of the virtual element method, is not yet
-covered.
+The derived property `facet_types` pairs each distinct facet type $F$ of the
+facets with the number of facets with the facet type $F$, in the order of the
+first facet of each facet type.
+
+A sub-entity of a cell type $C$ is a facet of $C$, or a sub-entity of a facet
+of $C$. A sub-entity is identified by the set of the vertex numbers of $C$ of
+the sub-entity. A vertex is a sub-entity of dimension 0.
+
+A topology of polygons, as for the virtual element method, has a cell type for
+each number of vertices. A cell type whose number of facets is known only at
+run time is not yet covered.
 
 ### Reference cell
 
@@ -2439,27 +2446,22 @@ Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain), [RD](#rd),
 See also: [AbstractTopology](#abstracttopology).
 
 An abstract subclass of `AbstractCoordinateDomain` and of `AbstractCellType`
-for a reference cell `AbstractReferenceCell`, a coordinate domain with
-numbered vertices and numbered facets. A concrete reference cell is a subclass
-outside the core, such as a reference cell version of
-[`UnitSimplex`](#example-the-unit-simplex). A concrete `AbstractReferenceCell`
-$K$ of dimension $n$ also provides:
+for a reference cell `AbstractReferenceCell`, a cell type whose vertices have
+coordinates. A concrete reference cell is a subclass outside the core, such as
+a reference cell version of [`UnitSimplex`](#example-the-unit-simplex). A
+concrete `AbstractReferenceCell` $K$ of dimension $n$ with $m$ vertices also
+provides:
 
 - `vertices`, a constant expression with no support and value shape `(m, n)`.
   Row $v$ holds the coordinates of vertex $v$.
-- `facets`, a `tuple` of pairs of a parameter domain $F$ and a `tuple` of
-  vertex numbers of $K$, one for each vertex of $F$, in the order of the
-  vertices of $F$. $F$ is an `AbstractReferenceCell` of dimension $n - 1$, or
-  `RD(0)` with one vertex number for $n = 1$. The boundary of $K$ is the union
-  of the facets.
 
-The facet types of $K$ pair each distinct parameter domain $F$ of the facets
-with the number of facets with the parameter domain $F$, an `int`.
+The facet types of $K$ are `AbstractReferenceCell`s. The boundary of $K$ is the
+union of the facets.
 
-The facet with the parameter domain $F$ and the vertex numbers
+The facet with the facet type $F$ and the vertex numbers
 $(w_0, w_1, \dots)$ is `parameterised_domain(F, psi, K)`. $\psi$ is the affine
-map that sends vertex $j$ of $F$ to vertex $w_j$ of $K$ for $j < n$, or the
-constant vertex $w_0$ of $K$ for $n = 1$. The first $n$ vertices of $F$ must
+map that sends vertex $j$ of $F$ to vertex $w_j$ of $K$ for $j < n$, which is
+the constant vertex $w_0$ of $K$ for $n = 1$. The first $n$ vertices of $F$ must
 not lie in a hyperplane of $F$. The core does not check that $\psi(F)$ is the
 facet.
 
@@ -2469,10 +2471,6 @@ facet.
 > integral of a pull-back, as in the [boundary
 > example](#example-integrating-over-the-boundary-of-a-triangle).
 
-A sub-entity of $K$ of dimension $d < n - 1$ is a facet of a facet. A
-sub-entity is identified by the set of the vertex numbers of $K$ of the
-sub-entity. A vertex is a sub-entity of dimension 0.
-
 Examples:
 
 - The unit triangle has the vertices $(0, 0)$, $(1, 0)$ and $(0, 1)$, and three
@@ -2480,8 +2478,10 @@ Examples:
   $(0, 1)$, so facet $j$ is opposite vertex $j$. Facet 0 is the hypotenuse,
   with $\psi(t) = (1 - t, t)$, as in the
   [ParameterisedDomain](#parameteriseddomain) examples.
-- The unit interval has the vertices $(0)$ and $(1)$, and two facets over
-  `RD(0)` with the vertex numbers $(0)$ and $(1)$.
+- The unit interval has the vertices $(0)$ and $(1)$, and two facets over the
+  reference point with the vertex numbers $(0)$ and $(1)$.
+- The reference point has the single vertex $()$, the point of $R^0$, and no
+  facets.
 
 ### Example: the unit simplex as a reference cell
 
@@ -2491,10 +2491,10 @@ Requires: [Example: the unit simplex](#example-the-unit-simplex),
 [Literals](#literals), [Tensor](#tensor), [Reference cell](#reference-cell).
 
 `ReferenceSimplex(n)` is the unit simplex in $R^n$ as a reference cell, for
-$n \ge 1$. Vertex 0 is the origin, and vertex $v \ge 1$ is the unit vector
+$n \ge 0$. Vertex 0 is the origin, and vertex $v \ge 1$ is the unit vector
 $e_{v-1}$. For $n \ge 2$, facet $j$ is opposite vertex $j$, with the other
 vertex numbers in increasing order. For $n = 1$, facet $j$ is vertex $j$. This
-is the numbering of Basix.
+is the numbering of Basix. `ReferenceSimplex(0)` is the reference point.
 
 ```python
 class ReferenceSimplex(AbstractReferenceCell):
@@ -2503,8 +2503,8 @@ class ReferenceSimplex(AbstractReferenceCell):
     def __init__(self, n: int):
         if type(n) is not int:
             raise TypeError("Dimension must be an int.")
-        if n < 1:
-            raise ValueError("Dimension must be at least 1.")
+        if n < 0:
+            raise ValueError("Dimension must be non-negative.")
         self._n = n
 
     @property
@@ -2512,8 +2512,14 @@ class ReferenceSimplex(AbstractReferenceCell):
         return self._n
 
     @property
+    def num_vertices(self) -> int:
+        return self._n + 1
+
+    @property
     def vertices(self) -> AbstractExpression:
         n = self._n
+        if n == 0:
+            return Zero((1, 0), (), ())
         return tensor(
             tuple(
                 tensor(tuple(Integer(1 if k == v - 1 else 0) for k in range(n)))
@@ -2524,9 +2530,11 @@ class ReferenceSimplex(AbstractReferenceCell):
     @property
     def facets(self) -> tuple[tuple[AbstractCoordinateDomain, tuple[int, ...]], ...]:
         n = self._n
-        if n == 1:
-            return ((RD(0), (0,)), (RD(0), (1,)))
+        if n == 0:
+            return ()
         F = ReferenceSimplex(n - 1)
+        if n == 1:
+            return ((F, (0,)), (F, (1,)))
         return tuple((F, tuple(v for v in range(n + 1) if v != j)) for j in range(n + 1))
 ```
 
@@ -2534,17 +2542,17 @@ class ReferenceSimplex(AbstractReferenceCell):
 facets of the unit triangle and the unit interval in the
 [Reference cell](#reference-cell) examples. `ReferenceSimplex(3)` has the
 facets $(1, 2, 3)$, $(0, 2, 3)$, $(0, 1, 3)$ and $(0, 1, 2)$. The facet types
-of `ReferenceSimplex(n)` are `((ReferenceSimplex(n - 1), n + 1),)`, or
-`((RD(0), 2),)` for $n = 1$.
+of `ReferenceSimplex(n)` are `((ReferenceSimplex(n - 1), n + 1),)` for
+$n \ge 1$, and `()` for $n = 0$.
 
 `ReferenceSimplex(2)` and `UnitSimplex(2)` are the same set but different
 coordinate domains, so an expression on one is not an expression on the other.
+Likewise, `ReferenceSimplex(0)` and `RD(0)` are different coordinate domains.
 
 ### AbstractTopology
 
 Requires: [The base object `Base`](#the-base-object-base), [Index](#index),
-[Extents](#extents), [AbstractCellType](#abstractcelltype),
-[Reference cell](#reference-cell).
+[Extents](#extents), [AbstractCellType](#abstractcelltype).
 
 See also: [Facets of a topology](#facets-of-a-topology),
 [Restriction](#restriction),
@@ -2557,26 +2565,20 @@ subclass outside the core, such as a subclass for the topology of the mesh of
 a solver, and provides:
 
 - `cell_types`, a `tuple` of distinct `AbstractCellType`s $C_0, C_1, \dots$ of
-  the same dimension. A cell of type $j$ has the facets of $C_j$. If $C_j$ is a
-  reference cell, a cell of type $j$ has the vertices and the facets of $C_j$,
-  numbered as in $C_j$.
+  the same dimension. A cell of type $j$ has the vertices and the facets of
+  $C_j$, numbered as in $C_j$.
 - `num_cells`, a `tuple` with the number of cells of each type, so the length
   of the `tuple` is known during construction. Entry $j$ is an `int`, such as
   for a macro element, or an `AbstractExtent`, such as for the mesh of a
   solver. For the mesh of a solver, the solver loops over the cells, and a
   kernel computes the terms of one cell.
+- `parent`, `None` for a topology whose cells are not seen as facets, or the
+  pair described in [Facets of a topology](#facets-of-a-topology).
 
 The derived property `dimension` is the dimension of the cell types. Two
 topologies are the same topology only if the two topologies are equal as base
 objects, so a concrete `AbstractTopology` stores the arguments that identify
 the topology, such as a label.
-
-> This assumption needs thinking about because it is violated in non-conforming
-> situations.
-
-Two cells of $T$ meet on a whole sub-entity of both cells, with the same cell
-type in both cells, or do not meet, so $T$ is conforming. For example, a
-triangle and a quadrilateral may share an edge.
 
 The free function `cell_index(T, j)` returns the derived index
 `Index(("uflx.cell_index", T, j, 0))` for the cells of type $j$, numbered from
@@ -2599,18 +2601,63 @@ Examples:
 - A mesh of a solver with triangles and quadrilaterals has two reference cells
   as the cell types, and two `AbstractExtent`s as the numbers of cells.
 
+### Facets of a topology
+
+Requires: [AbstractCellType](#abstractcelltype),
+[AbstractTopology](#abstracttopology).
+
+See also: [Restriction](#restriction).
+
+A topology $S$ whose cells are facets of cells of a topology $T$ has the
+parent `(T, seen_from)`. Entry $i$ of `seen_from` is `(j,)` if each cell of
+type $i$ of $S$ is seen from one cell of type $j$ of $T$, or `(j0, j1)` if each
+cell of type $i$ of $S$ is seen from a cell of type $j_0$ and a cell of type
+$j_1$ of $T$. Cell type $i$ of $S$ is a facet type of each cell type of $T$ in
+entry $i$ of `seen_from`, and each cell of $S$ is a whole facet of each cell of
+$T$ that the cell of $S$ is seen from. [Restriction](#restriction) picks the
+value of an expression on a cell of $S$ seen from two cells.
+
+The concrete mesh decides which facets are the cells of $S$, and from which
+cells each facet is seen. For example, the cells of $S$ may be the facets of a
+marked boundary, and a facet of two cells may be seen from one cell only. $T$
+may itself have a parent, so the cells of $S$ may be facets of facets.
+
+> Legacy note: The legacy UFL measures `ds` and `dS` integrate over a topology
+> with a parent whose `seen_from` entries have one and two cell types.
+
+A cell of $S$ that is only part of a facet of a cell of $T$, as with hanging
+nodes or a non-matching interface, is not yet covered.
+[Restriction](#restriction) maps a cell of $S$ seen from two cells into a facet
+of each of the two cells, and a cell of $S$ that is only part of a facet needs
+only other maps, such as a map onto part of a facet.
+
+Examples, with a topology `T` of triangles with the cell types `(K,)`,
+`I = ReferenceSimplex(1)` and `P = ReferenceSimplex(0)`:
+
+- A topology `B` of the boundary facets of `T` has the cell types `(I,)` and
+  the parent `(T, ((0,),))`, since each facet is seen from one triangle.
+  `cell_index(B, 0)` is the index of the facets.
+- A topology of the facets shared by two triangles has the cell types `(I,)`
+  and the parent `(T, ((0, 0),))`.
+- A topology of the corners of the boundary has the cell types `(P,)` and the
+  parent `(B, ((0, 0),))`, since each corner is seen from two facets of `B`.
+- For a topology `U` of prisms with the cell types `(W,)`, a topology of the
+  boundary facets has the cell types `(K, Q)`, with the unit square `Q`, and
+  the parent `(U, ((0,), (0,)))`.
+
 ### Example: a static topology
 
 > LLM generated content.
 
 Requires: [AbstractTopology](#abstracttopology),
-[Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell).
+[Example: the unit simplex as a reference cell](#example-the-unit-simplex-as-a-reference-cell),
+[Facets of a topology](#facets-of-a-topology).
 
-`StaticTopology(cell_types, cells)` is a topology whose cells are known during
-construction. Entry $j$ of `cells` is a `tuple` with the vertices of each cell
-of type $j$, as vertex numbers of the topology. Local vertex $i$ of cell $c$ of
-type $j$ is the vertex `cells[j][c][i]` of the topology. The cell types are
-reference cells, so that each cell has numbered vertices.
+`StaticTopology(cell_types, cells, parent)` is a topology whose cells are known
+during construction. Entry $j$ of `cells` is a `tuple` with the vertices of
+each cell of type $j$, as vertex numbers of the topology. Local vertex $i$ of
+cell $c$ of type $j$ is the vertex `cells[j][c][i]` of the topology. A
+`StaticTopology` with a parent uses the vertex numbers of the parent.
 
 > This is primarily useful for testing UFLx ideas later, but also covers
 > Alfeld splits.
@@ -2621,48 +2668,56 @@ class StaticTopology(AbstractTopology):
 
     def __init__(
         self,
-        cell_types: tuple[AbstractReferenceCell, ...],
+        cell_types: tuple[AbstractCellType, ...],
         cells: tuple[tuple[tuple[int, ...], ...], ...],
+        parent: tuple[AbstractTopology, tuple[tuple[int, ...], ...]] | None,
     ):
         if len(cells) != len(cell_types):
             raise ValueError("Need one tuple of cells for each cell type.")
         self._cell_types = cell_types
         self._cells = cells
+        self._parent = parent
 
     @property
-    def cell_types(self) -> tuple[AbstractReferenceCell, ...]:
+    def cell_types(self) -> tuple[AbstractCellType, ...]:
         return self._cell_types
 
     @property
     def num_cells(self) -> tuple[int, ...]:
         return tuple(len(c) for c in self._cells)
+
+    @property
+    def parent(self) -> tuple[AbstractTopology, tuple[tuple[int, ...], ...]] | None:
+        return self._parent
 ```
 
-With `K = ReferenceSimplex(2)`:
+With `K = ReferenceSimplex(2)` and `I = ReferenceSimplex(1)`:
 
 ```python
 # The unit square divided into two triangles, with the numbers of cells (2,).
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),))
+square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), None)
 
 # The Alfeld split of a triangle at vertex 3, with the numbers of cells (3,).
-alfeld = StaticTopology((K,), (((0, 1, 3), (1, 2, 3), (2, 0, 3)),))
+alfeld = StaticTopology((K,), (((0, 1, 3), (1, 2, 3), (2, 0, 3)),), None)
+
+# The facets of the boundary of the square, each seen from one triangle.
+boundary = StaticTopology((I,), (((0, 1), (1, 3), (3, 2), (2, 0)),), (square, ((0,),)))
+
+# The facet of the diagonal of the square, seen from two triangles.
+diagonal = StaticTopology((I,), (((1, 2),),), (square, ((0, 0),)))
 ```
 
 A facet of a cell is a set of vertex numbers of the topology, found through the
-facets of `K`. In `square`, the facet $\{1, 2\}$ is interior and the other
-four facets are exterior. In `alfeld`, the three facets that contain vertex 3
-are interior, and the three other facets are exterior. A `StaticTopology` has
-no coordinates. The positions of the vertices come from the
+facets of `K`. In `square`, the facet $\{1, 2\}$ is a facet of two cells and
+the other four facets are facets of one cell. In `alfeld`, the three facets
+that contain vertex 3 are facets of two cells, and the three other facets are
+facets of one cell. `boundary` and `diagonal` have the numbers of cells `(4,)`
+and `(1,)`.
+
+`StaticTopology` does not check that the cells of a topology with a parent are
+facets of cells of the parent. A
+`StaticTopology` has no coordinates. The positions of the vertices come from the
 [coordinate field](#coordinate-field).
-
-### Facets of a topology
-
-Requires: [AbstractCellType](#abstractcelltype),
-[AbstractTopology](#abstracttopology).
-
-A facet of a topology $T$ is a facet of a cell of $T$. A facet of $T$ that is a
-facet of exactly one cell is an exterior facet. A facet of $T$ that is a facet
-of two cells is an interior facet.
 
 ### Restriction
 
@@ -3086,10 +3141,10 @@ AbstractExpression
 
 # Topology of domains
 Base
-├── AbstractCellType                      dimension and facet types
+├── AbstractCellType                      numbered vertices and facets
 └── AbstractTopology                      cells without coordinates
 AbstractCoordinateDomain, AbstractCellType
-└── AbstractReferenceCell                 numbered vertices and facets
+└── AbstractReferenceCell                 coordinates of the vertices
 ```
 
 ## Appendix: Free functions
@@ -3143,28 +3198,28 @@ rules in the section of the concrete class.
 
 > LLM generated table.
 
-| Class                                          | Stored properties                                        | Derived properties                                                |
-| ---------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
-| `Base`                                         | `construction_arguments`                                 |                                                                   |
-| `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`     |                                                                   |
-| `AbstractExpression`                           |                                                          | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree` |
-| `Index`, `EllipsisIndex`                       | `label`                                                  |                                                                   |
-| `AbstractIndexValue`                           | `extent`, in every concrete subclass                     |                                                                   |
-| `Integer`, `Float`                             | `value`                                                  |                                                                   |
-| `Zero`                                         | `value_shape`, `free_indices`, `degree`                  |                                                                   |
-| `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                        |                                                                   |
-| `Absolute`, `Conjugate`                        | `operand`                                                |                                                                   |
-| `TensorProduct`                                | `first`, `second`                                        |                                                                   |
-| `SquareRoot`, `Inverse`                        | `operand`                                                |                                                                   |
-| `Tensor`                                       | `entries`                                                |                                                                   |
-| `Indexed`, `ComponentTensor`, `IndexSum`       | `expression`, `indices`                                  |                                                                   |
-| `Coordinate`                                   | `domain`                                                 |                                                                   |
-| `ExteriorDerivative`, `Components`, `Integral` | `expression`, `domain`                                   |                                                                   |
-| `ParameterisedDomain`                          | `parameter_domain`, `parameterisation`, `ambient_domain` | `free_indices`                                                    |
-| `PullBack`                                     | `expression`, `domain`                                   |                                                                   |
-| `AbstractCellType`                             | `dimension`, `facet_types`, in every concrete subclass   |                                                                   |
-| `AbstractReferenceCell`                        | `vertices`, `facets`, in every concrete subclass         | `facet_types`                                                     |
-| `AbstractTopology`                             | `cell_types`, `num_cells`, in every concrete subclass    | `dimension`                                                       |
+| Class                                          | Stored properties                                                 | Derived properties                                                |
+| ---------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `Base`                                         | `construction_arguments`                                          |                                                                   |
+| `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`              |                                                                   |
+| `AbstractExpression`                           |                                                                   | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree` |
+| `Index`, `EllipsisIndex`                       | `label`                                                           |                                                                   |
+| `AbstractIndexValue`                           | `extent`, in every concrete subclass                              |                                                                   |
+| `Integer`, `Float`                             | `value`                                                           |                                                                   |
+| `Zero`                                         | `value_shape`, `free_indices`, `degree`                           |                                                                   |
+| `Sum`, `Product`, `Power`, `Division`          | `first`, `second`                                                 |                                                                   |
+| `Absolute`, `Conjugate`                        | `operand`                                                         |                                                                   |
+| `TensorProduct`                                | `first`, `second`                                                 |                                                                   |
+| `SquareRoot`, `Inverse`                        | `operand`                                                         |                                                                   |
+| `Tensor`                                       | `entries`                                                         |                                                                   |
+| `Indexed`, `ComponentTensor`, `IndexSum`       | `expression`, `indices`                                           |                                                                   |
+| `Coordinate`                                   | `domain`                                                          |                                                                   |
+| `ExteriorDerivative`, `Components`, `Integral` | `expression`, `domain`                                            |                                                                   |
+| `ParameterisedDomain`                          | `parameter_domain`, `parameterisation`, `ambient_domain`          | `free_indices`                                                    |
+| `PullBack`                                     | `expression`, `domain`                                            |                                                                   |
+| `AbstractCellType`                             | `dimension`, `num_vertices`, `facets`, in every concrete subclass | `facet_types`                                                     |
+| `AbstractReferenceCell`                        | `vertices`, in every concrete subclass                            |                                                                   |
+| `AbstractTopology`                             | `cell_types`, `num_cells`, `parent`, in every concrete subclass   | `dimension`                                                       |
 
 ## Appendix: Degree table
 
