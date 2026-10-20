@@ -673,12 +673,10 @@ product](EXAMPLES.md#example-transpose-and-matrix-product).
 
 > LLM generated content.
 
-Index notation writes tensor algebra as fixed compositions, so that operators
-such as `transpose` and `matrix_product` are free functions rather than node
-classes.
-
 A concrete subclass of the base object for a free index. An `Index` is not an
-expression.
+expression. Index notation writes tensor algebra as fixed compositions, so
+that operators such as `transpose` and `matrix_product` are free functions
+rather than node classes.
 
 | `Index(label)` |                                                                                                 |
 | -------------- | ----------------------------------------------------------------------------------------------- |
@@ -736,8 +734,6 @@ See also: [Indexed](#indexed), [Tensor algebra with
 EllipsisIndex](#tensor-algebra-with-ellipsisindex).
 
 > LLM generated content.
-
-> Legacy UFL: This numpy-like concept does not appear to be in legacy UFL.
 
 A concrete subclass of the base object for an index that covers any number of
 axes. An `EllipsisIndex` is not an expression.
@@ -1016,8 +1012,7 @@ fixed composition exists, and the core transformation states the composition.
 
 For example, the transpose is always `component_tensor(A[k, l], (l, k))`, and
 `volume_form(P)` is the product of the $n$ coordinate 1-forms of a coordinate
-domain of dimension $n$, so both are free functions. No composition of
-existing nodes differentiates, so `ExteriorDerivative` is a node class.
+domain of dimension $n$, so both are free functions.
 
 A free function is part of the core only if a definition or a rule of the
 core uses the free function, such as `volume_form` in [Integral over a
@@ -1029,8 +1024,6 @@ product](EXAMPLES.md#example-transpose-and-matrix-product)) and the operations o
 operator overloads of the core are those of the free functions of the core,
 so `A + B` on tensors is not an overload (see
 [Operator overloads](#operator-overloads)).
-`Division` and `SquareRoot` are evaluated by a numerical algorithm that the
-user supplies, so each is a node class.
 
 A free function that builds a fixed composition is a definition, not a
 simplification. The free function does not read the structure of the
@@ -1805,15 +1798,8 @@ See also: [ExteriorDerivative](#exteriorderivative),
 [DomainMap](#domainmap).
 
 A concrete subclass of `AbstractExpression` for the coordinate function of a
-domain.
-
-Every domain $P$ provides a coordinate function `Coordinate(P)`. The
-coordinate function $X$ of $P$ is the terminal expression that maps each point
-of $P$ to the coordinates of the point in the ambient coordinate domain of $P$,
-of dimension $n$. For a coordinate domain $P$, the coordinate function is the
-identity:
-
-$X : P \to R^n$, $X(p) = p$.
+domain, the terminal that maps each point of the domain to the coordinates of
+the point in the ambient coordinate domain.
 
 | `Coordinate(P)` |                                                    |
 | --------------- | -------------------------------------------------- |
@@ -1822,9 +1808,10 @@ $X : P \to R^n$, $X(p) = p$.
 | Static type     | Value shape `(n,)`, real, the support $P$          |
 | Raises          | `TypeError` if $P$ is not an `AbstractDomain`      |
 
-The coordinate function is a 0-form.
-The 1-forms $\mathrm{d}X_i$ come from the exterior derivative, not from
-`Coordinate`.
+$n$ is the dimension of the ambient coordinate domain of $P$. For a
+coordinate domain $P$, the coordinate function is the identity,
+$X : P \to R^n$, $X(p) = p$. The coordinate function is a 0-form. The 1-forms
+$\mathrm{d}X_i$ come from the exterior derivative, not from `Coordinate`.
 
 The coordinate function of a decomposed domain $D$ is defined through the
 pieces of $D$. The pull-back of `coordinate(D)` by a piece is the
@@ -2048,12 +2035,18 @@ triangle](#example-an-affinely-mapped-triangle), [Integral over a decomposed
 domain](#integral-over-a-decomposed-domain), [Expanding
 integrals](#expanding-integrals).
 
-At this point the core has everything needed to integrate an expression over
-a coordinate domain. A basic integral needs no topological notion of the
-domain.
-
 A concrete subclass of `AbstractExpression` for the integral of a differential
-form $f$ over a domain $P$ of dimension $k$.
+form $f$ over a domain $P$ of dimension $k$. A basic integral needs no
+topological notion of the domain.
+
+| `Integral(f, P)` |                                                                                                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free function    | `integral(f, P)`                                                                                                                                                      |
+| Properties       | `expression` $f$ and `domain` $P$, an `AbstractDomain` of dimension $k$                                                                                               |
+| Requires         | A [valid pair](#valid-pair) $(f, P)$, or $f$ with the support `P.ambient_domain`, and $f$ of the degree `(k,)`, or of the degree `()` if $k = 0$ or $P$ is decomposed |
+| Static type      | The value shape and the free indices of $f$, with no support                                                                                                          |
+| Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                                                                                                   |
+| Evaluated by     | [`expand_integrals`](#expanding-integrals), for a decomposed domain $P$                                                                                               |
 
 For a coordinate domain $P$ of dimension $n$, `Integral(f, P)` is the integral
 of a top form $f$, with the orientation
@@ -2073,15 +2066,6 @@ against the density that the pieces induce, as the sum of the integrals over
 the pieces (see [Integral over a decomposed
 domain](#integral-over-a-decomposed-domain)). For $k = 0$, a 0-form is a top
 form, and the two readings agree.
-
-| `Integral(f, P)` |                                                                                                                                                                       |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Free function    | `integral(f, P)`                                                                                                                                                      |
-| Properties       | `expression` $f$ and `domain` $P$, an `AbstractDomain` of dimension $k$                                                                                               |
-| Requires         | A [valid pair](#valid-pair) $(f, P)$, or $f$ with the support `P.ambient_domain`, and $f$ of the degree `(k,)`, or of the degree `()` if $k = 0$ or $P$ is decomposed |
-| Static type      | The value shape and the free indices of $f$, with no support                                                                                                          |
-| Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                                                                                                   |
-| Evaluated by     | [`expand_integrals`](#expanding-integrals), for a decomposed domain $P$                                                                                               |
 
 An array-valued differential form integrates component by component.
 `Integral` is lazy. `expand_integrals` rewrites an `Integral` over a
@@ -4286,6 +4270,7 @@ of the core.
 The notes that relate rules of the core to legacy UFL, by section.
 
 - **Basic principles.** TSFC lowers a UFL form to GEM, which repeats much of the algebra of UFL, partly because UFL simplifies during construction. The UFLx core does not simplify during construction, so a form compiler may be able to use a lowered UFLx form directly, adding only leaves for tables and kernel inputs. This has not been confirmed with the TSFC or FFCx developers.
+- **EllipsisIndex.** This numpy-like concept does not appear to be in legacy UFL.
 - **AbstractIndexValue.** GEM, the intermediate language of TSFC, appears to have `VariableIndex` for the same purpose.
 - **AbstractTopology.** In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and the measure `dx` hides the sum over the cells. In UFLx, the topology, the parameterisations of the pieces of a decomposed domain and the `IndexSum` over `cell_index(T, j)` are separate.
 - **Sides of a topology.** The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
