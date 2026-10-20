@@ -116,6 +116,7 @@ reached without an LLM. Sections generated entirely by the LLM are marked.
   - [Function](#function)
 - [Variational forms](#variational-forms)
   - [Argument spaces](#argument-spaces)
+  - [ConjugateSpace](#conjugatespace)
   - [DualSpace](#dualspace)
   - [Form](#form)
   - [Action](#action)
@@ -263,10 +264,15 @@ L = form(integral(L_D, D), (v,))
   [`Components`](#components). `i` is an [index](#index), and
   [`IndexSum`](#componenttensor-and-indexsum) contracts.
 - **Integration.** [`integral(f, D)`](#integral-over-a-decomposed-domain) of
-  a 0-form is the sum over the cell index `c` of [`Integral`](#integral)s over
-  the reference triangle `K`, each of the [pull-back](#pullback) to `K` times
-  the density $\lvert \det J \rvert$ of the cell.
-- **Forms.** [`form`](#form) binds `v` in slot 0 and `u` in slot 1. `f` stays
+  a 0-form is the [`Integral`](#integral) over the mesh `D`, which
+  [`expand_integrals`](#expanding-integrals) lowers to the sum over the cell
+  index `c` of `Integral`s over the reference triangle `K`, each of the
+  [pull-back](#pullback) to `K` times the density $\lvert \det J \rvert$ of the
+  cell.
+- **Forms.** [`form`](#form) binds `v` as the argument at position 0 and `u`
+  at position 1. The tour is in real arithmetic. For a complex `V`, the
+  integrands take `conjugate(v)` and the forms bind `conjugate(v)`, so that the
+  forms are sesquilinear (see [Form](#form)). `f` stays
   fixed. `a` and `L` are expressions with the [argument
   spaces](#argument-spaces) `(V, V)` and `(V,)`.
 
@@ -1306,16 +1312,20 @@ type](#scalar-type), [Degree](#degree).
 
 See also: [Variational forms](#variational-forms).
 
-| `Conjugate(f)` |                                              |
-| -------------- | -------------------------------------------- |
-| Free function  | `conjugate(f)`                               |
-| Requires       | A scalar differential form $f$ of any degree |
-| Raises         | `ValueError` if a requirement fails          |
+| `Conjugate(f)` |                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| Free function  | `conjugate(f)`                                                                              |
+| Requires       | A scalar differential form $f$ of any degree                                                |
+| Static type    | The argument spaces of $f$ with each space conjugated (see [ConjugateSpace](#conjugatespace)) |
+| Raises         | `ValueError` if a requirement fails                                                         |
 
 `Conjugate` is the complex conjugate, acting on the coefficients of the form.
 No fixed composition of the other node classes conjugates, so `Conjugate` is a
 node class. A sesquilinear variational form, such as the $L^2$ inner product
-$\int u \bar{v}$, needs `Conjugate`.
+$\int u \bar{v}$, needs `Conjugate`. A form that is linear in an argument is
+antilinear in the argument after conjugation, so `Conjugate` conjugates each
+argument space, with `conjugate_space(V)` for $V$ and $V$ for
+`ConjugateSpace(V)`.
 
 ### TensorProduct
 
@@ -1734,7 +1744,7 @@ class AbstractExpression(Base, ABC):
     def argument_spaces(
         self,
     ) -> tuple[AbstractFunctionSpace | tuple[AbstractFunctionSpace, ...], ...]:
-        """The space of each slot of a form, or () for an expression that is not a form."""
+        """The space of each argument of a form, or () for an expression that is not a form."""
 
     # Operator overloading must be in the class.
     def __add__(self, other: AbstractExpression) -> AbstractExpression:
@@ -3753,8 +3763,8 @@ $\rho = \sqrt{\det(J^T J)}$ the density of
 > a cell, the library states the representation, and the space holds a
 > decomposed domain, the legacy mesh.
 
-A mixed problem needs no mixed space, because a slot of a [form](#form) may
-bind a `tuple` of functions in several spaces. The Sobolev space of $V$ is not
+A mixed problem needs no mixed space, because an argument of a [form](#form)
+may be a `tuple` of functions in several spaces. The Sobolev space of $V$ is not
 yet covered. The Sobolev space is expected to be stated through the
 [restrictions](#restriction) of the functions of $V$ to the facets of the
 topology of $D$ from the two sides of each facet.
@@ -3804,7 +3814,7 @@ an argument of a form is stated by the form (see [Form](#form)).
 
 > Legacy note: The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction`
 > are all functions. A test function and a trial function are the functions
-> that a form states as the arguments in the slots 0 and 1.
+> that a form states as the arguments at the positions 0 and 1.
 
 Examples, with a decomposed domain `D` and a space `V` on `D` of the degree
 `()` and the value shape `()`:
@@ -3820,7 +3830,7 @@ Examples, with a decomposed domain `D` and a space `V` on `D` of the degree
 A variational form is an expression that is abstracted over some functions, the
 arguments, as a multilinear map is over the arguments of the map. A form binds
 the arguments, as a [`ComponentTensor`](#componenttensor-and-indexsum) binds
-indices, and an action gives a function to a slot of a form, as an
+indices, and an action gives a function to an argument of a form, as an
 [`Indexed`](#indexed) gives an index to an axis.
 
 ### Argument spaces
@@ -3829,13 +3839,13 @@ Requires: [`AbstractExpression`](#abstractexpression),
 [AbstractFunctionSpace](#abstractfunctionspace).
 
 Every `AbstractExpression` derives the argument spaces, a `tuple` with the
-space of each slot of a form, and `()` for an expression that is not a form.
-The space of a slot is an `AbstractFunctionSpace` for a slot of one function,
-or a `tuple` of at least two spaces for a slot of a `tuple` of functions, the
-product of the spaces. So each slot has one representation. The arity is the
-number of argument spaces. A functional has the arity 0, a linear form the
-arity 1 and a bilinear form the arity 2, whatever the number of functions in
-each slot.
+space of each argument of a form, in order of position, and `()` for an
+expression that is not a form. The space of an argument is an
+`AbstractFunctionSpace` for an argument of one function, or a `tuple` of at
+least two spaces for an argument of a `tuple` of functions, the product of the
+spaces. So each argument has one representation. The arity is the number of
+argument spaces. A functional has the arity 0, a linear form the arity 1 and a
+bilinear form the arity 2, whatever the number of functions in each argument.
 
 A node passes on the argument spaces of an operand in which the node is linear
 or antilinear, and every other operand must have the argument spaces `()`, or
@@ -3844,10 +3854,47 @@ table](#appendix-static-type-table) gives the rule of each node class. A leaf
 class states the argument spaces as part of the contract of the class, as the
 degree.
 
+The argument spaces record the linearity of the form in each argument. A form
+is linear in an argument with the space $V$, and antilinear in an argument
+with the space `conjugate_space(V)`, the complex conjugate space $\bar V$ of
+$V$ (see [ConjugateSpace](#conjugatespace)), because an antilinear form on
+$V$ is a linear form on $\bar V$. The form states the linearity when the form
+binds the argument (see [Form](#form)).
+
 The argument spaces are static, as the value shape and the degree are, so a
-form with a wrong arity is rejected during construction. The arity and the
-degree are independent. The degree counts the slots of a differential form,
-and the arity counts the functions that a form binds.
+form with a wrong arity is rejected during construction, and a load that is
+antilinear in `v` and a form that is linear in `v` do not add. The arity and
+the degree are independent. The degree counts the slots of a differential
+form, and the arity counts the arguments that a form binds. The word slot is
+used only for differential forms.
+
+### ConjugateSpace
+
+Requires: [Argument spaces](#argument-spaces),
+[AbstractFunctionSpace](#abstractfunctionspace), [Scalar type](#scalar-type),
+[Conjugate](#conjugate).
+
+See also: [DualSpace](#dualspace), [Form](#form).
+
+A concrete subclass of `AbstractFunctionSpace` for the complex conjugate space
+$\bar V$ of a complex space $V$.
+
+| `ConjugateSpace(V)` |                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| Free function       | `conjugate_space(V)`, which returns $V$ for a real $V$ and `ConjugateSpace(V)` for a complex $V$ |
+| Properties          | `space` $V$, an `AbstractFunctionSpace` with the complex scalar type, not a `ConjugateSpace`       |
+| Provides            | The domain, the degree, the value shape, the scalar type and the argument spaces of $V$           |
+| Raises              | `TypeError` for a $V$ that is not a space, and `ValueError` for a real $V$ or a `ConjugateSpace`  |
+
+$\bar V$ has the functions of $V$ with the conjugate scalar multiplication, so
+a function in $\bar V$ is the conjugate of a function in $V$, and a linear
+form on $\bar V$ is an antilinear form on $V$. The core uses $\bar V$ only as
+an argument space, to record that a form is antilinear in an argument. For a
+real $V$, linear and antilinear coincide, so `conjugate_space(V)` is $V$
+itself, and the free function reads only the scalar type of $V$. The conjugate
+of an argument space is `conjugate_space(V)` for a space $V$ and $V$ for
+`ConjugateSpace(V)`, so conjugating twice gives the space back (see
+[Conjugate](#conjugate)).
 
 ### DualSpace
 
@@ -3863,14 +3910,19 @@ forms on a space or on the product of spaces.
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Free function  | `dual(S)`                                                                                                                                                     |
 | Properties     | `space` $S$, an `AbstractFunctionSpace`, or a `tuple` of at least two spaces                                                                                  |
-| Provides       | The domain `None`, the degree `()`, the value shape `()`, the argument spaces `(S,)` and the scalar type of $S$, complex if any space of a `tuple` is complex |
+| Provides       | The domain `None`, the degree `()`, the value shape `()`, the argument spaces `(S',)` with $S'$ the conjugate of $S$ as in [Conjugate](#conjugate), member by member for a `tuple` $S$, and the scalar type of $S$, complex if any space of a `tuple` is complex |
 | Raises         | `TypeError` for an $S$ that is not a space or a `tuple` of spaces, and `ValueError` for a `tuple` of fewer than two spaces                                    |
 
-A function in `dual(S)` is an antilinear form on $S$, as a form is in the slot
-of a function under a `Conjugate`, such as the slot of $v$ in
-$\int u \bar v$. So a residual and an assembled load have the same
-linearity, and the difference of the two is a form. For a real scalar type,
-antilinear and linear coincide. A fixed function in `dual(S)` is a known
+A function in `dual(S)` is an antilinear form on $S$, a linear form on
+`conjugate_space(S)` (see [ConjugateSpace](#conjugatespace)), as a form is in
+an argument bound as `conjugate(v)`, such as the argument $v$ of
+$\int u \bar v$. So a residual bound as `(conjugate(v),)` and an assembled
+load have the same argument spaces, and the difference of the two is a form.
+For a real scalar type, antilinear and linear coincide, and the argument
+spaces are `(S,)`. The space of linear forms on a complex $S$ is
+`dual(conjugate_space(S))`, with the argument spaces `(S,)`, so the core fixes
+no convention on the argument in which a form is antilinear. A fixed function
+in `dual(S)` is a known
 antilinear form, such as a load, and a function bound by a [form](#form) is a
 variable antilinear form. The pairing of a function `l` in `dual(S)` with a
 function `w` in $S$ is `action(l, 0, w)`, antilinear in `w`, and the library
@@ -3881,11 +3933,11 @@ of the spaces, such as the load of a mixed problem, although no single
 function is in the product.
 
 `dual(dual(V))` is the space of antilinear forms on `dual(V)`, with the
-argument spaces `(dual(V),)`. `dual(dual(V))` is not `V`, because `V` has the
-argument spaces `()`. The canonical map takes a function `w` in `V` to
-`form(conjugate(action(l, 0, w)), (l,))`, with a function `l` in `dual(V)`,
-linear in `w` and antilinear in `l`, and a library may store both with the
-same values.
+argument spaces `(conjugate_space(dual(V)),)`. `dual(dual(V))` is not `V`,
+because `V` has the argument spaces `()`. The canonical map takes a function
+`w` in `V` to `form(conjugate(action(l, 0, w)), (conjugate(l),))`, with a
+function `l` in `dual(V)`, linear in `w` and antilinear in `l`, and a library
+may store both with the same values.
 
 > Legacy note: The legacy UFL `Cofunction` and `Coargument` are a fixed and a
 > bound function in `dual(V)`. In legacy UFL, the dual of the dual space is
@@ -3895,18 +3947,21 @@ same values.
 Examples, with the spaces `V` and `Q` and the functions `v` in `V` and `q` in
 `Q` of the [Form](#form) examples:
 
-- `l = function(dual(V), "l")` has the argument spaces `(V,)`, and
-  `action(l, 0, v)` is the pairing $\langle l, v \rangle$.
-- `m = function(dual((V, Q)), "m")` has the argument spaces `((V, Q),)`, and
-  `action(m, 0, (v, q))` is the pairing of `m` with `(v, q)`.
+- `l = function(dual(V), "l")` has the argument spaces
+  `(conjugate_space(V),)`, and `action(l, 0, v)` is the pairing
+  $\langle l, v \rangle$.
+- `m = function(dual((V, Q)), "m")` has the argument spaces
+  `((conjugate_space(V), conjugate_space(Q)),)`, and `action(m, 0, (v, q))` is
+  the pairing of `m` with `(v, q)`.
 - With a function `w` in `V` and a function `l` in `dual(V)`,
-  `form(conjugate(action(l, 0, w)), (l,))` has the argument spaces
-  `(dual(V),)`, the static type of a function in `dual(dual(V))`, and
-  evaluates every antilinear form on `V` at `w`.
+  `form(conjugate(action(l, 0, w)), (conjugate(l),))` has the argument spaces
+  `(conjugate_space(dual(V)),)`, the static type of a function in
+  `dual(dual(V))`, and evaluates every antilinear form on `V` at `w`.
 - With the [interpolation extension](#example-interpolation), a space `W` and
-  a function `l` in `dual(W)`, `form(action(l, 0, interpolate(v, W)), (v,))`
-  is the adjoint of the interpolation from `V` to `W` applied to `l`, with the
-  argument spaces `(V,)`.
+  a function `l` in `dual(W)`,
+  `form(action(l, 0, interpolate(v, W)), (conjugate(v),))` is the adjoint of
+  the interpolation from `V` to `W` applied to `l`, with the argument spaces
+  `(conjugate_space(V),)`, the static type of a function in `dual(V)`.
 
 ### Form
 
@@ -3915,14 +3970,17 @@ Requires: [Argument spaces](#argument-spaces), [Function](#function).
 | `Form(expression, arguments)` |                                                                                                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Free function                 | `form(expression, arguments)`                                                                                                                                                                      |
-| Properties                    | `expression`, an expression with the argument spaces `()`, and `arguments`, a `tuple` of entries, each a [function](#function) or a `tuple` of at least two functions                              |
+| Properties                    | `expression`, an expression with the argument spaces `()`, and `arguments`, a `tuple` of entries, each a [function](#function) `v`, the [conjugate](#conjugate) `conjugate(v)` of a function, or a `tuple` of at least two of these |
 | Requires                      | Every function in `arguments` distinct                                                                                                                                                             |
-| Static type                   | That of the expression, with the argument spaces the space of each function entry, or the `tuple` of the spaces of the members of a `tuple` entry, in order                                        |
-| Raises                        | `TypeError` for an entry that is not a `Function` or a `tuple` of functions, and `ValueError` for a repeated function, a `tuple` of fewer than two functions or an expression with argument spaces |
+| Static type                   | That of the expression, with the argument spaces the space $V$ of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
+| Raises                        | `TypeError` for an entry that is not a `Function`, a `Conjugate` of a `Function` or a `tuple` of these, and `ValueError` for a repeated function, a `tuple` of fewer than two members or an expression with argument spaces |
 
-A form binds the arguments, as a `ComponentTensor` binds indices. The slot of an
-entry is the position in `arguments`. The expression is linear or antilinear in
-each slot, as the expression makes it, such as antilinear under a `Conjugate`.
+A form binds the arguments, as a `ComponentTensor` binds indices. The position
+of an argument is the index of the entry in `arguments`. The entry states the
+linearity: for an entry `v`, the expression is linear in `v`, and for an entry
+`conjugate(v)`, the expression is linear in $\bar v$, so antilinear in `v`,
+as in $\int u \bar v$ (see [ConjugateSpace](#conjugatespace)). For a real
+space, the two entries give the same argument space.
 For a `tuple` entry, the expression is linear in the members jointly, so a term
 may depend on one member only. Construction does not check the linearity, and
 a pass may check the linearity by the conjugations on the path from each
@@ -3951,11 +4009,11 @@ substitution renames a bound argument to avoid capture, as for indices (see
 [Passes](#passes)).
 
 > Legacy note: In legacy UFL, the arguments of a form are the test functions
-> and the trial functions in the integrand, with the slot numbers of the
-> functions, and a form is not an expression. In UFLx, a function has no slot
-> number, the form states the arguments, and a functional is any expression
-> with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are
-> a slot of a `tuple` of functions.
+> and the trial functions in the integrand, with the argument numbers of the
+> functions, and a form is not an expression. In UFLx, a function has no
+> argument number, the form states the arguments, and a functional is any
+> expression with the argument spaces `()`. The legacy UFL `MixedElement` and
+> `split` are an argument that is a `tuple` of functions.
 
 Examples, with `u`, `v` and a fixed `w` in a space `V` on `D`, and an
 expression `a` linear in `u` and `v`:
@@ -3963,6 +4021,14 @@ expression `a` linear in `u` and `v`:
 - `form(a, (v, u))` is a bilinear form with the argument spaces `(V, V)`.
 - `form(a, (v,))` is a linear form in `v`.
 - `form(a, (v, u)) + form(a, (v,))` raises `ValueError`.
+- With `m = integral(u * conjugate(v), D)`, `form(m, (conjugate(v), u))` is
+  the sesquilinear mass form, with the argument spaces
+  `(conjugate_space(V), V)`.
+- With `r = integral(f * conjugate(v), D)` and `l = function(dual(V), "l")`,
+  `form(r, (conjugate(v),)) - l` is a residual, with the argument spaces
+  `(conjugate_space(V),)`. For a complex `V`, `form(integral(f * v, D), (v,)) - l`
+  raises `ValueError`, because the argument spaces `(V,)` and
+  `(conjugate_space(V),)` differ.
 - With a velocity space `V` and a pressure space `Q`, functions `u`, `v` in `V`
   and `p`, `q` in `Q`, and the Stokes expression `e` of the terms
   $\nabla u : \nabla v$, $-p \, \mathrm{div}\, v$ and $-q \, \mathrm{div}\, u$,
@@ -3974,12 +4040,12 @@ expression `a` linear in `u` and `v`:
 
 Requires: [Form](#form).
 
-| `Action(f, slot, g)` |                                                                                                                                                                                       |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Free function        | `action(f, slot, g)`                                                                                                                                                                  |
-| Properties           | `form`, an expression with more than `slot` argument spaces, `slot`, and `argument`, the expression $g$, or a `tuple` of expressions                                                  |
-| Requires             | $g$ has the static type of a function in the space of the slot, with the support of that function or no support, or for a `tuple` of spaces, a `tuple` with one such member per space |
-| Static type          | That of $f$, with the argument spaces of $f$ without the slot.                                                                                                                        |
+| `Action(f, position, g)` |                                                                                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free function            | `action(f, position, g)`                                                                                                                                                                          |
+| Properties               | `form`, an expression with more than `position` argument spaces, `position`, an `int`, and `argument`, the expression $g$, or a `tuple` of expressions                                            |
+| Requires                 | $g$ has the static type of a function in $V$, where the argument space at `position` is $V$ or `ConjugateSpace(V)`, with the support of that function or no support, or for a `tuple` of spaces, a `tuple` with one such member per space |
+| Static type              | That of $f$, with the argument spaces of $f$ without the entry at `position`.                                                                                                                     |
 | Raises               | `ValueError` if a requirement fails                                                                                                                                                   |
 | Evaluated by         | [`apply_actions`](#applying-actions)                                                                                                                                                  |
 
@@ -3989,8 +4055,11 @@ space, remains for the library of the leaf.
 Legacy UFL operations are actions and rebindings:
 
 - The action on the last argument of a bilinear form is `action(f, 1, w)`.
-- The adjoint of `form(e, (v, u))` is `form(conjugate(e), (u, v))`.
-- A derivative with respect to a function is expected to add an argument.
+- The adjoint of `form(e, (conjugate(v), u))` is
+  `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in
+  `v` and antilinear in `u`.
+- The Gateaux derivative with respect to a function adds an argument (see
+  [Gateaux derivative](#gateaux-derivative)).
 
 Examples, with `a`, `u`, `v` and `w` of the [Form](#form) examples and
 `l = function(dual(V), "l")`:
@@ -4157,8 +4226,8 @@ is rebuilt on the rewritten edges, and the evaluated node remains on the
 rebuilt node.
 
 In a `Form`, an evaluated node moves only into the expression, and in an
-`Action` only into the form $f$, because the arguments and $g$ are in a slot,
-not on the support. For example,
+`Action` only into the form $f$, because the arguments and $g$ are bound, not
+on the support. For example,
 $\psi^* \mathrm{action}(f, s, g) = \mathrm{action}(\psi^* f, s, g)$,
 because the action replaces $\psi^* u$ in $\psi^* f$ by $\psi^* g$.
 
@@ -4338,14 +4407,14 @@ for `Conjugate` holds because $\partial_j$ is real.
 Requires: [Core transformations](#core-transformations), [Action](#action),
 [Form](#form), [Passes](#passes).
 
-An action moves into the operand that carries the slot, with these rules:
+An action moves into the operand that carries the argument, with these rules:
 
-| Operand                                                  | Rewrite of `Action(f, slot, g)` with $f$ the operand                                                                           |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `Form(e, arguments)`                                     | $e$ with the entry of the slot replaced by $g$, member by member for a `tuple`, in a `Form` of the other entries if any remain |
-| `Sum`, `Tensor`                                          | The action of every operand                                                                                                    |
-| `Product`, `TensorProduct`                               | The action of the operand that carries the slot, with the slot counted within that operand                                     |
-| `Zero`                                                   | `Zero` with the argument spaces without the slot                                                                               |
+| Operand                                                  | Rewrite of `Action(f, position, g)` with $f$ the operand                                                                               |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `Form(e, arguments)`                                     | $e$ with the entry at `position` replaced by $g$, member by member for a `tuple`, in a `Form` of the other entries if any remain        |
+| `Sum`, `Tensor`                                          | The action of every operand                                                                                                            |
+| `Product`, `TensorProduct`                               | The action of the operand that carries the argument at `position`, with the position counted within that operand                       |
+| `Zero`                                                   | `Zero` with the argument spaces without the entry at `position`                                                                        |
 | `Function` or a downstream leaf, such as in a dual space | Remains, for the library of the leaf                                                                                           |
 | `Action`                                                 | Remains                                                                                                                        |
 
@@ -4521,7 +4590,7 @@ node passes on the argument spaces of $f$, and an action moves into $f$.
 The interpolation operator from a space $U$ to $V$ is the form
 `form(interpolate(u, V), (u,))`, with a function `u` in $U$, a form whose
 value is a field. The adjoint of the operator takes a function `l` in
-`dual(V)` to the form `form(action(l, 0, interpolate(u, V)), (u,))`,
+`dual(V)` to the form `form(action(l, 0, interpolate(u, V)), (conjugate(u),))`,
 antilinear in `u`, with the static type of a function in `dual(U)`. Binding
 `l` as well gives the form of the interpolation matrix. The action on `l`
 remains, and the library of `l` evaluates the pairing, the transpose of the
@@ -4546,7 +4615,7 @@ polynomial degrees 1 and 2 on `D`, a Nédélec space `W` on `D` of the degree
 - `interpolate(u, W)` raises `ValueError`, because the degree of `u` is `()`
   and the degree of `W` is `(1,)`.
 - `form(interpolate(u, V2), (u,))` is the prolongation from `V` to `V2`, and
-  `form(action(l, 0, interpolate(u, V2)), (u,))` is the restriction of `l` to
+  `form(action(l, 0, interpolate(u, V2)), (conjugate(u),))` is the restriction of `l` to
   a linear form on `V`, the transpose of the prolongation, as in multigrid.
 
 ### New questions
@@ -4732,6 +4801,7 @@ AbstractExpression
 # Function spaces
 Base
 └── AbstractFunctionSpace                 degree and value shape of functions
+    ├── ConjugateSpace                    the complex conjugate space of a complex space
     └── DualSpace                         antilinear forms on a space or a product
 AbstractExpression
 └── Function                              a member of a space, a terminal
@@ -4739,7 +4809,7 @@ AbstractExpression
 # Variational forms
 AbstractExpression
 ├── Form                                  binds functions as arguments
-└── Action                                gives an expression to a slot of a form
+└── Action                                gives an expression to an argument of a form
 ```
 
 ## Appendix: Free functions
@@ -4786,8 +4856,9 @@ AbstractExpression
 |                                 | [`normal(D, E, side)`](#normal)                                 |                               | `D, E: DecomposedDomain`, `side: str`                                                                       | `Normal`                                                                    |
 | Function spaces                 | [`function(V, label)`](#function)                               |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                           | `Function`                                                                  |
 | Variational forms               | [`form(expression, arguments)`](#form)                          |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| tuple[Function, ...], ...]`                 | `Form`                                                                      |
+|                                 | [`conjugate_space(V)`](#conjugatespace)                         |                               | `V: AbstractFunctionSpace`                                                                                  | `V` for a real `V`, and `ConjugateSpace` for a complex `V`                  |
 |                                 | [`dual(S)`](#dualspace)                                         |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                             | `DualSpace`                                                                 |
-|                                 | [`action(f, slot, g)`](#action)                                 |                               | `f: AbstractExpression`, `slot: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`             | `Action`                                                                    |
+|                                 | [`action(f, position, g)`](#action)                             |                               | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`         | `Action`                                                                    |
 
 The value-shape and other constraints on the arguments are stated in the section
 of each free function. A free function and an operator overload accept only the
@@ -4834,10 +4905,11 @@ rules in the section of the concrete class.
 | `Normal`                                       | `ambient_domain`, `parameter_domain`, `side`                                                    |                                                                                      |
 | `DecomposedDomain`                             | `pieces`                                                                                        | `ambient_domain`, `dimension`, `topology`                                            |
 | `AbstractFunctionSpace`                        | `domain`, `degree`, `value_shape`, `scalar_type`, `argument_spaces`, in every concrete subclass |                                                                                      |
+| `ConjugateSpace`                               | `space`                                                                                         | `domain`, `degree`, `value_shape`, `scalar_type`, `argument_spaces`                  |
 | `DualSpace`                                    | `space`                                                                                         | `domain`, `degree`, `value_shape`, `scalar_type`, `argument_spaces`                  |
 | `Function`                                     | `space`, `label`                                                                                |                                                                                      |
 | `Form`                                         | `expression`, `arguments`                                                                       | `argument_spaces`                                                                    |
-| `Action`                                       | `form`, `slot`, `argument`                                                                      | `argument_spaces`                                                                    |
+| `Action`                                       | `form`, `position`, `argument`                                                                  | `argument_spaces`                                                                    |
 
 ## Appendix: Static type table
 
@@ -4852,7 +4924,7 @@ not named in the argument spaces column must have the argument spaces `()`.
 | `Product`                                | The degree `()`, or exactly one slot each                 | The slotwise sum (see [Product](#product))    | Those of the operands, concatenated        |
 | `Power`, `Absolute`                      | The degree `()`                                           | `()`                                          | `()`                                       |
 | `Division`                               | The degree `()` for the second operand                    | The degree of the first operand               | Those of the first operand                 |
-| `Conjugate`                              | Any degree                                                | The degree of the operand                     | Those of the operand                       |
+| `Conjugate`                              | Any degree                                                | The degree of the operand                     | Those of the operand, each conjugated      |
 | `TensorProduct`                          | Any degree                                                | The concatenated degrees                      | Those of the operands, concatenated        |
 | `SquareRoot`, `Inverse`                  | The degree `()`                                           | `()`                                          | `()`                                       |
 | `Tensor`                                 | Equal degrees                                             | The degree of the entries                     | Those of the entries, which must be equal  |
@@ -4860,7 +4932,7 @@ not named in the argument spaces column must have the argument spaces `()`.
 | `Coordinate`                             | No such edges                                             | `()`                                          | `()`                                       |
 | `Normal`                                 | No such edges                                             | `()`                                          | `()`                                       |
 | `Function`                               | No such edges                                             | The degree of the space                       | Those of the space                         |
-| `Form`                                   | Any degree                                                | The degree of the expression                  | The space of each entry of the arguments   |
+| `Form`                                   | Any degree                                                | The degree of the expression                  | The space of each entry, conjugated for a `conjugate(v)` entry |
 | `Action`                                 | Any degree                                                | The degree of the form                        | Those of the form without the slot         |
 | `ExteriorDerivative`                     | The degree `()` or `(k,)`                                 | `(1,)` for `()`, and `(k + 1,)` for `(k,)`    | Those of the operand                       |
 | `Components`                             | At least one slot                                         | The first slot lowered by 1, and removed at 0 | Those of the operand                       |
@@ -4919,8 +4991,8 @@ whatever the class of the operand.
 | `Coordinate`                             | Rule                | Remains             | —                   | —               |
 | `Normal`                                 | Rule, Remains       | Remains             | —                   | —               |
 | `Function`                               | Remains             | Remains             | Remains             | Remains         |
-| `Form`                                   | Slot                | Slot                | Slot                | Rule            |
-| `Action`                                 | Slot                | Slot                | Slot                | Remains         |
+| `Form`                                   | Bound               | Bound               | Bound               | Rule            |
+| `Action`                                 | Bound               | Bound               | Bound               | Remains         |
 | `ExteriorDerivative`                     | Rule                | Rule                | Rule, Remains       | In              |
 | `Components`                             | Rule, Remains       | Remains             | Remains             | In              |
 | `Integral`                               | Rule                | Rule                | —                   | In              |
