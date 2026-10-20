@@ -3,7 +3,7 @@
 Authors: Jack S. Hale, Matthew Scroggs, Michal Habera
 
 This note is the argument behind [LANGUAGE.md](LANGUAGE.md). LANGUAGE.md is the
-specification and is normative. This note explains the seven ideas the
+specification and is normative. This note explains the eight ideas the
 specification is built on, the decisions that shape every section of it, and
 what is deliberately left out. Read this note first, then use LANGUAGE.md as a
 reference. Every heading below names the sections of LANGUAGE.md that carry
@@ -132,7 +132,53 @@ gradient on a surface in three dimensions, because `Components` projects the
 ambient frame onto the tangent space. There are no dimension-specific
 operators, which is the point of Basic principles.
 
-## Idea 4: domains are leaves or decompositions, and maps are how things move
+## Idea 4: indices carry the mesh and the runtime data
+
+Index notation does a second job beyond tensor algebra. It is the only way
+that a set of things, a mesh of cells, a family of points, a table of
+neighbours, enters the language, and the only way that data unknown until
+assembly enters it (Index, Extents, GatheredIndex, DomainMap).
+
+- **A family is a free index.** A `DomainMap` whose parameterisation has a
+  free index is one map for each value of the index. A mesh is such a family
+  from the reference cell, the sensor points of a data assimilation problem
+  are such a family from `RD(0)`, and a quadrature rule is such a family
+  weighted and summed. No node class represents "a set of cells".
+- **A cell index belongs to a topology.** `cell_index(T, j)` is a derived
+  index whose label names the topology and the cell type, so two meshes with
+  the same number of cells have different cell indices, and an expression
+  with that index free has one value per cell. A decomposed domain whose
+  pieces carry the cell indices of one topology has that topology.
+- **Tables are read by gathers.** A `GatheredIndex` is an index value read
+  from a table at other indices: the vertices of a cell, the cell on each
+  side of a facet, the cell containing a point. Gathers nest, so the vertices
+  of the neighbour of a facet are one index, and a gather is an ordinary
+  entry of `Indexed`, so the vertex positions of a cell are an ordinary
+  expression. The core never sees the table's values, only its shape and
+  extent.
+- **Extents may be unknown.** An `AbstractExtent` is a length that a solver
+  supplies, such as the number of cells or of quadrature points, and the type
+  rules compare extents by equality and never by value, so the same
+  expression serves a mesh of any size.
+- **Fresh indices need no global state.** A free function or a pass that
+  needs a new index derives it from its operands, with the operands in the
+  label, so the index cannot occur inside them, and construction stays a
+  pure function of its arguments. Labels track under replacement, so a
+  substitution commutes with `transpose` and the kernel placeholder pass can
+  swap one mesh for another.
+- **The kernel split is a split at the cell index.** After the passes, an
+  integral over a mesh is an index sum over the cell index of an expression
+  that reads cell data through gathers with that index. The sum is the
+  assembler's loop, the gathers are the packed inputs, and what is left is
+  the kernel (Concept: kernels). The same split at a facet index gives a
+  facet kernel, and at a point index a point evaluation.
+
+The price is that the tour builds the affine map of a cell by hand, from
+gathers of vertex positions, where legacy UFL hides it inside `Mesh`. The
+gain is that nothing is hidden: a surface, a macro element, a cut cell or a
+point cloud is written with the same five constructs.
+
+## Idea 5: domains are leaves or decompositions, and maps are how things move
 
 ```
 AbstractDomain                      the support of an expression
@@ -175,7 +221,7 @@ a 0-form integrates against a density that needs none. Where a k-form over a
 surface needs consistent orientations, the mesh library supplies a sign per
 cell as an ordinary expression (Concept: orientation of a domain).
 
-## Idea 5: a facet is a cell seen from a side
+## Idea 6: a facet is a cell seen from a side
 
 The core does not number facets, edges or vertices of a cell. A topology of
 sub-entities names, for each of its cells, the cell it is seen from on each
@@ -196,7 +242,7 @@ Jacobian applied to the reference facet normal, which the paired vertices
 determine (Normal). The interior facet example in LANGUAGE.md follows one
 `dS` form through all of this to a kernel.
 
-## Idea 6: a function is a terminal, and a form binds it
+## Idea 7: a function is a terminal, and a form binds it
 
 A `Function` is a member of a space and nothing more. It is not a test
 function, a trial function or a coefficient by itself. A `Form` binds some of
@@ -217,7 +263,7 @@ Mixed problems need no mixed space. An argument may be a tuple of functions
 in different spaces, on different domains, with different degrees, and a
 library assembles the tuple as one system or in blocks (Form).
 
-## Idea 7: six lazy transformations do all the work
+## Idea 8: six lazy transformations do all the work
 
 ```
 form(integral(f, D), (v, u))                  what the user wrote
@@ -275,13 +321,14 @@ L = form(integral(f * v, D), (v,))
 ```
 
 Every idea above is visible. The mesh is a family of affine maps from the
-reference triangle, built by gathers through the cell index (ideas 1 and 4).
-The gradient is the exterior derivative turned into an array (idea 3). The
-functions are plain members of a space, and the forms bind them (idea 6).
-`integral(f, D)` is one lazy node over the mesh, an expression like `f`
-itself, so `a` and `L` are expressions too (idea 2), and the passes turn the
-integral into a sum over cells of integrals over the reference triangle
-(idea 7). On a mesh of triangles and quadrilaterals, only `D` changes.
+reference triangle, built by gathers of the vertex positions through the cell
+index (ideas 4 and 5). The gradient is the exterior derivative turned into an
+array (idea 3). The functions are plain members of a space, and the forms
+bind them (idea 7). `integral(f, D)` is one lazy node over the mesh, an
+expression like `f` itself, so `a` and `L` are expressions too (idea 2), and
+the passes turn the integral into a sum over cells of integrals over the
+reference triangle (idea 8). On a mesh of triangles and quadrilaterals, only
+`D` changes.
 
 ## The decisions that shape everything
 
@@ -300,6 +347,10 @@ here so that a reader knows which choices are load-bearing.
 - **Index notation and ellipsis indices** instead of tensor operators, so
   every tensor operation is one composition for every rank (Index,
   EllipsisIndex).
+- **Families, tables and sizes are indices**: a free index for a family, a
+  derived index per topology for the cells, gathers for tables and abstract
+  extents for sizes, so no node class stands for a mesh (Index, Extents,
+  GatheredIndex).
 - **Exterior calculus with one derivative**, and `Components` as the bridge
   to arrays, so there are no dimension-specific operators (Degree,
   ExteriorDerivative, Components).
