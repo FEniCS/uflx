@@ -28,6 +28,7 @@ in the graph.
 | Look up one node class                       | The section named after the class, and the appendices |
 | Follow a form from the user to a kernel      | Core transformations, Concept: kernels                |
 | Add something without changing the core      | Extending the core                                    |
+| See the core exercised on small problems     | EXAMPLES.md                                           |
 
 ## Idea 1: the graph is the form, and only passes change it
 
