@@ -2,24 +2,24 @@
 
 Authors: Jack S. Hale, Matthew Scroggs, Michal Habera
 
-This note describes the smallest core language behind UFLx. It intentionally
-avoids implementation details, compiler algorithms, and broad redesign ideas.
-It assumes knowledge of differential geometry, and functional analysis. Some
-advanced differential geometry concepts are explained in more detail.
+This note describes the smallest core language behind UFLx. The note leaves
+out implementation details, compiler algorithms and broad redesign ideas. The
+note assumes knowledge of differential geometry and functional analysis, and
+explains some advanced concepts of differential geometry in more detail.
 
-This document is aimed at users and developers with extensive knowledge of
-domain specific languages for variational forms (e.g. UFL, ngsolve).
+This document is written for users and developers who know domain-specific
+languages for variational forms, such as UFL and ngsolve.
 
 ## AI usage statement
 
-This document has been co-created with Claude Opus 5.5 which has presumably
-been trained on a large corpus of material related to modern differential
-geometry, algorithms, functional programming and the source code of Firedrake,
-DOLFINx, UFL, FFCx, TSFC, GEM and many other packages. That said, Claude Code
-was specifically instructed not to look at any materials or source code
-directly. The quality of the document and resulting design is substantially
-higher than what could be achieved through 'old-fashioned' means. Sections with
-fully LLM generated content are explicitly marked.
+This document has been co-created with Claude Opus 5.5. Claude Opus 5.5 has
+presumably been trained on a large corpus of material on modern differential
+geometry, algorithms and functional programming, and on the source code of
+Firedrake, DOLFINx, UFL, FFCx, TSFC, GEM and many other packages. That said,
+Claude Code was instructed not to read any of those materials or source code
+directly. In the judgement of the authors, the quality of the document and of
+the resulting design is substantially higher than the authors could have
+reached without an LLM. Sections generated entirely by the LLM are marked.
 
 ## Contents
 
@@ -147,55 +147,52 @@ In one sentence:
 
 > UFLx is a typed symbolic language for writing variational forms.
 
-The UFLx core language (henceforth the core) should not use finite element or
-numerical analysis terminology - differential geometry, and functional
-analysis, and their intersection, without finite element (numerical analysis)
-concepts, should be all that is required. This draft of the scheme requires
-knowledge of calculus on intrinsic manifolds, i.e. a coordinate-free
-representation. This provides a very compact and dimension-free representation
-of many concepts already in UFL.
+The UFLx core language, henceforth the core, should not use finite element or
+numerical analysis terminology. Differential geometry and functional analysis
+should be all that the core requires. This draft requires calculus on
+manifolds in coordinate-free form. The coordinate-free form gives a compact,
+dimension-free statement of many concepts already in UFL.
 
-Finite element and numerical analysis concepts, when necessary, will be added
-on top of the core, or provided by external libraries (Basix being the
-'in-house' example). Basix and DOLFINx and their assumptions should not be
-visible in the core.
+Where finite element or numerical analysis concepts are needed, a layer above
+the core or an external library provides them. Basix is the in-house example.
+Neither Basix nor DOLFINx, nor their assumptions, should be visible in the
+core.
 
 UFLx is *not* a symbolic language for reasoning about problems in functional
-analysis or differential geometry. Hence, the core should only contain the
-minimal concepts and relations necessary for writing a wide range of
-variational forms as code for subsequent algorithmic transformation.
+analysis or differential geometry. The core should therefore contain only the
+concepts and relations needed to write variational forms as code for later
+algorithmic transformation.
 
 A UFLx program is ordinary Python code that constructs symbolic objects and
-connects them through a graph. The primary results are usually variational
-forms, such as bilinear forms, linear forms and functionals. Python code will
-be used to motivate examples but a full concrete implementation is out of
-scope.
+connects them through a graph. The result is usually a variational form, such
+as a bilinear form, a linear form or a functional. Python code illustrates the
+examples. A full implementation is out of scope.
 
-UFLx does not handle concrete data or numerical algorithms; e.g. actual meshes,
-boundary markers, numerical values of coefficients, or assembly procedures.
-Those belong to the surrounding problem-solving environment, such as DOLFINx,
-Firedrake, FIAT and Basix. UFLx instead specifies a set of leaf nodes, and the
-external library provides the concrete data behind the leaf nodes.
+UFLx does not handle concrete data or numerical algorithms, such as meshes,
+boundary markers, values of coefficients or assembly procedures. Those belong
+to the surrounding problem-solving environment, such as DOLFINx, Firedrake,
+FIAT and Basix. UFLx specifies a set of leaf nodes, and the external library
+provides the concrete data behind each leaf node.
 
 ### Basic principles
 
-- All core object definitions should be closely related to their strict
-  mathematical definition.
-- Extra definitions, properties or terminology outside of the established
-  mathematical fields noted must be avoided.
-- Strictness and expressivity, not brevity, is key in the core - brevity can be
-  added later with higher-level APIs. The cost of writing code against a
-  precise lower-level API has massively decreased with LLMs, and so the end
-  library could potentially be more concise than it was in the past.
-- The mathematical fields provide a rich foundation for writing variational
-  problems in a uniform way across geometric dimensions, i.e. 'special cases'
-  for particular dimensions do not exist, and so should not exist in the core.
+- Each core object definition should follow the mathematical definition of
+  the object closely.
+- The core must not add definitions, properties or terminology outside
+  differential geometry and functional analysis.
+- The core values strictness and expressivity over brevity. Higher-level APIs
+  can add brevity later. LLMs have lowered the cost of writing code against a
+  precise low-level API, so the end library could be more concise than in the
+  past.
+- The mathematical fields state variational problems uniformly across
+  geometric dimensions. Special cases for particular dimensions do not exist
+  in the mathematics, so they should not exist in the core.
 - The core does not contain algorithms for the convenience of a form
   compiler. A form compiler states the forms that the form compiler accepts.
   A pass outside the core must lower a form to those forms and must produce
   only node classes of the core and of the
   [language extensions](#language-extensions) that the form compiler accepts.
-  For example, a very basic form compiler might only accept integrals over a
+  For example, a basic form compiler might only accept integrals over a
   reference cell, such as a unit simplex, as in each cell term of a legacy UFL
   `dx` integral.
 
