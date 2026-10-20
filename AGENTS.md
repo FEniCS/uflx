@@ -15,11 +15,13 @@ adding to the object model.
 ## Commands
 
 Install for development (editable):
+
 ```
 pip install -e ".[ci,lint,docs]"
 ```
 
 Lint (must pass with zero diff/errors, matches CI):
+
 ```
 ruff check .
 ruff format --check .          # use `ruff format .` to auto-fix
@@ -27,6 +29,7 @@ pyrefly check                  # type checker, config in [tool.pyrefly]
 ```
 
 Run the core test suite:
+
 ```
 pytest test/
 pytest test/test_forms.py::test_name    # single test
@@ -35,12 +38,14 @@ pytest -n auto test/                    # parallel, matches CI (needs pytest-xdi
 
 `external/basix_uflx` is a separate installable package excluded from the main `uflx`
 package; install and test it independently:
+
 ```
 pip install external/basix_uflx
 pytest external/basix_uflx/test
 ```
 
 Build docs:
+
 ```
 cd doc && make html
 ```
@@ -89,10 +94,11 @@ consumers, e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` exte
   `Form` is a sum/combination of integrals whose integrand must be scalar with no
   free indices.
 
-Symbolic (Gateaux) differentiation and expression/integral transformation between
-domain configurations are the two core transformation procedures UFLx provides on top
-of this object model (see LANGUAGE.md §4) — both are lazy, expressed as graph
-operators rather than eagerly evaluated.
+LANGUAGE.md specifies six core transformations on top of this object model
+(expanding integrals, pull-backs and components, applying derivatives and actions,
+and reducing component tensors), all lazy graph rewrites rather than eager
+evaluation. The Gateaux derivative is planned but not yet specified (see the
+"Gateaux derivative" section of LANGUAGE.md).
 
 ## Python style
 
@@ -105,14 +111,18 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
   flake8-import-conventions, NumPy-specific rules, and a few more (`RUF`, `FLY`,
   `LOG`, `ISC`). Run the formatter/linter locally before calling a change done —
   don't rely on CI to catch formatting.
+
 - **Import order** (ruff's isort, default grouping): future → standard-library →
   third-party (`networkx`, `pytest`) → first-party (`uflx`) → local-folder.
+
 - **Docstrings**: Google style (`Args:`, `Returns:`, etc.), required on modules,
   classes and methods (`D` rules are enforced, `__init__.py` is exempted from unused
   imports only — not docstrings).
+
 - **Type hints**: used throughout and checked with `pyrefly` (`[tool.pyrefly]` in
   `pyproject.toml`); not currently enforced by a ruff annotation rule, but new public
   functions/methods should still be annotated to match the rest of the codebase.
+
 - **File header**: most files under `uflx/` (the core object-model layer —
   `entities.py`, `finite_elements.py`, `domains.py`, `function_spaces.py`,
   `functions.py`, `expressions.py`, `operators.py`, `integrals.py`,

@@ -3,9 +3,11 @@
 Authors: Jack S. Hale, Matthew Scroggs, Michal Habera
 
 This note describes the smallest core language behind UFLx. The note leaves
-out implementation details, compiler algorithms and broad redesign ideas. The
-note assumes knowledge of differential geometry and functional analysis, and
-explains some advanced concepts of differential geometry in more detail.
+out implementation details, compiler algorithms and broad redesign ideas.
+Implementation principles and the enforcement of the rules of the language
+are in DESIGN_CHOICES.md. The note assumes knowledge of differential geometry
+and functional analysis, and explains some advanced concepts of differential
+geometry in more detail.
 
 This document is written for users and developers who know domain-specific
 languages for variational forms, such as UFL and ngsolve.
@@ -21,14 +23,27 @@ directly. In the judgement of the authors, the quality of the document and of
 the resulting design is substantially higher than the authors could have
 reached without an LLM. Sections generated entirely by the LLM are marked.
 
+## Conventions
+
+The note uses "must" for a rule that an implementation or a library has to
+satisfy, "should" for a rule that an implementation or a library satisfies
+unless the note states a reason not to, and "may" for a choice that the note
+leaves open. A statement in the present tense, such as "the degree is a
+`tuple`", is a rule of the language. "Not yet covered" marks a decided gap, a
+part of the language that the authors intend to specify later. "Open" marks a
+question that the authors have not decided. A "Legacy note" relates a rule to
+legacy UFL and is not a rule. An "Implementation note" is advice to an
+implementation and is not a rule.
+
 ## Contents
+
+- [Conventions](#conventions)
 
 - [Scope](#scope)
   - [What UFLx is and isn't](#what-uflx-is-and-isnt)
   - [Basic principles](#basic-principles)
   - [A tour: the Poisson problem](#a-tour-the-poisson-problem)
 - [Rules of the language](#rules-of-the-language)
-  - [Basic implementation principles](#basic-implementation-principles)
   - [The base object `Base`](#the-base-object-base)
   - [Leaves and subclassing](#leaves-and-subclassing)
   - [Properties and free functions](#properties-and-free-functions)
@@ -202,10 +217,9 @@ provides the concrete data behind each leaf node.
 
 > Legacy note: TSFC lowers a UFL form to GEM, which repeats much of the
 > algebra of UFL, partly because UFL simplifies during construction. The UFLx
-> core does not simplify during construction, so my impression is that a form
-> compiler could use a lowered UFLx form directly, adding only leaves for
-> tables and kernel inputs. I have not checked this with the TSFC or FFCx
-> developers.
+> core does not simplify during construction, so a form compiler may be able
+> to use a lowered UFLx form directly, adding only leaves for tables and
+> kernel inputs. This has not been confirmed with the TSFC or FFCx developers.
 
 ### A tour: the Poisson problem
 
@@ -350,27 +364,12 @@ of the family, so each datum pairs with its point. `S` has no topology, because
 
 ## Rules of the language
 
-### Basic implementation principles
-
-- Explicit is better than implicit.
-
-- Boilerplate and error-prone patterns should be minimised.
-
-- UFLx should be deterministic on the same machine using the same byte-code.
-  Serialisation and pickling should be considered early.
-
-- Performance matters, so the data structures and algorithms of the core
-  should be chosen with care and tested for scalability.
-
-- The minimal language should need only a small number of object kinds. When
-  designing the language, consider whether objects can be composed rather than
-  extended, and what could be layered on top of the core.
-
 ### The base object `Base`
 
 The base object in UFLx must be extended by all objects that are included in
-the graph. The graph is a directed acyclic graph (DAG). An edge means "is
-defined from".
+the graph. The graph is a directed acyclic graph (DAG). An edge of the graph
+means "is defined from". The note writes "edge" for an edge of the graph, and
+"edge of a triangle" or "edge of a cell" for the geometric edge.
 
 Everything needed to define the variational problem must be recoverable from
 the graph. No information is held outside of the graph.
@@ -432,9 +431,6 @@ Objects must satisfy the following rules:
     the identifiers of different libraries apart, and a library keeps the
     identifiers of the classes of the library distinct.
 
-> Implementation note: Python randomises the hash of a `str` for each process,
-> so rule 1 needs a custom hash for `str` in an implementation in Python.
-
 Hence two objects are equal if and only if the two objects have the same class
 and equal construction arguments.
 
@@ -457,7 +453,9 @@ extensions](#language-extensions).
 
 Only leaves are subclassed. A leaf is an object that the core cannot build
 from other objects, such as the coordinate domain `RD(n)` or a function whose
-values an external library supplies. An object built from other objects is a
+values an external library supplies. A terminal is a leaf that is an
+expression, such as `Coordinate`, `Function` and `Normal` of the core, or a
+leaf expression of a downstream library. An object built from other objects is a
 single class of the core or a free function that returns objects of the core,
 never a subclass. For example, every domain is a `DomainMap`, and an
 affinely mapped triangle is a free function that returns a
@@ -573,21 +571,7 @@ constructor of `SideMap` when no group of the topology of `E` has a side named
 the pass has no rule for, or with an error of the pass, such as inconsistent
 units.
 
-### Enforcement
-
-Requires: [The base object `Base`](#the-base-object-base).
-
-Enforcement must be implemented to help library developers. Candidate tools
-are `dataclass`, deterministic hashing, hash-consing, `WeakValueDictionary`,
-`ruff` and [`semgrep`](https://github.com/semgrep/semgrep).
-
-These rules should be put in place at the start of the project.
-
-How best to enforce the rules is not yet clear. Custom static analysis, such
-as `semgrep`, may be more robust than making Python 'well behaved' at runtime.
-For example, the purity of a function cannot be checked in Python.
-
-## Coordinate domains
+## Domains
 
 We begin with differential geometry because the function spaces and operators
 of UFLx are defined on a domain. The function spaces and operators require the
@@ -872,8 +856,8 @@ mesh gives. An `AbstractIndexValue` with the shape `()` is one value. A table
 is read only through a [GatheredIndex](#gatheredindex), so one value is read
 as `gathered_index(v, ())`.
 
-> Legacy note: GEM, the intermediate language of TSFC, has `VariableIndex` for
-> the same purpose. The authors have not checked this.
+> Legacy note: GEM, the intermediate language of TSFC, appears to have
+> `VariableIndex` for the same purpose.
 
 Example:
 
@@ -2286,7 +2270,7 @@ Requires: [RD](#rd), [Coordinate](#coordinate), [Tensor](#tensor),
 The paraboloid over `RD(2)` collects the examples of the sections above.
 
 ```python
-# AbstractCoordinateDomain: RD(2), no edges.
+# AbstractCoordinateDomain: RD(2), no edges in the graph.
 P = RD(2)
 
 # AbstractExpression: Coordinate(RD(2)), value shape (2,).
@@ -2317,7 +2301,7 @@ $$\psi(X) = v_0 + X_0 (v_1 - v_0) + X_1 (v_2 - v_0)
 = (1 + 2 X_0 + X_1, X_0 + 3 X_1).$$
 
 ```python
-# AbstractCoordinateDomain: UnitSimplex(2), no edges.
+# AbstractCoordinateDomain: UnitSimplex(2), no edges in the graph.
 T = UnitSimplex(2)
 
 # AbstractExpression: Coordinate(UnitSimplex(2)), value shape (2,).
@@ -2839,9 +2823,9 @@ q = runtime_extent("q")
 points = runtime_array("points", (q, 2))
 weights = runtime_array("weights", (q,))
 
-# The family of q points in the part of T where phi < 0.
-# At this point we have no Function (phi) or if().
-xs = parameterised_domain(RD(0), component_tensor(points[i, k], (k,)), T)
+# The family of q points in the part of T where phi < 0. The level set phi
+# is not written here, because the core has no conditional.
+xs = domain_map(RD(0), component_tensor(points[i, k], (k,)), T)
 
 a = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
 ```
@@ -3687,9 +3671,13 @@ cells and a scatter-add.
 
 A kernel depends on no particular mesh. Before compiling a kernel, a pass
 replaces the topologies, the tables, the arrays and the extents of a mesh by
-placeholders numbered in the order of appearance, and renames the arguments of
-each form by the slot, so one compiled kernel serves every mesh with the same
-cell types and spaces, and every naming of the arguments.
+placeholders numbered in the order of appearance, renames the arguments of
+each form by position, and renames the bound indices of each `ComponentTensor`
+and `IndexSum` by the position of the binder and of the index, so one compiled
+kernel serves every mesh with the same cell types and spaces, and every naming
+of the arguments and of the indices. Equality is structural (rule 7), so
+without the renaming two kernels that differ only in the names of indices
+would compile twice.
 
 ## Function spaces
 
@@ -4265,8 +4253,10 @@ downstream lazy node class may join evaluation if the rules of the class
 rewrite only that class, move the node towards the leaves, and never reverse a
 core rule, as moving an `ExteriorDerivative` inside a `PullBack` would.
 
-A terminal is a `Coordinate`, a [`Function`](#function), or an expression with a
-support whose class is a leaf class of a downstream library. After evaluation,
+A terminal is a `Coordinate`, a [`Function`](#function), a [`Normal`](#normal),
+or an expression with a support whose class is a leaf class of a downstream
+library (see [Leaves and subclassing](#leaves-and-subclassing)). After
+evaluation,
 every `PullBack`, `ExteriorDerivative`, `Components` and `Action` applies to an
 expression that contains a downstream terminal, except the coordinate frame
 $\mathrm{d}X$ and the components of $\mathrm{d}X$ on a decomposed domain of
@@ -4520,7 +4510,7 @@ adds node classes.
 
 The core supports five kinds of extension:
 
-> LLM generated table, could be made more concise.
+> LLM generated table.
 
 | Kind of extension                    | Examples                                                    | Section                                     |
 | ------------------------------------ | ----------------------------------------------------------- | ------------------------------------------- |
