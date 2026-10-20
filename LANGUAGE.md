@@ -3245,7 +3245,7 @@ argument of a variational form.
 
 ### AbstractFunctionSpace
 
-Requires: [DecomposedDomain](#decomposeddomain), [Degree](#degree),
+Requires: [AbstractDomain](#abstractdomain), [Degree](#degree),
 [Scalar type](#scalar-type).
 
 See also: [PullBack](#pullback).
@@ -3519,6 +3519,9 @@ Examples, with the spaces `V` and `Q` and the functions `v` in `V` and `q` in
 
 Requires: [Argument spaces](#argument-spaces), [Function](#function).
 
+A concrete subclass of `AbstractExpression` for a variational form, an
+expression with some of its functions bound as arguments.
+
 | `Form(expression, arguments)` |                                                                                                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Free function                 | `form(expression, arguments)`                                                                                                                                                                      |
@@ -3584,6 +3587,9 @@ expression `a` linear in `u` and `v`:
 ### Action
 
 Requires: [Form](#form).
+
+A concrete subclass of `AbstractExpression` for the action of a form, an
+expression given to one argument of the form.
 
 | `Action(f, position, g)` |                                                                                                                                                                                                   |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -4263,8 +4269,9 @@ A new transformation is a pass with one rule for each node class of the core
 and one rule for each leaf class that the transformation rewrites. For example,
 the [Gateaux derivative](#gateaux-derivative) rewrites the functions that the
 derivative is taken with respect to, so the Gateaux derivative needs a rule for
-the leaf classes of those functions. A new transformation must produce only node classes of the
-core. A transformation that needs a new node class needs a language extension.
+the leaf classes of those functions. A new transformation must produce only
+node classes of the core. A transformation that needs a new node class needs
+a language extension.
 
 There should be helpers to check whether a transformation covers all classes
 of the core.
