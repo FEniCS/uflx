@@ -70,7 +70,7 @@ reached without an LLM. Sections generated entirely by the LLM are marked.
   - [Indexed](#indexed)
   - [ComponentTensor and IndexSum](#componenttensor-and-indexsum)
   - [Tensor algebra with EllipsisIndex](#tensor-algebra-with-ellipsisindex)
-  - [Transpose and matrix product](#transpose-and-matrix-product)
+  - [Example: transpose and matrix product](#example-transpose-and-matrix-product)
   - [Inverse](#inverse)
   - [Operator overloads](#operator-overloads)
   - [Numbers in expressions](#numbers-in-expressions)
@@ -479,15 +479,15 @@ type of a property.
 Requires: [The base object `Base`](#the-base-object-base).
 
 See also: [`AbstractExpression`](#abstractexpression),
-[ParameterisedDomain](#parameteriseddomain), [Coordinate](#coordinate),
-[Transpose and matrix product](#transpose-and-matrix-product).
+[DomainMap](#domainmap), [Coordinate](#coordinate),
+[Example: transpose and matrix product](#example-transpose-and-matrix-product).
 
 A property reads and a free function builds. Data that an object stores, or
 derives from the class and the construction arguments of the object, is a
 property of the object, such as `value_shape` of an expression or
 `parameter_domain` of a domain. A property never constructs an object. Any
 operation that constructs objects is a pure free function, such as
-`coordinate(P)` or `transpose(A)`. A class method, where
+`coordinate(P)` or `volume_form(P)`. A class method, where
 needed, immediately calls a free function.
 
 Free functions are not objects in the graph. A free function builds or returns
@@ -555,7 +555,7 @@ and the user of the core chooses which passes run and in what order.
 Requires: [The base object `Base`](#the-base-object-base), [Properties and free
 functions](#properties-and-free-functions), [Passes](#passes).
 
-See also: [Transpose and matrix product](#transpose-and-matrix-product),
+See also: [Example: transpose and matrix product](#example-transpose-and-matrix-product),
 [Indexed](#indexed), [New questions](#new-questions).
 
 Three kinds of code produce objects:
@@ -563,12 +563,13 @@ Three kinds of code produce objects:
 | Kind                                               | When the code runs              | Inspects arguments to choose what to build                                | Validates                     |
 | -------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- | ----------------------------- |
 | Constructor                                        | Whenever an object is made      | No, a constructor inspects arguments only to validate                     | Yes, and only constructors do |
-| Construction free function, such as `transpose`    | While the user builds the graph | Only the static type, to build one fixed composition for each static type | No                            |
+| Construction free function, such as `volume_form`  | While the user builds the graph | Only the static type, to build one fixed composition for each static type | No                            |
 | Pass, such as differentiation, lowering or `units` | After construction              | Yes, and a pass may rewrite the graph                                     | No                            |
 
 A construction free function fails when a constructor rejects the
-arguments, for example `transpose` of a vector raises `IndexError` from the
-constructor of `Indexed`. A pass fails with `TypeError` for a node class that
+arguments, for example `restriction(f, E, s)` raises `ValueError` from the
+constructor of `SideMap` when no group of the topology of `E` has a side named
+`s`. A pass fails with `TypeError` for a node class that
 the pass has no rule for, or with an error of the pass, such as inconsistent
 units.
 
@@ -727,8 +728,8 @@ shape `()` is a scalar.
 Requires: [The base object `Base`](#the-base-object-base), [Properties and free
 functions](#properties-and-free-functions).
 
-See also: [Indexed](#indexed), [Transpose and matrix
-product](#transpose-and-matrix-product).
+See also: [Indexed](#indexed), [Example: transpose and matrix
+product](#example-transpose-and-matrix-product).
 
 > LLM generated content.
 
@@ -1051,7 +1052,7 @@ Requires: [Properties and free functions](#properties-and-free-functions),
 [Scalar type](#scalar-type), [Support](#support), [Degree](#degree),
 [AbstractDomain](#abstractdomain).
 
-See also: [Transpose and matrix product](#transpose-and-matrix-product), [Volume
+See also: [Example: transpose and matrix product](#example-transpose-and-matrix-product), [Volume
 form](#volume-form), [ExteriorDerivative](#exteriorderivative),
 [Division](#division), [Elementary functions (very
 incomplete)](#elementary-functions-very-incomplete),
@@ -1080,6 +1081,17 @@ For example, the transpose is always `component_tensor(A[k, l], (l, k))`, and
 `volume_form(P)` is the product of the $n$ coordinate 1-forms of a coordinate
 domain of dimension $n$, so both are free functions. No composition of
 existing nodes differentiates, so `ExteriorDerivative` is a node class.
+
+A free function is part of the core only if a definition or a rule of the
+core uses the free function, such as `volume_form` in [Integral over a
+decomposed domain](#integral-over-a-decomposed-domain) and `cell_domain` in
+[Restriction](#restriction). Every other free function belongs to a library,
+such as `transpose` (see [Example: transpose and matrix
+product](#example-transpose-and-matrix-product)) and the operations of
+[Tensor algebra with EllipsisIndex](#tensor-algebra-with-ellipsisindex). The
+operator overloads of the core are those of the free functions of the core,
+so `A + B` on tensors is not an overload (see
+[Operator overloads](#operator-overloads)).
 `Division` and `SquareRoot` are evaluated by a numerical algorithm that the
 user supplies, so each is a node class.
 
@@ -1256,11 +1268,13 @@ See also: [Applying derivatives](#applying-derivatives).
 | `Power(first, second)` |                                                                             |
 | ---------------------- | --------------------------------------------------------------------------- |
 | Free function          | `power(first, second)`, with the overload `**`                              |
-| Requires               | The operands of [Arithmetic](#arithmetic), with an exponent with no support |
+| Requires               | The operands of [Arithmetic](#arithmetic), both of the degree `()`                |
 | Raises                 | `ValueError` if a requirement fails                                         |
 
-The derivative of a power whose exponent has a support needs a logarithm,
-which the core does not have.
+The exponent may have a support. The derivative of a power whose exponent has
+a support needs a logarithm, which the core does not have, so the exterior
+derivative of such a power remains after
+[`apply_derivatives`](#applying-derivatives), as on a function.
 
 ### Negation and subtraction
 
@@ -1299,7 +1313,7 @@ type](#scalar-type).
 | `Absolute(f)` |                                           |
 | ------------- | ----------------------------------------- |
 | Free function | `absolute(f)`, with the overload `abs(f)` |
-| Requires      | A scalar $f$                              |
+| Requires      | A scalar $f$ of the degree `()`           |
 | Static type   | Value shape `()`, real                    |
 | Raises        | `ValueError` if a requirement fails       |
 
@@ -1595,27 +1609,31 @@ and an ordinary index `k`:
 because the extents of `r` differ. The overload `A + B` calls `add`, so
 `A + B` accepts only scalars (see [Arithmetic](#arithmetic)).
 
-### Transpose and matrix product
+### Example: transpose and matrix product
 
 Requires: [Index](#index), [Indexed](#indexed), [ComponentTensor and
 IndexSum](#componenttensor-and-indexsum), [Product](#product).
 
-Transpose and matrix product are free functions built with derived indices:
+`transpose` and `matrix_product` are not part of the core. A library provides
+the two as free functions built with derived indices (see [New
+operations](#new-operations)), and the examples of this note use the two:
 
 - `transpose(A)` is `component_tensor(A[k, l], (l, k))`, with
-  $k$ = `Index(("uflx.transpose", A, 0))` and
-  $l$ = `Index(("uflx.transpose", A, 1))`.
-- `matrix_product(A, B)`, with the overload `A @ B`, is
+  $k$ = `Index(("library.transpose", A, 0))` and
+  $l$ = `Index(("library.transpose", A, 1))`.
+- `matrix_product(A, B)` is
   `component_tensor(index_sum(A[i, k] * B[k, j], (k,)), (i, j))`, with $i$, $k$
-  and $j$ the derived indices `Index(("uflx.matrix_product", A, B, m))` for
+  and $j$ the derived indices `Index(("library.matrix_product", A, B, m))` for
   $m = 0, 1, 2$.
 
 An operand that does not have rank 2, including a scalar operand, is rejected
 with `IndexError` by the constructor of `Indexed`. Unequal inner extents in
 `matrix_product` are rejected with `ValueError` by the constructor of `Product`,
-because the index $k$ has two extents. So the overload `@` accepts only rank 2
+because the index $k$ has two extents. So `matrix_product` accepts only rank 2
 operands. Contractions of other ranks, such as a matrix-vector product, are
-written in index notation.
+written in index notation. The core defines no overload for the matrix
+product, because the core has no free function for the matrix product (see
+[Operator overloads](#operator-overloads)).
 
 Examples, with a matrix `A` of value shape `(2, 2)`:
 
@@ -1626,8 +1644,8 @@ Examples, with a matrix `A` of value shape `(2, 2)`:
 
 Requires: [`AbstractExpression`](#abstractexpression), [Degree](#degree),
 [Division](#division), [Elementary
-functions](#elementary-functions-very-incomplete), [Transpose and matrix
-product](#transpose-and-matrix-product).
+functions](#elementary-functions-very-incomplete), [Example: transpose and matrix
+product](#example-transpose-and-matrix-product).
 
 See also: [Expanding pull-backs](#expanding-pull-backs), [Applying
 derivatives](#applying-derivatives).
@@ -1645,15 +1663,23 @@ $A^+$ is the inverse matrix $A^{-1}$. If $A$ has rank less than $k$,
 `Inverse(A)` is undefined. Construction does not check the rank of $A$.
 
 For $k = n$, the adjugate of $A$ divided by the determinant of $A$ is a
-fixed composition, and for $k < n$, `inverse(transpose(A) @ A) @ transpose(A)`
-is a fixed composition. `Inverse` is a node class, not those compositions,
-because the compositions differ in floating-point arithmetic from a
-factorisation of $A$, as for `Division` and `SquareRoot`. A pass chooses how
-to evaluate `Inverse`, such as in closed form for a small matrix, from
-$\det(A^T A)$, which the volume density of a domain of lower dimension also
-needs. One node class for every $k \le n$ gives one rule for every dimension,
-such as the rule for `Components` in
-[Expanding pull-backs](#expanding-pull-backs).
+fixed composition for each $n$, and for $k < n$,
+`matrix_product(inverse(matrix_product(transpose(A), A)), transpose(A))` is a
+fixed composition, with the library free functions of [Example: transpose and
+matrix product](#example-transpose-and-matrix-product). `Inverse` is a node
+class, not those compositions, for two reasons. No single composition covers
+every $k \le n$, and one node class gives one rule for every dimension, such
+as the rule for `Components` in
+[Expanding pull-backs](#expanding-pull-backs). And the compositions fix the
+algorithm, whereas a pass chooses how to evaluate `Inverse`, such as in closed
+form for a small matrix or by a factorisation, as for `Division` and
+`SquareRoot`. The determinant differs on both counts. The determinant of a
+$k \times k$ matrix is an exact polynomial, the Leibniz formula, whose only
+floating-point choice is the order of the sum, and the formula is a fixed
+composition for each $k$, so the core writes the determinant as that
+composition, such as in the density of [Integral over a decomposed
+domain](#integral-over-a-decomposed-domain), and has no node class for the
+determinant.
 
 Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
 
@@ -1678,8 +1704,8 @@ Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
 Requires: [`AbstractExpression`](#abstractexpression), [Sum](#sum),
 [Product](#product), [Division](#division), [Power](#power), [Negation and
 subtraction](#negation-and-subtraction), [Absolute](#absolute),
-[Indexed](#indexed), [Transpose and matrix
-product](#transpose-and-matrix-product).
+[Indexed](#indexed), [Example: transpose and matrix
+product](#example-transpose-and-matrix-product).
 
 See also: [Numbers in expressions](#numbers-in-expressions), [Appendix: Free
 functions](#appendix-free-functions).
@@ -1687,8 +1713,9 @@ functions](#appendix-free-functions).
 Every overload in the [table of free functions](#appendix-free-functions) is
 a method of `AbstractExpression` (see
 [`AbstractExpression`](#abstractexpression)). No other class defines
-arithmetic, matrix or indexing overloads. An overload outside the standard
-mathematical meaning of the operator should be considered with care.
+arithmetic or indexing overloads. An overload outside the standard
+mathematical meaning of the operator should be considered with care. The core
+has no free function for a matrix product, so `@` is not an overload.
 
 An operator overload calls the free function with the operands unchanged, and
 the constructor validates (see [Numbers in expressions](#numbers-in-expressions)).
@@ -1759,11 +1786,6 @@ class AbstractExpression(Base, ABC):
     def __mul__(self, other: AbstractExpression) -> AbstractExpression:
         """Multiply."""
         # Calls the free function multiply.
-        ...
-
-    def __matmul__(self, other: AbstractExpression) -> AbstractExpression:
-        """Matrix multiply."""
-        # Calls the free function matrix_product.
         ...
 
     def __truediv__(self, other: AbstractExpression) -> AbstractExpression:
@@ -3733,20 +3755,21 @@ shape (see [PullBack](#pullback)). The library of $V$ fixes how the function is
 represented on the reference cell. For a space of differential forms, the
 natural representation is the pull-back itself, and the legacy UFL map is the
 pull-back of the slots. For a space of vector fields, the library chooses the
-representation, and the legacy UFL map is the choice of the library:
+representation, and the legacy UFL map is the choice of the library. With $k$
+the dimension of $D$ and $n$ the dimension of the ambient coordinate domain:
 
 | Space                             | Degree     | Value shape | Legacy UFL map                   |
 | --------------------------------- | ---------- | ----------- | -------------------------------- |
 | Lagrange                          | `()`       | `()`        | identity                         |
 | Vector Lagrange                   | `()`       | `(n,)`      | identity                         |
 | Nédélec, $H(\mathrm{curl})$       | `(1,)`     | `()`        | covariant Piola                  |
-| Raviart–Thomas, $H(\mathrm{div})$ | `(n - 1,)` | `()`        | contravariant Piola              |
+| Raviart–Thomas, $H(\mathrm{div})$ | `(k - 1,)` | `()`        | contravariant Piola              |
 | Raviart–Thomas, $H(\mathrm{div})$ | `()`       | `(n,)`      | contravariant Piola of a library |
-| Discontinuous densities           | `(n,)`     | `()`        | $L^2$ Piola                      |
+| Discontinuous densities           | `(k,)`     | `()`        | $L^2$ Piola                      |
 | Regge                             | `(1, 1)`   | `()`        | double covariant                 |
 
 The two rows of Raviart–Thomas differ on a domain of dimension $k < n$, such as
-a surface in $R^3$. The space of $(n - 1)$-forms has the divergence
+a surface in $R^3$. The space of $(k - 1)$-forms has the divergence
 $\mathrm{d}u$, a $k$-form, and an integral of $\mathrm{d}u$ needs an
 orientation of the domain (see [Concept: orientation of a
 domain](#concept-orientation-of-a-domain)). The space of vector fields has the
@@ -3770,12 +3793,12 @@ yet covered. The Sobolev space is expected to be stated through the
 topology of $D$ from the two sides of each facet.
 
 Examples, with a decomposed domain `D` of `ReferenceSimplex(2)` cells in
-`RD(2)`, so $n = 2$:
+`RD(2)`, so $k = n = 2$:
 
 - The Lagrange space of polynomial degree 1 on `D` has the degree `()` and the
   value shape `()`.
 - The Nédélec and the Raviart–Thomas spaces on `D` both have the degree `(1,)`,
-  because $n - 1 = 1$. A Raviart–Thomas function is the vector field of legacy
+  because $k - 1 = 1$. A Raviart–Thomas function is the vector field of legacy
   UFL contracted with the volume form.
 - The discontinuous Lagrange space of polynomial degree 0 on `D`, as densities,
   has the degree `(2,)`.
@@ -4348,6 +4371,8 @@ chain rule for the node classes of the degree `()`, with these rules:
 | `Inverse` $A^+$                                                             | $-A^+ \, \mathrm{d}A \, A^+ + A^+ (A^+)^T \, \mathrm{d}A^T \, (I - A A^+)$                                         |
 | `Absolute` $\lvert a \rvert$                                                | $(\bar{a} \, \mathrm{d}a + a \, \overline{\mathrm{d}a}) / (2 \lvert a \rvert)$                                     |
 | `Conjugate` $\bar{\omega}$                                                  | $\overline{\mathrm{d}\omega}$                                                                                      |
+| `Power` $a^b$ with an exponent $b$ with no support                          | $b \, a^{b - 1} \, \mathrm{d}a$, the chain rule, with `b - Integer(1)` the exponent                                |
+| `Power` $a^b$ with an exponent $b$ with a support                           | Remains                                                                                                            |
 | `ExteriorDerivative`, an expression with no support, or a `PullBack` of one | `Zero`, with the value shape, the free indices and the argument spaces of the operand and the degree raised by one |
 | `Coordinate(P)`, `Normal`, `Function` or a downstream terminal              | Remains                                                                                                            |
 | `Components`, or a `PullBack` of an expression with a support               | Remains                                                                                                            |
@@ -4383,7 +4408,7 @@ rules:
 
 | Operand                                                                                                                              | Rewrite of $\iota_j$ applied to the operand                                                                |
 | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `Product` $\alpha \wedge \beta$, with the first slot of $\alpha$ of the degree $k$                                                   | $\iota_j\alpha \wedge \beta + (-1)^k \alpha \wedge \iota_j\beta$, and $f \, \iota_j\beta$ for a 0-form $f$ |
+| `Product` $\alpha \wedge \beta$, with the first slot of $\alpha$ of the degree $k$                                                   | $\iota_j\alpha \wedge \beta + (-1)^k \alpha \wedge \iota_j\beta$ when both operands have a slot, $f \, \iota_j\beta$ for a 0-form $f = \alpha$, and $\iota_j\alpha \, f$ for a 0-form $f = \beta$ |
 | `TensorProduct` $\alpha \otimes \beta$                                                                                               | $(\iota_j\alpha) \otimes \beta$ if $\alpha$ has a slot, and $f \, \iota_j\beta$ for a 0-form $f$           |
 | $\mathrm{d}X_i$, on a support of the dimension of the frame                                                                          | $\delta_{ij}$                                                                                              |
 | `Zero`                                                                                                                               | `Zero` with the new value shape and degree                                                                 |
@@ -4513,8 +4538,8 @@ core.
 ### Language extensions
 
 Requires: [Leaves and subclassing](#leaves-and-subclassing), [Passes](#passes),
-[Core transformations](#core-transformations), [Transpose and matrix
-product](#transpose-and-matrix-product).
+[Core transformations](#core-transformations), [Example: transpose and matrix
+product](#example-transpose-and-matrix-product).
 
 A language extension adds node classes that are not leaves, in a package
 outside the core. A node class of a language extension subclasses
@@ -4716,9 +4741,9 @@ Requires: [Language extensions](#language-extensions).
 
 A new transformation is a pass with one rule for each node class of the core
 and one rule for each leaf class that the transformation rewrites. For example,
-a Gateaux derivative rewrites the functions that the derivative is taken with
-respect to, so the Gateaux derivative needs a rule for the leaf classes of
-those functions. A new transformation must produce only node classes of the
+the [Gateaux derivative](#gateaux-derivative) rewrites the functions that the
+derivative is taken with respect to, so the Gateaux derivative needs a rule for
+the leaf classes of those functions. A new transformation must produce only node classes of the
 core. A transformation that needs a new node class needs a language extension.
 
 There should be helpers to check whether a transformation covers all classes
@@ -4835,8 +4860,6 @@ AbstractExpression
 |                                 | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple`                                                                   | `Indexed`                                                                   |
 |                                 | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                                                       | `ComponentTensor`                                                           |
 |                                 | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                                                       | `IndexSum`                                                                  |
-|                                 | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                                                                     | `ComponentTensor` of an `Indexed`                                           |
-|                                 | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                                                                  | `ComponentTensor` of an `IndexSum`                                          |
 |                                 | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                                                                     | `Inverse`                                                                   |
 | Calculus on a domain            | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractDomain`                                                                                         | `Coordinate`                                                                |
 |                                 | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                | `ExteriorDerivative`                                                        |
@@ -4984,7 +5007,8 @@ whatever the class of the operand.
 | `Sum`, `Tensor`                          | In                  | In                  | In                  | Rule            |
 | `Product`, `TensorProduct`               | In                  | Rule                | Rule                | Rule            |
 | `Division`                               | In                  | Rule                | In                  | In              |
-| `Power`, `SquareRoot`                    | In                  | Chain               | —                   | —               |
+| `Power`                                  | In                  | Chain, Remains      | —                   | —               |
+| `SquareRoot`                             | In                  | Chain               | —                   | —               |
 | `Absolute`, `Inverse`                    | In                  | Rule                | —                   | —               |
 | `Conjugate`                              | In                  | Rule                | Rule                | In              |
 | `Indexed`, `ComponentTensor`, `IndexSum` | In                  | In                  | In                  | In              |
