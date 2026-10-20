@@ -346,14 +346,14 @@ to evaluate `u` and `v` there.
 - Boilerplate and error-prone patterns should be minimised.
 
 - UFLx should be deterministic on the same machine using the same byte-code.
-  Serialisation/pickling should be considered early on.
+  Serialisation and pickling should be considered early.
 
-- Performance is *important* and so any data structures and algorithms in the
-  core should be carefully chosen and tested for scalability.
+- Performance matters, so the data structures and algorithms of the core
+  should be chosen with care and tested for scalability.
 
-- The minimal language should only need a relatively small number of object
-  kinds. When designing the language, consider whether objects can be composed,
-  rather than extended. Consider what could be layered on top of the core.
+- The minimal language should need only a small number of object kinds. When
+  designing the language, consider whether objects can be composed rather than
+  extended, and what could be layered on top of the core.
 
 ### The base object `Base`
 
@@ -434,8 +434,8 @@ An object cannot be changed. To obtain a modified object, construct a new
 object and reconstruct every object that depends on the original object, up to
 the root of the graph.
 
-The above design implies that construction arguments should be small and cheap
-to hash and compare, and the graph implementation must be performant.
+This design implies that construction arguments should be small and cheap to
+hash and compare, and that the graph implementation must be fast.
 
 ### Leaves and subclassing
 
@@ -495,12 +495,11 @@ has the derived properties of the abstract classes of the concrete class.
 
 Requires: [The base object `Base`](#the-base-object-base).
 
-Simplifications and rewriting should be completely avoided during user graph
-construction, maintaining the user's intent. Only later selectable algorithmic
-passes should re-write. A good example is `(a + b) + c` in floating point
-arithmetic where `a`, `b` and `c` are unknown terminals (i.e. to be provided
-later). The user may have very good reason to have `(a + b)` performed before
-adding the answer to `c`.
+Simplification and rewriting should be avoided entirely while the user
+constructs the graph, so the graph keeps the intent of the user. Only later
+passes, chosen by the user, should rewrite. For example, in `(a + b) + c` in
+floating point arithmetic, where `a`, `b` and `c` are terminals supplied
+later, the user may need `(a + b)` evaluated before `c` is added.
 
 ### Passes
 
@@ -562,18 +561,15 @@ units.
 
 Requires: [The base object `Base`](#the-base-object-base).
 
-Enforcement must be implemented to help library developers - look at tools such
-as `dataclass`, deterministic hashing, hash-consing, `WeakValueDictionary`,
-`ruff` and `semgrep`.
+Enforcement must be implemented to help library developers. Candidate tools
+are `dataclass`, deterministic hashing, hash-consing, `WeakValueDictionary`,
+`ruff` and [`semgrep`](https://github.com/semgrep/semgrep).
 
-https://github.com/semgrep/semgrep
+These rules should be put in place at the start of the project.
 
-This rules should be put in place at the start of the project.
-
-It is not clear at the moment how best to do this - it may be that custom
-static analysis e.g. (semgrep) is more robust than hacking Python to be 'well
-behaved' in some places, for example checking the purity of functions is not
-possible in Python.
+How best to enforce the rules is not yet clear. Custom static analysis, such
+as `semgrep`, may be more robust than making Python 'well behaved' at runtime.
+For example, the purity of a function cannot be checked in Python.
 
 ## Coordinate domains
 
