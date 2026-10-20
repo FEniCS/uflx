@@ -2849,16 +2849,18 @@ sides. `S.sides` has one entry for each cell type of $S$. Entry $i$ is a
 `tuple` of one or more sides with distinct names, each a triple `(name, T, j)`
 of a side name, a `str`, a topology $T$ and a cell type number $j$ of $T$. Two
 entries of the same cell type of $S$ differ, so a group of cells of $S$ is
-fixed by the cell type and the sides together. Each
-cell of type $i$ of $S$ is seen from one cell of type $j$ of $T$ on each side,
-and is a whole sub-entity of that cell, the image of cell type $i$ of $S$ under
-the affine map through the paired vertices (see [Restriction](#restriction)).
-The sub-entity may be the cell itself, with the vertices in the order of the
-cell, a facet, or a sub-entity of lower dimension, such as an edge of a
-tetrahedron or a vertex. The concrete mesh pairs each vertex of a
-cell of $S$ with a vertex of the cell on each side, the same vertex for a
-matching facet, and a vertex one period away for a periodic boundary. A
-topology whose cells are not seen from other cells has the sides `()`.
+fixed by the cell type and the sides together. A topology whose cells are not
+seen from other cells has the sides `()`.
+
+Each cell of type $i$ of $S$ is seen from one cell of type $j$ of $T$ on each
+side, and is a whole sub-entity of that cell, the image of cell type $i$ of
+$S$ under the affine map through the paired vertices (see
+[Restriction](#restriction)). The sub-entity may be the cell itself, with the
+vertices in the order of the cell, a facet, or a sub-entity of lower
+dimension, such as an edge of a tetrahedron or a vertex. The concrete mesh
+pairs each vertex of a cell of $S$ with a vertex of the cell on each side, the
+same vertex for a matching facet, and a vertex one period away for a periodic
+boundary.
 
 A concrete topology with sides also provides `side_tables(i, side)`, a pair of
 [`AbstractIndexValue`](#abstractindexvalue) tables `(cells, vertices)` for the
@@ -2960,14 +2962,13 @@ each cell of type $j$, as vertex numbers of the topology. Local vertex $i$ of
 cell $c$ of type $j$ is the vertex `cells[j][c][i]` of the topology. A
 `StaticTopology` with sides has one topology on every side, uses the vertex
 numbers of that topology, pairs each vertex with the same vertex, and computes
-the side tables from the vertex numbers. For a
-cell seen from two cells of the same group, the cell with the lower number is
-on the first side, and otherwise the group of each side decides.
-For a sub-entity of lower dimension than a facet, the cell with the lowest
-number that contains the sub-entity is chosen.
+the side tables from the vertex numbers. For a cell seen from two cells of the
+same group, the cell with the lower number is on the first side, and otherwise
+the group of each side decides. For a sub-entity of lower dimension than a
+facet, the cell with the lowest number that contains the sub-entity is chosen.
 
-> This is primarily useful for testing UFLx ideas later, but also covers
-> Alfeld splits.
+> `StaticTopology` is mainly for testing UFLx ideas, but also covers Alfeld
+> splits.
 
 ```python
 class StaticTopology(AbstractTopology):
@@ -3067,10 +3068,9 @@ reference cell $F$ is `parameterised_domain(F, affine_map(F, points), K)`, with
 row $v$ of `points` the vertex $w_v$ of $K$. The core does not check that the
 image is a sub-entity of $K$.
 
-> A downstream library such as Basix provides the vertex numbers of the facets,
-> so a facet is an ordinary
-> `ParameterisedDomain` in the form, and an integral over a facet is the
-> integral of a pull-back, as in the [boundary
+> A downstream library such as Basix provides the vertex numbers of the
+> facets, so a facet is an ordinary `ParameterisedDomain` in the form, and an
+> integral over a facet is the integral of a pull-back, as in the [boundary
 > example](#example-integrating-over-the-boundary-of-a-triangle).
 
 Examples:
