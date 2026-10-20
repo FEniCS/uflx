@@ -5,50 +5,43 @@ the suggested order of work.
 
 ## Blocking
 
-1. **Integral over a decomposed domain.** The section is a placeholder. Define
-   the integral of `omega` over `D` as the sum over the groups $j$ of
-   `index_sum(integral(s_j * pull_back(omega, cell_domain(D, j)), K_j), (cell_index(T, j),))`,
-   with the orientation sign `s_j = det J / |det J|` for $k = n$.
-1. **Volume form or density on a decomposed domain.** `volume_form` accepts only
-   coordinate domains. Add `volume_form(D)` for $k = n$, so that a 0-form
-   integrates as the legacy `f * dx`. For $k < n$ (surfaces, and facets for
-   `ds` and `dS`) decide between the induced density `sqrt(det(J^T J))` and an
-   orientation from a side. See PR 106's `INTEGRATION.md` §1–2 for the case for
-   densities.
-1. **Facet normal.** Define the outward normal of a cell of a topology with
-   sides, taking a side name, as the outward normal of the cell on that side.
-   The two sides give opposite normals. Needed for Neumann data, Nitsche terms
-   and DG fluxes.
+Nothing. Integrals over cells and facets use the induced density in
+`integral(f, D)`, and `normal(D, E, s)` gives the outward normal.
 
 ## Common forms
 
-4. **Surface gradient.** `components(du, D)` is refused when $D$ has a lower
+1. **Surface gradient and conormal.** `components(du, D)` is refused when $D$ has a lower
    dimension than the ambient coordinate domain. Specify the tangential
    projection (the pseudo-inverse of a non-square Jacobian) for surfaces and
-   shells.
-1. **Mixed and block forms.** A slot of a `Form` binds one function. Stokes is
-   bilinear in `(v, q)` and `(u, p)`, so decide between a slot that binds a
-   `tuple` of functions and a mixed space.
-1. **Linearisation.** Add the derivative with respect to a function, which adds
-   an argument to a form.
+   shells, and the in-surface conormal of the edges of a surface mesh, which
+   `normal` refuses.
+1. **Linearisation.** Add the derivative with respect to a function or a
+   `tuple` of functions, which adds a slot to a form. For shape derivatives and
+   ALE, the geometry must depend on a function, such as a parameterisation of
+   the pieces from a displacement function on the domain, because a form binds
+   only functions and the parameterisation is an expression of runtime data.
 1. **Conditionals and elementary functions.** Add `conditional` and `max` (for
    upwinding, limiters and switching materials) and more elementary functions,
    such as `exp` and `sin`.
 
 ## Already expressible
 
-- The Laplacian, once item 2 exists, as
-  `index_sum(components(du, D)[i] * components(dv, D)[i], (i,))` times the
-  volume form, with the Euclidean frame of `RD(n)`.
-- The volume and the size $h$ of each cell, as an `Integral` over $K_j$ of the
-  pulled-back volume form with the free cell index. The facet size waits on
-  item 2.
+- The Laplacian, as `integral` over `D` of
+  `index_sum(components(du, D)[i] * components(dv, D)[i], (i,))`, with the
+  Euclidean frame of `RD(n)`.
+- The volume and the size $h$ of each cell, and the area of each facet, as an
+  `Integral` over the reference cell of the density, with the free cell index.
+- Mixed forms, such as Stokes and mixed Poisson with Raviart–Thomas spaces, as
+  a slot of a `tuple` of functions, `form(e, ((v, q), (u, p)))`. The members
+  may be on different domains.
+- H(curl) and H(div) spaces, as spaces of the degree
+  `(1,)` and `(n - 1,)`, with the normal trace through `normal`.
 - Real spaces and Lagrange multipliers, as a space with the domain `None` and a
   `Function`.
 - Subdomain and marked boundary terms, through topologies with sides of
   codimension 0 and 1.
-- Point and vertex terms, through topologies of vertices, once item 1 covers
-  $k = 0$.
+- Point and vertex terms, through topologies of vertices, with `integral` over
+  a decomposed domain of dimension 0.
 
 ## Outside the core
 
