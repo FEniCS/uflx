@@ -32,8 +32,8 @@ unless the note states a reason not to, and "may" for a choice that the note
 leaves open. A statement in the present tense, such as "the degree is a
 `tuple`", is a rule of the language. "Not yet covered" marks a decided gap, a
 part of the language that the authors intend to specify later. "Open" marks a
-question that the authors have not decided. A "Legacy note" relates a rule to
-legacy UFL and is not a rule. An "Implementation note" is advice to an
+question that the authors have not decided. The correspondence with legacy UFL
+is in an appendix and is not a rule. An "Implementation note" is advice to an
 implementation and is not a rule.
 
 ## Contents
@@ -154,6 +154,7 @@ implementation and is not a rule.
   - [New operations](#new-operations)
   - [New subclasses](#new-subclasses)
   - [New transformations](#new-transformations)
+- [Appendix: Correspondence with legacy UFL](#appendix-correspondence-with-legacy-ufl)
 - [Appendix: Class hierarchy](#appendix-class-hierarchy)
 - [Appendix: Free functions](#appendix-free-functions)
 - [Appendix: Properties](#appendix-properties)
@@ -216,12 +217,6 @@ provides the concrete data behind each leaf node.
   For example, a basic form compiler might only accept integrals over a
   reference cell, such as a unit simplex, as in each cell term of a legacy UFL
   `dx` integral.
-
-> Legacy note: TSFC lowers a UFL form to GEM, which repeats much of the
-> algebra of UFL, partly because UFL simplifies during construction. The UFLx
-> core does not simplify during construction, so a form compiler may be able
-> to use a lowered UFLx form directly, adding only leaves for tables and
-> kernel inputs. This has not been confirmed with the TSFC or FFCx developers.
 
 ### A tour: the Poisson problem
 
@@ -858,9 +853,6 @@ mesh gives. An `AbstractIndexValue` with the shape `()` is one value. A table
 is read only through a [GatheredIndex](#gatheredindex), so one value is read
 as `gathered_index(v, ())`.
 
-> Legacy note: GEM, the intermediate language of TSFC, appears to have
-> `VariableIndex` for the same purpose.
-
 Example:
 
 - With an `AbstractIndexValue` `l` of the shape `()` and the extent 3, and the
@@ -1096,6 +1088,26 @@ Otherwise the node class belongs to a
 rational number as the `Division` of two `Integer`s, so `Division` is part of
 the core.
 
+The node classes of the core, and why each is a node class and not a
+composition:
+
+| Node class                                       | Why a node class                                                                                              |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `Integer`, `Float`, `ImaginaryUnit`              | A number written down is a leaf                                                                               |
+| `Zero`                                           | No composition gives a zero with free indices or a non-empty degree without edges to other expressions        |
+| `Sum`, `Product`, `Power`, `Absolute`, `Conjugate` | Operations of the scalar field, which nothing else composes                                                 |
+| `Division`                                       | `multiply(f, power(g, Integer(-1)))` rounds twice, and the quotient the user wrote rounds once                |
+| `SquareRoot`                                     | IEEE 754 rounds the square root correctly and the power not, so `power(f, Integer(1) / Integer(2))` differs   |
+| `TensorProduct`                                  | Nothing else adds a slot                                                                                      |
+| `Inverse`                                        | No one composition covers every $k \le n$, and a pass chooses the algorithm, as for `Division`                |
+| `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | The primitives of index notation                                                                            |
+| `Coordinate`, `Function`, `Normal`               | Terminals: the coordinate function of a domain, a member of a space, the outward normal of a cell on a side   |
+| `ExteriorDerivative`                             | Nothing composes to differentiate                                                                             |
+| `Components`                                     | Nothing composes to turn a slot into an axis                                                                  |
+| `Integral`                                       | Nothing composes to integrate over a coordinate domain, and over a decomposed domain a pass must meet the integral as written |
+| `PullBack`                                       | Nothing composes to move an expression between domains                                                        |
+| `Form`, `Action`                                 | Binding arguments and giving an expression to an argument are not compositions                                |
+
 ## Algebra
 
 ### Literals
@@ -1147,10 +1159,7 @@ See also: [Indexed](#indexed), [Applying derivatives](#applying-derivatives).
 | Raises                                                     | `TypeError` for an argument of another form, and `ValueError` for a negative extent, an index that occurs twice, or a slot degree less than 1                                      |
 
 `Zero` is the zero of any static type. `apply_derivatives` produces `Zero`
-(see [Applying derivatives](#applying-derivatives)). No fixed composition gives
-a zero with free indices or with a non-empty degree, because
-`Integer(0) * a[i]` has edges to `a`, and $0 \, \mathrm{d}x$ has edges to
-$\mathrm{d}x$. So `Zero` is a node class. For example,
+(see [Applying derivatives](#applying-derivatives)). For example,
 `Zero((), (), (1,), ())` is the zero 1-form, `Zero((3,), (), (), ())` is the
 zero array of value shape `(3,)`, and `Zero((), (), (), (V,))` is the zero
 linear form on a space `V`.
@@ -1227,8 +1236,7 @@ the operands, and a later pass may apply the identity. `Product` never adds a
 slot, so the product of two 1-forms is a 2-form with the degree `(2,)`, not a
 double form with the degree `(1, 1)`.
 
-No fixed composition of the other node classes multiplies, so `Product` is a
-node class. Every node class combines the free indices of operands that
+Every node class combines the free indices of operands that
 differ, by the general rule of [Free indices](#free-indices), unless the node
 class states otherwise. So a contraction is an `IndexSum` of any node class,
 such as `index_sum(a[i] * b[i], (i,))` or `index_sum(a[i] / b[i], (i,))`.
@@ -1320,8 +1328,7 @@ See also: [Variational forms](#variational-forms).
 | Raises         | `ValueError` if a requirement fails                                                         |
 
 `Conjugate` is the complex conjugate, acting on the coefficients of the form.
-No fixed composition of the other node classes conjugates, so `Conjugate` is a
-node class. A sesquilinear variational form, such as the $L^2$ inner product
+A sesquilinear variational form, such as the $L^2$ inner product
 $\int u \bar{v}$, needs `Conjugate`. A form that is linear in an argument is
 antilinear in the argument after conjugation, so `Conjugate` conjugates each
 argument space, with `conjugate_space(V)` for $V$ and $V$ for
@@ -1347,9 +1354,8 @@ differential forms. An operand with the degree `()` adds no slot, so
 $f \otimes \omega = f \omega$.
 
 The tensor product is not commutative, and `TensorProduct` never reorders the
-operands. No fixed composition of the other node classes adds a slot, so
-`TensorProduct` is a node class. `Product` adds degrees within a slot, and
-`TensorProduct` adds slots.
+operands. `Product` adds degrees within a slot, and `TensorProduct` adds
+slots.
 
 Examples, with the setup of [ExteriorDerivative](#exteriorderivative) on
 `RD(3)` and `i = index("i")`:
@@ -1648,21 +1654,16 @@ of rank $k$, the left inverse of $A$ with $A^+ A$ the identity. For $k = n$,
 $A^+$ is the inverse matrix $A^{-1}$. If $A$ has rank less than $k$,
 `Inverse(A)` is undefined. Construction does not check the rank of $A$.
 
-For $k = n$, the adjugate of $A$ divided by the determinant of $A$ is a
-fixed composition for each $n$, and for $k < n$,
-`matrix_product(inverse(matrix_product(transpose(A), A)), transpose(A))` is a
-fixed composition, with the library free functions of [Example: transpose and
-matrix product](#example-transpose-and-matrix-product). `Inverse` is a node
-class, not those compositions, for two reasons. No single composition covers
-every $k \le n$, and one node class gives one rule for every dimension, such
-as the rule for `Components` in
-[Expanding pull-backs](#expanding-pull-backs). And the compositions fix the
-algorithm, whereas a pass chooses how to evaluate `Inverse`, such as in closed
-form for a small matrix or by a factorisation, as for `Division` and
-`SquareRoot`. The determinant differs on both counts. The determinant of a
-$k \times k$ matrix is an exact polynomial, the Leibniz formula, whose only
-floating-point choice is the order of the sum, and the formula is a fixed
-composition for each $k$, so the core writes the determinant as that
+`Inverse` is a node class and not a composition (see [Node class or free
+function](#node-class-or-free-function)). For $k = n$ the adjugate divided by
+the determinant, and for $k < n$
+`matrix_product(inverse(matrix_product(transpose(A), A)), transpose(A))`, are
+compositions for one $k$ each, and no one composition covers every $k \le n$,
+whereas one node class gives one rule for every dimension, such as the rule
+for `Components` in [Expanding pull-backs](#expanding-pull-backs). A pass
+chooses how to evaluate `Inverse`, in closed form for a small matrix or by a
+factorisation. The determinant of a $k \times k$ matrix is an exact
+polynomial, the Leibniz formula, so the core writes the determinant as that
 composition, such as in the density of [Integral over a decomposed
 domain](#integral-over-a-decomposed-domain), and has no node class for the
 determinant.
@@ -1936,8 +1937,7 @@ the dimension of $P$ gives the zero form, as for [`Product`](#product).
 The exterior derivative acts on each component of an array-valued differential
 form, so the axes of the value shape pass through unchanged.
 
-No fixed composition of the other node classes differentiates, so
-`ExteriorDerivative` is a node class. `ExteriorDerivative` is lazy, and
+`ExteriorDerivative` is lazy, and
 [`apply_derivatives`](#applying-derivatives) evaluates the derivative. The
 exterior derivative of `Coordinate(P)` is the vector-valued 1-form
 $\mathrm{d}X$ and remains.
@@ -2028,8 +2028,7 @@ degree $k - 1$. If the first slot of $f$ has the degree 1, the result does not
 have that slot. For example, the degree `(1,)` gives `()`, the degree `(2,)`
 gives `(1,)`, and the degree `(1, 1)` gives `(1,)`.
 
-No fixed composition of the other node classes turns a slot into an axis, so
-`Components` is a node class. The reverse direction is a fixed composition,
+The reverse direction is a fixed composition,
 `index_sum(v[i] * dX[i], (i,))` for a vector `v` of value shape `(n,)`.
 
 The components depend on the coordinates of $P$. So a pull-back does not
@@ -2147,12 +2146,9 @@ decomposed domain as `Integral`s over the parameter domains of the pieces, and
 a later pass might evaluate an `Integral` over a coordinate domain, for example
 by quadrature.
 
-No fixed composition integrates over a coordinate domain, so `Integral` is a
-node class. The integral over a decomposed domain is a fixed composition of
-`Integral`s over the parameter domains of the pieces, but `Integral` keeps the
-integral over the decomposed domain as the user wrote the integral, so that a
-form compiler meets the domain of the integral and not the composition (see
-[Node class or free function](#node-class-or-free-function)).
+`Integral` keeps the integral over a decomposed domain as the user wrote the
+integral, so that a form compiler meets the domain of the integral and not the
+lowering (see [Node class or free function](#node-class-or-free-function)).
 
 An `Integral` is an expression, so integrals can be added, multiplied and
 used wherever an expression is accepted.
@@ -2780,7 +2776,6 @@ tensors](#reducing-component-tensors)). A form compiler could generate:
 weights = (1 / 6, 1 / 6, 1 / 6)
 points = ((1 / 2, 0.0), (1 / 2, 1 / 2), (0.0, 1 / 2))
 
-
 def kernel() -> float:
     q = 0.0
     for i in range(3):
@@ -2970,11 +2965,6 @@ index.
 By the rules of [free indices](#free-indices), an expression with the free
 index `cell_index(T, j)` has one value for each cell of type $j$.
 
-> Legacy note: In legacy UFL, a `Mesh` holds both the topology and the
-> coordinate element, and the measure `dx` hides the sum over the cells. In
-> UFLx, the topology, the parameterisations of the pieces of a decomposed
-> domain and the `IndexSum` over `cell_index(T, j)` are separate.
-
 Examples:
 
 - A square divided into two triangles has the cell types `(K,)`, for the
@@ -3043,12 +3033,6 @@ side. For example, the facets of an interface between fluid and solid
 triangles of the one cell type 0 of `T` have the sides
 `(("fluid", T, 0), ("solid", T, 0))`, and the cell on the side `"fluid"` is the
 fluid triangle.
-
-> Legacy note: The legacy UFL measures `ds` and `dS` integrate over a topology
-> of facets with one and two sides, and legacy UFL names the two sides `'+'`
-> and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the
-> cells of a subdomain, and the legacy UFL measure `dP` integrates over a
-> topology of vertices.
 
 A cell of $S$ that is not a whole sub-entity of the cell on a side, as with
 hanging nodes, a mortar interface or a line through the cells of a 3D mesh, is
@@ -3349,9 +3333,6 @@ pull-back by `cell_domain(D, j)` on the cell $g$ (see
 [Restriction](#restriction) moves an expression on $D$ to the cells of a
 topology with sides, through `gathered_cell_domain`.
 
-> Legacy note: In legacy UFL, a `Mesh` is a decomposed domain, and
-> `SpatialCoordinate(mesh)` is `coordinate(D)`.
-
 Example, with `K = ReferenceSimplex(2)`, the topology
 `square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())` of the
 [static topology example](#example-a-static-topology) on reference cells, an
@@ -3473,10 +3454,6 @@ $\mathrm{d}u$, as for a normal derivative, restrict `components(du, D)`, whose
 axes are in the frame of the ambient coordinate domain from every side. The
 outward normal of the cell on a side is [`normal(D, E, s)`](#normal).
 
-> Legacy note: The legacy UFL restriction `f('+')` is `restriction(f, E, "+")`
-> on the decomposed domain $E$ of the interior facets, whose sides are named
-> `'+'` and `'-'`.
-
 Example, with `D` and `square` of the [DecomposedDomain](#decomposeddomain)
 example, `I = ReferenceSimplex(1)`, a function `u` on `D`, and the diagonal of
 `square`:
@@ -3558,11 +3535,6 @@ in place of `cell_domain(D, j)`, so $D$ may be a set of points or of curves in
 a mesh. A free index of $f$ that is also a free index of piece $j$ takes the
 value of the member, so `d[i]` pairs a datum with each point of a family with
 the index `i`.
-
-> Legacy note: `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the
-> decomposed domain of the cells, of the boundary facets and of the interior
-> facets, with the fields restricted to the facets in `f`. The three are one
-> integral over three domains.
 
 Examples, with `D` of the [DecomposedDomain](#decomposeddomain) example, a
 function `u` on `D`, and the decomposed domain `B` of the boundary facets of
@@ -3760,13 +3732,6 @@ facet from each side.
   $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
   is a difference at one point.
 
-> Legacy note: The legacy UFL form is
-> `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`,
-> with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names,
-> the normal and the facet domain are explicit, `avg` and `jump` are ordinary
-> arithmetic on restrictions, and the size is an array of the solver or a
-> composition of integrals over the cells.
-
 ### Concept: kernels
 
 Requires: [DecomposedDomain](#decomposeddomain), [GatheredIndex](#gatheredindex),
@@ -3865,9 +3830,6 @@ multiplier, because an argument comes from a space. Constant data needs no
 space, because an expression with no support, such as a literal or an array
 that a kernel receives, is already a constant.
 
-> Legacy note: The legacy UFL `Real` space is a space of constants, and the
-> legacy UFL `Constant` is constant data.
-
 The pull-back by a cell fixes what a function in $V$ is on the cell. The
 pull-back transforms each slot and keeps the frame of each axis of the value
 shape (see [PullBack](#pullback)). The library of $V$ fixes how the function is
@@ -3898,12 +3860,6 @@ space of vector fields on a cell as $J \hat u / \rho$, with $\hat u$ a
 function on the reference cell, $J$ the Jacobian matrix of the cell and
 $\rho = \sqrt{\det(J^T J)}$ the density of
 [Integral over a decomposed domain](#integral-over-a-decomposed-domain).
-
-> Legacy note: In legacy UFL, a `FunctionSpace` holds a mesh and an element,
-> and the element states the value shape, the map to the reference cell and
-> the Sobolev space. In UFLx, the pull-back states the meaning of a function on
-> a cell, the library states the representation, and the space holds a
-> decomposed domain, the legacy mesh.
 
 A mixed problem needs no mixed space, because an argument of a [form](#form)
 may be a `tuple` of functions in several spaces. The Sobolev space of $V$ is not
@@ -3953,10 +3909,6 @@ remains after [applying derivatives](#applying-derivatives).
 
 A function is not an argument or a coefficient by itself. Whether a function is
 an argument of a form is stated by the form (see [Form](#form)).
-
-> Legacy note: The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction`
-> are all functions. A test function and a trial function are the functions
-> that a form states as the arguments at the positions 0 and 1.
 
 Examples, with a decomposed domain `D` and a space `V` on `D` of the degree
 `()` and the value shape `()`:
@@ -4081,11 +4033,6 @@ because `V` has the argument spaces `()`. The canonical map takes a function
 function `l` in `dual(V)`, linear in `w` and antilinear in `l`, and a library
 may store both with the same values.
 
-> Legacy note: The legacy UFL `Cofunction` and `Coargument` are a fixed and a
-> bound function in `dual(V)`. In legacy UFL, the dual of the dual space is
-> $V$. In UFLx, the canonical map is a form, so the spaces keep distinct
-> argument spaces.
-
 Examples, with the spaces `V` and `Q` and the functions `v` in `V` and `q` in
 `Q` of the [Form](#form) examples:
 
@@ -4149,13 +4096,6 @@ extension](#example-interpolation). The support is that of the expression, so
 a form of integrals has no support, although the arguments have one. A
 substitution renames a bound argument to avoid capture, as for indices (see
 [Passes](#passes)).
-
-> Legacy note: In legacy UFL, the arguments of a form are the test functions
-> and the trial functions in the integrand, with the argument numbers of the
-> functions, and a form is not an expression. In UFLx, a function has no
-> argument number, the form states the arguments, and a functional is any
-> expression with the argument spaces `()`. The legacy UFL `MixedElement` and
-> `split` are an argument that is a `tuple` of functions.
 
 Examples, with `u`, `v` and a fixed `w` in a space `V` on `D`, and an
 expression `a` linear in `u` and `v`:
@@ -4271,11 +4211,6 @@ L = form(integral(f * v, M), (v,))
   `components(exterior_derivative(grad_u, M), M)` is the tangential
   derivative $H$ of the surface gradient, which is not symmetric in general.
   The covariant Hessian of `u` is $P H P$.
-
-> Legacy note: Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of
-> topological dimension 2 in $R^3$, and `grad` is the surface gradient because
-> of the dimensions of the mesh. In UFLx, the same rule of `Components` gives
-> the gradient in every dimension.
 
 ### Example: the flux through a surface
 
@@ -4638,11 +4573,6 @@ Requires: [Passes](#passes), [Scalar type](#scalar-type), [Absolute](#absolute).
 Extensibility is a requirement of the core. Downstream libraries must be able
 to extend UFLx without changing the core.
 
-> Legacy note: In legacy UFL, properties are stored on the node classes, and
-> the set of properties is fixed. Every new property touches every node class,
-> so features such as complex numbers and dual spaces were patched in across
-> the node classes.
-
 The core has a small, fixed set of node classes and an open set of passes. A
 downstream library extends UFLx mainly by adding passes, not by adding
 properties to the node classes of the core. A new pass needs one rule for each
@@ -4756,10 +4686,6 @@ core provides [dual spaces](#dualspace), forms and actions.
 Interpolation between the spaces of two domains needs the cell of one domain
 that contains a point of the other, and is left to a later version of the
 extension.
-
-> Legacy note: In legacy UFL, `Interpolate(f, V)` is a `BaseFormOperator`, as
-> an external operator is, and the adjoint interpolation takes a `Coargument`.
-> In DOLFINx, interpolation happens outside UFL.
 
 Examples, with the decomposed domain `D`, the Lagrange spaces `V` and `V2` of
 polynomial degrees 1 and 2 on `D`, a Nédélec space `W` on `D` of the degree
@@ -4879,6 +4805,27 @@ core. A transformation that needs a new node class needs a language extension.
 
 There should be helpers to check whether a transformation covers all classes
 of the core.
+
+## Appendix: Correspondence with legacy UFL
+
+The notes that relate rules of the core to legacy UFL, by section.
+
+- **Basic principles.** TSFC lowers a UFL form to GEM, which repeats much of the algebra of UFL, partly because UFL simplifies during construction. The UFLx core does not simplify during construction, so a form compiler may be able to use a lowered UFLx form directly, adding only leaves for tables and kernel inputs. This has not been confirmed with the TSFC or FFCx developers.
+- **AbstractIndexValue.** GEM, the intermediate language of TSFC, appears to have `VariableIndex` for the same purpose.
+- **AbstractTopology.** In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and the measure `dx` hides the sum over the cells. In UFLx, the topology, the parameterisations of the pieces of a decomposed domain and the `IndexSum` over `cell_index(T, j)` are separate.
+- **Sides of a topology.** The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
+- **DecomposedDomain.** In legacy UFL, a `Mesh` is a decomposed domain, and `SpatialCoordinate(mesh)` is `coordinate(D)`.
+- **Restriction.** The legacy UFL restriction `f('+')` is `restriction(f, E, "+")` on the decomposed domain $E$ of the interior facets, whose sides are named `'+'` and `'-'`.
+- **Integral over a decomposed domain.** `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the decomposed domain of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
+- **Example: an interior facet integral.** The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal and the facet domain are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
+- **AbstractFunctionSpace.** The legacy UFL `Real` space is a space of constants, and the legacy UFL `Constant` is constant data.
+- **AbstractFunctionSpace.** In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, the pull-back states the meaning of a function on a cell, the library states the representation, and the space holds a decomposed domain, the legacy mesh.
+- **Function.** The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functions. A test function and a trial function are the functions that a form states as the arguments at the positions 0 and 1.
+- **DualSpace.** The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the canonical map is a form, so the spaces keep distinct argument spaces.
+- **Form.** In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
+- **Example: the Laplace-Beltrami operator.** Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Components` gives the gradient in every dimension.
+- **Extending the core.** In legacy UFL, properties are stored on the node classes, and the set of properties is fixed. Every new property touches every node class, so features such as complex numbers and dual spaces were patched in across the node classes.
+- **Example: interpolation.** In legacy UFL, `Interpolate(f, V)` is a `BaseFormOperator`, as an external operator is, and the adjoint interpolation takes a `Coargument`. In DOLFINx, interpolation happens outside UFL.
 
 ## Appendix: Class hierarchy
 
