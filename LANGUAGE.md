@@ -1,6 +1,6 @@
 # Core UFLx language definition
 
-## Authors: Jack S. Hale, Matthew Scroggs, Michal Habera
+Authors: Jack S. Hale, Matthew Scroggs, Michal Habera
 
 This note describes the smallest core language behind UFLx. It intentionally
 avoids implementation details, compiler algorithms, and broad redesign ideas.
@@ -119,6 +119,8 @@ fully LLM generated content are explicitly marked.
   - [DualSpace](#dualspace)
   - [Form](#form)
   - [Action](#action)
+  - [Example: the Laplace-Beltrami operator](#example-the-laplace-beltrami-operator)
+  - [Example: the flux through a surface](#example-the-flux-through-a-surface)
 - [Core transformations](#core-transformations)
   - [Expanding pull-backs](#expanding-pull-backs)
   - [Applying derivatives](#applying-derivatives)
@@ -2329,6 +2331,20 @@ orientations agree where $\det J > 0$, and differ where $\det J < 0$. The core
 has no node class for the determinant, because $\det J$ is the coefficient of
 `pull_back(volume_form(Q), D)`.
 
+If $k < n$, such as for a surface in $R^3$, $Q$ gives $D$ no orientation. Each
+piece of a decomposed domain of dimension $k < n$ takes the orientation of the
+parameter domain of the piece, and the core does not relate the orientations
+of two cells. An integral of a $k$-form over such a domain, such as in Stokes'
+theorem on a surface, needs the cells to be oriented consistently, as does a
+term that turns a $k$-form into a 0-form or a $(k - 1)$-form into a vector
+field, such as the scalar curl of a 1-form on a surface. The mesh library
+provides a
+consistent orientation where one is needed, such as an expression with the
+sign $+1$ or $-1$ for each cell, and the core needs nothing more (see
+[Example: the flux through a surface](#example-the-flux-through-a-surface)).
+An integral of a 0-form uses a density and needs no orientation (see
+[Integral over a decomposed domain](#integral-over-a-decomposed-domain)).
+
 ### Concept: integral over a domain
 
 Requires: [PullBack](#pullback), [Integral](#integral),
@@ -2451,10 +2467,12 @@ element $|\psi'| \, \mathrm{d}t$, which comes from the Euclidean metric of
 `T`. The metric enters as an expression that the user writes:
 
 > This example writes the length element by hand, for a curve in the
-> Euclidean plane. The general concept is the volume form of the metric that
-> $\psi$ induces, $\sqrt{\det(J^T J)} \, \mathrm{d}t$. The core has no
-> induced metric, so a downstream library could provide the general concept as free
-> functions (see [New operations](#new-operations)).
+> Euclidean plane, because `Integral` over a coordinate domain takes the
+> density from the user. The general concept is the volume form of the metric
+> that $\psi$ induces, $\sqrt{\det(J^T J)} \, \mathrm{d}t$. The free function
+> `integral(f, D)` over a decomposed domain builds that density for each piece
+> (see [Integral over a decomposed
+> domain](#integral-over-a-decomposed-domain)).
 
 ```python
 # The Jacobian matrix of the edge, with value shape (2, 1).
@@ -3399,9 +3417,17 @@ the Jacobian matrix of $A_i$ and pointing away from the centroid of the
 vertices of $K_j$. Both are fixed compositions for each $k$ and $n$, from the vertices
 of $K_j$ and the side tables, so the core needs no numbering of the facets.
 The centroid lies inside a convex reference cell, so $\hat m$ points out of
-$K_j$. The normals from two sides of one cell of $E$ are opposite. For
-$k < n$, such as on the edges of a surface in $R^3$, $\nu$ is the unit
-conormal, tangent to the cell on the side and orthogonal to the cell of $E$.
+$K_j$. For $k = n$, the normals from two sides of one cell of $E$ are
+opposite. For $k < n$, such as on the edges of a surface in $R^3$, $\nu$ is
+the unit conormal, tangent to the cell on the side and orthogonal to the cell
+of $E$. The conormals from two sides are opposite only where the cells on the
+two sides have the same tangent space, so on a surface a jump weights each
+side by the normal of that side, as in `u_p * n_p + u_m * n_m`.
+
+`Normal` is the normal of a cell on a side, not the unit normal field of a
+domain of dimension $n - 1$, such as of a surface in $R^3$. That field needs
+an orientation of the domain (see [Concept: orientation of a
+domain](#concept-orientation-of-a-domain)) and belongs to a downstream library.
 
 Examples, with `B` of the [Integral over a decomposed
 domain](#integral-over-a-decomposed-domain) examples, the decomposed domain `E`
@@ -3771,6 +3797,118 @@ Examples, with `a`, `u`, `v` and `w` of the [Form](#form) examples and
 - With the Stokes form of the [Form](#form) examples and fixed functions
   `w` in `V` and `r` in `Q`, `action(form(e, ((v, q), (u, p))), 1, (w, r))`
   is a linear form in `(v, q)`, the residual at `(w, r)`.
+
+### Example: the Laplace-Beltrami operator
+
+Requires: [A tour: the Poisson problem](#a-tour-the-poisson-problem),
+[Components](#components), [Integral over a decomposed
+domain](#integral-over-a-decomposed-domain), [Form](#form).
+
+See also: [Expanding pull-backs](#expanding-pull-backs), [Inverse](#inverse).
+
+The Poisson forms of the [tour](#a-tour-the-poisson-problem) on a surface in
+$R^3$ are the forms of the Laplace–Beltrami operator. Only the geometry
+changes. The vertex positions `y` have value shape `(m, 3)`, and the ambient
+coordinate domain is `RD(3)`:
+
+```python
+# A triangulated surface in RD(3), with K, T, c and p of the tour.
+x = component_tensor(
+    p[c, 0, k] + (p[c, 1, k] - p[c, 0, k]) * X[0] + (p[c, 2, k] - p[c, 0, k]) * X[1],
+    (k,),
+)
+M = decomposed_domain((parameterised_domain(K, x, RD(3)),))
+
+# Functions in a space of a library on M.
+u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
+
+# The surface gradients, of value shape (3,) in the frame of RD(3).
+i = index("i")
+grad_u = components(exterior_derivative(u, M), M)
+grad_v = components(exterior_derivative(v, M), M)
+
+a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), M), (v, u))
+L = form(integral(f * v, M), (v,))
+```
+
+- `M` has the dimension 2 and the ambient coordinate domain `RD(3)`, so
+  [`Components`](#components) projects the frame of `RD(3)` onto the tangent
+  plane of each cell, and `grad_u` is the surface gradient of `u`.
+- `integral(..., M)` multiplies the integrand on `K` by the density
+  $\rho = \sqrt{\det(J^T J)}$, with $J$ the Jacobian matrix of `x`, of value
+  shape `(3, 2)`. The integrands are 0-forms, so the forms need no orientation
+  of `M`.
+- `expand_pull_backs` rewrites the pull-back of `grad_u` by the cells as
+  $K^T \hat g$, with $K$ = `inverse(J)` the pseudo-inverse, of value shape
+  `(2, 3)`, and $\hat g$ the components of the exterior derivative of the
+  pull-back of `u` on `K`. The integrand of `a` on `K` is then
+  $\hat g_u^T K K^T \hat g_v \, \rho$, and $K K^T = (J^T J)^{-1}$ is the
+  inverse of the metric that `x` induces.
+- With a function `w` in a space on `M` of the value shape `(3,)`,
+  `index_sum(components(exterior_derivative(w, M), M)[i, i], (i,))` is the
+  surface divergence of `w`.
+- With `P = components(exterior_derivative(coordinate(M), M), M)`, the
+  projection onto the tangent plane,
+  `components(exterior_derivative(grad_u, M), M)` is the tangential derivative $H$ of the surface gradient, which is
+  not symmetric in general. The covariant Hessian of `u` is $P H P$.
+
+> Legacy note: Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of
+> topological dimension 2 in $R^3$, and `grad` is the surface gradient because
+> of the dimensions of the mesh. In UFLx, the same rule of `Components` gives
+> the gradient in every dimension.
+
+### Example: the flux through a surface
+
+Requires: [Example: the Laplace-Beltrami
+operator](#example-the-laplace-beltrami-operator), [Concept: orientation of a
+domain](#concept-orientation-of-a-domain), [Integral over a decomposed
+domain](#integral-over-a-decomposed-domain).
+
+The flux of a vector field through a surface is the integral of a 2-form, so
+the flux needs an orientation of the surface. With `M`, `T` and `c` of the
+[Laplace-Beltrami example](#example-the-laplace-beltrami-operator), where `M` is
+a closed surface such as a triangulated sphere:
+
+```python
+# The 2-form of the flux of the position field through a surface in RD(3).
+Y = coordinate(RD(3))
+dY = exterior_derivative(Y, RD(3))
+omega = Y[0] * dY[1] * dY[2] + Y[1] * dY[2] * dY[0] + Y[2] * dY[0] * dY[1]
+
+# The sign of each triangle from the mesh library, +1 where the order of the
+# vertices of the triangle agrees with the outward orientation of M.
+N = T.num_cells[0]
+o = runtime_array("o", (N,))
+
+# The outward flux, 3 times the volume inside M.
+flux = integral(o[c] * omega, M)
+
+# The area of M, with no orientation.
+area = integral(Integer(1), M)
+```
+
+- `omega` has the support `RD(3)`, so `integral(omega, M)` pulls `omega` back
+  by the triangles of `M` (see [Integral over a decomposed
+  domain](#integral-over-a-decomposed-domain)). Each triangle contributes the
+  flux with the orientation of the parameterisation of the triangle, which the
+  order of the vertices of the triangle in `T` fixes. If the mesh library
+  numbers some triangles clockwise and others anticlockwise, seen from
+  outside, the contributions of the two groups have opposite signs, and the
+  sum is not the flux.
+- `o[c]` has the free index `c` of the triangles, so each triangle takes the
+  sign of that triangle. With the signs, every contribution uses the outward
+  orientation. A mesh library may instead number the vertices of every
+  triangle consistently, and then `integral(omega, M)` is the flux without
+  `o`.
+- `area` integrates a 0-form against the density $\sqrt{\det(J^T J)}$, which
+  does not depend on the order of the vertices, so `area` needs no signs.
+- A surface with no consistent orientation, such as a Möbius strip, has no
+  signs `o`. The area of the surface is defined, and the flux is not.
+
+`runtime_extent` and `runtime_array` are not in the core (see [Example:
+integrating over a cut cell](#example-integrating-over-a-cut-cell)). The same
+signs enter a term that turns a 2-form on `M` into a 0-form, such as the
+scalar curl of a 1-form on `M`.
 
 ## Core transformations
 
