@@ -20,6 +20,9 @@ Nothing. Integrals over cells and facets use the induced density in
    ALE, the geometry must depend on a function, such as a parameterisation of
    the pieces from a displacement function on the domain, because a form binds
    only functions and the parameterisation is an expression of runtime data.
+1. **Interpolation between domains.** The interpolation extension requires $f$
+   on the domain of $V$. Interpolation from another mesh needs the cell that
+   contains each point, a runtime gather of the cells.
 1. **Conditionals and elementary functions.** Add `conditional` and `max` (for
    upwinding, limiters and switching materials) and more elementary functions,
    such as `exp` and `sin`.
@@ -36,6 +39,9 @@ Nothing. Integrals over cells and facets use the induced density in
   may be on different domains.
 - H(curl) and H(div) spaces, as spaces of the degree
   `(1,)` and `(n - 1,)`, with the normal trace through `normal`.
+- Interpolation, through the interpolation extension, with the operator
+  `form(interpolate(u, W), (u,))` and the adjoint on `dual(W)`, such as the
+  prolongation and restriction of multigrid.
 - Real spaces and Lagrange multipliers, as a space with the domain `None` and a
   `Function`.
 - Subdomain and marked boundary terms, through topologies with sides of
