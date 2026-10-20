@@ -755,9 +755,9 @@ axes. An `EllipsisIndex` is not an expression.
 | Raises                 | `TypeError` if the label is neither a `str` nor a `tuple` |
 
 An `EllipsisIndex` covers every axis of an `Indexed` that the other entries do not
-cover, so a `EllipsisIndex` may cover no axis. The extent of a `EllipsisIndex` is the
+cover, so an `EllipsisIndex` may cover no axis. The extent of an `EllipsisIndex` is the
 `tuple` of the extents of the covered axes. In every other rule of index
-notation, a `EllipsisIndex` behaves as an `Index`.
+notation, an `EllipsisIndex` behaves as an `Index`.
 
 ### Extents
 
@@ -889,7 +889,7 @@ See also: [Sum](#sum), [Tensor](#tensor), [Indexed](#indexed), [ComponentTensor
 and IndexSum](#componenttensor-and-indexsum).
 
 Every `AbstractExpression` derives the free indices, a `tuple` of pairs of an
-`Index` and an extent, or of a `EllipsisIndex` and a `tuple` of extents. The
+`Index` and an extent, or of an `EllipsisIndex` and a `tuple` of extents. The
 order is the order of first occurrence, never the order of a `set`.
 
 Unless a node class states otherwise, the free indices of a node are the free
@@ -1049,8 +1049,8 @@ indices](#free-indices), [Scalar type](#scalar-type), [Support](#support),
 
 See also: [Division](#division).
 
-A literal is a number written down in an expression, e.g. `Integer(2) * u`. A
-literal's value is part of the expression itself. Every literal has value shape
+A literal is a number written down in an expression, such as
+`Integer(2) * u`. The value of a literal is part of the expression itself. Every literal has value shape
 `()`, no free indices, no support and the degree `()`.
 
 The literals are concrete subclasses of `AbstractExpression`:
@@ -1112,7 +1112,7 @@ Both operands must have value shape `()`, or construction raises
 `ValueError`, and the result has value shape `()`. Free indices pass through
 arithmetic (see [Free indices](#free-indices)), so tensor arithmetic is
 written in index notation. For example, a scalar `a` times a tensor `T` of any
-rank is `component_tensor(a * T[r], (r,))`, with `r` a
+rank is `component_tensor(a * T[r], (r,))`, with `r` an
 [EllipsisIndex](#ellipsisindex).
 
 | Class      | Free function | Overload |
@@ -1309,8 +1309,8 @@ induces on $P$, the pull-back of the Euclidean metric.
 Requires: [`AbstractExpression`](#abstractexpression), [Power](#power),
 [Division](#division), [Literals](#literals).
 
-> UFLx core is likely to contain very few elementary functions - a language
-> extension e.g. `uflx.elementary` will implement them later.
+> The UFLx core is likely to contain few elementary functions. A language
+> extension, such as `uflx.elementary`, will implement the rest later.
 
 `SquareRoot` is the only elementary function so far.
 
@@ -1391,15 +1391,16 @@ tensor-valued expression.
 | Raises                         | See the table below                                                                                                                                                                                                                             |
 
 Indexing is full indexing only. Each `int`, each `Index`, each
-`AbstractIndexValue` and each `GatheredIndex` entry covers one axis, and a `EllipsisIndex` entry covers every axis that the other entries do not
-cover. Without a `EllipsisIndex`, the number of entries must equal $r$. With a
-`EllipsisIndex`, the number of other entries must be at most $r$. Each `int` entry
-$i_j$ must index an axis with an `int` extent $n_j$ and must satisfy
-$0 \le i_j < n_j$, where `(n_0, ..., n_{r-1})` is the value
-shape of the expression. Each `AbstractIndexValue` and each `GatheredIndex`
-entry must have the extent $n_j$. Each `Index` entry $i_j$ takes the extent $n_j$. A
-`EllipsisIndex` takes the `tuple` of the extents of the axes that the `EllipsisIndex`
-covers.
+`AbstractIndexValue` and each `GatheredIndex` entry covers one axis, and an
+`EllipsisIndex` entry covers every axis that the other entries do not cover.
+Without an `EllipsisIndex`, the number of entries must equal $r$. With an
+`EllipsisIndex`, the number of other entries must be at most $r$. Each `int`
+entry $i_j$ must index an axis with an `int` extent $n_j$ and must satisfy
+$0 \le i_j < n_j$, where `(n_0, ..., n_{r-1})` is the value shape of the
+expression. Each `AbstractIndexValue` and each `GatheredIndex` entry must have
+the extent $n_j$. Each `Index` entry $i_j$ takes the extent $n_j$. An
+`EllipsisIndex` takes the `tuple` of the extents of the axes that the
+`EllipsisIndex` covers.
 
 An `Index` may occur in two or more entries, or may already be free in the
 expression. All the occurrences are the same index, so the indexed axes take
@@ -1410,8 +1411,9 @@ same rule and the `tuple` of extents of the `EllipsisIndex`. So with a
 `EllipsisIndex` `r` that is free with the extents `(2, 3)` in an expression `B`
 of value shape `(2, 3)`, `B[r]` is the block diagonal of `B`.
 
-The rank $r$ counts the axes of the value shape only. The indices select axes of the value
-shape and never a slot, so the slots of a differential form cannot be indexed.
+The rank $r$ counts the axes of the value shape only. The indices select axes
+of the value shape and never a slot, so the slots of a differential form
+cannot be indexed.
 
 `X[0]` and `A[0, 1]` are `indexed(X, (0,))` and `indexed(A, (0, 1))`.
 Construction of `Indexed` raises:
@@ -1460,7 +1462,7 @@ See also: [ExteriorDerivative](#exteriorderivative).
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Free function                                                           | `component_tensor(expression, indices)`, `index_sum(expression, indices)`                                                                                                                                         |
 | Properties                                                              | `expression`, a scalar, and `indices`, a non-empty `tuple` of distinct `Index` and `EllipsisIndex` entries free in the expression                                                                                 |
-| Static type                                                             | The free indices of the expression without the indices. `ComponentTensor` has the value shape of the extents of the indices in order, with every extent of a `EllipsisIndex`, and `IndexSum` the value shape `()` |
+| Static type                                                             | The free indices of the expression without the indices. `ComponentTensor` has the value shape of the extents of the indices in order, with every extent of an `EllipsisIndex`, and `IndexSum` the value shape `()` |
 | Raises                                                                  | `ValueError` if a requirement fails                                                                                                                                                                               |
 
 The indices bind axes of the value shape, so a `ComponentTensor` of a
@@ -1609,10 +1611,11 @@ product](#transpose-and-matrix-product).
 See also: [Numbers in expressions](#numbers-in-expressions), [Appendix: Free
 functions](#appendix-free-functions).
 
-Every overload in the [table of free functions](#appendix-free-functions) is a method of `AbstractExpression` (see
+Every overload in the [table of free functions](#appendix-free-functions) is
+a method of `AbstractExpression` (see
 [`AbstractExpression`](#abstractexpression)). No other class defines
-arithmetic, matrix or indexing overloads. Overloading should be considered
-carefully outside of standard mathematical meanings.
+arithmetic, matrix or indexing overloads. An overload outside the standard
+mathematical meaning of the operator should be considered with care.
 
 An operator overload calls the free function with the operands unchanged, and
 the constructor validates (see [Numbers in expressions](#numbers-in-expressions)).
@@ -1623,9 +1626,9 @@ single entry `i`, and passes `f[i, j]` as the `tuple` `(i, j)`. `__getitem__`
 converts a single entry into a `tuple` of one entry and calls `indexed`. The
 conversion exists because of Python indexing syntax.
 
-This base class is sketched in pseudo-code according to the principles outlined
-above. Later classes will not be sketched in detail - `AbstractExpression` is
-the only class with overloads.
+This base class is sketched in pseudo-code according to the principles above.
+Later classes are not sketched in detail, because `AbstractExpression` is the
+only class with overloads.
 
 ```
 class AbstractExpression(Base, ABC):
@@ -2022,9 +2025,8 @@ Requires: [Valid pair](#valid-pair), [Volume form](#volume-form),
 See also: [Example: an affinely mapped
 triangle](#example-an-affinely-mapped-triangle).
 
-At this point we have everything we need to integrate an expression over a
-single domain. Note we do not need to explicitly introduce any
-topological notions of the domain to build a basic integral.
+At this point the core has everything needed to integrate an expression over
+a single domain. A basic integral needs no topological notion of the domain.
 
 `Integral(f, P)` is the integral of a top form $f$ over a coordinate domain
 $P$ of dimension $n$, with the orientation
@@ -2052,8 +2054,8 @@ integrals over the parameter domains of the pieces (see [Integral over a
 decomposed domain](#integral-over-a-decomposed-domain)). `Integral` is lazy, and a later
 pass might evaluate the integral, for example by quadrature.
 
-Note that an `Integral` is an expression, so integrals can be added,
-multiplied and used wherever an expression is accepted.
+An `Integral` is an expression, so integrals can be added, multiplied and
+used wherever an expression is accepted.
 
 #### Examples
 
