@@ -3645,20 +3645,20 @@ domain](#integral-over-a-decomposed-domain), [Normal](#normal),
 [Form](#form), [Core transformations](#core-transformations).
 
 The interior facet terms of the symmetric interior penalty method for the
-Poisson problem, the legacy UFL `dS` integral. The form needs no particular
-mesh. `D` is a mesh, a decomposed domain with the topology `T`, `S` is the
-topology of the interior facets of `T` with the sides `"+"` and `"-"`, which
-the mesh library provides with its side tables, `V` is a space on `D` of the
-degree `()` and the value shape `()`, and `u` and `v` are functions in `V`.
-`runtime_array` is the language extension of [Example: integrating over a cut
-cell](#example-integrating-over-a-cut-cell).
+Poisson problem, the legacy UFL `dS` integral, on the square divided into two
+triangles. The example uses `D`, `square`, `K`, `X`, `y` and `cell_vertices`
+of the [DecomposedDomain](#decomposeddomain) example, `I = ReferenceSimplex(1)`
+and the `diagonal` topology of the [Restriction](#restriction) example, a
+space `V` on `D` of the degree `()` and the value shape `()`, and functions
+`u` and `v` in `V`. `runtime_array` is the language extension of [Example:
+integrating over a cut cell](#example-integrating-over-a-cut-cell).
 
 ```python
 # The interior facets, seen from the sides "+" and "-", with the free index e.
-E = side_domain(D, S)
-e = cell_index(S, 0)
+E = side_domain(D, diagonal)
+e = cell_index(diagonal, 0)
 
-# The gradients on D, in the frame of the ambient coordinate domain.
+# The gradients on D, in the frame of RD(2).
 i = index("i")
 grad_u = components(exterior_derivative(u, D), D)
 grad_v = components(exterior_derivative(v, D), D)
@@ -3677,7 +3677,7 @@ avg_dn_u = half * index_sum((du_p[i] + du_m[i]) * n[i], (i,))
 avg_dn_v = half * index_sum((dv_p[i] + dv_m[i]) * n[i], (i,))
 
 # The penalty parameter of each facet, an array of the solver.
-alpha = runtime_array("alpha", (S.num_cells[0],))
+alpha = runtime_array("alpha", (diagonal.num_cells[0],))
 
 # The facet terms of the symmetric interior penalty method.
 f = -avg_dn_u * jump_v - jump_u * avg_dn_v + alpha[e] * jump_u * jump_v
@@ -3688,10 +3688,10 @@ a_facet = form(integral(f, E), (v, u))
   expression with the support `E` and no free index. `jump_u` is the
   difference of two expressions on `E`, and `f` has the support `E` and the
   free index `e`, from `alpha[e]`.
-- `n` points out of the cell on the side `"+"`, so `jump_u * n` is the jump
-  of `u` with a fixed sign convention. Swapping the two sides in `S` negates
-  `n` and every jump, and leaves `f` unchanged, because every term of `f` has
-  two jumps or a jump and a normal.
+- `n` points out of the cell on the side `"+"`, the triangle `(0, 1, 2)`, so
+  `jump_u * n` is the jump of `u` with a fixed sign convention. Swapping the
+  two sides in `diagonal` negates `n` and every jump, and leaves `f`
+  unchanged, because every term of `f` has two jumps or a jump and a normal.
 - `alpha[e]` stands for the legacy $\alpha / h$. The array is a choice, not a
   limitation. A size built from the two cells is a composition with the free
   index `e`: the measure of the cell on the side `"+"` is
@@ -3700,26 +3700,22 @@ a_facet = form(integral(f, E), (v, u))
   domain](#integral-over-a-decomposed-domain), and a per-cell array `h` of the
   solver is read as `h[gathered_index(cells_p, (e,))]`.
 - `integral(f, E)` is one `Integral` over the decomposed domain `E`. On a mesh
-  of triangles and quadrilaterals, `S` has three groups (see
+  of triangles and quadrilaterals, the facet topology has three groups (see
   [Sides of a topology](#sides-of-a-topology)), `E` has three pieces, and the
-  same lines give the integral over all three. On a surface in $R^3$, `n` is
-  the conormal of the cell on the side `"+"`, and the same lines give the
-  facet terms of the Laplace-Beltrami problem.
+  same lines give the integral over all three.
 
-The core transformations rewrite `a_facet` as follows, for a topology `T` of
-one cell type with the reference cell `K`. With $B_\pm$ =
+The core transformations rewrite `a_facet` as follows. With $B_\pm$ =
 `gathered_cell_domain(D, 0, gathered_index(cells_pm, (e,)))` the cell on each
-side and $A_\pm$ = `domain_map(F, affine_map(F, points_pm), K)` the inclusion
-of the facet into that cell, both of [Restriction](#restriction), with `F` the
-reference facet and the side tables `(cells_pm, vertices_pm)` of each side:
+side and $A_\pm$ = `domain_map(I, affine_map(I, points_pm), K)` the inclusion
+of the facet into that cell, both of [Restriction](#restriction), with the side
+tables `(cells_pm, vertices_pm)` of each side:
 
 1. `expand_integrals` rewrites `integral(f, E)` as
-   `index_sum(integral(pull_back(f, cell_domain(E, 0)) * rho * volume_form(F), F), (e,))`,
-   with `rho` the density of the facet, from the Jacobian of the
-   parameterisation `pull_back(pull_back(coordinate(D), B_+), A_+)` of the
-   piece.
+   `index_sum(integral(pull_back(f, cell_domain(E, 0)) * rho * volume_form(I), I), (e,))`,
+   with `rho` the length of the facet, from the Jacobian of the parameterisation
+   `pull_back(pull_back(coordinate(D), B_+), A_+)` of the piece.
 2. `expand_pull_backs` moves the pull-back by `cell_domain(E, 0)` into `f`.
-   On `u_p` the rule for `SideMap` gives `pull_back(pull_back(u, B_+), A_+)`.
+   On `u_p` the rule for `SideMap` gives `pull_back(pull_back(u, B_+), A_+)`,
    The inner pull-back remains, for the library of `V`, as `u` on the cell
    `cells_p[e]` (see [AbstractFunctionSpace](#abstractfunctionspace)), and
    the outer pull-back remains outside the inner one, by the rule that
@@ -3729,10 +3725,10 @@ reference facet and the side tables `(cells_pm, vertices_pm)` of each side:
    $K^T \hat g$, with $K$ = `inverse(J_+)` the inverse Jacobian of the cell and
    $\hat g$ = `components(exterior_derivative(pull_back(u, B_+), K), K)` the
    reference gradient, and then pulled back by $A_+$, which remains on
-   $\hat g$ and on $J_+$, because `F` has lower dimension than `K`: the
+   $\hat g$ and on $J_+$, because `I` has lower dimension than `K`: the
    reference gradient and the cell Jacobian are read at the points of the
    facet. On `n` the rule for `Normal` gives $K^T \hat m / \lvert K^T \hat m \rvert$,
-   with $\hat m$ the normal of the facet in `K` pointing away from the
+   with $\hat m$ the normal of the edge `(1, 2)` of `K` pointing away from the
    centroid of `K`. On `alpha[e]`, an expression with no support whose free
    index `e` is free in `cell_domain(E, 0)`, the pull-back is `alpha[e]`.
 3. `apply_derivatives` leaves `exterior_derivative(pull_back(u, B_+), K)` on
@@ -3740,29 +3736,26 @@ reference facet and the side tables `(cells_pm, vertices_pm)` of each side:
    vertex positions inside $J_+$ and `points_pm` to `Indexed`s with gathered
    indices, nested through the cell on the side.
 
-After the passes, `a_facet` is `form(index_sum(integral(g, F), (e,)), (v, u))`
-with `g` an expression on `F` with the free index `e`. The `IndexSum` over `e`
+After the passes, `a_facet` is `form(index_sum(integral(g, I), (e,)), (v, u))`
+with `g` an expression on `I` with the free index `e`. The `IndexSum` over `e`
 is the loop of the assembler over the interior facets. The gathered indices in
 `g` read, for the facet `e`, the two cells `cells_p[e]` and `cells_m[e]`, the
-vertex positions of each through the vertex table of `T`, the paired vertices
+vertex positions of each through `cell_vertices`, the paired vertices
 `vertices_p[e, v]` and `vertices_m[e, v]`, and `alpha[e]`, which the assembler
 packs for a kernel. The kernel is `g` without `e`: an expression on the
-reference facet `F` that reads the reference basis of `u` and `v` on the two
+reference facet `I` that reads the reference basis of `u` and `v` on the two
 cells, through the library of `V`, at the points of the facet in each cell's
 reference coordinates $A_\pm(t)$, and the two cell Jacobians at those points.
 This is the interface of a legacy interior facet kernel, with the local facet
 numbers replaced by the paired vertices, which also fix the orientation of the
 facet from each side.
 
-On the square divided into two triangles of the
-[DecomposedDomain](#decomposeddomain) example, with the `diagonal` topology of
-the [Restriction](#restriction) example as `S` and `F = ReferenceSimplex(1)`:
-
-- $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$, $J_+$ is the identity and $J_-$
-  is $\begin{pmatrix} 0 & -1 \\ 1 & 1 \end{pmatrix}$, and
-  $\hat m = (1, 1) / \sqrt 2$, so `n` evaluates to $(1, 1) / \sqrt 2$ on the
-  diagonal, pointing from triangle 0 into triangle 1, and `rho` to $\sqrt 2$.
-- `restriction(u, E, "-")` at the parameter `t` reads `u` on triangle 1 at
+- In the example, $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$ (see
+  [Restriction](#restriction)), $J_+$ is the identity and $J_-$ is
+  $\begin{pmatrix} 0 & -1 \\ 1 & 1 \end{pmatrix}$, and $\hat m = (1, 1) / \sqrt 2$,
+  so `n` evaluates to $(1, 1) / \sqrt 2$ on the diagonal, pointing from
+  triangle 0 into triangle 1, and `rho` to $\sqrt 2$.
+- `restriction(u, E, "-")` on the same `t` reads `u` on triangle 1 at
   $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
   is a difference at one point.
 
