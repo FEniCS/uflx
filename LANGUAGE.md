@@ -127,6 +127,8 @@ reached without an LLM. Sections generated entirely by the LLM are marked.
   - [Applying derivatives](#applying-derivatives)
   - [Expanding components](#expanding-components)
   - [Applying actions](#applying-actions)
+  - [Reducing component tensors](#reducing-component-tensors)
+  - [Gateaux derivative](#gateaux-derivative)
 - [Extending the core](#extending-the-core)
   - [Language extensions](#language-extensions)
   - [Example: interpolation](#example-interpolation)
@@ -336,8 +338,9 @@ integrating over a cut cell](#example-integrating-over-a-cut-cell)). The
 integral of a 0-form over a point is the value at the point, so `misfit`
 is $\sum_j (u(q_j) - d_j)^2$. The index `j` of `d[j]` and `g[j]` is the index
 of the family, so each datum pairs with its point. `S` has no topology, because
-`j` is not a cell index, and the library of `V` locates the cell of each point
-to evaluate `u` and `v` there.
+`j` is not a cell index. A pass of the mesh library rewrites the pull-backs of
+`u` and `v` by the points through the cell that contains each point (see
+[Points and point evaluation](#points-and-point-evaluation)).
 
 ## Rules of the language
 
@@ -515,8 +518,12 @@ graph. The result of a pass depends only on the arguments of the pass. A pass
 returns a value, such as a unit, or a new graph. A pass builds a new graph by
 constructing an object for each node that the pass replaces, and by
 reconstructing every object that depends on a replaced node, up to the root
-(see [The base object](#the-base-object-base)). A pass may cache results for
-each object, because objects are immutable.
+(see [The base object](#the-base-object-base)). An object depends on a
+replaced node through any edge, so a pass that replaces an object also
+reconstructs an [`Index`](#index) whose label contains the object. Hence a
+replacement commutes with the free functions: replacing `A` by `B` in
+`transpose(A)` gives `transpose(B)`, with the derived indices of `B`. A pass
+may cache results for each object, because objects are immutable.
 
 Substitution avoids capture. A `ComponentTensor` or an `IndexSum` binds
 indices (see [ComponentTensor and
@@ -735,18 +742,22 @@ expression.
 An `Index` has no extent of its own, and takes the extent of the axis that the
 `Index` indexes.
 
-The user names user indices. Two occurrences of one `Index` are the same
-index, so `a[i] * b[i]` is the component-wise product (see [Free
+The user names user indices. Two free occurrences of one `Index` in one scope
+are the same index, so `a[i] * b[i]` is the component-wise product (see [Free
 indices](#free-indices)), and `A[i, i]` is the diagonal entry (see
 [Indexed](#indexed)). An index that the user means to be new needs a new name.
+The scope of an index is given in [ComponentTensor and
+IndexSum](#componenttensor-and-indexsum).
 
 A free function that needs fresh indices derives the indices from the
 operands. The label of a derived index is the identifier of the free function,
 followed by the arguments of the free function and a number. The identifier is
 the public name of the free function, qualified by the package name, such as
-`"uflx.transpose"` for the core or `"library.trace"` for a library. For example,
-`transpose(A)` uses `Index(("uflx.transpose", A, 0))` and
-`Index(("uflx.transpose", A, 1))`. An index whose label contains `A` has an
+`"uflx.cell_index"` for the core or `"library.transpose"` for a library. For
+example, `transpose(A)` of [Example: transpose and matrix
+product](#example-transpose-and-matrix-product) uses
+`Index(("library.transpose", A, 0))` and `Index(("library.transpose", A, 1))`.
+An index whose label contains `A` has an
 edge to `A`. Every node that uses an `Index` has an edge to the `Index`. So an index
 whose label contains `A` cannot occur inside `A`, because `A` would then
 contain `A`, and the graph is acyclic. Hence
@@ -761,10 +772,14 @@ identifier of the pass, the arguments of the rule and a number. For example,
 [Passes](#passes) follows the same rule.
 
 The edges of an index to the objects in the label of the index identify the
-index and are not operands. The label keeps the operands as the operands were
-when the index was derived, and a later pass may rewrite the operands. So a
-pass that computes or collects from the value of an expression does not walk
-into the label of an index.
+index and are not operands. A pass that derives a property from the value of
+an expression, such as the free indices or the support, reads the edges of
+each node that are expressions, and an `Index` is not an expression, so such a
+pass never meets the label of an index. A pass that replaces an object
+reconstructs every index whose label contains the object (see
+[Passes](#passes)), so the label of a derived index always names the current
+operands, and the derived index stays fresh with respect to the current
+operands by the argument above.
 
 ### EllipsisIndex
 
@@ -844,26 +859,23 @@ An `AbstractIndexValue` is not an expression and not a free index.
 | Provides             | `extent`, an extent, and `shape`, a `tuple` of extents |
 | Defined by           | A subclass outside the core                            |
 
-An `AbstractIndexValue` with the shape `()` is one value, an `int` $v$ with
-$0 \le v <$ `extent`. An `AbstractIndexValue` with a non-empty shape is a table
-of such values, such as the cell on one side of each facet, which the mesh
-gives, and is read through a [GatheredIndex](#gatheredindex).
-
-An `AbstractIndexValue` with the shape `()` is an entry of [Indexed](#indexed).
-The entry covers one axis, as an `int` entry does, and the extent of the entry
-must equal the extent of the axis.
+An `AbstractIndexValue` is a table of values, each an `int` $v$ with
+$0 \le v <$ `extent`, such as the cell on one side of each facet, which the
+mesh gives. An `AbstractIndexValue` with the shape `()` is one value. A table
+is read only through a [GatheredIndex](#gatheredindex), so one value is read
+as `gathered_index(v, ())`.
 
 > Legacy note: GEM, the intermediate language of TSFC, has `VariableIndex` for
 > the same purpose. The authors have not checked this.
 
 Example:
 
-- With an `AbstractIndexValue` `l` with the extent 3, and the table `starts` of
-  value shape `(3, 2)` of the
+- With an `AbstractIndexValue` `l` of the shape `()` and the extent 3, and the
+  table `starts` of value shape `(3, 2)` of the
   [boundary example](#example-integrating-over-the-boundary-of-a-triangle),
-  `starts[l, k]` is the start of edge `l`, with the free index `k`. With an
-  `AbstractIndexValue` with the extent 4, the same expression raises
-  `IndexError`.
+  `starts[gathered_index(l, ()), k]` is the start of edge `l`, with the free
+  index `k`. With an `AbstractIndexValue` with the extent 4, the same
+  expression raises `IndexError`.
 
 ### GatheredIndex
 
@@ -878,15 +890,18 @@ A `GatheredIndex` is not an expression and not a free index.
 | `GatheredIndex(table, indices)` |                                                                                                                                                                                   |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Free function                   | `gathered_index(table, indices)`                                                                                                                                                  |
-| Properties                      | `table`, an `AbstractIndexValue`, and `indices`, an `int` or an `Index` for each axis of the shape of the table                                                                   |
-| Static type                     | The extent of the table, and the free indices of the `Index` entries, each with the extent of the axis                                                                            |
-| Raises                          | `TypeError` for an entry that is neither exactly `int` nor `Index`, and `IndexError` if the number of entries differs from the number of axes, or for an `int` entry out of range |
+| Properties                      | `table`, an `AbstractIndexValue`, and `indices`, an `int`, an `Index` or a `GatheredIndex` for each axis of the shape of the table                                                                                                               |
+| Static type                     | The extent of the table, and the free indices of the `Index` entries, each with the extent of the axis, and of the `GatheredIndex` entries, in order, with each `Index` taken once                                                               |
+| Raises                          | `TypeError` for an entry that is neither exactly `int`, `Index` nor `GatheredIndex`, and `IndexError` if the number of entries differs from the number of axes, for an `int` entry out of range, or for a `GatheredIndex` entry whose extent differs from the extent of the axis |
 
 The value is the entry of the table at the indices.
 
 A `GatheredIndex` is an entry of [Indexed](#indexed), and covers one axis
 whose extent equals the extent of the `GatheredIndex`. The free indices of the
-`GatheredIndex` are free in the `Indexed`.
+`GatheredIndex` are free in the `Indexed`. A `GatheredIndex` is also an entry
+of a `GatheredIndex`, with the same rule, so gathers nest, such as the
+vertices of the cell on the side of each facet, read through the cell on the
+side of the facet.
 
 Example, with a table `cells` of the shape `(4,)`, the extent 2 and the values
 `(0, 1, 1, 0)`, such as the cell of each of the four boundary edges of the
@@ -909,6 +924,9 @@ total = index_sum(a_e, (e,))
 
 - `gathered_index(cells, (2,))` has no free index and the value 1, so
   `a[gathered_index(cells, (2,))]` is `a[1]`.
+- With a table `cell_vertices` of the shape `(2, 3)` and the extent 4, the
+  vertices of each triangle, `gathered_index(cell_vertices, (g, w))` is the
+  vertex `w` of the triangle of edge `e`, with the free indices `e` and `w`.
 - For an array `c` of value shape `(3,)`, `c[g]` raises `IndexError`, because
   the extent 2 of `g` differs from the extent 3 of the axis.
 
@@ -1421,19 +1439,18 @@ tensor-valued expression.
 | `Indexed(expression, indices)` |                                                                                                                                                                                                                                                 |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Free function                  | `indexed(expression, indices)`, with the overload `expression[indices]`                                                                                                                                                                         |
-| Properties                     | `expression`, of rank $r$, and `indices`, a `tuple` of `int`, [`Index`](#index), [`EllipsisIndex`](#ellipsisindex), [`AbstractIndexValue`](#abstractindexvalue) and [`GatheredIndex`](#gatheredindex) entries, with at most one `EllipsisIndex` |
+| Properties                     | `expression`, of rank $r$, and `indices`, a `tuple` of `int`, [`Index`](#index), [`EllipsisIndex`](#ellipsisindex) and [`GatheredIndex`](#gatheredindex) entries, with at most one `EllipsisIndex`                                               |
 | Static type                    | Value shape `()`, and the free indices of the expression followed by the `Index` and `EllipsisIndex` entries and the free indices of the `GatheredIndex` entries, with each `Index` taken once                                                  |
 | Raises                         | See the table below                                                                                                                                                                                                                             |
 
-Indexing is full indexing only. Each `int`, each `Index`, each
-`AbstractIndexValue` and each `GatheredIndex` entry covers one axis, and an
+Indexing is full indexing only. Each `int`, each `Index` and each
+`GatheredIndex` entry covers one axis, and an
 `EllipsisIndex` entry covers every axis that the other entries do not cover.
 Without an `EllipsisIndex`, the number of entries must equal $r$. With an
 `EllipsisIndex`, the number of other entries must be at most $r$. Each `int`
 entry $i_j$ must index an axis with an `int` extent $n_j$ and must satisfy
 $0 \le i_j < n_j$, where `(n_0, ..., n_{r-1})` is the value shape of the
-expression. Each `AbstractIndexValue` and each `GatheredIndex` entry must have
-the extent $n_j$. Each `Index` entry $i_j$ takes the extent $n_j$. An
+expression. Each `GatheredIndex` entry must have the extent $n_j$. Each `Index` entry $i_j$ takes the extent $n_j$. An
 `EllipsisIndex` takes the `tuple` of the extents of the axes that the
 `EllipsisIndex` covers.
 
@@ -1455,13 +1472,13 @@ Construction of `Indexed` raises:
 
 | Error        | Cause                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------------- |
-| `TypeError`  | An entry that is neither exactly `int`, `Index`, `EllipsisIndex`, `AbstractIndexValue` nor `GatheredIndex`. |
+| `TypeError`  | An entry that is neither exactly `int`, `Index`, `EllipsisIndex` nor `GatheredIndex`.                       |
 | `ValueError` | No entries.                                                                                                 |
 | `IndexError` | A number of entries that does not cover exactly the rank. An expression with value shape `()` has rank 0.   |
 | `ValueError` | More than one `EllipsisIndex` entry.                                                                        |
 | `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                                    |
 | `IndexError` | An `int` entry for an axis whose extent is not an `int`.                                                    |
-| `IndexError` | An `AbstractIndexValue` or `GatheredIndex` entry whose extent differs from the extent of the axis.          |
+| `IndexError` | A `GatheredIndex` entry whose extent differs from the extent of the axis.                                   |
 | `ValueError` | An index with two extents, in two entries or in an entry and the expression.                                |
 
 A negative index is rejected rather than converted, so the stored indices are
@@ -1503,6 +1520,17 @@ See also: [ExteriorDerivative](#exteriorderivative).
 The indices bind axes of the value shape, so a `ComponentTensor` of a
 differential form is an array-valued differential form, and an `IndexSum` of
 differential forms is a sum of differential forms of the same degree.
+
+Scope is lexical. An occurrence of an `Index` refers to the innermost
+`ComponentTensor` or `IndexSum` that encloses the occurrence and binds the
+index, and the occurrence is free otherwise. A bound index is not free in the
+binding node, so the binding is closed, and a binder may bind an index that a
+binder inside the expression of the binder also binds. For example, with
+`p = component_tensor(y[gathered_index(cells, (c, w)), k], (c, w, k))`, `p`
+has no free index, and `p[c, 0, k]` has the free indices `c` and `k`, which
+refer to nothing inside `p`. A pass that substitutes into the expression of a
+binder renames the bound indices that would capture a free index of the
+substituted expression (see [Passes](#passes)).
 
 One `IndexSum` holds a whole contraction, such as the sum over both indices of
 `A[i, j] * B[i, j]`. A pass that chooses the order of summation then finds the
@@ -2326,7 +2354,12 @@ curve, and a 1-form pulled back to a point, are zero.
 `PullBack` is lazy, and [`expand_pull_backs`](#expanding-pull-backs)
 evaluates the pull-back. A `PullBack` of a downstream terminal or of a
 [`Function`](#function) remains, and the library of the terminal evaluates the
-terminal at $\psi(p)$ and transforms the slots.
+terminal at $\psi(p)$ and transforms the slots. For a function, the library
+evaluates the pull-back by a cell domain or a gathered cell domain of the
+domain of the space (see [AbstractFunctionSpace](#abstractfunctionspace)), and
+the pull-back by another domain map into a decomposed domain is rewritten
+through those (see [Points and point
+evaluation](#points-and-point-evaluation)).
 
 A domain $E$ in the parameter domain of $D$ has the image $\psi(E)$, a subset
 of $D$. The image is given by the domain map with the parameterisation
@@ -2612,10 +2645,34 @@ The value of a 0-form $f$ of any value shape at a point $p$ is
 `pull_back(f, p)` is an expression on `RD(0)`, and the integral has no support, so
 the integral combines with any expression.
 
-A point in `T` is given in the coordinates of `T`. For a point $x$ of `K`, the
-surrounding environment supplies $\psi^{-1}(x)$. For a non-affine $\psi$, the
-surrounding environment supplies a numerical approximation of $\psi^{-1}(x)$,
-for example by Newton's method.
+A point in a coordinate domain `T` is given in the coordinates of `T`, and
+`expand_pull_backs` evaluates the pull-back of an expression on `T` by the
+point.
+
+A family of points $M$ = `domain_map(RD(0), q, D)` in a decomposed domain $D$
+with a topology $T$, with the free index $i$ of the family of the extent $m$,
+needs the cell of $D$ that contains each point and the position of each point
+in that cell. `pull_back(u, M)` for a function `u` on $D$ remains after
+`expand_pull_backs`, because the library of the space of `u` defines `u` on
+the cells only (see [AbstractFunctionSpace](#abstractfunctionspace)). A pass
+of the mesh library rewrites the pull-back as
+
+```python
+g = gathered_index(cells, (i,))
+R = domain_map(RD(0), component_tensor(Xp[i, k], (k,)), K_j)
+pull_back(pull_back(u, gathered_cell_domain(D, j, g)), R)
+```
+
+with `cells` a table of the cell of type $j$ that contains each point, an
+[`AbstractIndexValue`](#abstractindexvalue) of the shape `(m,)` and the extent
+`T.num_cells[j]`, and `Xp` an array of value shape `(m, k_j)` with the position
+of each point in $K_j$, both leaves that the mesh library supplies, as the
+mesh library supplies the side tables. The mesh library locates the cells and
+inverts the map of each cell, for example by Newton's method, outside the
+language. The result has the free index $i$, and the pull-back of `u` by a
+gathered cell domain is in the contract of the space. A family whose points
+lie in cells of several types is not yet covered, because the family would
+need one piece for each cell type.
 
 Examples, with `T`, `X`, `psi` and `K` of the affinely mapped triangle, and
 `f = X[0] * X[1]`:
@@ -2696,9 +2753,10 @@ index_sum(weights[i] * (points[i, 0] * points[i, 1]), (i,))
 ```
 
 `expand_pull_backs` replaces `X` by the parameterisation of `xs`. A pass
-replaces the integral over `RD(0)` of a 0-form by the 0-form, and a pass
-replaces `component_tensor(points[i, k], (k,))[0]` by `points[i, 0]`. A form
-compiler could generate:
+replaces the integral over `RD(0)` of a 0-form by the 0-form, and
+`reduce_component_tensors` replaces `component_tensor(points[i, k], (k,))[0]`
+by `points[i, 0]` (see [Reducing component
+tensors](#reducing-component-tensors)). A form compiler could generate:
 
 ```python
 weights = (1 / 6, 1 / 6, 1 / 6)
@@ -2736,8 +2794,9 @@ that part of each cut cell, so the number of points differs from cell to cell.
 > `RuntimeExtent(label)`, an `AbstractExtent`,
 > `RuntimeArray(label, value_shape)`, an array such as quadrature data, the
 > coefficients of a function on a cell, or a constant, and
-> `RuntimeIndex(label, extent)`, an `AbstractIndexValue`, such as the local
-> number of a facet.
+> `RuntimeIndex(label, extent)`, an `AbstractIndexValue` of the shape `()`,
+> such as the local number of a facet, read as
+> `gathered_index(RuntimeIndex(label, extent), ())`.
 
 With `T`, `f`, `i` and `k` of the quadrature example:
 
@@ -2983,7 +3042,10 @@ that a downstream library provides. Which parts of a cell of $S$ meet which
 cells of a side stays outside the language.
 
 Examples, with a topology `T` of triangles with the cell types `(K,)`,
-`I = Simplex(1)` and `P = Simplex(0)`:
+`I = Simplex(1)` and `P = Simplex(0)`. A topology of sub-entities that an
+expression is restricted to needs reference cells as cell types, such as
+`ReferenceSimplex(1)` in place of `I` (see [Restriction](#restriction)), and
+the examples here show the topology only:
 
 - A topology `B` of the boundary facets of `T` has the cell types `(I,)` and
   the sides `((("inside", T, 0),),)`. `cell_index(B, 0)` is the index of the
@@ -3120,10 +3182,12 @@ coordinates.
 | Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](#example-the-unit-simplex-as-a-reference-cell)                                                   |
 
 The free function `affine_map(F, points)` returns the affine map on a reference
-cell $F$ of dimension $k$ that sends vertex $v$ of $F$ to row $v$ of `points`
-for $v \le k$, with `points` of value shape `(k + 1, m)`. With the vertices
-$V_v$ of $F$, the matrix $E$ with the columns $V_{d+1} - V_0$, and the rows
-$p_v$ of `points`, the map is
+cell $F$ of dimension $k$ with $m_F$ vertices that sends vertex $v$ of $F$ to
+row $v$ of `points` for $v \le k$, with `points` of value shape `(m_F, m)`.
+Only the first $k + 1$ rows enter the map, and the other rows are the images
+of the other vertices when the image is affine, such as the facet of a
+reference cell. With the vertices $V_v$ of $F$, the matrix $E$ with the
+columns $V_{d+1} - V_0$, and the rows $p_v$ of `points`, the map is
 
 $$
 X \mapsto p_0 + \sum_{d < k} (p_{d+1} - p_0) \, \big(E^{-1} (X - V_0)\big)_d,
@@ -3134,9 +3198,10 @@ with [Inverse](#inverse). For $k = 0$ the map is the constant $p_0$. The first
 $k + 1$ vertices of $F$ must not lie in a hyperplane of $F$.
 
 A sub-entity of $K$ with the vertex numbers $(w_0, w_1, \dots)$ and the
-reference cell $F$ is `parameterised_domain(F, affine_map(F, points), K)`, with
-row $v$ of `points` the vertex $w_v$ of $K$. The core does not check that the
-image is a sub-entity of $K$.
+reference cell $F$ is `domain_map(F, affine_map(F, points), K)`, with
+row $v$ of `points` the coordinates `K.vertices[w_v, k]` of the vertex $w_v$ of
+$K$, stacked with `component_tensor` over the vertex and the coordinate
+indices. The core does not check that the image is a sub-entity of $K$.
 
 > A downstream library such as Basix provides the vertex numbers of the
 > facets, so a facet is an ordinary `DomainMap` in the form, and an
@@ -3244,8 +3309,27 @@ on each domain of piece $j$. The pull-back of `coordinate(D)` is $\psi_j$, and
 the pull-back of a function in a space on $D$ is evaluated by the library of
 the space (see [PullBack](#pullback)).
 
+The free function `gathered_cell_domain(D, j, g)`, for a decomposed domain $D$
+with a topology $T$, returns the domains of piece $j$ selected by a
+[`GatheredIndex`](#gatheredindex) $g$ of the extent `T.num_cells[j]`. With
+$c$ = `cell_index(T, j)`, the one free index of piece $j$, the result is
+`domain_map(P_j, chi, D)` with
+
+```python
+chi = component_tensor(component_tensor(psi_j[k], (c, k))[g, k], (k,))
+```
+
+and $k$ the derived index `Index(("uflx.gathered_cell_domain", D, j, g, 0))`.
+The inner `ComponentTensor` binds $c$ and is the array of the maps of all the
+cells of type $j$, and the `Indexed` entry $g$ selects the map of the cell
+$g$, so `chi` has the free indices of $g$. The free function reads only the
+free indices of piece $j$, which are static. The library of a function in a
+space on $D$ evaluates the pull-back by `gathered_cell_domain(D, j, g)` as the
+pull-back by `cell_domain(D, j)` on the cell $g$ (see
+[AbstractFunctionSpace](#abstractfunctionspace)).
+
 [Restriction](#restriction) moves an expression on $D$ to the cells of a
-topology with sides.
+topology with sides, through `gathered_cell_domain`.
 
 > Legacy note: In legacy UFL, a `Mesh` is a decomposed domain, and
 > `SpatialCoordinate(mesh)` is `coordinate(D)`.
@@ -3320,13 +3404,15 @@ the side tables `(cells, vertices)`, the cell type $F$ of group $i$ and
 `e = cell_index(S, i)`, two families of domain maps with the free index `e`
 make the inclusion:
 
-- The cell on the side, $B_i$, is `cell_domain(D, j)` with every `Indexed`
-  entry `cell_index(T, j)` of the parameterisation replaced by
-  `gathered_index(cells, (e,))`. The library of a function in a space on $D$
-  evaluates the pull-back by $B_i$ on the cell `cells[e]`.
+- The cell on the side, $B_i$, is
+  `gathered_cell_domain(D, j, gathered_index(cells, (e,)))`, the cell of type
+  $j$ of $T$ on the side of each cell $e$ of $S$ (see
+  [DecomposedDomain](#decomposeddomain)).
 - The inclusion into the cell, $A_i$, is
-  `parameterised_domain(F, affine_map(F, points), K_j)`, with row $v$ of
-  `points` the vertex `gathered_index(vertices, (e, v))` of $K_j$. $A_i$ sends
+  `domain_map(F, affine_map(F, points), K_j)`, with
+  `points = component_tensor(K_j.vertices[gathered_index(vertices, (e, v)), k], (v, k))`,
+  the coordinates in $K_j$ of the paired vertex of each vertex $v$ of the cell
+  $e$, with derived indices $v$ and $k$. $F$ must be a reference cell. $A_i$ sends
   each vertex of the cell $e$ to the paired vertex of the cell on the side. For
   a vertex, $A_i$ is the constant vertex, and for the cell itself with the
   vertices in order, $A_i$ is the identity map.
@@ -3343,7 +3429,7 @@ from each side.
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
 | Free function      | `side_map(D, E, s)`                                                                                     |
 | Properties         | `ambient_domain` $D$, `parameter_domain` $E$, a decomposed domain with the topology $S$, and `side` $s$ |
-| Requires           | $D$ has a topology, and every group of $S$ has a side named $s$ with the topology of $D$                |
+| Requires           | $D$ has a topology, every cell type of $S$ is an `AbstractReferenceCell`, and every group of $S$ has a side named $s$ with the topology of $D$ |
 | Raises             | `ValueError` if a requirement fails                                                                     |
 
 A `SideMap` maps the cells of $E$ into $D$ through the side $s$.
@@ -3354,10 +3440,11 @@ expression by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)` (see
 
 The free function `side_domain(D, S)` returns the decomposed domain of $S$ with
 the geometry of the first side of each group, with piece $i$
-`parameterised_domain(F_i, pull_back(pull_back(coordinate(D), B_i), A_i), Q)`
-for the first side, with $F_i$ the cell type of group $i$ and $Q$ the ambient
-coordinate domain of $D$. The topology of the result is $S$. The core does not
-check that the other sides have the same geometry. The free function
+`domain_map(F_i, pull_back(pull_back(coordinate(D), B_i), A_i), Q)`
+for the first side, with $F_i$ the cell type of group $i$, which must be an
+`AbstractReferenceCell`, and $Q$ the ambient domain of $D$. $A_i$ and $B_i$
+are fixed compositions, so `side_domain` is a free function. The topology of the result is $S$. The core does not check that
+the other sides have the same geometry. The free function
 `restriction(f, E, s)` returns `pull_back(f, side_map(D, E, s))` with $D$ the
 support of $f$, or $f$ if $f$ has no support.
 
@@ -3541,10 +3628,10 @@ Requires: [DecomposedDomain](#decomposeddomain), [GatheredIndex](#gatheredindex)
 > This section describes how a downstream library is expected to use the core,
 > not a rule of the core.
 
-An integral over a decomposed domain is an `IndexSum` over the cell index of
-each group, of an expression on a reference cell that reads arrays through
-gathered indices with the cell index. A form compiler splits the integral
-there:
+After `expand_integrals` and `reduce_component_tensors`, an integral over a
+decomposed domain is an `IndexSum` over the cell index of each group, of an
+expression on a reference cell that reads arrays through gathered indices with
+the cell index. A form compiler splits the integral there:
 
 - The `IndexSum` over the cell index is the loop of an assembler over the
   cells, or over the cells of a topology with sides.
@@ -3601,7 +3688,14 @@ the value shape and the scalar type of $V$. For a decomposed domain $D$, the
 function is defined through the cells of $D$ (see
 [DecomposedDomain](#decomposeddomain)), and the concrete subclass defines the
 pull-back of a function in $V$ by `cell_domain(D, j)` for every cell type $j$
-of $D$, such as with one finite element for each cell type. The core does not
+of $D$, such as with one finite element for each cell type, and evaluates the
+pull-back by `gathered_cell_domain(D, j, g)` as the same function on the cell
+$g$ (see [DecomposedDomain](#decomposeddomain)). The pull-back of a function
+by any other domain map into $D$, such as a family of points, is rewritten
+through these two (see [Points and point
+evaluation](#points-and-point-evaluation)). For a coordinate
+domain $D$, such as a reference cell, a function in $V$ is a terminal on $D$
+that the concrete subclass evaluates. The core does not
 represent the polynomials, the degrees of freedom or the basis of $V$, which
 belong to the concrete subclass. Two spaces are the same space only if the two
 spaces are equal as base objects, so a concrete `AbstractFunctionSpace` stores
@@ -3834,14 +3928,19 @@ may depend on one member only. Construction does not check the linearity, and
 a pass may check the linearity by the conjugations on the path from each
 occurrence of the function to the root. Every
 other function in the expression is fixed, so one function may be an argument
-of one form and fixed in another.
+of one form and fixed in another. The scope of a bound function is lexical, as
+the scope of an index is (see [ComponentTensor and
+IndexSum](#componenttensor-and-indexsum)): an occurrence of a function refers
+to the innermost enclosing `Form` that binds the function, and is fixed
+otherwise.
 
-A slot of a `tuple` of functions gives the forms of mixed problems with no mixed
-space. Each member is a function in an ordinary space, so the members may have
-different degrees, such as a Raviart–Thomas and a discontinuous function, and
-different domains, such as a Lagrange multiplier on the boundary. A library may
-assemble the slots as one system or in blocks. The block of a member of each
-slot is the form of the expression with the other members replaced by `Zero`.
+An argument that is a `tuple` of functions gives the forms of mixed problems
+with no mixed space. Each member is a function in an ordinary space, so the
+members may have different degrees, such as a Raviart–Thomas and a
+discontinuous function, and different domains, such as a Lagrange multiplier
+on the boundary. A library may assemble the arguments as one system or in
+blocks. The block of a member of each argument is the form of the expression
+with the other members replaced by `Zero`.
 
 The expression may have any value shape and support. A form whose expression
 is a field is a linear operator, such as the interpolation operator
@@ -4026,18 +4125,22 @@ Requires: [Passes](#passes), [Integral](#integral), [PullBack](#pullback),
 [ExteriorDerivative](#exteriorderivative), [Components](#components),
 [Action](#action).
 
-The core has four transformations, each a pass (see [Passes](#passes)) that
-evaluates one lazy node class. Each has a default for the node classes of the
-operand, and a table of the operand classes with a rule of their own. The
-[pass table](#appendix-pass-table) gives every node class for every core
-transformation.
+The core has six transformations, each a pass (see [Passes](#passes)) that
+evaluates one node class. `expand_integrals` dispatches on the domain of the
+`Integral` and not on the operand, and `reduce_component_tensors` has one rule,
+for an `Indexed` whose operand is a `ComponentTensor`. Each of the other four
+has a default for the node classes of the operand, and a table of the operand
+classes with a rule of their own. The [pass table](#appendix-pass-table) gives
+every node class for each of the four.
 
-| Core transformation                             | Evaluates            | Default                                                     |
-| ----------------------------------------------- | -------------------- | ----------------------------------------------------------- |
-| [`expand_pull_backs(f)`](#expanding-pull-backs) | `PullBack`           | Commutes with every node class                              |
-| [`apply_derivatives(f)`](#applying-derivatives) | `ExteriorDerivative` | Linear for the linear node classes, the chain rule for `()` |
-| [`expand_components(f)`](#expanding-components) | `Components`         | Linear for the linear node classes                          |
-| [`apply_actions(f)`](#applying-actions)         | `Action`             | Moves into the operand that carries the slot                |
+| Core transformation                                         | Evaluates            | Default                                                     |
+| ----------------------------------------------------------- | -------------------- | ----------------------------------------------------------- |
+| [`expand_integrals(f)`](#expanding-integrals)               | `Integral`           | One rule, by the domain of the `Integral`                   |
+| [`expand_pull_backs(f)`](#expanding-pull-backs)             | `PullBack`           | Commutes with every node class                              |
+| [`apply_derivatives(f)`](#applying-derivatives)             | `ExteriorDerivative` | Linear for the linear node classes, the chain rule for `()` |
+| [`expand_components(f)`](#expanding-components)             | `Components`         | Linear for the linear node classes                          |
+| [`apply_actions(f)`](#applying-actions)                     | `Action`             | Moves into the operand that carries the argument            |
+| [`reduce_component_tensors(f)`](#reducing-component-tensors) | `Indexed`            | One rule, for a `ComponentTensor` operand, and otherwise remains |
 
 The linear node classes are `Sum`, `Tensor`, `Indexed`, `ComponentTensor` and
 `IndexSum`, linear in every operand, and `Division`, linear in the first
@@ -4059,10 +4162,13 @@ not on the support. For example,
 $\psi^* \mathrm{action}(f, s, g) = \mathrm{action}(\psi^* f, s, g)$,
 because the action replaces $\psi^* u$ in $\psi^* f$ by $\psi^* g$.
 
-Each core transformation rewrites only the evaluated class, so the four run
-separately or together. Evaluation runs the four together until no rule
-applies. A `PullBack` moves inside an `ExteriorDerivative`, and never the
-reverse, and an action removes an `Action`, so evaluation terminates. A
+Each core transformation rewrites only the evaluated class, so the six run
+separately or together. Evaluation runs the six together until no rule
+applies. An `Integral` over a decomposed domain is replaced by `Integral`s
+over the parameter domains of the pieces, which nest less deeply, a `PullBack`
+moves inside an `ExteriorDerivative`, and never the reverse, an action removes
+an `Action`, and a reduction removes an `Indexed` and a `ComponentTensor`, so
+evaluation terminates. A
 downstream lazy node class may join evaluation if the rules of the class
 rewrite only that class, move the node towards the leaves, and never reverse a
 core rule, as moving an `ExteriorDerivative` inside a `PullBack` would.
@@ -4126,10 +4232,14 @@ of the core, with these rules:
 The rule for an expression with no support comes before every other rule and
 before commuting, whatever the class of the expression, so a pull-back never
 moves inside an `Integral`. The integral has no support, and
-the integrand stays on the coordinate domain of the integral. A pull-back of a
-constant by a family remains, because `PullBack(c, D)` has the free indices of
-the family $D$ and $c$ does not. For example, with the family of quadrature
-points `xs` of [Example: quadrature](#example-quadrature),
+the integrand stays on the domain of the integral. `PullBack(c, D)` has the
+free indices of the family $D$, and $c$ may not, so the rule adds the `Zero`
+with the value shape, the degree and the argument spaces of $c$ and the
+missing free indices with the extents of the family (see [Zero](#zero)), a
+constant with the free indices of the family. For example, with the family of
+three quadrature points `xs` of [Example: quadrature](#example-quadrature),
+`pull_back(Integer(1), xs)` is rewritten as
+`Integer(1) + Zero((), ((i, 3),), (), ())`, and
 `index_sum(integral(pull_back(Integer(1), xs), RD(0)), (i,))` counts the
 points.
 
@@ -4242,6 +4352,59 @@ An action moves into the operand that carries the slot, with these rules:
 The substitution into a `Form` avoids capture (see [Passes](#passes)). The
 pass rewrites inner actions first, so an outer action meets an `Action` only on
 a leaf, and the outer action remains.
+
+### Reducing component tensors
+
+Requires: [Core transformations](#core-transformations), [Indexed](#indexed),
+[ComponentTensor and IndexSum](#componenttensor-and-indexsum),
+[Passes](#passes).
+
+`reduce_component_tensors` evaluates an `Indexed` whose operand is a
+`ComponentTensor`, with these rules:
+
+| Operand of the `Indexed`      | Rewrite of `Indexed(operand, entries)`                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------- |
+| `ComponentTensor(e, indices)` | $e$ with each index of `indices` replaced by the entries of the axes of the index, when possible |
+| Any other node class          | Remains                                                                                           |
+
+The entries are matched to the indices axis by axis. An `Index` of `indices`
+covers one axis and is replaced by the entry of that axis, an `int`, an
+`Index`, a `GatheredIndex` or an `EllipsisIndex` that covers one axis. An
+`EllipsisIndex` of `indices` covers the axes of the extents of the
+`EllipsisIndex`, and is replaced by the entries of those axes, or by one
+`EllipsisIndex` entry that covers exactly those axes. An occurrence of the
+replaced index in the entries of an `Indexed` or of a `GatheredIndex` takes
+the replacing entries in place, and an occurrence in the free indices of a
+`Zero` is removed or replaced in the same way. An `EllipsisIndex` cannot occur
+in a `GatheredIndex` and cannot replace a part of the axes of an
+`EllipsisIndex` of `indices`. When a replacement is not possible, the
+`Indexed` remains. The substitution
+avoids capture (see [Passes](#passes)).
+
+The rewrite is the identity `component_tensor(e, (i,))[j]` $= e[i := j]$, so
+the rewrite never changes the value, and the result has the free indices of
+the `Indexed`. For example, `component_tensor(points[i, k], (k,))[0]` is
+rewritten as `points[i, 0]`, and with `p` of the
+[tour](#a-tour-the-poisson-problem), `p[c, 0, k]` is rewritten as
+`y[gathered_index(cell_vertices, (c, 0)), k]`. After the reduction, the arrays
+that a kernel reads through gathered indices are visible without a binder
+(see [Concept: kernels](#concept-kernels)).
+
+### Gateaux derivative
+
+Requires: [Core transformations](#core-transformations), [Form](#form),
+[Function](#function).
+
+> Not yet covered. This section states only the shape of the transformation.
+
+The Gateaux derivative of an expression with respect to a function $u$ in a
+space $V$ is expected to be a core transformation that adds an argument. The
+result is linear in a new function in $V$, the direction, bound by a `Form` at
+a new position, and the rule for the class of $u$ replaces $u$ by the direction
+in the derivative of each occurrence of $u$. The rules for the node classes of
+the core, the derivative with respect to a function bound by an enclosing
+`Form`, and the derivative of a downstream terminal through the pull-back by a
+cell are not yet decided.
 
 ## Extending the core
 
@@ -4614,8 +4777,9 @@ AbstractExpression
 |                                 | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap`                                                | `PullBack`                                                                  |
 | Topology                        | [`cell_index(T, j)`](#abstracttopology)                         |                               | `T: AbstractTopology`, `j: int`                                                                             | `Index`                                                                     |
 | Reference cells                 | [`affine_map(F, points)`](#reference-cell)                      |                               | `F: AbstractReferenceCell`, `points: AbstractExpression`                                                    | The affine map of the vertices                                              |
-| Decomposed domains              | [`decomposed_domain(pieces)`](#decomposeddomain)                |                               | `pieces: tuple[ParameterisedDomain, ...]`                                                                   | `DecomposedDomain`                                                          |
-|                                 | [`cell_domain(D, j)`](#decomposeddomain)                        |                               | `D: DecomposedDomain`, `j: int`                                                                             | `ParameterisedDomain` of the cells of type `j`                              |
+| Decomposed domains              | [`decomposed_domain(pieces)`](#decomposeddomain)                |                               | `pieces: tuple[DomainMap, ...]`                                                                   | `DecomposedDomain`                                                          |
+|                                 | [`cell_domain(D, j)`](#decomposeddomain)                        |                               | `D: DecomposedDomain`, `j: int`                                                                             | `DomainMap` of the cells of type `j`                              |
+|                                 | [`gathered_cell_domain(D, j, g)`](#decomposeddomain)            |                               | `D: DecomposedDomain`, `j: int`, `g: GatheredIndex`                                                         | `DomainMap` of the cells of type `j` selected by `g`              |
 |                                 | [`side_domain(D, S)`](#restriction)                             |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                                | `DecomposedDomain` of the cells of `S`                                      |
 |                                 | [`side_map(D, E, side)`](#restriction)                          |                               | `D, E: DecomposedDomain`, `side: str`                                                                       | `SideMap`                                                                   |
 |                                 | [`restriction(f, E, side)`](#restriction)                       |                               | `f: AbstractExpression`, `E: DecomposedDomain`, `side: str`                                                 | `PullBack` of `f` by `side_map(D, E, side)`, or `f` with no support         |
@@ -4723,7 +4887,13 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 ## Appendix: Pass table
 
 What each core transformation does with each node class as the operand of the
-evaluated node. "In" moves the evaluated node into the operands, by linearity
+evaluated node. `expand_integrals` has no column, because the one rule of
+`expand_integrals` dispatches on the domain of the `Integral` and not on the
+operand (see [Expanding integrals](#expanding-integrals)), and
+`reduce_component_tensors` has no column, because the one rule of
+`reduce_component_tensors` applies to a `ComponentTensor` operand and every
+other operand remains (see [Reducing component
+tensors](#reducing-component-tensors)). "In" moves the evaluated node into the operands, by linearity
 or commuting. "Chain" is the chain rule. "Rule" is a rule of the
 transformation. "Bound" moves the evaluated node into the expression or the
 form only, past the bound arguments. "Remains" keeps the
