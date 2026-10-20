@@ -582,7 +582,9 @@ We begin with differential geometry because the function spaces and operators
 of UFLx are defined on a domain. The function spaces and operators require the
 topological structure of the domain, which is the dimension, boundary,
 orientation and decomposition into cells of the domain. The core needs no
-metric.
+metric beyond the Euclidean metric of the ambient coordinate domain, which
+gives the components of a differential form on a domain of lower dimension
+(see [Components](#components)) and the unit normal (see [Normal](#normal)).
 
 ### AbstractCoordinateDomain
 
@@ -1557,26 +1559,28 @@ product](#transpose-and-matrix-product).
 See also: [Expanding pull-backs](#expanding-pull-backs), [Applying
 derivatives](#applying-derivatives).
 
-| `Inverse(A)`  |                                                   |
-| ------------- | ------------------------------------------------- |
-| Free function | `inverse(A)`                                      |
-| Requires      | $A$ with value shape `(m, m)` and the degree `()` |
-| Static type   | Value shape `(m, m)`                              |
-| Raises        | `ValueError` if a requirement fails               |
+| `Inverse(A)`  |                                                                                         |
+| ------------- | --------------------------------------------------------------------------------------- |
+| Free function | `inverse(A)`                                                                            |
+| Requires      | $A$ with value shape `(n, k)`, $k \le n$, and the degree `()`, and $A$ real for $k < n$ |
+| Static type   | Value shape `(k, n)`                                                                    |
+| Raises        | `ValueError` if a requirement fails                                                     |
 
-`Inverse(A)` is the inverse matrix $A^{-1}$. If $A$ is singular, `Inverse(A)`
-is undefined. Construction does not check that $A$ is invertible.
+`Inverse(A)` is the pseudo-inverse $A^+ = (A^T A)^{-1} A^T$ of a matrix $A$
+of rank $k$, the left inverse of $A$ with $A^+ A$ the identity. For $k = n$,
+$A^+$ is the inverse matrix $A^{-1}$. If $A$ has rank less than $k$,
+`Inverse(A)` is undefined. Construction does not check the rank of $A$.
 
-For each extent $m$, the adjugate of $A$ divided by the determinant of $A$ is
-a fixed composition. `Inverse` is a node class, not that composition, because
-the composition differs in floating-point arithmetic from a factorisation of
-$A$, as for `Division` and `SquareRoot`. A pass chooses how to evaluate
-`Inverse`.
-
-The pseudo-inverse of a matrix $J$ of value shape `(n, k)` with rank $k$ is the
-fixed composition `inverse(transpose(J) @ J) @ transpose(J)`, so the core has
-no node class for the pseudo-inverse. For $k = n$, the pseudo-inverse is equal
-to `inverse(J)`.
+For $k = n$, the adjugate of $A$ divided by the determinant of $A$ is a
+fixed composition, and for $k < n$, `inverse(transpose(A) @ A) @ transpose(A)`
+is a fixed composition. `Inverse` is a node class, not those compositions,
+because the compositions differ in floating-point arithmetic from a
+factorisation of $A$, as for `Division` and `SquareRoot`. A pass chooses how
+to evaluate `Inverse`, such as in closed form for a small matrix, from
+$\det(A^T A)$, which the volume density of a domain of lower dimension also
+needs. One node class for every $k \le n$ gives one rule for every dimension,
+such as the rule for `Components` in
+[Expanding pull-backs](#expanding-pull-backs).
 
 Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
 
@@ -1585,8 +1589,14 @@ Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
   mapped triangle](#example-an-affinely-mapped-triangle), `inverse(J)` has
   value shape `(2, 2)`, and a later pass evaluates `inverse(J)` to
   $\frac{1}{5} \begin{pmatrix} 3 & -1 \\ -1 & 2 \end{pmatrix}$.
+- With the Jacobian matrix `Je = tensor((tensor((one,)), tensor((one,))))` of
+  value shape `(2, 1)`, of the edge from $(0, 0)$ to $(1, 1)$, `inverse(Je)`
+  has value shape `(1, 2)`, and a later pass evaluates `inverse(Je)` to
+  $\begin{pmatrix} 1/2 & 1/2 \end{pmatrix}$.
 - `inverse(tensor((one, two)))` raises `ValueError`, because the value shape
-  `(2,)` is not the value shape of a square matrix.
+  `(2,)` is not the value shape of a matrix.
+- `inverse(transpose(Je))` with value shape `(1, 2)` raises `ValueError`,
+  because $k > n$.
 - With the coordinate coframe `dX` of `RD(2)`, `inverse(tensor((dX, dX)))`
   raises `ValueError`, because the degree is `(1,)`.
 
@@ -1903,19 +1913,27 @@ See also: [PullBack](#pullback), [Expanding components](#expanding-components),
 
 A concrete subclass of `AbstractExpression` that turns the first slot of a
 differential form into an axis of the value shape, with the coordinate frame of
-a coordinate domain $P$ of dimension $n$.
+a coordinate domain $P$ of dimension $n$, or of the ambient coordinate domain
+of a decomposed domain $P$.
 
-| `Components(f, P)` |                                                                                                                                                                         |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Free function      | `components(f, P)`                                                                                                                                                      |
-| Properties         | `expression` $f$ and `domain` $P$ of dimension $n$                                                                                                                      |
-| Requires           | A [valid pair](#valid-pair) $(f, P)$, $f$ with at least one slot, and for a [`DecomposedDomain`](#decomposeddomain) $P$, the dimension of the ambient coordinate domain |
-| Static type        | Value shape `f.value_shape + (n,)`                                                                                                                                      |
-| Raises             | `ValueError` if a requirement fails                                                                                                                                     |
-| Evaluated by       | [`expand_components`](#expanding-components)                                                                                                                            |
+| `Components(f, P)` |                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Free function      | `components(f, P)`                                                                                                        |
+| Properties         | `expression` $f$ and `domain` $P$, with $n$ the dimension of $P$, or of the ambient coordinate domain of a decomposed $P$ |
+| Requires           | A [valid pair](#valid-pair) $(f, P)$, and $f$ with at least one slot                                                      |
+| Static type        | Value shape `f.value_shape + (n,)`                                                                                        |
+| Raises             | `ValueError` if a requirement fails                                                                                       |
+| Evaluated by       | [`expand_components`](#expanding-components)                                                                              |
 
-For a decomposed domain $P$, the frame is the coordinate frame of the ambient
-coordinate domain of $P$, which is a frame of $P$ only for the same dimension.
+For a decomposed domain $P$ of dimension $k$, the frame is the coordinate
+frame of the ambient coordinate domain of $P$, of dimension $n$. For $k = n$,
+that frame is a frame of $P$. For $k < n$, such as a surface in $R^3$, the
+coordinate vector fields $\partial_j$ of the ambient coordinate domain are not
+tangent to $P$, and $\partial_j$ in the definition below is the orthogonal
+projection of $\partial_j$ onto the tangent space of $P$, with the Euclidean
+metric of the ambient coordinate domain. The array is then the array of the
+extension of $f$ that is zero on the normal space of $P$, such as the surface
+gradient of a function on $P$.
 
 With $\partial_j$ the coordinate vector fields of $P$, dual to the coordinate
 1-forms $\mathrm{d}X_j$, the entry $j$ of the new axis is the interior product
@@ -1936,8 +1954,8 @@ No fixed composition of the other node classes turns a slot into an axis, so
 
 The components depend on the coordinates of $P$. So a pull-back does not
 commute with `Components`. `PullBack(Components(f, Q), D)` is the array of the
-components of $f$ on $Q$, evaluated at $\psi(p)$. If $P$ and $Q$ have the same
-dimension, `expand_pull_backs` moves the pull-back inside `Components` with the
+components of $f$ on $Q$, evaluated at $\psi(p)$. If $P$ has the dimension of
+$Q$, `expand_pull_backs` moves the pull-back inside `Components` with the
 inverse of the Jacobian matrix (see
 [Expanding pull-backs](#expanding-pull-backs)). Otherwise
 `PullBack(Components(f, Q), D)` remains until `expand_components` evaluates the
@@ -1960,6 +1978,11 @@ on `RD(3)`, and `f = x * y * z`:
   `components(exterior_derivative(D.parameterisation, P), P)` is the Jacobian
   matrix of value shape `(m, n)`, with $m$ the dimension of the ambient
   coordinate domain of $D$.
+- For a decomposed domain `M` of dimension 2 in `RD(3)` and a function `u` on
+  `M`, `components(exterior_derivative(u, M), M)` is the surface gradient of
+  `u`, with value shape `(3,)`, and
+  `components(exterior_derivative(coordinate(M), M), M)` is the orthogonal
+  projection onto the tangent plane of `M`, with value shape `(3, 3)`.
 
 ### Volume form
 
@@ -2429,8 +2452,8 @@ element $|\psi'| \, \mathrm{d}t$, which comes from the Euclidean metric of
 
 > This example writes the length element by hand, for a curve in the
 > Euclidean plane. The general concept is the volume form of the metric that
-> $\psi$ induces, $\sqrt{\det(J^T J)} \, \mathrm{d}t$. The core needs no
-> metric, so a downstream library could provide the general concept as free
+> $\psi$ induces, $\sqrt{\det(J^T J)} \, \mathrm{d}t$. The core has no
+> induced metric, so a downstream library could provide the general concept as free
 > functions (see [New operations](#new-operations)).
 
 ```python
@@ -3351,14 +3374,14 @@ Requires: [Restriction](#restriction), [Reference cell](#reference-cell),
 A concrete subclass of `AbstractExpression` for the unit outward normal of the
 cell on a side, on the cells of a topology with sides.
 
-| `Normal(D, E, s)` |                                                                                                                                     |
-| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Free function     | `normal(D, E, s)`                                                                                                                   |
-| Properties        | `ambient_domain` $D$, `parameter_domain` $E$ and `side` $s$, as for [`SideMap`](#restriction)                                       |
-| Requires          | The requirements of `SideMap(D, E, s)`, $D$ of the dimension $n$ of the ambient coordinate domain, and $E$ of the dimension $n - 1$ |
-| Static type       | Value shape `(n,)`, the support $E$, real                                                                                           |
-| Raises            | `ValueError` if a requirement fails                                                                                                 |
-| Evaluated by      | [`expand_pull_backs`](#expanding-pull-backs)                                                                                        |
+| `Normal(D, E, s)` |                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| Free function     | `normal(D, E, s)`                                                                                     |
+| Properties        | `ambient_domain` $D$, `parameter_domain` $E$ and `side` $s$, as for [`SideMap`](#restriction)         |
+| Requires          | The requirements of `SideMap(D, E, s)`, and $E$ of the dimension $k - 1$ for the dimension $k$ of $D$ |
+| Static type       | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the support $E$, real      |
+| Raises            | `ValueError` if a requirement fails                                                                   |
+| Evaluated by      | [`expand_pull_backs`](#expanding-pull-backs)                                                          |
 
 `Normal(D, E, s)` is a terminal of the geometry, as `Coordinate` is. The
 pull-back by `cell_domain(E, i)`, with $B_i$ and $A_i$ of
@@ -3369,13 +3392,16 @@ $$
 \nu = \frac{K^T \hat m}{\lvert K^T \hat m \rvert},
 $$
 
-with $K$ the inverse of the Jacobian matrix of $B_i$ at the points of $A_i$,
+with $K$ the [inverse](#inverse) of the Jacobian matrix of $B_i$ at the
+points of $A_i$, the pseudo-inverse for $k < n$,
 and $\hat m$ a normal of the cell of $E$ in $K_j$, orthogonal to the columns of
 the Jacobian matrix of $A_i$ and pointing away from the centroid of the
-vertices of $K_j$. Both are fixed compositions for each $n$, from the vertices
+vertices of $K_j$. Both are fixed compositions for each $k$ and $n$, from the vertices
 of $K_j$ and the side tables, so the core needs no numbering of the facets.
 The centroid lies inside a convex reference cell, so $\hat m$ points out of
-$K_j$. The normals from two sides of one cell of $E$ are opposite.
+$K_j$. The normals from two sides of one cell of $E$ are opposite. For
+$k < n$, such as on the edges of a surface in $R^3$, $\nu$ is the unit
+conormal, tangent to the cell on the side and orthogonal to the cell of $E$.
 
 Examples, with `B` of the [Integral over a decomposed
 domain](#integral-over-a-decomposed-domain) examples, the decomposed domain `E`
@@ -3796,7 +3822,9 @@ A terminal is a `Coordinate`, a [`Function`](#function), or an expression with a
 support whose class is a leaf class of a downstream library. After evaluation,
 every `PullBack`, `ExteriorDerivative`, `Components` and `Action` applies to an
 expression that contains a downstream terminal, except the coordinate frame
-$\mathrm{d}X$ and a `PullBack` of a constant by a family of domains. An
+$\mathrm{d}X$, the components of $\mathrm{d}X$ on a decomposed domain of lower
+dimension than the ambient coordinate domain, and a `PullBack` of a constant
+by a family of domains. An
 expression without a downstream terminal evaluates to a sum of products and
 tensor products of 0-forms and the coordinate 1-forms $\mathrm{d}X_i$, inside
 any `Form`.
@@ -3820,8 +3848,8 @@ of the core, with these rules:
 | `PullBack(f, SideMap(D2, E, s))`, for `cell_domain(E, i)`                 | `pull_back(pull_back(f, B_i), A_i)` (see [Restriction](#restriction))                |
 | `Normal(D2, E, s)`, for `cell_domain(E, i)`                               | $K^T \hat m / \lvert K^T \hat m \rvert$ (see [Normal](#normal))                      |
 | `PullBack(f, SideMap(D2, E, s))` or `Normal(D2, E, s)`, for any other $D$ | Remains                                                                              |
-| `Components(f, Q)`, $P$ and $Q$ of dimension $n$                          | $\sum_i K_{ij} \, \mathrm{Components}(\psi^* f, P)_i$ for entry $j$ of the last axis |
-| `Components(f, Q)`, $P$ of dimension $k < n$                              | Remains                                                                              |
+| `Components(f, Q)`, $P$ of the dimension of $Q$                           | $\sum_i K_{ij} \, \mathrm{Components}(\psi^* f, P)_i$ for entry $j$ of the last axis |
+| `Components(f, Q)`, $P$ of lower dimension than $Q$                       | Remains                                                                              |
 | `Function` or a downstream terminal                                       | Remains, for the library of the terminal                                             |
 
 The rule for an expression with no support comes before every other rule and
@@ -3841,13 +3869,17 @@ directly, such as a function on a physical cell pulled back to a facet of the
 reference cell.
 
 In the rule for `Components`, $J$ is
-`components(exterior_derivative(D.parameterisation, P), P)` and $K$ is
-`inverse(J)`. $\psi$ has a local inverse near each point where $J$ is
-invertible, and the pull-back of the coordinate vector field $\partial_j$ of
-$Q$ by $\psi$ is $\sum_i K_{ij} \, \partial_i$. For $k < n$, the same
-composition with the pseudo-inverse of $J$ (see [Inverse](#inverse)) is the
-array of the components of the part of $f$ tangent to $D$, not the array of
-the components of $f$, so the pull-back remains.
+`components(exterior_derivative(D.parameterisation, P), P)`, of value shape
+`(n, k)` with $k$ the dimension of $P$ and $n$ the dimension of the frame of
+`Components(f, Q)`, and $K$ is `inverse(J)`, the pseudo-inverse for $k < n$
+(see [Inverse](#inverse)). The vector fields $\sum_i K_{ij} \, \partial_i$ on $P$
+push forward to the orthogonal projections of the $\partial_j$ of the frame
+onto the tangent space of $D$, which are the $\partial_j$ themselves for
+$k = n$. For a decomposed $Q$ of dimension $k < n$, `Components(f, Q)` is
+defined with those projections (see [Components](#components)), so the rule
+holds for $f$ on $Q$. If $P$ has lower dimension than $Q$, the same
+composition gives the components of the part of $f$ tangent to $D$, not the
+components of $f$, so the pull-back remains.
 
 ### Applying derivatives
 
@@ -3863,7 +3895,7 @@ chain rule for the node classes of the degree `()`, with these rules:
 | `Product` $\alpha \wedge \beta$, with $\alpha$ a $k$-form                   | $\mathrm{d}\alpha \wedge \beta + (-1)^k \alpha \wedge \mathrm{d}\beta$                                             |
 | `TensorProduct` $\alpha \otimes \beta$                                      | The rule of `Product`, written with `Product`                                                                      |
 | `Division` $a / b$                                                          | $\mathrm{d}a / b - (\mathrm{d}b \wedge a) / (b b)$                                                                 |
-| `Inverse` $A^{-1}$                                                          | $-A^{-1} \, \mathrm{d}A \, A^{-1}$                                                                                 |
+| `Inverse` $A^+$                                                             | $-A^+ \, \mathrm{d}A \, A^+ + A^+ (A^+)^T \, \mathrm{d}A^T \, (I - A A^+)$                                         |
 | `Absolute` $\lvert a \rvert$                                                | $(\bar{a} \, \mathrm{d}a + a \, \overline{\mathrm{d}a}) / (2 \lvert a \rvert)$                                     |
 | `Conjugate` $\bar{\omega}$                                                  | $\overline{\mathrm{d}\omega}$                                                                                      |
 | `ExteriorDerivative`, an expression with no support, or a `PullBack` of one | `Zero`, with the value shape, the free indices and the argument spaces of the operand and the degree raised by one |
@@ -3879,7 +3911,11 @@ A `TensorProduct` under an exterior derivative has at most one slot, so
 $\alpha \otimes \beta = \alpha \wedge \beta$. Written with `TensorProduct`,
 the two terms would have different numbers of slots. In the rule for
 `Inverse`, the matrix products are in the value shape, with the wedge product
-of the 0-form $A^{-1}$ with the 1-form $\mathrm{d}A$. `Absolute` is not
+of the 0-forms $A^+$ and $(A^+)^T$ with the 1-forms $\mathrm{d}A$ and
+$\mathrm{d}A^T$, and $I$ is the identity matrix of value shape `(n, n)`, the
+`Tensor` of `Integer(1)` and `Integer(0)` entries. For $k = n$,
+$I - A A^+$ is zero and the rule is $-A^{-1} \, \mathrm{d}A \, A^{-1}$, but
+the rule does not drop the term, because the core never simplifies. `Absolute` is not
 complex differentiable, and for a real $a$ the rule is the chain rule. The
 rule for `Conjugate` holds because the exterior derivative is real. The
 exterior derivative of `Coordinate(P)` is the coordinate frame $\mathrm{d}X$.
@@ -3894,18 +3930,21 @@ The interior product $\iota_j$ with $\partial_j$ is linear for the linear node
 classes, and the new axis stays the last axis of the value shape, with these
 rules:
 
-| Operand                                                                            | Rewrite of $\iota_j$ applied to the operand                                                                |
-| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `Product` $\alpha \wedge \beta$, with the first slot of $\alpha$ of the degree $k$ | $\iota_j\alpha \wedge \beta + (-1)^k \alpha \wedge \iota_j\beta$, and $f \, \iota_j\beta$ for a 0-form $f$ |
-| `TensorProduct` $\alpha \otimes \beta$                                             | $(\iota_j\alpha) \otimes \beta$ if $\alpha$ has a slot, and $f \, \iota_j\beta$ for a 0-form $f$           |
-| $\mathrm{d}X_i$                                                                    | $\delta_{ij}$                                                                                              |
-| `Zero`                                                                             | `Zero` with the new value shape and degree                                                                 |
-| `Conjugate` $\bar{\alpha}$                                                         | $\overline{\iota_j \alpha}$                                                                                |
-| `Function` or a downstream terminal                                                | Remains                                                                                                    |
-| Any other `ExteriorDerivative`, `Components` or `PullBack`                         | Remains                                                                                                    |
+| Operand                                                                                                                              | Rewrite of $\iota_j$ applied to the operand                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `Product` $\alpha \wedge \beta$, with the first slot of $\alpha$ of the degree $k$                                                   | $\iota_j\alpha \wedge \beta + (-1)^k \alpha \wedge \iota_j\beta$, and $f \, \iota_j\beta$ for a 0-form $f$ |
+| `TensorProduct` $\alpha \otimes \beta$                                                                                               | $(\iota_j\alpha) \otimes \beta$ if $\alpha$ has a slot, and $f \, \iota_j\beta$ for a 0-form $f$           |
+| $\mathrm{d}X_i$, on a support of the dimension of the frame                                                                          | $\delta_{ij}$                                                                                              |
+| `Zero`                                                                                                                               | `Zero` with the new value shape and degree                                                                 |
+| `Conjugate` $\bar{\alpha}$                                                                                                           | $\overline{\iota_j \alpha}$                                                                                |
+| `Function` or a downstream terminal                                                                                                  | Remains                                                                                                    |
+| $\mathrm{d}X_i$ on a decomposed domain of lower dimension than the frame, any other `ExteriorDerivative`, `Components` or `PullBack` | Remains                                                                                                    |
 
 The rule for $\mathrm{d}X_i$ applies to `ExteriorDerivative(Coordinate(P), P)`,
-reached through `Indexed`. The components of the exterior derivative of any
+reached through `Indexed`. On a decomposed domain of lower dimension than the
+frame, the components of $\mathrm{d}X$ are the orthogonal projection onto the
+tangent space, which `expand_pull_backs` evaluates on each piece as $J K$.
+The components of the exterior derivative of any
 other expression remain, such as the gradient
 `components(exterior_derivative(u, P), P)` of a function `u`.
 
@@ -4219,7 +4258,7 @@ AbstractExpression
 ├── Conjugate
 ├── TensorProduct                         ⊗, concatenates slots
 ├── SquareRoot
-├── Inverse                               inverse of a square matrix
+├── Inverse                               inverse, or pseudo-inverse of a tall matrix
 ├── Tensor                                stacks entries along a new axis
 ├── Indexed                               full indexing, int, Index or index value entries
 ├── ComponentTensor                       binds indices to tensor axes
