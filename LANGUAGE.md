@@ -3270,18 +3270,18 @@ from each side.
 
 A `SideMap` maps the cells of $E$ into $D$ through the side $s$.
 `pull_back(f, SideMap(D, E, s))` is an expression with the support $E$, the
-restriction of $f$ to all the groups at once. The pull-back of it by
-`cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)` (see [Expanding
-pull-backs](#expanding-pull-backs)).
+restriction of $f$ to all the groups at once. The pull-back of that
+expression by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)` (see
+[Expanding pull-backs](#expanding-pull-backs)).
 
 The free function `side_domain(D, S)` returns the decomposed domain of $S$ with
 the geometry of the first side of each group, with piece $i$
 `parameterised_domain(F_i, pull_back(pull_back(coordinate(D), B_i), A_i), Q)`
 for the first side, with $F_i$ the cell type of group $i$ and $Q$ the ambient
-coordinate domain of $D$. The topology of the result is $S$. The core does not check that the other sides have the same
-geometry. The free function `restriction(f, E, s)` returns
-`pull_back(f, side_map(D, E, s))` with $D$ the support of $f$, or $f$ if $f$
-has no support.
+coordinate domain of $D$. The topology of the result is $S$. The core does not
+check that the other sides have the same geometry. The free function
+`restriction(f, E, s)` returns `pull_back(f, side_map(D, E, s))` with $D$ the
+support of $f$, or $f$ if $f$ has no support.
 
 The pull-back gives the trace of each degree. The restriction of a 0-form is
 the value on the cell of $S$, and the restriction of the 1-form $\mathrm{d}u$
@@ -3412,11 +3412,11 @@ $$
 $$
 
 with $K$ the [inverse](#inverse) of the Jacobian matrix of $B_i$ at the
-points of $A_i$, the pseudo-inverse for $k < n$,
-and $\hat m$ a normal of the cell of $E$ in $K_j$, orthogonal to the columns of
-the Jacobian matrix of $A_i$ and pointing away from the centroid of the
-vertices of $K_j$. Both are fixed compositions for each $k$ and $n$, from the vertices
-of $K_j$ and the side tables, so the core needs no numbering of the facets.
+points of $A_i$, the pseudo-inverse for $k < n$, and $\hat m$ a normal of the
+cell of $E$ in $K_j$, orthogonal to the columns of the Jacobian matrix of
+$A_i$ and pointing away from the centroid of the vertices of $K_j$. Both are
+fixed compositions for each $k$ and $n$, from the vertices of $K_j$ and the
+side tables, so the core needs no numbering of the facets.
 The centroid lies inside a convex reference cell, so $\hat m$ points out of
 $K_j$. For $k = n$, the normals from two sides of one cell of $E$ are
 opposite. For $k < n$, such as on the edges of a surface in $R^3$, $\nu$ is
@@ -3476,9 +3476,9 @@ describe the interface beyond a fixed convention, such as for two sides of
 different cell types.
 
 The assembler adds the result of a kernel into a global array through the same
-tables, which is outside the language. A whole-array compiler may instead keep
-the integral whole, as a batched gather, one kernel for all the cells and a
-scatter-add.
+tables. That addition is outside the language. A whole-array compiler may
+instead keep the integral whole, as a batched gather, one kernel for all the
+cells and a scatter-add.
 
 A kernel depends on no particular mesh. Before compiling a kernel, a pass
 replaces the topologies, the tables, the arrays and the extents of a mesh by
@@ -3515,15 +3515,15 @@ the value shape and the scalar type of $V$, defined through the cells of $D$
 (see [DecomposedDomain](#decomposeddomain)). The concrete subclass defines the
 pull-back of a function in $V$ by `cell_domain(D, j)` for every cell type $j$
 of $D$, such as with one finite element for each cell type. The core does not
-represent the polynomials, the degrees of freedom or the basis of $V$, which belong to the
-concrete subclass. Two spaces are the same space only if the two spaces are
-equal as base objects, so a concrete `AbstractFunctionSpace` stores the
-arguments that identify the space, such as the finite element.
+represent the polynomials, the degrees of freedom or the basis of $V$, which
+belong to the concrete subclass. Two spaces are the same space only if the two
+spaces are equal as base objects, so a concrete `AbstractFunctionSpace` stores
+the arguments that identify the space, such as the finite element.
 
 A space with the domain `None` and the argument spaces `()` is a space of
-constants. A function in the space
-is an expression with no support and the degree `()`, a single array with the
-value shape and the scalar type of $V$. The degree is `()`, because an
+constants. A function in the space is an expression with no support and the
+degree `()`, a single array with the value shape and the scalar type of $V$.
+The degree is `()`, because an
 expression with no support and a non-empty degree is a `Zero` (see
 [Expressions as differential forms](#expressions-as-differential-forms)), and
 a constant $k$-form is a constant array times the coordinate $k$-forms of a
