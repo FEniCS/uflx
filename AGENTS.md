@@ -8,9 +8,9 @@ UFLx is an experimental, minimal reimplementation of UFL (Unified Form Language)
 symbolic language embedded in Python for writing finite-element variational forms
 (e.g. `inner(grad(v), grad(u)) * dx`). It does not own meshes, boundary markers,
 coefficient values, or assembly — those belong to a surrounding solver environment
-(e.g. DOLFIN/DOLFINx). See [LANGUAGE.md](LANGUAGE.md) for the full language spec and
-[DESIGN_CHOICES.md](DESIGN_CHOICES.md) for naming/API conventions — read both before
-adding to the object model.
+(e.g. DOLFIN/DOLFINx). See [DESIGN.md](DESIGN.md) for the argument behind the language, [LANGUAGE.md](LANGUAGE.md)
+for the full language spec and [DESIGN_CHOICES.md](DESIGN_CHOICES.md) for naming/API
+conventions — read all three before adding to the object model.
 
 ## Commands
 

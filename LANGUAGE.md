@@ -4,7 +4,8 @@ Authors: Jack S. Hale, Matthew Scroggs, Michal Habera
 
 This note describes the smallest core language behind UFLx. The note leaves
 out implementation details, compiler algorithms and broad redesign ideas.
-Implementation principles and the enforcement of the rules of the language
+The argument behind the design, with a reading guide, is in DESIGN.md, and
+implementation principles and the enforcement of the rules of the language
 are in DESIGN_CHOICES.md. The note assumes knowledge of differential geometry
 and functional analysis, and explains some advanced concepts of differential
 geometry in more detail.
