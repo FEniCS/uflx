@@ -2180,7 +2180,7 @@ Requires: [Example: the unit simplex](#example-the-unit-simplex),
 The physical triangle with vertices $v_0 = (1, 0)$, $v_1 = (3, 1)$ and
 $v_2 = (2, 3)$ is the image of the unit triangle under an affine map.
 
-Important point is that there is no topology here, just geometry.
+There is no topology here, only geometry.
 
 The affine map from `UnitSimplex(2)` onto the physical triangle is
 
@@ -2304,8 +2304,8 @@ E = parameterised_domain(S, pull_back(psi, e), RD(2))
 Requires: [ParameterisedDomain](#parameteriseddomain),
 [Volume form](#volume-form), [PullBack](#pullback).
 
-An orientation is a choice of direction, i.e. which way an edge runs, or which
-side of a surface is up. A coordinate domain $P$ is oriented by the order of
+An orientation is a choice of direction, such as which way an edge runs or
+which side of a surface is up. A coordinate domain $P$ is oriented by the order of
 the coordinates of $P$, as fixed by the volume form of $P$ (see
 [Volume form](#volume-form)). A domain $D$ = `ParameterisedDomain(P, psi, Q)`
 takes the orientation of $P$ through $\psi$. For example, an edge runs in the
@@ -2532,7 +2532,7 @@ Requires: [RD](#rd), [ParameterisedDomain](#parameteriseddomain),
 [PullBack](#pullback), [Integral](#integral), [Example: an affinely mapped
 triangle](#example-an-affinely-mapped-triangle).
 
-A point is a domain! A point in a coordinate domain $Q$ of dimension $n$ is
+A point is a domain. A point in a coordinate domain $Q$ of dimension $n$ is
 `parameterised_domain(RD(0), x, Q)`, with $x$ a constant expression of value
 shape `(n,)`. The core needs no node class and no free function for a point.
 
@@ -2577,10 +2577,9 @@ C = parameterised_domain(RD(0), pull_back(psi, c), RD(2))
 
 ### Example: quadrature
 
-> This is very much inspired by what GEM/TSFC does but expresses it in core
-> primitives. Clearly by combining these ideas UFLx has quite some additional
-> expressivity. Perhaps having this in UFLx will make TSFC simpler, if it
-> eventually targets UFLx.
+> This example is inspired by GEM and TSFC, but is written in the primitives
+> of the core. Combining these ideas gives UFLx additional expressivity.
+> Quadrature in UFLx may make TSFC simpler, if TSFC eventually targets UFLx.
 
 Requires: [Points and point evaluation](#points-and-point-evaluation),
 [ParameterisedDomain](#parameteriseddomain), [PullBack](#pullback),
@@ -2588,8 +2587,7 @@ Requires: [Points and point evaluation](#points-and-point-evaluation),
 [ComponentTensor and IndexSum](#componenttensor-and-indexsum),
 [Extents](#extents).
 
-This example is a 'look ahead' to expressing the concept of quadrature
-integration in the core language.
+This example looks ahead to quadrature in the core language.
 
 A quadrature rule replaces the integral by the inner product of the weights
 with the values at the points. With `T`, `X` and `f = X[0] * X[1]` of
@@ -2721,9 +2719,8 @@ determinant. The centroid is the parameterisation of the point `C` of
 image of the centroid of `T`. The two expressions are not equal, and a later
 pass evaluates both to $(2, 4/3)$.
 
-> At this point, we can do no more on geometry before we do some work in
-> topology (cells, facets, families, orientations) and functions. Then, we can
-> return to geometry later.
+> Geometry stops here until topology (cells, facets, families, orientations)
+> and functions are defined. Later sections return to geometry.
 
 ## Topology
 
