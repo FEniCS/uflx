@@ -3765,6 +3765,11 @@ transformation.
 | [`expand_components(f)`](#expanding-components) | `Components`         | Linear for the linear node classes                          |
 | [`apply_actions(f)`](#applying-actions)         | `Action`             | Moves into the operand that carries the slot                |
 
+The linear node classes are `Sum`, `Tensor`, `Indexed`, `ComponentTensor` and
+`IndexSum`, linear in every operand, and `Division`, linear in the first
+operand. An evaluated node that is linear moves into the operands of a linear
+node class in which the node is linear.
+
 A rule rewrites a node of the evaluated class to a mathematically equal
 expression of node classes of the core, and never simplifies. The rewritten
 expression has the free indices of the node, with the same extents, possibly
@@ -3806,19 +3811,21 @@ For a domain $D$ with the parameterisation $\psi$, the parameter domain $P$
 and the ambient coordinate domain $Q$, $\psi^*$ commutes with every node class
 of the core, with these rules:
 
-| Operand                                                   | Rewrite of $\psi^*$ applied to the operand                                           |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| An expression $c$ with no support                         | $c$, if every free index of $D$ is free in $c$, and otherwise remains                |
-| `Coordinate(Q)`                                           | $\psi$                                                                               |
-| `ExteriorDerivative(f, Q)`                                | $\mathrm{d}(\psi^* f)$, with the exterior derivative on $P$                          |
-| `PullBack(g, D2)`                                         | The pull-back of $g$ by the image of $D$ under `D2`                                  |
-| `PullBack(f, SideMap(D2, E, s))`, for `cell_domain(E, i)` | `pull_back(pull_back(f, B_i), A_i)` (see [Restriction](#restriction))                |
-| `Normal(D2, E, s)`, for `cell_domain(E, i)`               | $K^T \hat m / \lvert K^T \hat m \rvert$ (see [Normal](#normal))                      |
-| `Components(f, Q)`, $P$ and $Q$ of dimension $n$          | $\sum_i K_{ij} \, \mathrm{Components}(\psi^* f, P)_i$ for entry $j$ of the last axis |
-| `Components(f, Q)`, $P$ of dimension $k < n$              | Remains                                                                              |
-| `Function` or a downstream terminal                       | Remains, for the library of the terminal                                             |
+| Operand                                                                   | Rewrite of $\psi^*$ applied to the operand                                           |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| An expression $c$ with no support                                         | $c$, if every free index of $D$ is free in $c$, and otherwise remains                |
+| `Coordinate(Q)`                                                           | $\psi$                                                                               |
+| `ExteriorDerivative(f, Q)`                                                | $\mathrm{d}(\psi^* f)$, with the exterior derivative on $P$                          |
+| `PullBack(g, D2)`, for a `ParameterisedDomain` `D2`                       | The pull-back of $g$ by the image of $D$ under `D2`                                  |
+| `PullBack(f, SideMap(D2, E, s))`, for `cell_domain(E, i)`                 | `pull_back(pull_back(f, B_i), A_i)` (see [Restriction](#restriction))                |
+| `Normal(D2, E, s)`, for `cell_domain(E, i)`                               | $K^T \hat m / \lvert K^T \hat m \rvert$ (see [Normal](#normal))                      |
+| `PullBack(f, SideMap(D2, E, s))` or `Normal(D2, E, s)`, for any other $D$ | Remains                                                                              |
+| `Components(f, Q)`, $P$ and $Q$ of dimension $n$                          | $\sum_i K_{ij} \, \mathrm{Components}(\psi^* f, P)_i$ for entry $j$ of the last axis |
+| `Components(f, Q)`, $P$ of dimension $k < n$                              | Remains                                                                              |
+| `Function` or a downstream terminal                                       | Remains, for the library of the terminal                                             |
 
-The rule for an expression with no support comes before commuting, so a
+The rule for an expression with no support comes before every other rule and
+before commuting, whatever the class of the expression, so a
 pull-back never moves inside an `Integral`. The integral has no support, and
 the integrand stays on the coordinate domain of the integral. A pull-back of a
 constant by a family remains, because `PullBack(c, D)` has the free indices of
@@ -3860,7 +3867,13 @@ chain rule for the node classes of the degree `()`, with these rules:
 | `Absolute` $\lvert a \rvert$                                                | $(\bar{a} \, \mathrm{d}a + a \, \overline{\mathrm{d}a}) / (2 \lvert a \rvert)$                                     |
 | `Conjugate` $\bar{\omega}$                                                  | $\overline{\mathrm{d}\omega}$                                                                                      |
 | `ExteriorDerivative`, an expression with no support, or a `PullBack` of one | `Zero`, with the value shape, the free indices and the argument spaces of the operand and the degree raised by one |
-| `Coordinate(P)`, `Function` or a downstream terminal                        | Remains                                                                                                            |
+| `Coordinate(P)`, `Normal`, `Function` or a downstream terminal              | Remains                                                                                                            |
+| `Components`, or a `PullBack` of an expression with a support               | Remains                                                                                                            |
+
+`Components` remains because the exterior derivative and the interior product
+do not commute. A `PullBack` with a support remains because moving the
+exterior derivative inside the pull-back would reverse a rule of
+[`expand_pull_backs`](#expanding-pull-backs).
 
 A `TensorProduct` under an exterior derivative has at most one slot, so
 $\alpha \otimes \beta = \alpha \wedge \beta$. Written with `TensorProduct`,
@@ -3889,6 +3902,12 @@ rules:
 | `Zero`                                                                             | `Zero` with the new value shape and degree                                                                 |
 | `Conjugate` $\bar{\alpha}$                                                         | $\overline{\iota_j \alpha}$                                                                                |
 | `Function` or a downstream terminal                                                | Remains                                                                                                    |
+| Any other `ExteriorDerivative`, `Components` or `PullBack`                         | Remains                                                                                                    |
+
+The rule for $\mathrm{d}X_i$ applies to `ExteriorDerivative(Coordinate(P), P)`,
+reached through `Indexed`. The components of the exterior derivative of any
+other expression remain, such as the gradient
+`components(exterior_derivative(u, P), P)` of a function `u`.
 
 The components of `dX` are the identity matrix, the `Tensor` of `Integer(1)`
 and `Integer(0)` entries, or `Zero((0, 0), (), (), ())` for $n = 0$. The rule
@@ -3908,6 +3927,7 @@ An action moves into the operand that carries the slot, with these rules:
 | `Product`, `TensorProduct`                               | The action of the operand that carries the slot, with the slot counted within that operand                                     |
 | `Zero`                                                   | `Zero` with the argument spaces without the slot                                                                               |
 | `Function` or a downstream leaf, such as in a dual space | Remains, for the library of the leaf                                                                                           |
+| `Action`                                                 | Remains                                                                                                                        |
 
 The substitution into a `Form` avoids capture (see [Passes](#passes)). The
 pass rewrites inner actions first, so an outer action meets an `Action` only on
@@ -4251,47 +4271,47 @@ AbstractExpression
 
 > LLM generated table.
 
-| Group                           | Free function                                                   | `AbstractExpression` overload | Takes                                                                                           | Returns                                                                     |
-| ------------------------------- | --------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| Expressions and static type     | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                                                           | `Index`                                                                     |
-|                                 | [`ellipsis_index(label)`](#ellipsisindex)                       |                               | `label: str \| tuple`                                                                           | `EllipsisIndex`                                                             |
-|                                 | [`gathered_index(table, indices)`](#gatheredindex)              |                               | `table: AbstractIndexValue`, `indices: tuple`                                                   | `GatheredIndex`                                                             |
-| Algebra                         | [`add(f, g)`](#sum)                                             | `+`                           | `f, g: AbstractExpression`                                                                      | `Sum`                                                                       |
-|                                 | [`multiply(f, g)`](#product)                                    | `*`                           | `f, g: AbstractExpression`                                                                      | `Product`                                                                   |
-|                                 | [`power(f, g)`](#power)                                         | `**`                          | `f, g: AbstractExpression`                                                                      | `Power`                                                                     |
-|                                 | [`negate(f)`](#negation-and-subtraction)                        | unary `-`                     | `f: AbstractExpression`                                                                         | `Product` of `Integer(-1)` and `f`                                          |
-|                                 | [`subtract(f, g)`](#negation-and-subtraction)                   | `-`                           | `f, g: AbstractExpression`                                                                      | `Sum` of `f` and `negate(g)`                                                |
-|                                 | [`divide(f, g)`](#division)                                     | `/`                           | `f, g: AbstractExpression`                                                                      | `Division`                                                                  |
-|                                 | [`absolute(f)`](#absolute)                                      | `abs`                         | `f: AbstractExpression`                                                                         | `Absolute`                                                                  |
-|                                 | [`conjugate(f)`](#conjugate)                                    |                               | `f: AbstractExpression`                                                                         | `Conjugate`                                                                 |
-|                                 | [`tensor_product(f, g)`](#tensorproduct)                        |                               | `f, g: AbstractExpression`                                                                      | `TensorProduct`                                                             |
-|                                 | [`square_root(f)`](#elementary-functions-very-incomplete)       |                               | `f: AbstractExpression`                                                                         | `SquareRoot`                                                                |
-|                                 | [`tensor(entries)`](#tensor)                                    |                               | `entries: tuple[AbstractExpression, ...]`                                                       | `Tensor`                                                                    |
-|                                 | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple`                                                       | `Indexed`                                                                   |
-|                                 | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                                           | `ComponentTensor`                                                           |
-|                                 | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                                           | `IndexSum`                                                                  |
-|                                 | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                                                         | `ComponentTensor` of an `Indexed`                                           |
-|                                 | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                                                      | `ComponentTensor` of an `IndexSum`                                          |
-|                                 | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                                                         | `Inverse`                                                                   |
-| Calculus on a coordinate domain | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain`                                                                   | `Coordinate`                                                                |
-|                                 | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`                                          | `ExteriorDerivative`                                                        |
-|                                 | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain`                                          | `Components`                                                                |
-|                                 | [`volume_form(P)`](#volume-form)                                |                               | `P: AbstractCoordinateDomain`                                                                   | `Product` of the coordinate 1-forms                                         |
-|                                 | [`integral(f, P)`](#integral)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain \| DecomposedDomain`                      | `Integral`, or a sum of `IndexSum`s of `Integral`s for a `DecomposedDomain` |
-| Maps between domains            | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P, Q: AbstractCoordinateDomain`, `psi: AbstractExpression`                                     | `ParameterisedDomain`                                                       |
-|                                 | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain`                                               | `PullBack`                                                                  |
-| Topology                        | [`cell_index(T, j)`](#abstracttopology)                         |                               | `T: AbstractTopology`, `j: int`                                                                 | `Index`                                                                     |
-| Reference cells                 | [`affine_map(F, points)`](#reference-cell)                      |                               | `F: AbstractReferenceCell`, `points: AbstractExpression`                                        | The affine map of the vertices                                              |
-| Decomposed domains              | [`decomposed_domain(pieces)`](#decomposeddomain)                |                               | `pieces: tuple[ParameterisedDomain, ...]`                                                       | `DecomposedDomain`                                                          |
-|                                 | [`cell_domain(D, j)`](#decomposeddomain)                        |                               | `D: DecomposedDomain`, `j: int`                                                                 | `ParameterisedDomain` of the cells of type `j`                              |
-|                                 | [`side_domain(D, S)`](#restriction)                             |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                    | `DecomposedDomain` of the cells of `S`                                      |
-|                                 | [`side_map(D, E, side)`](#restriction)                          |                               | `D, E: DecomposedDomain`, `side: str`                                                           | `SideMap`                                                                   |
-|                                 | [`restriction(f, E, side)`](#restriction)                       |                               | `f: AbstractExpression`, `E: DecomposedDomain`, `side: str`                                     | `PullBack` of `f` by `side_map(D, E, side)`, or `f` with no support         |
-|                                 | [`normal(D, E, side)`](#normal)                                 |                               | `D, E: DecomposedDomain`, `side: str`                                                           | `Normal`                                                                    |
-| Function spaces                 | [`function(V, label)`](#function)                               |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                               | `Function`                                                                  |
-| Variational forms               | [`form(expression, arguments)`](#form)                          |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| tuple[Function, ...], ...]`     | `Form`                                                                      |
-|                                 | [`dual(S)`](#dualspace)                                         |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                 | `DualSpace`                                                                 |
-|                                 | [`action(f, slot, g)`](#action)                                 |                               | `f: AbstractExpression`, `slot: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]` | `Action`                                                                    |
+| Group                           | Free function                                                   | `AbstractExpression` overload | Takes                                                                                                       | Returns                                                                     |
+| ------------------------------- | --------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Expressions and static type     | [`index(label)`](#index)                                        |                               | `label: str \| tuple`                                                                                       | `Index`                                                                     |
+|                                 | [`ellipsis_index(label)`](#ellipsisindex)                       |                               | `label: str \| tuple`                                                                                       | `EllipsisIndex`                                                             |
+|                                 | [`gathered_index(table, indices)`](#gatheredindex)              |                               | `table: AbstractIndexValue`, `indices: tuple`                                                               | `GatheredIndex`                                                             |
+| Algebra                         | [`add(f, g)`](#sum)                                             | `+`                           | `f, g: AbstractExpression`                                                                                  | `Sum`                                                                       |
+|                                 | [`multiply(f, g)`](#product)                                    | `*`                           | `f, g: AbstractExpression`                                                                                  | `Product`                                                                   |
+|                                 | [`power(f, g)`](#power)                                         | `**`                          | `f, g: AbstractExpression`                                                                                  | `Power`                                                                     |
+|                                 | [`negate(f)`](#negation-and-subtraction)                        | unary `-`                     | `f: AbstractExpression`                                                                                     | `Product` of `Integer(-1)` and `f`                                          |
+|                                 | [`subtract(f, g)`](#negation-and-subtraction)                   | `-`                           | `f, g: AbstractExpression`                                                                                  | `Sum` of `f` and `negate(g)`                                                |
+|                                 | [`divide(f, g)`](#division)                                     | `/`                           | `f, g: AbstractExpression`                                                                                  | `Division`                                                                  |
+|                                 | [`absolute(f)`](#absolute)                                      | `abs`                         | `f: AbstractExpression`                                                                                     | `Absolute`                                                                  |
+|                                 | [`conjugate(f)`](#conjugate)                                    |                               | `f: AbstractExpression`                                                                                     | `Conjugate`                                                                 |
+|                                 | [`tensor_product(f, g)`](#tensorproduct)                        |                               | `f, g: AbstractExpression`                                                                                  | `TensorProduct`                                                             |
+|                                 | [`square_root(f)`](#elementary-functions-very-incomplete)       |                               | `f: AbstractExpression`                                                                                     | `SquareRoot`                                                                |
+|                                 | [`tensor(entries)`](#tensor)                                    |                               | `entries: tuple[AbstractExpression, ...]`                                                                   | `Tensor`                                                                    |
+|                                 | [`indexed(f, indices)`](#indexed)                               | `f[i]`                        | `f: AbstractExpression`, `indices: tuple`                                                                   | `Indexed`                                                                   |
+|                                 | [`component_tensor(f, indices)`](#componenttensor-and-indexsum) |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                                                       | `ComponentTensor`                                                           |
+|                                 | [`index_sum(f, indices)`](#componenttensor-and-indexsum)        |                               | `f: AbstractExpression`, `indices: tuple[Index, ...]`                                                       | `IndexSum`                                                                  |
+|                                 | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                                                                     | `ComponentTensor` of an `Indexed`                                           |
+|                                 | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                                                                  | `ComponentTensor` of an `IndexSum`                                          |
+|                                 | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                                                                     | `Inverse`                                                                   |
+| Calculus on a coordinate domain | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain \| DecomposedDomain`                                                           | `Coordinate`                                                                |
+|                                 | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain \| DecomposedDomain`                                  | `ExteriorDerivative`                                                        |
+|                                 | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain \| DecomposedDomain`                                  | `Components`                                                                |
+|                                 | [`volume_form(P)`](#volume-form)                                |                               | `P: AbstractCoordinateDomain`                                                                               | `Product` of the coordinate 1-forms                                         |
+|                                 | [`integral(f, P)`](#integral)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain \| DecomposedDomain`                                  | `Integral`, or a sum of `IndexSum`s of `Integral`s for a `DecomposedDomain` |
+| Maps between domains            | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P: AbstractCoordinateDomain`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain \| DecomposedDomain` | `ParameterisedDomain`                                                       |
+|                                 | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain \| SideMap`                                                | `PullBack`                                                                  |
+| Topology                        | [`cell_index(T, j)`](#abstracttopology)                         |                               | `T: AbstractTopology`, `j: int`                                                                             | `Index`                                                                     |
+| Reference cells                 | [`affine_map(F, points)`](#reference-cell)                      |                               | `F: AbstractReferenceCell`, `points: AbstractExpression`                                                    | The affine map of the vertices                                              |
+| Decomposed domains              | [`decomposed_domain(pieces)`](#decomposeddomain)                |                               | `pieces: tuple[ParameterisedDomain, ...]`                                                                   | `DecomposedDomain`                                                          |
+|                                 | [`cell_domain(D, j)`](#decomposeddomain)                        |                               | `D: DecomposedDomain`, `j: int`                                                                             | `ParameterisedDomain` of the cells of type `j`                              |
+|                                 | [`side_domain(D, S)`](#restriction)                             |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                                | `DecomposedDomain` of the cells of `S`                                      |
+|                                 | [`side_map(D, E, side)`](#restriction)                          |                               | `D, E: DecomposedDomain`, `side: str`                                                                       | `SideMap`                                                                   |
+|                                 | [`restriction(f, E, side)`](#restriction)                       |                               | `f: AbstractExpression`, `E: DecomposedDomain`, `side: str`                                                 | `PullBack` of `f` by `side_map(D, E, side)`, or `f` with no support         |
+|                                 | [`normal(D, E, side)`](#normal)                                 |                               | `D, E: DecomposedDomain`, `side: str`                                                                       | `Normal`                                                                    |
+| Function spaces                 | [`function(V, label)`](#function)                               |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                           | `Function`                                                                  |
+| Variational forms               | [`form(expression, arguments)`](#form)                          |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| tuple[Function, ...], ...]`                 | `Form`                                                                      |
+|                                 | [`dual(S)`](#dualspace)                                         |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                             | `DualSpace`                                                                 |
+|                                 | [`action(f, slot, g)`](#action)                                 |                               | `f: AbstractExpression`, `slot: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`             | `Action`                                                                    |
 
 The value-shape and other constraints on the arguments are stated in the section
 of each free function. A free function and an operator overload accept only the
@@ -4333,7 +4353,7 @@ rules in the section of the concrete class.
 | `AbstractCellType`                             | `dimension`, `num_vertices`, in every concrete subclass                                         |                                                                                      |
 | `AbstractReferenceCell`                        | `vertices`, in every concrete subclass                                                          |                                                                                      |
 | `AbstractTopology`                             | `cell_types`, `num_cells`, `sides`, in every concrete subclass                                  | `dimension`                                                                          |
-| `SideMap`                                      | `parameter_domain`, `ambient_domain`, `side`                                                    |                                                                                      |
+| `SideMap`                                      | `parameter_domain`, `ambient_domain`, `side`                                                    | `free_indices`, always `()`                                                          |
 | `Normal`                                       | `ambient_domain`, `parameter_domain`, `side`                                                    |                                                                                      |
 | `DecomposedDomain`                             | `pieces`                                                                                        | `ambient_domain`, `dimension`, `topology`                                            |
 | `AbstractFunctionSpace`                        | `domain`, `degree`, `value_shape`, `scalar_type`, `argument_spaces`, in every concrete subclass |                                                                                      |
@@ -4370,7 +4390,8 @@ not named in the argument spaces column must have the argument spaces `()`.
 | `Integral`                               | `(n,)` with $n$ the dimension of $P$, or `()` for $n = 0$ | `()`                                          | Those of the integrand                     |
 | `PullBack`                               | Any degree                                                | The degree of the expression                  | Those of the expression                    |
 
-The support and the scalar type of the node classes that differ from the
+The value shape and the free indices of each node class are in the section
+of the class. The support and the scalar type of the node classes that differ from the
 default rules of [Support](#support) and [Scalar type](#scalar-type):
 
 | Class                                            | Support of the node                | Scalar type of the node           |
@@ -4392,26 +4413,31 @@ What each core transformation does with each node class as the operand of the
 evaluated node. "In" moves the evaluated node into the operands, by linearity
 or commuting. "Chain" is the chain rule. "Rule" is a rule of the transformation. "Slot" moves the
 evaluated node into the expression or the form only. "Remains" keeps the
-evaluated node on the operand. "—" cannot occur, because the static type rules
-out the pair.
+evaluated node on the operand. "Rule, Remains" is a rule for some operands of
+the class and "Remains" for the others, as the table of the transformation
+states. "—" cannot occur, because the static type rules out the pair.
+
+For `expand_pull_backs`, the entry is for an operand with a support. An
+operand with no support takes the rule for an expression with no support,
+whatever the class of the operand.
 
 | Class                                    | `expand_pull_backs` | `apply_derivatives` | `expand_components` | `apply_actions` |
 | ---------------------------------------- | ------------------- | ------------------- | ------------------- | --------------- |
 | `Integer`, `Float`, `ImaginaryUnit`      | Rule                | Rule                | —                   | —               |
 | `Zero`                                   | Rule                | Rule                | Rule                | Rule            |
-| `Sum`, `Tensor`                          | In                  | In                  | In                  | In              |
-| `Product`, `TensorProduct`               | In                  | Rule                | Rule                | In              |
+| `Sum`, `Tensor`                          | In                  | In                  | In                  | Rule            |
+| `Product`, `TensorProduct`               | In                  | Rule                | Rule                | Rule            |
 | `Division`                               | In                  | Rule                | In                  | In              |
 | `Power`, `SquareRoot`                    | In                  | Chain               | —                   | —               |
 | `Absolute`, `Inverse`                    | In                  | Rule                | —                   | —               |
 | `Conjugate`                              | In                  | Rule                | Rule                | In              |
 | `Indexed`, `ComponentTensor`, `IndexSum` | In                  | In                  | In                  | In              |
 | `Coordinate`                             | Rule                | Remains             | —                   | —               |
-| `Normal`                                 | Rule                | Remains             | —                   | —               |
+| `Normal`                                 | Rule, Remains       | Remains             | —                   | —               |
 | `Function`                               | Remains             | Remains             | Remains             | Remains         |
 | `Form`                                   | Slot                | Slot                | Slot                | Rule            |
 | `Action`                                 | Slot                | Slot                | Slot                | Remains         |
-| `ExteriorDerivative`                     | Rule                | Rule                | Rule                | In              |
-| `Components`                             | Rule                | Remains             | Remains             | In              |
+| `ExteriorDerivative`                     | Rule                | Rule                | Rule, Remains       | In              |
+| `Components`                             | Rule, Remains       | Remains             | Remains             | In              |
 | `Integral`                               | Rule                | Rule                | —                   | In              |
-| `PullBack`                               | Rule                | Rule                | Remains             | In              |
+| `PullBack`                               | Rule, Remains       | Rule, Remains       | Remains             | In              |
