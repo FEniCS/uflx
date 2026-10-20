@@ -4,12 +4,12 @@ Authors: Jack S. Hale, Matthew Scroggs, Michal Habera
 
 This note describes the smallest core language behind UFLx. The note leaves
 out implementation details, compiler algorithms and broad redesign ideas.
-The argument behind the design, with a reading guide, is in DESIGN.md, the
+The argument behind the design, with a reading guide, is in DESIGN.md. The
 library classes of the examples and further worked examples are in
-EXAMPLES.md, and implementation principles and the enforcement of the rules of the language
-are in DESIGN_CHOICES.md. The note assumes knowledge of differential geometry
-and functional analysis, and explains some advanced concepts of differential
-geometry in more detail.
+EXAMPLES.md. Implementation principles and the enforcement of the rules of
+the language are in DESIGN_CHOICES.md. The note assumes knowledge of
+differential geometry and functional analysis, and explains some advanced
+concepts of differential geometry in more detail.
 
 This document is written for users and developers who know domain-specific
 languages for variational forms, such as UFL and ngsolve.
