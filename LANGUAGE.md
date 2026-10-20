@@ -1111,14 +1111,16 @@ indices](#free-indices), [Support](#support), [Degree](#degree).
 
 See also: [Indexed](#indexed), [Applying derivatives](#applying-derivatives).
 
+A concrete subclass of `AbstractExpression` for the zero of any static type.
+
 | `Zero(value_shape, free_indices, degree, argument_spaces)` |                                                                                                                                                                                    |
 | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Properties                                                 | `value_shape`, `free_indices`, `degree` and `argument_spaces`, as in [Extents](#extents), [Free indices](#free-indices), [Degree](#degree) and [Argument spaces](#argument-spaces) |
 | Static type                                                | The stored properties, with no support                                                                                                                                             |
 | Raises                                                     | `TypeError` for an argument of another form, and `ValueError` for a negative extent, an index that occurs twice, or a slot degree less than 1                                      |
 
-`Zero` is the zero of any static type. `apply_derivatives` produces `Zero`
-(see [Applying derivatives](#applying-derivatives)). For example,
+`apply_derivatives` produces `Zero` (see [Applying
+derivatives](#applying-derivatives)). For example,
 `Zero((), (), (1,), ())` is the zero 1-form, `Zero((3,), (), (), ())` is the
 zero array of value shape `(3,)`, and `Zero((), (), (), (V,))` is the zero
 linear form on a space `V`.
@@ -1153,15 +1155,17 @@ Requires: [Arithmetic](#arithmetic), [Degree](#degree).
 
 See also: [ExteriorDerivative](#exteriorderivative).
 
+A concrete subclass of `AbstractExpression` for the sum of two differential
+forms of the same degree.
+
 | `Sum(first, second)` |                                                                 |
 | -------------------- | --------------------------------------------------------------- |
 | Free function        | `add(first, second)`, with the overload `+`                     |
 | Requires             | The operands of [Arithmetic](#arithmetic), with the same degree |
 | Raises               | `ValueError` if a requirement fails                             |
 
-`Sum` adds two differential forms of the same degree. For example,
-$\mathrm{d}x + \mathrm{d}y$ has the degree `(1,)`, and $f + \mathrm{d}x$
-raises `ValueError`.
+For example, $\mathrm{d}x + \mathrm{d}y$ has the degree `(1,)`, and
+$f + \mathrm{d}x$ raises `ValueError`.
 
 ### Product
 
@@ -1173,6 +1177,9 @@ See also: [TensorProduct](#tensorproduct), [ComponentTensor and
 IndexSum](#componenttensor-and-indexsum),
 [ExteriorDerivative](#exteriorderivative).
 
+A concrete subclass of `AbstractExpression` for the wedge product
+$\alpha \wedge \beta$ of two differential forms.
+
 | `Product(first, second)` |                                                                                                                |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------- |
 | Free function            | `multiply(first, second)`, with the overload `*`                                                               |
@@ -1180,8 +1187,8 @@ IndexSum](#componenttensor-and-indexsum),
 | Static type              | The degrees added slot by slot, where the degree `()` adds 0 to every slot                                     |
 | Raises                   | `ValueError` if a requirement fails                                                                            |
 
-`Product` is the wedge product $\alpha \wedge \beta$. For two 0-forms, the
-wedge product is the ordinary product, and $f \wedge \omega = f \omega$. With
+For two 0-forms, the wedge product is the ordinary product, and
+$f \wedge \omega = f \omega$. With
 two slots in an operand, the interior product of [Expanding
 components](#expanding-components) removes a slot from one operand only, and
 the slots of the operands no longer align. A slot of the result may have a
@@ -1194,11 +1201,6 @@ and an $l$-form $\beta$. Equality is structural, so `Product` never reorders
 the operands, and a later pass may apply the identity. `Product` never adds a
 slot, so the product of two 1-forms is a 2-form with the degree `(2,)`, not a
 double form with the degree `(1, 1)`.
-
-Every node class combines the free indices of operands that
-differ, by the general rule of [Free indices](#free-indices), unless the node
-class states otherwise. So a contraction is an `IndexSum` of any node class,
-such as `index_sum(a[i] * b[i], (i,))` or `index_sum(a[i] / b[i], (i,))`.
 
 Examples, with a scalar $f$, the 1-forms $\mathrm{d}x$ and $\mathrm{d}y$ and a
 double form $S$ with the degree `(1, 1)`:
@@ -1217,6 +1219,9 @@ double form $S$ with the degree `(1, 1)`:
 Requires: [Arithmetic](#arithmetic), [Support](#support).
 
 See also: [Applying derivatives](#applying-derivatives).
+
+A concrete subclass of `AbstractExpression` for a scalar raised to a scalar
+power.
 
 | `Power(first, second)` |                                                                             |
 | ---------------------- | --------------------------------------------------------------------------- |
@@ -1246,8 +1251,8 @@ composition changes the arithmetic that the user wrote.
 Requires: [Arithmetic](#arithmetic), [Product](#product), [Power](#power),
 [Literals](#literals).
 
-Division is a node class, because `multiply(f, power(g, Integer(-1)))`
-rounds twice and differs from `f / g` in floating-point arithmetic.
+A concrete subclass of `AbstractExpression` for the quotient of a
+differential form by a scalar.
 
 | `Division(first, second)` |                                                                                        |
 | ------------------------- | -------------------------------------------------------------------------------------- |
@@ -1263,14 +1268,15 @@ The quotient has the degree of the first operand, so `dx / Integer(2)` is a
 Requires: [`AbstractExpression`](#abstractexpression), [Scalar
 type](#scalar-type).
 
+A concrete subclass of `AbstractExpression` for the absolute value, or the
+modulus of a complex scalar.
+
 | `Absolute(f)` |                                           |
 | ------------- | ----------------------------------------- |
 | Free function | `absolute(f)`, with the overload `abs(f)` |
 | Requires      | A scalar $f$ of the degree `()`           |
 | Static type   | Value shape `()`, real                    |
 | Raises        | `ValueError` if a requirement fails       |
-
-For a complex argument, `Absolute` is the modulus.
 
 ### Conjugate
 
@@ -1279,6 +1285,9 @@ type](#scalar-type), [Degree](#degree).
 
 See also: [Variational forms](#variational-forms).
 
+A concrete subclass of `AbstractExpression` for the complex conjugate, acting
+on the coefficients of a differential form.
+
 | `Conjugate(f)` |                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------- |
 | Free function  | `conjugate(f)`                                                                              |
@@ -1286,7 +1295,6 @@ See also: [Variational forms](#variational-forms).
 | Static type    | The argument spaces of $f$ with each space conjugated (see [ConjugateSpace](#conjugatespace)) |
 | Raises         | `ValueError` if a requirement fails                                                         |
 
-`Conjugate` is the complex conjugate, acting on the coefficients of the form.
 A sesquilinear variational form, such as the $L^2$ inner product
 $\int u \bar{v}$, needs `Conjugate`. A form that is linear in an argument is
 antilinear in the argument after conjugation, so `Conjugate` conjugates each
@@ -1301,6 +1309,9 @@ indices](#free-indices), [Degree](#degree).
 See also: [ExteriorDerivative](#exteriorderivative),
 [DomainMap](#domainmap).
 
+A concrete subclass of `AbstractExpression` for the tensor product
+$\alpha \otimes \beta$ of two differential forms, which adds a slot.
+
 | `TensorProduct(first, second)` |                                                                                 |
 | ------------------------------ | ------------------------------------------------------------------------------- |
 | Free function                  | `tensor_product(first, second)`, with no overload                               |
@@ -1308,8 +1319,7 @@ See also: [ExteriorDerivative](#exteriorderivative),
 | Static type                    | The degree `first.degree + second.degree`, and the free indices as in `Product` |
 | Raises                         | `ValueError` if a requirement fails                                             |
 
-`TensorProduct` is the tensor product $\alpha \otimes \beta$ of two
-differential forms. An operand with the degree `()` adds no slot, so
+An operand with the degree `()` adds no slot, so
 $f \otimes \omega = f \omega$.
 
 The tensor product is not commutative, and `TensorProduct` never reorders the
@@ -1340,7 +1350,8 @@ Requires: [`AbstractExpression`](#abstractexpression), [Power](#power),
 > The UFLx core is likely to contain few elementary functions. A language
 > extension, such as `uflx.elementary`, will implement the rest later.
 
-`SquareRoot` is the only elementary function so far.
+`SquareRoot` is the only elementary function so far, a concrete subclass of
+`AbstractExpression` for the square root of a scalar.
 
 | `SquareRoot(f)` |                                     |
 | --------------- | ----------------------------------- |
@@ -1349,10 +1360,9 @@ Requires: [`AbstractExpression`](#abstractexpression), [Power](#power),
 | Static type     | Value shape `()`                    |
 | Raises          | `ValueError` if a requirement fails |
 
-`SquareRoot` is a node class, not the composition `power(f, Integer(1) /
-Integer(2))`. IEEE 754 requires a correctly rounded square root but does not
-require a correctly rounded power. So the two differ in floating-point
-arithmetic, and the result of `power` depends on the math library.
+`SquareRoot` is not the composition `power(f, Integer(1) / Integer(2))`,
+because IEEE 754 requires a correctly rounded square root and not a correctly
+rounded power, so the result of `power` depends on the math library.
 
 ### Tensor
 
@@ -1533,8 +1543,8 @@ shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
   `component_tensor(A[i, i], (i,))` is the diagonal of `A`, for every extent of
   `A`, including an `AbstractExtent`.
 
-> Note: `opt_einsum` can directly plan a contract path for a given contraction,
-> but assumes dense operators.
+> Implementation note: `opt_einsum` can plan a contraction path for a given
+> contraction, but assumes dense operators.
 
 ### Tensor algebra with EllipsisIndex
 
@@ -1569,6 +1579,9 @@ product](EXAMPLES.md#example-transpose-and-matrix-product).
 
 See also: [Expanding pull-backs](#expanding-pull-backs), [Applying
 derivatives](#applying-derivatives).
+
+A concrete subclass of `AbstractExpression` for the inverse of a square
+matrix, or the pseudo-inverse of a matrix with more rows than columns.
 
 | `Inverse(A)`  |                                                                                         |
 | ------------- | --------------------------------------------------------------------------------------- |
