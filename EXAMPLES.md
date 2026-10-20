@@ -3,8 +3,10 @@
 These examples accompany [LANGUAGE.md](LANGUAGE.md) and use its names. The
 first part defines the library classes that the examples and the tour of
 LANGUAGE.md use; none of them is part of the core. The second part exercises
-the core on small problems with known answers. A reader of LANGUAGE.md needs
-none of this to follow the rules.
+the core on small problems with known answers, and then on three larger
+problems: an interior facet integral, the Laplace-Beltrami operator and the
+flux through a surface. A reader of LANGUAGE.md needs none of this to follow
+the rules.
 
 ## Reference library
 
@@ -245,16 +247,58 @@ psi = tensor((X[0], X[1], X[0]**Integer(2) + X[1]**Integer(2)))
 D = domain_map(P, psi, RD(3))
 ```
 
+### Example: an affinely mapped triangle
+
+Requires: [Example: the unit simplex](#example-the-unit-simplex),
+[Coordinate](LANGUAGE.md#coordinate), [Tensor](LANGUAGE.md#tensor), [Components](LANGUAGE.md#components),
+[DomainMap](LANGUAGE.md#domainmap).
+
+The physical triangle with vertices $v_0 = (1, 0)$, $v_1 = (3, 1)$ and
+$v_2 = (2, 3)$ is the image of the unit triangle under an affine map.
+
+There is no topology here, only geometry.
+
+The affine map from `UnitSimplex(2)` onto the physical triangle is
+
+$$\psi(X) = v_0 + X_0 (v_1 - v_0) + X_1 (v_2 - v_0)
+= (1 + 2 X_0 + X_1, X_0 + 3 X_1).$$
+
+```python
+# AbstractCoordinateDomain: UnitSimplex(2), no edges in the graph.
+T = UnitSimplex(2)
+
+# AbstractExpression: Coordinate(UnitSimplex(2)), value shape (2,).
+X = coordinate(T)
+
+# AbstractExpression: Tensor(..., ...), value shape (2,).
+one, two, three = Integer(1), Integer(2), Integer(3)
+psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
+
+# DomainMap(UnitSimplex(2), psi, RD(2)), k = n = 2.
+K = domain_map(T, psi, RD(2))
+```
+
+The Jacobian matrix of $\psi$ is the constant matrix
+
+$$J = \begin{pmatrix} 2 & 1 \\ 1 & 3 \end{pmatrix},$$
+
+so $\det J = 5$, and the area of the physical triangle is $5$ times the area
+$1/2$ of the unit triangle.
+
+The physical triangle is the image of a domain map with $k = n$, not a
+coordinate domain, although the physical triangle has non-empty interior in
+$R^2$. The class records how the domain is built.
+
 ### Example: orientation of an edge and of a triangle
 
 Requires: [Concept: orientation of a domain](LANGUAGE.md#concept-orientation-of-a-domain),
 [Concept: integral over a domain](LANGUAGE.md#concept-integral-over-a-domain),
 [Components](LANGUAGE.md#components), [Example: an affinely mapped
-triangle](LANGUAGE.md#example-an-affinely-mapped-triangle).
+triangle](#example-an-affinely-mapped-triangle).
 
 The examples use `T`, `X`, `one`, `S`, `t` and `e` of the
 [PullBack](LANGUAGE.md#pullback) example, and `K` of the
-[affinely mapped triangle example](LANGUAGE.md#example-an-affinely-mapped-triangle).
+[affinely mapped triangle example](#example-an-affinely-mapped-triangle).
 
 The edge `e`, with $\psi(t) = (1 - t, t)$, runs from vertex 1 to vertex 2 of
 the unit triangle. The edge with $\psi(t) = (t, 1 - t)$ is the same set with
@@ -518,7 +562,7 @@ For all the cells of a topology, see the open item on ragged indexing in
 > LLM came up with this example.
 
 Requires: [Example: an affinely mapped
-triangle](LANGUAGE.md#example-an-affinely-mapped-triangle), [PullBack](LANGUAGE.md#pullback),
+triangle](#example-an-affinely-mapped-triangle), [PullBack](LANGUAGE.md#pullback),
 [Integral](LANGUAGE.md#integral), [Division](LANGUAGE.md#division),
 [ComponentTensor and IndexSum](LANGUAGE.md#componenttensor-and-indexsum),
 [Points and point evaluation](LANGUAGE.md#points-and-point-evaluation).
@@ -547,3 +591,232 @@ pass evaluates both to $(2, 4/3)$.
 > Geometry stops here until topology (cells, facets, families, orientations)
 > and functions are defined. Later sections return to geometry.
 
+### Example: an interior facet integral
+
+Requires: [Sides of a topology](LANGUAGE.md#sides-of-a-topology),
+[Restriction](LANGUAGE.md#restriction), [Integral over a decomposed
+domain](LANGUAGE.md#integral-over-a-decomposed-domain), [Normal](LANGUAGE.md#normal),
+[Form](LANGUAGE.md#form), [Core transformations](LANGUAGE.md#core-transformations).
+
+The interior facet terms of the symmetric interior penalty method for the
+Poisson problem, the legacy UFL `dS` integral, on the square divided into two
+triangles. The example uses `D`, `square`, `K`, `X`, `y` and `cell_vertices`
+of the [DecomposedDomain](LANGUAGE.md#decomposeddomain) example, `I = ReferenceSimplex(1)`
+and the `diagonal` topology of the [Restriction](LANGUAGE.md#restriction) example, a
+space `V` on `D` of the degree `()` and the value shape `()`, and functions
+`u` and `v` in `V`. `runtime_array` is the language extension of [Example:
+integrating over a cut cell](#example-integrating-over-a-cut-cell).
+
+```python
+# The interior facets, seen from the sides "+" and "-", with the free index e.
+E = side_domain(D, diagonal)
+e = cell_index(diagonal, 0)
+
+# The gradients on D, in the frame of RD(2).
+i = index("i")
+grad_u = components(exterior_derivative(u, D), D)
+grad_v = components(exterior_derivative(v, D), D)
+
+# The restrictions from each side, expressions on E.
+u_p, u_m = restriction(u, E, "+"), restriction(u, E, "-")
+v_p, v_m = restriction(v, E, "+"), restriction(v, E, "-")
+du_p, du_m = restriction(grad_u, E, "+"), restriction(grad_u, E, "-")
+dv_p, dv_m = restriction(grad_v, E, "+"), restriction(grad_v, E, "-")
+
+# The normal out of the cell on the side "+", and the jumps and averages.
+n = normal(D, E, "+")
+half = Integer(1) / Integer(2)
+jump_u, jump_v = u_p - u_m, v_p - v_m
+avg_dn_u = half * index_sum((du_p[i] + du_m[i]) * n[i], (i,))
+avg_dn_v = half * index_sum((dv_p[i] + dv_m[i]) * n[i], (i,))
+
+# The penalty parameter of each facet, an array of the solver.
+alpha = runtime_array("alpha", (diagonal.num_cells[0],))
+
+# The facet terms of the symmetric interior penalty method.
+f = -avg_dn_u * jump_v - jump_u * avg_dn_v + alpha[e] * jump_u * jump_v
+a_facet = form(integral(f, E), (v, u))
+```
+
+- `restriction(u, E, "+")` is `pull_back(u, side_map(D, E, "+"))`, an
+  expression with the support `E` and no free index. `jump_u` is the
+  difference of two expressions on `E`, and `f` has the support `E` and the
+  free index `e`, from `alpha[e]`.
+- `n` points out of the cell on the side `"+"`, the triangle `(0, 1, 2)`, so
+  `jump_u * n` is the jump of `u` with a fixed sign convention. Swapping the
+  two sides in `diagonal` negates `n` and every jump, and leaves `f`
+  unchanged, because every term of `f` has two jumps or a jump and a normal.
+- `alpha[e]` stands for the legacy $\alpha / h$. The array is a choice, not a
+  limitation. A size built from the two cells is a composition with the free
+  index `e`: the measure of the cell on the side `"+"` is
+  `integral(rho_p * volume_form(K), K)`, with `rho_p` the density of $B_+$ of
+  [Restriction](LANGUAGE.md#restriction) built as in [Integral over a decomposed
+  domain](LANGUAGE.md#integral-over-a-decomposed-domain), and a per-cell array `h` of the
+  solver is read as `h[gathered_index(cells_p, (e,))]`.
+- `integral(f, E)` is one `Integral` over the decomposed domain `E`. On a mesh
+  of triangles and quadrilaterals, the facet topology has three groups (see
+  [Sides of a topology](LANGUAGE.md#sides-of-a-topology)), `E` has three pieces, and the
+  same lines give the integral over all three.
+
+The core transformations rewrite `a_facet` as follows. With $B_\pm$ =
+`gathered_cell_domain(D, 0, gathered_index(cells_pm, (e,)))` the cell on each
+side and $A_\pm$ = `domain_map(I, affine_map(I, points_pm), K)` the inclusion
+of the facet into that cell, both of [Restriction](LANGUAGE.md#restriction), with the side
+tables `(cells_pm, vertices_pm)` of each side:
+
+1. `expand_integrals` rewrites `integral(f, E)` as
+   `index_sum(integral(pull_back(f, cell_domain(E, 0)) * rho * volume_form(I), I), (e,))`,
+   with `rho` the length of the facet, from the Jacobian of the parameterisation
+   `pull_back(pull_back(coordinate(D), B_+), A_+)` of the piece.
+2. `expand_pull_backs` moves the pull-back by `cell_domain(E, 0)` into `f`.
+   On `u_p` the rule for `SideMap` gives `pull_back(pull_back(u, B_+), A_+)`.
+   The inner pull-back remains, for the library of `V`, as `u` on the cell
+   `cells_p[e]` (see [AbstractFunctionSpace](LANGUAGE.md#abstractfunctionspace)), and
+   the outer pull-back remains outside the inner one, by the rule that
+   pull-backs nest (see [Expanding pull-backs](LANGUAGE.md#expanding-pull-backs)).
+   On `du_p` the same rule gives the pull-back of `components(du, D)` by
+   $B_+$, which the rule for `Components` rewrites as
+   $K^T \hat g$, with $K$ = `inverse(J_+)` the inverse Jacobian of the cell and
+   $\hat g$ = `components(exterior_derivative(pull_back(u, B_+), K), K)` the
+   reference gradient, and then pulled back by $A_+$, which remains on
+   $\hat g$ and on $J_+$, because `I` has lower dimension than `K`: the
+   reference gradient and the cell Jacobian are read at the points of the
+   facet. On `n` the rule for `Normal` gives $K^T \hat m / \lvert K^T \hat m \rvert$,
+   with $\hat m$ the normal of the edge `(1, 2)` of `K` pointing away from the
+   centroid of `K`. On `alpha[e]`, an expression with no support whose free
+   index `e` is free in `cell_domain(E, 0)`, the pull-back is `alpha[e]`.
+3. `apply_derivatives` leaves `exterior_derivative(pull_back(u, B_+), K)` on
+   the function, and `reduce_component_tensors` reduces the gathers of the
+   vertex positions inside $J_+$ and `points_pm` to `Indexed`s with gathered
+   indices, nested through the cell on the side.
+
+After the passes, `a_facet` is `form(index_sum(integral(g, I), (e,)), (v, u))`
+with `g` an expression on `I` with the free index `e`. The `IndexSum` over `e`
+is the loop of the assembler over the interior facets. The gathered indices in
+`g` read, for the facet `e`, the two cells `cells_p[e]` and `cells_m[e]`, the
+vertex positions of each through `cell_vertices`, the paired vertices
+`vertices_p[e, v]` and `vertices_m[e, v]`, and `alpha[e]`, which the assembler
+packs for a kernel. The kernel is `g` without `e`: an expression on the
+reference facet `I` that reads the reference basis of `u` and `v` on the two
+cells, through the library of `V`, at the points of the facet in each cell's
+reference coordinates $A_\pm(t)$, and the two cell Jacobians at those points.
+This is the interface of a legacy interior facet kernel, with the local facet
+numbers replaced by the paired vertices, which also fix the orientation of the
+facet from each side.
+
+- In the example, $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$ (see
+  [Restriction](LANGUAGE.md#restriction)), $J_+$ is the identity and $J_-$ is
+  $\begin{pmatrix} 0 & -1 \\ 1 & 1 \end{pmatrix}$, and $\hat m = (1, 1) / \sqrt 2$,
+  so `n` evaluates to $(1, 1) / \sqrt 2$ on the diagonal, pointing from
+  triangle 0 into triangle 1, and `rho` to $\sqrt 2$.
+- `restriction(u, E, "-")` on the same `t` reads `u` on triangle 1 at
+  $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
+  is a difference at one point.
+
+### Example: the Laplace-Beltrami operator
+
+Requires: [A tour: the Poisson problem](LANGUAGE.md#a-tour-the-poisson-problem),
+[Components](LANGUAGE.md#components), [Integral over a decomposed
+domain](LANGUAGE.md#integral-over-a-decomposed-domain), [Form](LANGUAGE.md#form).
+
+See also: [Expanding pull-backs](LANGUAGE.md#expanding-pull-backs), [Inverse](LANGUAGE.md#inverse).
+
+The Poisson forms of the [tour](LANGUAGE.md#a-tour-the-poisson-problem) on a surface in
+$R^3$ are the forms of the Laplace–Beltrami operator. Only the geometry
+changes. The vertex positions `y` have value shape `(m, 3)`, and the ambient
+coordinate domain is `RD(3)`:
+
+```python
+# A triangulated surface in RD(3), with K, T, c and p of the tour.
+x = component_tensor(
+    p[c, 0, k] + (p[c, 1, k] - p[c, 0, k]) * X[0] + (p[c, 2, k] - p[c, 0, k]) * X[1],
+    (k,),
+)
+M = decomposed_domain((domain_map(K, x, RD(3)),))
+
+# Functions in a space of a library on M.
+u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
+
+# The surface gradients, of value shape (3,) in the frame of RD(3).
+i = index("i")
+grad_u = components(exterior_derivative(u, M), M)
+grad_v = components(exterior_derivative(v, M), M)
+
+a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), M), (v, u))
+L = form(integral(f * v, M), (v,))
+```
+
+- `M` has the dimension 2 and the ambient coordinate domain `RD(3)`, so
+  [`Components`](LANGUAGE.md#components) projects the frame of `RD(3)` onto the tangent
+  plane of each cell, and `grad_u` is the surface gradient of `u`.
+- `integral(..., M)` multiplies the integrand on `K` by the density
+  $\rho = \sqrt{\det(J^T J)}$, with $J$ the Jacobian matrix of `x`, of value
+  shape `(3, 2)`. The integrands are 0-forms, so the forms need no orientation
+  of `M`.
+- `expand_pull_backs` rewrites the pull-back of `grad_u` by the cells as
+  $K^T \hat g$, with $K$ = `inverse(J)` the pseudo-inverse, of value shape
+  `(2, 3)`, and $\hat g$ the components of the exterior derivative of the
+  pull-back of `u` on `K`. The integrand of `a` on `K` is then
+  $\hat g_u^T K K^T \hat g_v \, \rho$, and $K K^T = (J^T J)^{-1}$ is the
+  inverse of the metric that `x` induces.
+- With a function `w` in a space on `M` of the value shape `(3,)`,
+  `index_sum(components(exterior_derivative(w, M), M)[i, i], (i,))` is the
+  surface divergence of `w`.
+- With `P = components(exterior_derivative(coordinate(M), M), M)`, the
+  projection onto the tangent plane,
+  `components(exterior_derivative(grad_u, M), M)` is the tangential
+  derivative $H$ of the surface gradient, which is not symmetric in general.
+  The covariant Hessian of `u` is $P H P$.
+
+### Example: the flux through a surface
+
+Requires: [Example: the Laplace-Beltrami
+operator](#example-the-laplace-beltrami-operator), [Concept: orientation of a
+domain](LANGUAGE.md#concept-orientation-of-a-domain), [Integral over a decomposed
+domain](LANGUAGE.md#integral-over-a-decomposed-domain).
+
+The flux of a vector field through a surface is the integral of a 2-form, so
+the flux needs an orientation of the surface. With `M`, `T` and `c` of the
+[Laplace-Beltrami example](#example-the-laplace-beltrami-operator), where `M` is
+a closed surface such as a triangulated sphere:
+
+```python
+# The 2-form of the flux of the position field through a surface in RD(3).
+Y = coordinate(RD(3))
+dY = exterior_derivative(Y, RD(3))
+omega = Y[0] * dY[1] * dY[2] + Y[1] * dY[2] * dY[0] + Y[2] * dY[0] * dY[1]
+
+# The sign of each triangle from the mesh library, +1 where the order of the
+# vertices of the triangle agrees with the outward orientation of M.
+N = T.num_cells[0]
+o = runtime_array("o", (N,))
+
+# The outward flux, 3 times the volume inside M.
+flux = integral(o[c] * omega, M)
+
+# The area of M, with no orientation.
+area = integral(Integer(1), M)
+```
+
+- `omega` has the support `RD(3)`, so `integral(omega, M)` pulls `omega` back
+  by the triangles of `M` (see [Integral over a decomposed
+  domain](LANGUAGE.md#integral-over-a-decomposed-domain)). Each triangle contributes the
+  flux with the orientation of the parameterisation of the triangle, which the
+  order of the vertices of the triangle in `T` fixes. If the mesh library
+  numbers some triangles clockwise and others anticlockwise, seen from
+  outside, the contributions of the two groups have opposite signs, and the
+  sum is not the flux.
+- `o[c]` has the free index `c` of the triangles, so each triangle takes the
+  sign of that triangle. With the signs, every contribution uses the outward
+  orientation. A mesh library may instead number the vertices of every
+  triangle consistently, and then `integral(omega, M)` is the flux without
+  `o`.
+- `area` integrates a 0-form against the density $\sqrt{\det(J^T J)}$, which
+  does not depend on the order of the vertices, so `area` needs no signs.
+- A surface with no consistent orientation, such as a Möbius strip, has no
+  signs `o`. The area of the surface is defined, and the flux is not.
+
+`runtime_extent` and `runtime_array` are not in the core (see [Example:
+integrating over a cut cell](#example-integrating-over-a-cut-cell)). The same
+signs enter a term that turns a 2-form on `M` into a 0-form, such as the
+scalar curl of a 1-form on `M`.

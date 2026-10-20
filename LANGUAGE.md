@@ -99,7 +99,6 @@ implementation and is not a rule.
 - [Maps between domains](#maps-between-domains)
   - [Domains and parameterisations](#domains-and-parameterisations)
   - [DomainMap](#domainmap)
-  - [Example: an affinely mapped triangle](#example-an-affinely-mapped-triangle)
   - [PullBack](#pullback)
   - [Concept: orientation of a domain](#concept-orientation-of-a-domain)
   - [Concept: integral over a domain](#concept-integral-over-a-domain)
@@ -115,7 +114,6 @@ implementation and is not a rule.
   - [Restriction](#restriction)
   - [Integral over a decomposed domain](#integral-over-a-decomposed-domain)
   - [Normal](#normal)
-  - [Example: an interior facet integral](#example-an-interior-facet-integral)
   - [Concept: kernels](#concept-kernels)
 - [Function spaces](#function-spaces)
   - [AbstractFunctionSpace](#abstractfunctionspace)
@@ -126,8 +124,7 @@ implementation and is not a rule.
   - [DualSpace](#dualspace)
   - [Form](#form)
   - [Action](#action)
-  - [Example: the Laplace-Beltrami operator](#example-the-laplace-beltrami-operator)
-  - [Example: the flux through a surface](#example-the-flux-through-a-surface)
+  - [Example: the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator)
 - [Core transformations](#core-transformations)
   - [Expanding integrals](#expanding-integrals)
   - [Expanding pull-backs](#expanding-pull-backs)
@@ -138,7 +135,7 @@ implementation and is not a rule.
   - [Gateaux derivative](#gateaux-derivative)
 - [Extending the core](#extending-the-core)
   - [Language extensions](#language-extensions)
-  - [Example: interpolation](#example-interpolation)
+  - [The interpolation extension](#the-interpolation-extension)
   - [New questions](#new-questions)
   - [New operations](#new-operations)
   - [New subclasses](#new-subclasses)
@@ -1606,7 +1603,7 @@ Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
 
 - With the Jacobian matrix
   `J = tensor((tensor((two, one)), tensor((one, three))))` of the [affinely
-  mapped triangle](#example-an-affinely-mapped-triangle), `inverse(J)` has
+  mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle), `inverse(J)` has
   value shape `(2, 2)`, and a later pass evaluates `inverse(J)` to
   $\frac{1}{5} \begin{pmatrix} 3 & -1 \\ -1 & 2 \end{pmatrix}$.
 - With the Jacobian matrix `Je = tensor((tensor((one,)), tensor((one,))))` of
@@ -1999,7 +1996,7 @@ Requires: [Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative),
 [Product](#product), [Literals](#literals).
 
 See also: [Integral](#integral), [Example: an affinely mapped
-triangle](#example-an-affinely-mapped-triangle).
+triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 The free function `volume_form(P)` is the coordinate volume form of an
 `AbstractCoordinateDomain` $P$ of dimension $n$,
@@ -2031,7 +2028,7 @@ Requires: [Valid pair](#valid-pair), [Volume form](#volume-form),
 [Support](#support), [Degree](#degree).
 
 See also: [Example: an affinely mapped
-triangle](#example-an-affinely-mapped-triangle), [Integral over a decomposed
+triangle](EXAMPLES.md#example-an-affinely-mapped-triangle), [Integral over a decomposed
 domain](#integral-over-a-decomposed-domain), [Expanding
 integrals](#expanding-integrals).
 
@@ -2127,7 +2124,7 @@ Requires: [Domains and parameterisations](#domains-and-parameterisations),
 [Scalar type](#scalar-type), [Degree](#degree).
 
 See also: [PullBack](#pullback), [DecomposedDomain](#decomposeddomain),
-[Example: an affinely mapped triangle](#example-an-affinely-mapped-triangle).
+[Example: an affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 A concrete subclass of `Base` for a map $\psi$ from a parameter domain $P$
 into an ambient domain $Q$, with the image $D = \psi(P)$. The sections below
@@ -2187,55 +2184,13 @@ Examples:
   is `RD(0)`, $\psi$ is the constant `tensor((p0, p1))`, with no support, and $Q$
   is `RD(2)`.
 
-### Example: an affinely mapped triangle
-
-Requires: [Example: the unit simplex](EXAMPLES.md#example-the-unit-simplex),
-[Coordinate](#coordinate), [Tensor](#tensor), [Components](#components),
-[DomainMap](#domainmap).
-
-The physical triangle with vertices $v_0 = (1, 0)$, $v_1 = (3, 1)$ and
-$v_2 = (2, 3)$ is the image of the unit triangle under an affine map.
-
-There is no topology here, only geometry.
-
-The affine map from `UnitSimplex(2)` onto the physical triangle is
-
-$$\psi(X) = v_0 + X_0 (v_1 - v_0) + X_1 (v_2 - v_0)
-= (1 + 2 X_0 + X_1, X_0 + 3 X_1).$$
-
-```python
-# AbstractCoordinateDomain: UnitSimplex(2), no edges in the graph.
-T = UnitSimplex(2)
-
-# AbstractExpression: Coordinate(UnitSimplex(2)), value shape (2,).
-X = coordinate(T)
-
-# AbstractExpression: Tensor(..., ...), value shape (2,).
-one, two, three = Integer(1), Integer(2), Integer(3)
-psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
-
-# DomainMap(UnitSimplex(2), psi, RD(2)), k = n = 2.
-K = domain_map(T, psi, RD(2))
-```
-
-The Jacobian matrix of $\psi$ is the constant matrix
-
-$$J = \begin{pmatrix} 2 & 1 \\ 1 & 3 \end{pmatrix},$$
-
-so $\det J = 5$, and the area of the physical triangle is $5$ times the area
-$1/2$ of the unit triangle.
-
-The physical triangle is the image of a domain map with $k = n$, not a
-coordinate domain, although the physical triangle has non-empty interior in
-$R^2$. The class records how the domain is built.
-
 ### PullBack
 
 Requires: [DomainMap](#domainmap), [Valid pair](#valid-pair),
 [Support](#support),
 [Free indices](#free-indices), [Degree](#degree),
 [ExteriorDerivative](#exteriorderivative), [Example: an
-affinely mapped triangle](#example-an-affinely-mapped-triangle).
+affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 See also: [Expanding pull-backs](#expanding-pull-backs).
 
@@ -2359,7 +2314,7 @@ term that turns a $k$-form into a 0-form or a $(k - 1)$-form into a vector
 field, such as the scalar curl of a 1-form on a surface. The mesh library
 provides a consistent orientation where one is needed, such as an expression
 with the sign $+1$ or $-1$ for each cell, and the core needs nothing more (see
-[Example: the flux through a surface](#example-the-flux-through-a-surface)).
+[Example: the flux through a surface](EXAMPLES.md#example-the-flux-through-a-surface)).
 
 An integral of a 0-form uses a density and needs no orientation (see
 [Integral over a decomposed domain](#integral-over-a-decomposed-domain)). A
@@ -2397,7 +2352,7 @@ $\int_P s \, \psi^* (f \, \mathrm{d}Y_0 \wedge \dots \wedge \mathrm{d}Y_{n-1})
 
 Requires: [RD](#rd), [DomainMap](#domainmap),
 [PullBack](#pullback), [Integral](#integral), [Example: an affinely mapped
-triangle](#example-an-affinely-mapped-triangle).
+triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 A point is the image of a domain map. A point in a domain $Q$ is
 `domain_map(RD(0), x, Q)`, with $x$ a constant expression of value
@@ -2467,7 +2422,7 @@ C = domain_map(RD(0), pull_back(psi, c), RD(2))
 - `domain_map(RD(0), X, T)` raises `ValueError`, because `X` has the
   support `T`, not `RD(0)`.
 
-Worked examples for this chapter in EXAMPLES.md: [a paraboloid](EXAMPLES.md#example-a-paraboloid), [orientation of an edge and of a triangle](EXAMPLES.md#example-orientation-of-an-edge-and-of-a-triangle), [integrating over an edge](EXAMPLES.md#example-integrating-over-an-edge), [integrating over the boundary of a triangle](EXAMPLES.md#example-integrating-over-the-boundary-of-a-triangle), [quadrature](EXAMPLES.md#example-quadrature), [integrating over a cut cell](EXAMPLES.md#example-integrating-over-a-cut-cell), [the centroid of a triangle](EXAMPLES.md#example-the-centroid-of-a-triangle).
+Worked examples for this chapter in EXAMPLES.md: [a paraboloid](EXAMPLES.md#example-a-paraboloid), [an affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle), [orientation of an edge and of a triangle](EXAMPLES.md#example-orientation-of-an-edge-and-of-a-triangle), [integrating over an edge](EXAMPLES.md#example-integrating-over-an-edge), [integrating over the boundary of a triangle](EXAMPLES.md#example-integrating-over-the-boundary-of-a-triangle), [quadrature](EXAMPLES.md#example-quadrature), [integrating over a cut cell](EXAMPLES.md#example-integrating-over-a-cut-cell), [the centroid of a triangle](EXAMPLES.md#example-the-centroid-of-a-triangle).
 
 ## Topology
 
@@ -3073,128 +3028,6 @@ jump = restriction(grad_u, E, "+") - restriction(grad_u, E, "-")
 penalty = integral(index_sum(jump[i] * n_E[i], (i,)) ** Integer(2), E)
 ```
 
-### Example: an interior facet integral
-
-Requires: [Sides of a topology](#sides-of-a-topology),
-[Restriction](#restriction), [Integral over a decomposed
-domain](#integral-over-a-decomposed-domain), [Normal](#normal),
-[Form](#form), [Core transformations](#core-transformations).
-
-The interior facet terms of the symmetric interior penalty method for the
-Poisson problem, the legacy UFL `dS` integral, on the square divided into two
-triangles. The example uses `D`, `square`, `K`, `X`, `y` and `cell_vertices`
-of the [DecomposedDomain](#decomposeddomain) example, `I = ReferenceSimplex(1)`
-and the `diagonal` topology of the [Restriction](#restriction) example, a
-space `V` on `D` of the degree `()` and the value shape `()`, and functions
-`u` and `v` in `V`. `runtime_array` is the language extension of [Example:
-integrating over a cut cell](EXAMPLES.md#example-integrating-over-a-cut-cell).
-
-```python
-# The interior facets, seen from the sides "+" and "-", with the free index e.
-E = side_domain(D, diagonal)
-e = cell_index(diagonal, 0)
-
-# The gradients on D, in the frame of RD(2).
-i = index("i")
-grad_u = components(exterior_derivative(u, D), D)
-grad_v = components(exterior_derivative(v, D), D)
-
-# The restrictions from each side, expressions on E.
-u_p, u_m = restriction(u, E, "+"), restriction(u, E, "-")
-v_p, v_m = restriction(v, E, "+"), restriction(v, E, "-")
-du_p, du_m = restriction(grad_u, E, "+"), restriction(grad_u, E, "-")
-dv_p, dv_m = restriction(grad_v, E, "+"), restriction(grad_v, E, "-")
-
-# The normal out of the cell on the side "+", and the jumps and averages.
-n = normal(D, E, "+")
-half = Integer(1) / Integer(2)
-jump_u, jump_v = u_p - u_m, v_p - v_m
-avg_dn_u = half * index_sum((du_p[i] + du_m[i]) * n[i], (i,))
-avg_dn_v = half * index_sum((dv_p[i] + dv_m[i]) * n[i], (i,))
-
-# The penalty parameter of each facet, an array of the solver.
-alpha = runtime_array("alpha", (diagonal.num_cells[0],))
-
-# The facet terms of the symmetric interior penalty method.
-f = -avg_dn_u * jump_v - jump_u * avg_dn_v + alpha[e] * jump_u * jump_v
-a_facet = form(integral(f, E), (v, u))
-```
-
-- `restriction(u, E, "+")` is `pull_back(u, side_map(D, E, "+"))`, an
-  expression with the support `E` and no free index. `jump_u` is the
-  difference of two expressions on `E`, and `f` has the support `E` and the
-  free index `e`, from `alpha[e]`.
-- `n` points out of the cell on the side `"+"`, the triangle `(0, 1, 2)`, so
-  `jump_u * n` is the jump of `u` with a fixed sign convention. Swapping the
-  two sides in `diagonal` negates `n` and every jump, and leaves `f`
-  unchanged, because every term of `f` has two jumps or a jump and a normal.
-- `alpha[e]` stands for the legacy $\alpha / h$. The array is a choice, not a
-  limitation. A size built from the two cells is a composition with the free
-  index `e`: the measure of the cell on the side `"+"` is
-  `integral(rho_p * volume_form(K), K)`, with `rho_p` the density of $B_+$ of
-  [Restriction](#restriction) built as in [Integral over a decomposed
-  domain](#integral-over-a-decomposed-domain), and a per-cell array `h` of the
-  solver is read as `h[gathered_index(cells_p, (e,))]`.
-- `integral(f, E)` is one `Integral` over the decomposed domain `E`. On a mesh
-  of triangles and quadrilaterals, the facet topology has three groups (see
-  [Sides of a topology](#sides-of-a-topology)), `E` has three pieces, and the
-  same lines give the integral over all three.
-
-The core transformations rewrite `a_facet` as follows. With $B_\pm$ =
-`gathered_cell_domain(D, 0, gathered_index(cells_pm, (e,)))` the cell on each
-side and $A_\pm$ = `domain_map(I, affine_map(I, points_pm), K)` the inclusion
-of the facet into that cell, both of [Restriction](#restriction), with the side
-tables `(cells_pm, vertices_pm)` of each side:
-
-1. `expand_integrals` rewrites `integral(f, E)` as
-   `index_sum(integral(pull_back(f, cell_domain(E, 0)) * rho * volume_form(I), I), (e,))`,
-   with `rho` the length of the facet, from the Jacobian of the parameterisation
-   `pull_back(pull_back(coordinate(D), B_+), A_+)` of the piece.
-2. `expand_pull_backs` moves the pull-back by `cell_domain(E, 0)` into `f`.
-   On `u_p` the rule for `SideMap` gives `pull_back(pull_back(u, B_+), A_+)`.
-   The inner pull-back remains, for the library of `V`, as `u` on the cell
-   `cells_p[e]` (see [AbstractFunctionSpace](#abstractfunctionspace)), and
-   the outer pull-back remains outside the inner one, by the rule that
-   pull-backs nest (see [Expanding pull-backs](#expanding-pull-backs)).
-   On `du_p` the same rule gives the pull-back of `components(du, D)` by
-   $B_+$, which the rule for `Components` rewrites as
-   $K^T \hat g$, with $K$ = `inverse(J_+)` the inverse Jacobian of the cell and
-   $\hat g$ = `components(exterior_derivative(pull_back(u, B_+), K), K)` the
-   reference gradient, and then pulled back by $A_+$, which remains on
-   $\hat g$ and on $J_+$, because `I` has lower dimension than `K`: the
-   reference gradient and the cell Jacobian are read at the points of the
-   facet. On `n` the rule for `Normal` gives $K^T \hat m / \lvert K^T \hat m \rvert$,
-   with $\hat m$ the normal of the edge `(1, 2)` of `K` pointing away from the
-   centroid of `K`. On `alpha[e]`, an expression with no support whose free
-   index `e` is free in `cell_domain(E, 0)`, the pull-back is `alpha[e]`.
-3. `apply_derivatives` leaves `exterior_derivative(pull_back(u, B_+), K)` on
-   the function, and `reduce_component_tensors` reduces the gathers of the
-   vertex positions inside $J_+$ and `points_pm` to `Indexed`s with gathered
-   indices, nested through the cell on the side.
-
-After the passes, `a_facet` is `form(index_sum(integral(g, I), (e,)), (v, u))`
-with `g` an expression on `I` with the free index `e`. The `IndexSum` over `e`
-is the loop of the assembler over the interior facets. The gathered indices in
-`g` read, for the facet `e`, the two cells `cells_p[e]` and `cells_m[e]`, the
-vertex positions of each through `cell_vertices`, the paired vertices
-`vertices_p[e, v]` and `vertices_m[e, v]`, and `alpha[e]`, which the assembler
-packs for a kernel. The kernel is `g` without `e`: an expression on the
-reference facet `I` that reads the reference basis of `u` and `v` on the two
-cells, through the library of `V`, at the points of the facet in each cell's
-reference coordinates $A_\pm(t)$, and the two cell Jacobians at those points.
-This is the interface of a legacy interior facet kernel, with the local facet
-numbers replaced by the paired vertices, which also fix the orientation of the
-facet from each side.
-
-- In the example, $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$ (see
-  [Restriction](#restriction)), $J_+$ is the identity and $J_-$ is
-  $\begin{pmatrix} 0 & -1 \\ 1 & 1 \end{pmatrix}$, and $\hat m = (1, 1) / \sqrt 2$,
-  so `n` evaluates to $(1, 1) / \sqrt 2$ on the diagonal, pointing from
-  triangle 0 into triangle 1, and `rho` to $\sqrt 2$.
-- `restriction(u, E, "-")` on the same `t` reads `u` on triangle 1 at
-  $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
-  is a difference at one point.
-
 ### Concept: kernels
 
 Requires: [DecomposedDomain](#decomposeddomain), [GatheredIndex](#gatheredindex),
@@ -3237,6 +3070,8 @@ kernel serves every mesh with the same cell types and spaces, and every naming
 of the arguments and of the indices. Equality is structural (rule 7), so
 without the renaming two kernels that differ only in the names of indices
 would compile twice.
+
+Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral).
 
 ## Function spaces
 
@@ -3509,7 +3344,7 @@ Examples, with the spaces `V` and `Q` and the functions `v` in `V` and `q` in
   `form(conjugate(action(l, 0, w)), (conjugate(l),))` has the argument spaces
   `(conjugate_space(dual(V)),)`, the static type of a function in
   `dual(dual(V))`, and evaluates every antilinear form on `V` at `w`.
-- With the [interpolation extension](#example-interpolation), a space `W` and
+- With the [interpolation extension](#the-interpolation-extension), a space `W` and
   a function `l` in `dual(W)`,
   `form(action(l, 0, interpolate(v, W)), (conjugate(v),))` is the adjoint of
   the interpolation from `V` to `W` applied to `l`, with the argument spaces
@@ -3558,7 +3393,7 @@ with the other members replaced by `Zero`.
 The expression may have any value shape and support. A form whose expression
 is a field is a linear operator, such as the interpolation operator
 `form(interpolate(u, W), (u,))` of the [interpolation
-extension](#example-interpolation). The support is that of the expression, so
+extension](#the-interpolation-extension). The support is that of the expression, so
 a form of integrals has no support, although the arguments have one. A
 substitution renames a bound argument to avoid capture, as for indices (see
 [Passes](#passes)).
@@ -3626,113 +3461,7 @@ Examples, with `a`, `u`, `v` and `w` of the [Form](#form) examples and
   `w` in `V` and `r` in `Q`, `action(form(e, ((v, q), (u, p))), 1, (w, r))`
   is a linear form in `(v, q)`, the residual at `(w, r)`.
 
-### Example: the Laplace-Beltrami operator
-
-Requires: [A tour: the Poisson problem](#a-tour-the-poisson-problem),
-[Components](#components), [Integral over a decomposed
-domain](#integral-over-a-decomposed-domain), [Form](#form).
-
-See also: [Expanding pull-backs](#expanding-pull-backs), [Inverse](#inverse).
-
-The Poisson forms of the [tour](#a-tour-the-poisson-problem) on a surface in
-$R^3$ are the forms of the Laplace–Beltrami operator. Only the geometry
-changes. The vertex positions `y` have value shape `(m, 3)`, and the ambient
-coordinate domain is `RD(3)`:
-
-```python
-# A triangulated surface in RD(3), with K, T, c and p of the tour.
-x = component_tensor(
-    p[c, 0, k] + (p[c, 1, k] - p[c, 0, k]) * X[0] + (p[c, 2, k] - p[c, 0, k]) * X[1],
-    (k,),
-)
-M = decomposed_domain((domain_map(K, x, RD(3)),))
-
-# Functions in a space of a library on M.
-u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
-
-# The surface gradients, of value shape (3,) in the frame of RD(3).
-i = index("i")
-grad_u = components(exterior_derivative(u, M), M)
-grad_v = components(exterior_derivative(v, M), M)
-
-a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), M), (v, u))
-L = form(integral(f * v, M), (v,))
-```
-
-- `M` has the dimension 2 and the ambient coordinate domain `RD(3)`, so
-  [`Components`](#components) projects the frame of `RD(3)` onto the tangent
-  plane of each cell, and `grad_u` is the surface gradient of `u`.
-- `integral(..., M)` multiplies the integrand on `K` by the density
-  $\rho = \sqrt{\det(J^T J)}$, with $J$ the Jacobian matrix of `x`, of value
-  shape `(3, 2)`. The integrands are 0-forms, so the forms need no orientation
-  of `M`.
-- `expand_pull_backs` rewrites the pull-back of `grad_u` by the cells as
-  $K^T \hat g$, with $K$ = `inverse(J)` the pseudo-inverse, of value shape
-  `(2, 3)`, and $\hat g$ the components of the exterior derivative of the
-  pull-back of `u` on `K`. The integrand of `a` on `K` is then
-  $\hat g_u^T K K^T \hat g_v \, \rho$, and $K K^T = (J^T J)^{-1}$ is the
-  inverse of the metric that `x` induces.
-- With a function `w` in a space on `M` of the value shape `(3,)`,
-  `index_sum(components(exterior_derivative(w, M), M)[i, i], (i,))` is the
-  surface divergence of `w`.
-- With `P = components(exterior_derivative(coordinate(M), M), M)`, the
-  projection onto the tangent plane,
-  `components(exterior_derivative(grad_u, M), M)` is the tangential
-  derivative $H$ of the surface gradient, which is not symmetric in general.
-  The covariant Hessian of `u` is $P H P$.
-
-### Example: the flux through a surface
-
-Requires: [Example: the Laplace-Beltrami
-operator](#example-the-laplace-beltrami-operator), [Concept: orientation of a
-domain](#concept-orientation-of-a-domain), [Integral over a decomposed
-domain](#integral-over-a-decomposed-domain).
-
-The flux of a vector field through a surface is the integral of a 2-form, so
-the flux needs an orientation of the surface. With `M`, `T` and `c` of the
-[Laplace-Beltrami example](#example-the-laplace-beltrami-operator), where `M` is
-a closed surface such as a triangulated sphere:
-
-```python
-# The 2-form of the flux of the position field through a surface in RD(3).
-Y = coordinate(RD(3))
-dY = exterior_derivative(Y, RD(3))
-omega = Y[0] * dY[1] * dY[2] + Y[1] * dY[2] * dY[0] + Y[2] * dY[0] * dY[1]
-
-# The sign of each triangle from the mesh library, +1 where the order of the
-# vertices of the triangle agrees with the outward orientation of M.
-N = T.num_cells[0]
-o = runtime_array("o", (N,))
-
-# The outward flux, 3 times the volume inside M.
-flux = integral(o[c] * omega, M)
-
-# The area of M, with no orientation.
-area = integral(Integer(1), M)
-```
-
-- `omega` has the support `RD(3)`, so `integral(omega, M)` pulls `omega` back
-  by the triangles of `M` (see [Integral over a decomposed
-  domain](#integral-over-a-decomposed-domain)). Each triangle contributes the
-  flux with the orientation of the parameterisation of the triangle, which the
-  order of the vertices of the triangle in `T` fixes. If the mesh library
-  numbers some triangles clockwise and others anticlockwise, seen from
-  outside, the contributions of the two groups have opposite signs, and the
-  sum is not the flux.
-- `o[c]` has the free index `c` of the triangles, so each triangle takes the
-  sign of that triangle. With the signs, every contribution uses the outward
-  orientation. A mesh library may instead number the vertices of every
-  triangle consistently, and then `integral(omega, M)` is the flux without
-  `o`.
-- `area` integrates a 0-form against the density $\sqrt{\det(J^T J)}$, which
-  does not depend on the order of the vertices, so `area` needs no signs.
-- A surface with no consistent orientation, such as a Möbius strip, has no
-  signs `o`. The area of the surface is defined, and the flux is not.
-
-`runtime_extent` and `runtime_array` are not in the core (see [Example:
-integrating over a cut cell](EXAMPLES.md#example-integrating-over-a-cut-cell)). The same
-signs enter a term that turns a 2-form on `M` into a 0-form, such as the
-scalar curl of a 1-form on `M`.
+Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES.md#example-the-flux-through-a-surface).
 
 ## Core transformations
 
@@ -3870,7 +3599,7 @@ expression the library gives, such as the pull-back to the facet of a basis
 function on the reference cell, which remains in turn for the library to
 evaluate at the points of the facet (see [Restriction](#restriction) and
 [Example: an interior facet
-integral](#example-an-interior-facet-integral)). Composing the two maps into
+integral](EXAMPLES.md#example-an-interior-facet-integral)). Composing the two maps into
 `domain_map(P, pull_back(D2.parameterisation, D), D2.ambient_domain)` would
 lose the cell that the inner map names, and for a $g$ that is not a terminal
 both pull-backs commute to the terminals anyway, so nothing is gained by
@@ -4058,7 +3787,7 @@ The core supports five kinds of extension:
 | New subclasses                       | Elements and functions from Basix, new coordinate domains   | [New subclasses](#new-subclasses)           |
 | New operations                       | Trace, divergence                                           | [New operations](#new-operations)           |
 | New transformations                  | Gateaux derivative                                          | [New transformations](#new-transformations) |
-| Language extensions                  | External operators, [interpolation](#example-interpolation) | [Language extensions](#language-extensions) |
+| Language extensions                  | External operators, [interpolation](#the-interpolation-extension) | [Language extensions](#language-extensions) |
 
 A property that the rules of the core depend on is part of the core, not an
 extension. For example, the scalar type is part of the core, because
@@ -4105,7 +3834,7 @@ a `Transpose` node class lowers to `component_tensor(A[k, l], (l, k))`. The
 rule for `expand_pull_backs` moves the pull-back inside `Transpose`, because
 the transpose is pointwise, so `Transpose` survives the pull-back.
 
-### Example: interpolation
+### The interpolation extension
 
 Requires: [Language extensions](#language-extensions),
 [AbstractFunctionSpace](#abstractfunctionspace), [DualSpace](#dualspace),
@@ -4235,7 +3964,7 @@ extension.
 Requires: [Leaves and subclassing](#leaves-and-subclassing), [New
 operations](#new-operations), [Language extensions](#language-extensions),
 [Coordinate](#coordinate), [Example: an affinely mapped
-triangle](#example-an-affinely-mapped-triangle).
+triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 Every abstract class is a contract. The contract states what a subclass
 provides, so that every core transformation handles the subclass through the
@@ -4296,7 +4025,7 @@ The notes that relate rules of the core to legacy UFL, by section.
 - **Form.** In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
 - **Example: the Laplace-Beltrami operator.** Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Components` gives the gradient in every dimension.
 - **Extending the core.** In legacy UFL, properties are stored on the node classes, and the set of properties is fixed. Every new property touches every node class, so features such as complex numbers and dual spaces were patched in across the node classes.
-- **Example: interpolation.** In legacy UFL, `Interpolate(f, V)` is a `BaseFormOperator`, as an external operator is, and the adjoint interpolation takes a `Coargument`. In DOLFINx, interpolation happens outside UFL.
+- **The interpolation extension.** In legacy UFL, `Interpolate(f, V)` is a `BaseFormOperator`, as an external operator is, and the adjoint interpolation takes a `Coargument`. In DOLFINx, interpolation happens outside UFL.
 
 ## Appendix: Class hierarchy
 

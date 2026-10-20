@@ -89,7 +89,7 @@ as separate kinds, each with its own algebra.
   expression with the argument spaces `()`. A form whose expression is a
   field rather than an integral is a linear operator, which is how
   interpolation and its adjoint are written without new classes (Form,
-  Example: interpolation).
+  The interpolation extension).
 - A pass has one rule per node class and nothing else. Because a form and an
   action are nodes like any other, a pull-back moves into a form's expression
   past its bound arguments, and the same six transformations serve
@@ -244,7 +244,7 @@ into that cell through the paired vertices (Restriction). Two restrictions of
 one field land on the same reference facet with the same parameter, so a jump
 is a subtraction. The outward normal of the cell on a side is the inverse
 Jacobian applied to the reference facet normal, which the paired vertices
-determine (Normal). The interior facet example in LANGUAGE.md follows one
+determine (Normal). The interior facet example in EXAMPLES.md follows one
 `dS` form through all of this to a kernel.
 
 ## Idea 7: a function is a terminal, and a form binds it
