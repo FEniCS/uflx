@@ -2883,6 +2883,10 @@ the difference is the jump. A cell of $S$ with more than two sides, such as an
 edge where three triangles meet, has no jump, and a form uses the restriction
 from each side.
 
+A concrete subclass of `Base` for the lazy map of the cells of a decomposed
+domain $E$ of the cells of $S$ into $D$ through the side $s$, the second
+operand of the pull-back that restricts.
+
 | `SideMap(D, E, s)` |                                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
 | Free function      | `side_map(D, E, s)`                                                                                     |
@@ -2890,7 +2894,6 @@ from each side.
 | Requires           | $D$ has a topology, every cell type of $S$ is an `AbstractReferenceCell`, and every group of $S$ has a side named $s$ with the topology of $D$ |
 | Raises             | `ValueError` if a requirement fails                                                                     |
 
-A `SideMap` maps the cells of $E$ into $D$ through the side $s$.
 `pull_back(f, SideMap(D, E, s))` is an expression with the support $E$, the
 restriction of $f$ to all the groups at once. The pull-back of that
 expression by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)` (see
@@ -2901,10 +2904,11 @@ the geometry of the first side of each group, with piece $i$
 `domain_map(F_i, pull_back(pull_back(coordinate(D), B_i), A_i), Q)`
 for the first side, with $F_i$ the cell type of group $i$, which must be an
 `AbstractReferenceCell`, and $Q$ the ambient domain of $D$. $A_i$ and $B_i$
-are fixed compositions, so `side_domain` is a free function. The topology of the result is $S$. The core does not check that
-the other sides have the same geometry. The free function
-`restriction(f, E, s)` returns `pull_back(f, side_map(D, E, s))` with $D$ the
-support of $f$, or $f$ if $f$ has no support.
+are fixed compositions, so `side_domain` is a free function. The topology of
+the result is $S$. The core does not check that the other sides have the same
+geometry. The free function `restriction(f, E, s)` returns
+`pull_back(f, side_map(D, E, s))` with $D$ the support of $f$, or $f$ if $f$
+has no support.
 
 The pull-back gives the trace of each degree. The restriction of a 0-form is
 the value on the cell of $S$, and the restriction of the 1-form $\mathrm{d}u$
@@ -3147,7 +3151,7 @@ tables `(cells_pm, vertices_pm)` of each side:
    with `rho` the length of the facet, from the Jacobian of the parameterisation
    `pull_back(pull_back(coordinate(D), B_+), A_+)` of the piece.
 2. `expand_pull_backs` moves the pull-back by `cell_domain(E, 0)` into `f`.
-   On `u_p` the rule for `SideMap` gives `pull_back(pull_back(u, B_+), A_+)`,
+   On `u_p` the rule for `SideMap` gives `pull_back(pull_back(u, B_+), A_+)`.
    The inner pull-back remains, for the library of `V`, as `u` on the cell
    `cells_p[e]` (see [AbstractFunctionSpace](#abstractfunctionspace)), and
    the outer pull-back remains outside the inner one, by the rule that
