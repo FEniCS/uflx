@@ -3,7 +3,7 @@
 Authors: Jack S. Hale, Matthew Scroggs, Michal Habera
 
 This note is the argument behind [LANGUAGE.md](LANGUAGE.md). LANGUAGE.md is the
-specification and is normative. This note explains the six ideas the
+specification and is normative. This note explains the seven ideas the
 specification is built on, the decisions that shape every section of it, and
 what is deliberately left out. Read this note first, then use LANGUAGE.md as a
 reference. Every heading below names the sections of LANGUAGE.md that carry
@@ -53,7 +53,52 @@ else is a free function. So `transpose` is a composition, `Division` is a
 node because `f * g ** -1` rounds differently, and `Integral` over a mesh is
 a node because the lowering should happen in a pass, not at construction.
 
-## Idea 2: an expression is an array-valued differential form with a static type
+## Idea 2: nearly everything is an expression
+
+Almost every object a user builds is an `AbstractExpression`: literals,
+arithmetic, tensors, the coordinate function, the exterior derivative,
+components, pull-backs, the normal, functions, integrals, forms and actions,
+and the interpolant of the interpolation extension. The exceptions are the
+static data an expression refers to and never computes with: domains, domain
+maps, side maps, topologies, cell types, function spaces, indices, extents
+and index tables. Those are base objects with properties, not values.
+
+| An expression                               | Not an expression                    |
+| ------------------------------------------- | ------------------------------------ |
+| `Integer(2)`, `X[0] * dx`, `tensor(...)`    | `RD(2)`, a reference cell, a mesh    |
+| `coordinate(D)`, `exterior_derivative(u, D)` | `domain_map(K, x, RD(2))`            |
+| `pull_back(f, e)`, `normal(D, E, "+")`      | `side_map(D, E, "+")`, a topology    |
+| `function(V, "u")`                          | the space `V`, `dual(V)`             |
+| `integral(f, D)`                            | `index("i")`, an extent, a table     |
+| `form(e, (v, u))`, `action(a, 1, w)`        |                                      |
+
+This is the choice that lets the rest of the design be uniform, and it is
+where UFLx departs most from legacy UFL, which keeps `Expr`, `Form`,
+`BaseForm`, `FormSum`, `Action`, `Adjoint` and `Cofunction` as separate
+kinds with their own algebra.
+
+- There is one static type. An integral is a scalar with no support, so a
+  ratio of two integrals is a scalar, the centroid of a cell is a vector of
+  such ratios, a point value is an integral over `RD(0)`, and a quadrature
+  rule is an index sum of weighted point integrals, with no special node for
+  any of them (Integral, Points and point evaluation, Example: quadrature).
+- A form is an expression whose argument spaces are not `()`. Forms add,
+  scale and subtract by the ordinary operators, a functional is any
+  expression with the argument spaces `()`, and a form whose expression is a
+  field rather than an integral is a linear operator, which is how
+  interpolation and its adjoint are written without new classes (Form,
+  Example: interpolation).
+- A pass has one rule per node class and nothing else. Because a form and an
+  action are nodes like any other, a pull-back moves into a form's expression
+  past its bound arguments, and the same six transformations serve
+  functionals, forms, operators and point evaluations alike (Core
+  transformations).
+- What is not an expression needs no rules in any pass. A domain map is read
+  through the pull-back node that names it, and a topology is read through
+  the gathered indices of its tables, so the passes dispatch on node classes
+  only (Passes).
+
+## Idea 3: an expression is an array-valued differential form with a static type
 
 Every expression carries six static properties, derived at construction and
 never changed (Expressions and static type):
@@ -87,7 +132,7 @@ gradient on a surface in three dimensions, because `Components` projects the
 ambient frame onto the tangent space. There are no dimension-specific
 operators, which is the point of Basic principles.
 
-## Idea 3: domains are leaves or decompositions, and maps are how things move
+## Idea 4: domains are leaves or decompositions, and maps are how things move
 
 ```
 AbstractDomain                      the support of an expression
@@ -130,7 +175,7 @@ a 0-form integrates against a density that needs none. Where a k-form over a
 surface needs consistent orientations, the mesh library supplies a sign per
 cell as an ordinary expression (Concept: orientation of a domain).
 
-## Idea 4: a facet is a cell seen from a side
+## Idea 5: a facet is a cell seen from a side
 
 The core does not number facets, edges or vertices of a cell. A topology of
 sub-entities names, for each of its cells, the cell it is seen from on each
@@ -151,7 +196,7 @@ Jacobian applied to the reference facet normal, which the paired vertices
 determine (Normal). The interior facet example in LANGUAGE.md follows one
 `dS` form through all of this to a kernel.
 
-## Idea 5: a function is a terminal, and a form binds it
+## Idea 6: a function is a terminal, and a form binds it
 
 A `Function` is a member of a space and nothing more. It is not a test
 function, a trial function or a coefficient by itself. A `Form` binds some of
@@ -172,7 +217,7 @@ Mixed problems need no mixed space. An argument may be a tuple of functions
 in different spaces, on different domains, with different degrees, and a
 library assembles the tuple as one system or in blocks (Form).
 
-## Idea 6: six lazy transformations do all the work
+## Idea 7: six lazy transformations do all the work
 
 ```
 form(integral(f, D), (v, u))                  what the user wrote
@@ -230,12 +275,13 @@ L = form(integral(f * v, D), (v,))
 ```
 
 Every idea above is visible. The mesh is a family of affine maps from the
-reference triangle, built by gathers through the cell index (ideas 1 and 3).
-The gradient is the exterior derivative turned into an array (idea 2). The
-functions are plain members of a space, and the forms bind them (idea 5).
-`integral(f, D)` is one lazy node over the mesh, which the passes turn into a
-sum over cells of integrals over the reference triangle (idea 6). On a mesh
-of triangles and quadrilaterals, only `D` changes.
+reference triangle, built by gathers through the cell index (ideas 1 and 4).
+The gradient is the exterior derivative turned into an array (idea 3). The
+functions are plain members of a space, and the forms bind them (idea 6).
+`integral(f, D)` is one lazy node over the mesh, an expression like `f`
+itself, so `a` and `L` are expressions too (idea 2), and the passes turn the
+integral into a sum over cells of integrals over the reference triangle
+(idea 7). On a mesh of triangles and quadrilaterals, only `D` changes.
 
 ## The decisions that shape everything
 
@@ -248,6 +294,9 @@ here so that a reader knows which choices are load-bearing.
 - **A fixed composition, never a node class**, unless no composition exists,
   an algorithm is the user's choice, or a transformation must meet the
   concept as written (Node class or free function).
+- **Integrals, forms and actions are expressions**, with one static type and
+  one set of passes for functionals, forms, operators and point values
+  (Integral, Form, Action).
 - **Index notation and ellipsis indices** instead of tensor operators, so
   every tensor operation is one composition for every rank (Index,
   EllipsisIndex).
