@@ -2338,12 +2338,18 @@ of two cells. An integral of a $k$-form over such a domain, such as in Stokes'
 theorem on a surface, needs the cells to be oriented consistently, as does a
 term that turns a $k$-form into a 0-form or a $(k - 1)$-form into a vector
 field, such as the scalar curl of a 1-form on a surface. The mesh library
-provides a
-consistent orientation where one is needed, such as an expression with the
-sign $+1$ or $-1$ for each cell, and the core needs nothing more (see
+provides a consistent orientation where one is needed, such as an expression
+with the sign $+1$ or $-1$ for each cell, and the core needs nothing more (see
 [Example: the flux through a surface](#example-the-flux-through-a-surface)).
+
 An integral of a 0-form uses a density and needs no orientation (see
-[Integral over a decomposed domain](#integral-over-a-decomposed-domain)).
+[Integral over a decomposed domain](#integral-over-a-decomposed-domain)). A
+flux of a vector field through a facet needs a side and a density, but no
+orientation. The side $s$ says which cell the facet is seen from, and
+[`normal(D, E, s)`](#normal) points out of that cell, whatever the orientation
+of the facet. So the flux
+`integral(index_sum(restriction(u, E, s)[i] * normal(D, E, s)[i], (i,)), E)`
+of a function `u` of value shape `(n,)` needs no orientation of $D$ or $E$.
 
 ### Concept: integral over a domain
 
@@ -3535,24 +3541,41 @@ that a kernel receives, is already a constant.
 > Legacy note: The legacy UFL `Real` space is a space of constants, and the
 > legacy UFL `Constant` is constant data.
 
-The degree and the value shape fix how a function in $V$ transforms between a
-cell and the reference cell. The pull-back by a cell transforms each slot and
-keeps the frame of each axis of the value shape (see [PullBack](#pullback)). So a space needs no
-separate map to the reference cell:
+The pull-back by a cell fixes what a function in $V$ is on the cell. The
+pull-back transforms each slot and keeps the frame of each axis of the value
+shape (see [PullBack](#pullback)). The library of $V$ fixes how the function is
+represented on the reference cell. For a space of differential forms, the
+natural representation is the pull-back itself, and the legacy UFL map is the
+pull-back of the slots. For a space of vector fields, the library chooses the
+representation, and the legacy UFL map is the choice of the library:
 
-| Space                             | Degree     | Value shape | Legacy UFL map      |
-| --------------------------------- | ---------- | ----------- | ------------------- |
-| Lagrange                          | `()`       | `()`        | identity            |
-| Vector Lagrange                   | `()`       | `(n,)`      | identity            |
-| Nédélec, $H(\mathrm{curl})$       | `(1,)`     | `()`        | covariant Piola     |
-| Raviart–Thomas, $H(\mathrm{div})$ | `(n - 1,)` | `()`        | contravariant Piola |
-| Discontinuous densities           | `(n,)`     | `()`        | $L^2$ Piola         |
-| Regge                             | `(1, 1)`   | `()`        | double covariant    |
+| Space                             | Degree     | Value shape | Legacy UFL map                   |
+| --------------------------------- | ---------- | ----------- | -------------------------------- |
+| Lagrange                          | `()`       | `()`        | identity                         |
+| Vector Lagrange                   | `()`       | `(n,)`      | identity                         |
+| Nédélec, $H(\mathrm{curl})$       | `(1,)`     | `()`        | covariant Piola                  |
+| Raviart–Thomas, $H(\mathrm{div})$ | `(n - 1,)` | `()`        | contravariant Piola              |
+| Raviart–Thomas, $H(\mathrm{div})$ | `()`       | `(n,)`      | contravariant Piola of a library |
+| Discontinuous densities           | `(n,)`     | `()`        | $L^2$ Piola                      |
+| Regge                             | `(1, 1)`   | `()`        | double covariant                 |
+
+The two rows of Raviart–Thomas differ on a domain of dimension $k < n$, such as
+a surface in $R^3$. The space of $(n - 1)$-forms has the divergence
+$\mathrm{d}u$, a $k$-form, and an integral of $\mathrm{d}u$ needs an
+orientation of the domain (see [Concept: orientation of a
+domain](#concept-orientation-of-a-domain)). The space of vector fields has the
+divergence `index_sum(components(exterior_derivative(u, D), D)[i, i], (i,))`, a
+0-form, and needs no orientation. The library represents a function in the
+space of vector fields on a cell as $J \hat u / \rho$, with $\hat u$ a
+function on the reference cell, $J$ the Jacobian matrix of the cell and
+$\rho = \sqrt{\det(J^T J)}$ the density of
+[Integral over a decomposed domain](#integral-over-a-decomposed-domain).
 
 > Legacy note: In legacy UFL, a `FunctionSpace` holds a mesh and an element,
 > and the element states the value shape, the map to the reference cell and
-> the Sobolev space. In UFLx, the degree and the value shape replace the map,
-> and the space holds a decomposed domain, the legacy mesh.
+> the Sobolev space. In UFLx, the pull-back states the meaning of a function on
+> a cell, the library states the representation, and the space holds a
+> decomposed domain, the legacy mesh.
 
 A mixed problem needs no mixed space, because a slot of a [form](#form) may
 bind a `tuple` of functions in several spaces. The Sobolev space of $V$ is not
