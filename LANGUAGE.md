@@ -746,7 +746,7 @@ EllipsisIndex](#tensor-algebra-with-ellipsisindex).
 > Legacy UFL: This numpy-like concept does not appear to be in legacy UFL.
 
 A concrete subclass of the base object for an index that covers any number of
-axes. A `EllipsisIndex` is not an expression.
+axes. An `EllipsisIndex` is not an expression.
 
 | `EllipsisIndex(label)` |                                                           |
 | ---------------------- | --------------------------------------------------------- |
@@ -754,7 +754,7 @@ axes. A `EllipsisIndex` is not an expression.
 | Properties             | `label`, with the rules of the label of an `Index`        |
 | Raises                 | `TypeError` if the label is neither a `str` nor a `tuple` |
 
-A `EllipsisIndex` covers every axis of an `Indexed` that the other entries do not
+An `EllipsisIndex` covers every axis of an `Indexed` that the other entries do not
 cover, so a `EllipsisIndex` may cover no axis. The extent of a `EllipsisIndex` is the
 `tuple` of the extents of the covered axes. In every other rule of index
 notation, a `EllipsisIndex` behaves as an `Index`.
@@ -793,7 +793,8 @@ Example:
 > Open: ragged indexing. An axis whose length depends on another index, such
 > as the quadrature points of each cut cell, cannot be written. A dependent
 > extent, an `AbstractExtent` whose label contains the other index, would cover
-> it. An index value read from a table is a [GatheredIndex](#gatheredindex).
+> the case. An index value read from a table is a
+> [GatheredIndex](#gatheredindex).
 
 ### AbstractIndexValue
 
@@ -821,7 +822,7 @@ The entry covers one axis, as an `int` entry does, and the extent of the entry
 must equal the extent of the axis.
 
 > Legacy note: GEM, the intermediate language of TSFC, has `VariableIndex` for
-> the same purpose -- not fact checked.
+> the same purpose. The authors have not checked this.
 
 Example:
 
@@ -1007,26 +1008,28 @@ A concept must be a free function, not a node class, if the free function can
 build the concept as one fixed composition of existing node classes for each
 static type of the arguments. The static type of an expression is the value
 shape, the free indices, the scalar type, the support, the degree and the
-argument spaces, and the
-static type of a domain is the stored properties of the domain, such as the
-dimension of a coordinate domain or the pieces of a decomposed domain. A free function may read
-the static type to choose the composition, and never reads the structure of
-an argument, such as the class, the edges or the values. Otherwise the concept
-gets its own node class. A concept that is evaluated by a numerical algorithm
-that the user supplies also gets its own node class, even if a fixed
-composition exists, because the composition would fix the algorithm. For
-example, the transpose is always `component_tensor(A[k, l], (l, k))`, and
+argument spaces. The static type of a domain is the stored properties of the
+domain, such as the dimension of a coordinate domain or the pieces of a
+decomposed domain. A free function may read the static type to choose the
+composition, and never reads the structure of an argument, such as the class,
+the edges or the values. Otherwise the concept gets its own node class. A
+concept that is evaluated by a numerical algorithm that the user supplies also
+gets its own node class, even if a fixed composition exists, because the
+composition would fix the algorithm.
+
+For example, the transpose is always `component_tensor(A[k, l], (l, k))`, and
 `volume_form(P)` is the product of the $n$ coordinate 1-forms of a coordinate
 domain of dimension $n$, so both are free functions. No composition of
 existing nodes differentiates, so `ExteriorDerivative` is a node class.
 `Division` and `SquareRoot` are evaluated by a numerical algorithm that the
-user supplies, so each is a node class. A free
-function that builds a fixed composition is a definition, not a
+user supplies, so each is a node class.
+
+A free function that builds a fixed composition is a definition, not a
 simplification. The free function does not read the structure of the
 operands, so the free function never removes structure that the user built.
-A `EllipsisIndex` makes most tensor algebra one fixed composition for every
-value shape (see [EllipsisIndex](#tensor-algebra-with-ellipsisindex)), so a free function rarely
-needs to read a value shape.
+An `EllipsisIndex` makes most tensor algebra one fixed composition for every
+value shape (see [EllipsisIndex](#tensor-algebra-with-ellipsisindex)), so a
+free function rarely needs to read a value shape.
 
 A node class is part of the core only if a definition or a rule of the core
 needs the node class, or if the node class is an operation of the scalar
@@ -1402,7 +1405,7 @@ An `Index` may occur in two or more entries, or may already be free in the
 expression. All the occurrences are the same index, so the indexed axes take
 the same value. `A[i, i]` is the diagonal entry of a matrix `A`, and
 `index_sum(A[i, i], (i,))` is the trace. All the occurrences must have the same
-extent. A `EllipsisIndex` may also already be free in the expression, with the
+extent. An `EllipsisIndex` may also already be free in the expression, with the
 same rule and the `tuple` of extents of the `EllipsisIndex`. So with a
 `EllipsisIndex` `r` that is free with the extents `(2, 3)` in an expression `B`
 of value shape `(2, 3)`, `B[r]` is the block diagonal of `B`.
@@ -1499,7 +1502,7 @@ Requires: [EllipsisIndex](#ellipsisindex), [Indexed](#indexed), [ComponentTensor
 and IndexSum](#componenttensor-and-indexsum), [Sum](#sum), [Product](#product),
 [Conjugate](#conjugate).
 
-A `EllipsisIndex` writes an operation on tensors of every rank as one fixed
+An `EllipsisIndex` writes an operation on tensors of every rank as one fixed
 composition. The operations in the table below are not part of the core. A
 library may provide the operations as free functions (see
 [New operations](#new-operations)). With derived ellipsis indices `r` and `s`
