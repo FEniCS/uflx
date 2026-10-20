@@ -1407,9 +1407,9 @@ expression. All the occurrences are the same index, so the indexed axes take
 the same value. `A[i, i]` is the diagonal entry of a matrix `A`, and
 `index_sum(A[i, i], (i,))` is the trace. All the occurrences must have the same
 extent. An `EllipsisIndex` may also already be free in the expression, with the
-same rule and the `tuple` of extents of the `EllipsisIndex`. So with a
-`EllipsisIndex` `r` that is free with the extents `(2, 3)` in an expression `B`
-of value shape `(2, 3)`, `B[r]` is the block diagonal of `B`.
+same rule and the `tuple` of extents of the `EllipsisIndex`. So with an
+`EllipsisIndex` `r` that is free with the extents `(2, 3)` in an expression
+`B` of value shape `(2, 3)`, `B[r]` is the block diagonal of `B`.
 
 The rank $r$ counts the axes of the value shape only. The indices select axes
 of the value shape and never a slot, so the slots of a differential form
@@ -3651,9 +3651,10 @@ Every `AbstractExpression` derives the argument spaces, a `tuple` with the
 space of each slot of a form, and `()` for an expression that is not a form.
 The space of a slot is an `AbstractFunctionSpace` for a slot of one function,
 or a `tuple` of at least two spaces for a slot of a `tuple` of functions, the
-product of the spaces. So each slot has one representation. The arity is the number of argument spaces. A functional has the arity
-0, a linear form the arity 1 and a bilinear form the arity 2, whatever the
-number of functions in each slot.
+product of the spaces. So each slot has one representation. The arity is the
+number of argument spaces. A functional has the arity 0, a linear form the
+arity 1 and a bilinear form the arity 2, whatever the number of functions in
+each slot.
 
 A node passes on the argument spaces of an operand in which the node is linear
 or antilinear, and every other operand must have the argument spaces `()`, or
@@ -3757,7 +3758,8 @@ The expression may have any value shape and support. A form whose expression
 is a field is a linear operator, such as the interpolation operator
 `form(interpolate(u, W), (u,))` of the [interpolation
 extension](#example-interpolation). The support is that of the expression, so
-a form of integrals has no support, although the arguments have one. A substitution renames a bound argument to avoid capture, as for indices (see
+a form of integrals has no support, although the arguments have one. A
+substitution renames a bound argument to avoid capture, as for indices (see
 [Passes](#passes)).
 
 > Legacy note: In legacy UFL, the arguments of a form are the test functions
@@ -3867,8 +3869,9 @@ L = form(integral(f * v, M), (v,))
   surface divergence of `w`.
 - With `P = components(exterior_derivative(coordinate(M), M), M)`, the
   projection onto the tangent plane,
-  `components(exterior_derivative(grad_u, M), M)` is the tangential derivative $H$ of the surface gradient, which is
-  not symmetric in general. The covariant Hessian of `u` is $P H P$.
+  `components(exterior_derivative(grad_u, M), M)` is the tangential
+  derivative $H$ of the surface gradient, which is not symmetric in general.
+  The covariant Hessian of `u` is $P H P$.
 
 > Legacy note: Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of
 > topological dimension 2 in $R^3$, and `grad` is the surface gradient because
@@ -3958,7 +3961,8 @@ expression has the free indices of the node, with the same extents, possibly
 in another order, and the argument spaces of the node. The rule dispatches on
 the class of the operand and moves the evaluated node towards the leaves. The
 pass rewrites inner nodes first, until no rule applies. A node without a rule
-is rebuilt on the rewritten edges, and the evaluated node remains on it.
+is rebuilt on the rewritten edges, and the evaluated node remains on the
+rebuilt node.
 
 In a `Form`, an evaluated node moves only into the expression, and in an
 `Action` only into the form $f$, because the arguments and $g$ are in a slot,
@@ -3980,10 +3984,9 @@ every `PullBack`, `ExteriorDerivative`, `Components` and `Action` applies to an
 expression that contains a downstream terminal, except the coordinate frame
 $\mathrm{d}X$, the components of $\mathrm{d}X$ on a decomposed domain of lower
 dimension than the ambient coordinate domain, and a `PullBack` of a constant
-by a family of domains. An
-expression without a downstream terminal evaluates to a sum of products and
-tensor products of 0-forms and the coordinate 1-forms $\mathrm{d}X_i$, inside
-any `Form`.
+by a family of domains. An expression without a downstream terminal evaluates
+to a sum of products and tensor products of 0-forms and the coordinate 1-forms
+$\mathrm{d}X_i$, inside any `Form`.
 
 ### Expanding pull-backs
 
@@ -4009,8 +4012,8 @@ of the core, with these rules:
 | `Function` or a downstream terminal                                       | Remains, for the library of the terminal                                             |
 
 The rule for an expression with no support comes before every other rule and
-before commuting, whatever the class of the expression, so a
-pull-back never moves inside an `Integral`. The integral has no support, and
+before commuting, whatever the class of the expression, so a pull-back never
+moves inside an `Integral`. The integral has no support, and
 the integrand stays on the coordinate domain of the integral. A pull-back of a
 constant by a family remains, because `PullBack(c, D)` has the free indices of
 the family $D$ and $c$ does not. For example, with the family of quadrature
@@ -4071,8 +4074,9 @@ of the 0-forms $A^+$ and $(A^+)^T$ with the 1-forms $\mathrm{d}A$ and
 $\mathrm{d}A^T$, and $I$ is the identity matrix of value shape `(n, n)`, the
 `Tensor` of `Integer(1)` and `Integer(0)` entries. For $k = n$,
 $I - A A^+$ is zero and the rule is $-A^{-1} \, \mathrm{d}A \, A^{-1}$, but
-the rule does not drop the term, because the core never simplifies. `Absolute` is not
-complex differentiable, and for a real $a$ the rule is the chain rule. The
+the rule does not drop the term, because the core never simplifies.
+`Absolute` is not complex differentiable, and for a real $a$ the rule is the
+chain rule. The
 rule for `Conjugate` holds because the exterior derivative is real. The
 exterior derivative of `Coordinate(P)` is the coordinate frame $\mathrm{d}X$.
 
@@ -4100,9 +4104,8 @@ The rule for $\mathrm{d}X_i$ applies to `ExteriorDerivative(Coordinate(P), P)`,
 reached through `Indexed`. On a decomposed domain of lower dimension than the
 frame, the components of $\mathrm{d}X$ are the orthogonal projection onto the
 tangent space, which `expand_pull_backs` evaluates on each piece as $J K$.
-The components of the exterior derivative of any
-other expression remain, such as the gradient
-`components(exterior_derivative(u, P), P)` of a function `u`.
+The components of the exterior derivative of any other expression remain, such
+as the gradient `components(exterior_derivative(u, P), P)` of a function `u`.
 
 The components of `dX` are the identity matrix, the `Tensor` of `Integer(1)`
 and `Integer(0)` entries, or `Zero((0, 0), (), (), ())` for $n = 0$. The rule
@@ -4137,8 +4140,8 @@ to extend UFLx without changing the core.
 
 > Legacy note: In legacy UFL, properties are stored on the node classes, and
 > the set of properties is fixed. Every new property touches every node class,
-> so many language features were hacked in, for example complex numbers and
-> dual spaces.
+> so features such as complex numbers and dual spaces were patched in across
+> the node classes.
 
 The core has a small, fixed set of node classes and an open set of passes. A
 downstream library extends UFLx mainly by adding passes, not by adding
@@ -4187,9 +4190,9 @@ a node class without a lowering, every pass without a rule raises
 `TypeError`. A rule must agree with the lowering followed by the rules for the
 lowered expression, up to mathematical equality.
 
-UFLx core is likely to include its own language extensions, such as UFL
-compatibility layers and a simpler layer based on classical notions of
-differential geometry compatible with most engineering and physics syllabus.
+The UFLx core is likely to ship with its own language extensions, such as a
+UFL compatibility layer and a simpler layer based on the classical differential
+geometry of most engineering and physics syllabuses.
 
 For example, a language extension for local external operators adds a node
 class for an operation known only by name, such as `exp`, a material law or a
@@ -4282,8 +4285,8 @@ has one rule for each node class of the core and one rule for each leaf class
 of the library. The pass needs no rule for a node class of a language extension
 that has a lowering (see [Language extensions](#language-extensions)).
 
-For example, a library that checks physical units, like the work of Habera et
-al.:
+For example, a library that checks physical units, such as the work of Habera
+et al.:
 
 1. Assigns a unit to leaves in a table of the library. For example, with
    `X = coordinate(RD(2))`, the table `{X: "m"}` states that the coordinates
@@ -4317,13 +4320,13 @@ extensions](#language-extensions).
 A downstream library builds a new operation from existing node classes, as a
 free function. As in the core, the free function may read the static type of
 the operands, such as a value shape, to choose the composition (see
-[Node class or free function](#node-class-or-free-function)). For
-example, `determinant(A)` reads the extent $n$ of `A` and returns the Leibniz
-formula for an $n \times n$ matrix. So `determinant(A)` requires an `int`
-extent $n$ (see [Extents](#extents)). `trace(A)` reads no extent, because
+[Node class or free function](#node-class-or-free-function)). For example,
+`determinant(A)` reads the extent $n$ of `A` and returns the Leibniz formula
+for an $n \times n$ matrix. So `determinant(A)` requires an `int` extent $n$
+(see [Extents](#extents)). `trace(A)` reads no extent, because
 `index_sum(A[k, k], (k,))`, with a derived index `k`, is the trace for every
-extent. An operation that a
-`EllipsisIndex` expresses, such as `scale(a, T)`, needs no value shape (see
+extent. An operation that an `EllipsisIndex` expresses, such as
+`scale(a, T)`, needs no value shape (see
 [EllipsisIndex](#tensor-algebra-with-ellipsisindex)).
 
 A library node class that a pass replaces by node classes of the core gives
@@ -4341,18 +4344,17 @@ triangle](#example-an-affinely-mapped-triangle).
 
 Every abstract class is a contract. The contract states what a subclass
 provides, so that every core transformation handles the subclass through the
-abstract class alone. A downstream library may subclass an
-abstract class by fulfilling the contract, without changing the core. Only
-leaves are subclassed (see
-[Leaves and subclassing](#leaves-and-subclassing)). An
-operation built from other expressions is not a subclass but a free function
-(see [New operations](#new-operations)) or a node class of a language extension
-(see [Language extensions](#language-extensions)). A contract is
-part of the class, never a global registry. For example, a
-downstream subclass of `AbstractCoordinateDomain`, such as
-[`UnitSimplex`](#example-the-unit-simplex), provides the
-dimension, and every core transformation handles the coordinate function of
-the subclass through `Coordinate`.
+abstract class alone. A downstream library may subclass an abstract class by
+fulfilling the contract, without changing the core. Only leaves are subclassed
+(see [Leaves and subclassing](#leaves-and-subclassing)). An operation built
+from other expressions is not a subclass but a free function (see
+[New operations](#new-operations)) or a node class of a language extension
+(see [Language extensions](#language-extensions)). A contract is part of the
+class, never a global registry. For example, a downstream subclass of
+`AbstractCoordinateDomain`, such as
+[`UnitSimplex`](#example-the-unit-simplex), provides the dimension, and every
+core transformation handles the coordinate function of the subclass through
+`Coordinate`.
 
 Information that a downstream library attaches to the graph goes in one of two
 places:
@@ -4514,8 +4516,8 @@ types in the "Takes" column.
 
 A free function whose "Returns" column names only a node class `C` returns
 `C(...)` of the arguments. Any other free function returns the composition in
-the "Returns" column. The sections of the node classes do not
-repeat this rule.
+the "Returns" column. The sections of the node classes do not repeat this
+rule.
 
 ## Appendix: Properties
 
@@ -4586,8 +4588,8 @@ not named in the argument spaces column must have the argument spaces `()`.
 | `PullBack`                               | Any degree                                                | The degree of the expression                  | Those of the expression                    |
 
 The value shape and the free indices of each node class are in the section
-of the class. The support and the scalar type of the node classes that differ from the
-default rules of [Support](#support) and [Scalar type](#scalar-type):
+of the class. The support and the scalar type of the node classes that differ
+from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 
 | Class                                            | Support of the node                | Scalar type of the node           |
 | ------------------------------------------------ | ---------------------------------- | --------------------------------- |
@@ -4606,8 +4608,9 @@ default rules of [Support](#support) and [Scalar type](#scalar-type):
 
 What each core transformation does with each node class as the operand of the
 evaluated node. "In" moves the evaluated node into the operands, by linearity
-or commuting. "Chain" is the chain rule. "Rule" is a rule of the transformation. "Slot" moves the
-evaluated node into the expression or the form only. "Remains" keeps the
+or commuting. "Chain" is the chain rule. "Rule" is a rule of the
+transformation. "Slot" moves the evaluated node into the expression or the
+form only. "Remains" keeps the
 evaluated node on the operand. "Rule, Remains" is a rule for some operands of
 the class and "Remains" for the others, as the table of the transformation
 states. "—" cannot occur, because the static type rules out the pair.
