@@ -72,19 +72,20 @@ and index tables. Those are base objects with properties, not values.
 | `integral(f, D)`                            | `index("i")`, an extent, a table     |
 | `form(e, (v, u))`, `action(a, 1, w)`        |                                      |
 
-This is the choice that lets the rest of the design be uniform, and it is
-where UFLx departs most from legacy UFL, which keeps `Expr`, `Form`,
-`BaseForm`, `FormSum`, `Action`, `Adjoint` and `Cofunction` as separate
-kinds with their own algebra.
+This is the choice that lets the rest of the design be uniform. It is also
+the largest difference in the object model from legacy UFL, which keeps
+`Expr`, `Form`, `BaseForm`, `FormSum`, `Action`, `Adjoint` and `Cofunction`
+as separate kinds, each with its own algebra.
 
-- There is one static type. An integral is a scalar with no support, so a
+- There is one static type. An integral is a scalar with no support. So a
   ratio of two integrals is a scalar, the centroid of a cell is a vector of
   such ratios, a point value is an integral over `RD(0)`, and a quadrature
-  rule is an index sum of weighted point integrals, with no special node for
-  any of them (Integral, Points and point evaluation, Example: quadrature).
+  rule is an index sum of weighted point integrals. None of these needs a
+  node of its own (Integral, Points and point evaluation, Example:
+  quadrature).
 - A form is an expression whose argument spaces are not `()`. Forms add,
-  scale and subtract by the ordinary operators, a functional is any
-  expression with the argument spaces `()`, and a form whose expression is a
+  scale and subtract by the ordinary operators, and a functional is any
+  expression with the argument spaces `()`. A form whose expression is a
   field rather than an integral is a linear operator, which is how
   interpolation and its adjoint are written without new classes (Form,
   Example: interpolation).
@@ -112,7 +113,9 @@ never changed (Expressions and static type):
 | degree          | the differential-form degree of each slot, such as `(1,)`        |
 | argument spaces | the space of each bound argument, for a variational form         |
 
-Two choices here remove most of the operators of legacy UFL.
+Two choices here remove the rank-specific and dimension-specific operators
+of legacy UFL, such as `dot`, `inner`, `transpose`, `grad`, `div` and
+`curl`, as node classes.
 
 First, tensor algebra is index notation. `a[i] * b[i]` is the pointwise
 product with a free index, `index_sum(a[i] * b[i], (i,))` is the
@@ -135,9 +138,9 @@ operators, which is the point of Basic principles.
 ## Idea 4: indices carry the mesh and the runtime data
 
 Index notation does a second job beyond tensor algebra. It is the only way
-that a set of things, a mesh of cells, a family of points, a table of
-neighbours, enters the language, and the only way that data unknown until
-assembly enters it (Index, Extents, GatheredIndex, DomainMap).
+that a set of things enters the language: a mesh of cells, a family of
+points, a table of neighbours. It is also the only way that data unknown
+until assembly enters it (Index, Extents, GatheredIndex, DomainMap).
 
 - **A family is a free index.** A `DomainMap` whose parameterisation has a
   free index is one map for each value of the index. A mesh is such a family
@@ -158,8 +161,8 @@ assembly enters it (Index, Extents, GatheredIndex, DomainMap).
   extent.
 - **Extents may be unknown.** An `AbstractExtent` is a length that a solver
   supplies, such as the number of cells or of quadrature points, and the type
-  rules compare extents by equality and never by value, so the same
-  expression serves a mesh of any size.
+  rules compare extents by equality and never by value, so one
+  expression is valid for a mesh of any size.
 - **Fresh indices need no global state.** A free function or a pass that
   needs a new index derives it from its operands, with the operands in the
   label, so the index cannot occur inside them, and construction stays a
@@ -175,8 +178,9 @@ assembly enters it (Index, Extents, GatheredIndex, DomainMap).
 
 The price is that the tour builds the affine map of a cell by hand, from
 gathers of vertex positions, where legacy UFL hides it inside `Mesh`. The
-gain is that nothing is hidden: a surface, a macro element, a cut cell or a
-point cloud is written with the same five constructs.
+gain is that nothing is hidden. A surface, a macro element, a cut cell and a
+point cloud are written with the same five constructs: a free index, a cell
+index, a gather, an abstract extent and a domain map.
 
 ## Idea 5: domains are leaves or decompositions, and maps are how things move
 
@@ -204,16 +208,16 @@ from a domain into a domain. A mesh is one piece per cell type, each a family
 of maps from the reference cell indexed by the cell index, and the decomposed
 domain then has a topology. A set of sensor points is a family of maps from
 `RD(0)`. A facet domain is a family of maps from the reference facet. Pieces
-may themselves have a decomposed parameter domain, so macro elements are
-nothing special.
+may themselves have a decomposed parameter domain, so a macro element needs
+no construct of its own.
 
 Expressions never move between domains except by `PullBack`. A function on a
 mesh pulled back by a cell map is the function on that cell. The pull-back is
-the only place where a Jacobian can appear, and it appears there as a
-composition: the Jacobian is `components(exterior_derivative(psi, P), P)`,
-its inverse or pseudo-inverse is the one node `Inverse`, and the density of a
-cell of any dimension is `square_root` of the determinant of `J^T J`. One
-rule serves every dimension and every codimension (Expanding pull-backs).
+the only place where a Jacobian can appear, and there it is a composition.
+The Jacobian is `components(exterior_derivative(psi, P), P)`, its inverse or
+pseudo-inverse is the one node `Inverse`, and the density of a cell of any
+dimension is `square_root` of the determinant of `J^T J`. One rule covers
+every dimension and every codimension (Expanding pull-backs).
 
 Orientation is a consequence rather than a datum. A coordinate domain is
 oriented by its coordinate order, a map transports that orientation, and
@@ -226,10 +230,10 @@ cell as an ordinary expression (Concept: orientation of a domain).
 The core does not number facets, edges or vertices of a cell. A topology of
 sub-entities names, for each of its cells, the cell it is seen from on each
 side and the pairing of vertices, as two tables from the mesh library (Sides
-of a topology). That one construction gives boundary facets, interior facets
+of a topology). That one construction covers boundary facets, interior facets
 with two sides, marked subdomains, submesh interfaces, periodic boundaries,
-vertices for point loads and edges where three surface triangles meet, each
-as a topology whose groups list their sides.
+vertices for point loads, and edges where three surface triangles meet. Each
+is a topology whose groups list their sides.
 
 Restriction is then not a node. `restriction(u, E, "+")` is the pull-back of
 `u` by a lazy `SideMap`, and a pass rewrites it on each piece as two nested
@@ -280,9 +284,9 @@ form(index_sum(integral(g, K), (c,)), (v, u)) g on the reference cell K, reading
 Each transformation evaluates one node class, has a rule per operand class,
 and leaves the node where no rule applies (Core transformations, Appendix:
 Pass table). They terminate and may run together. What remains after them is
-exactly what a library owns: a function pulled back by a cell, the exterior
-derivative of such a pull-back, and the `Components` of that derivative,
-which are the basis functions and their reference gradients that the library
+what a library owns: a function pulled back by a cell, the exterior
+derivative of that pull-back, and the `Components` of that derivative. These
+are the basis functions and their reference gradients, which the library
 tabulates. Pull-backs nest rather than compose, so a function pulled back by a
 cell and then by a facet inclusion is still "this function, on this cell, at
 these facet points".
@@ -400,7 +404,10 @@ here so that a reader knows which choices are load-bearing.
 | `Mesh`                                   | a `DecomposedDomain` with a topology                    |
 | `SpatialCoordinate(mesh)`                | `coordinate(D)`                                         |
 | `grad(u)`                                | `components(exterior_derivative(u, D), D)`              |
-| `dx`, `ds`, `dS`, `dx(1)`                | `integral(f, D)` over the cells, a facet topology, an interior facet topology, a marked topology |
+| `f * dx`                                 | `integral(f, D)` over the mesh                          |
+| `f * ds`                                 | `integral(f, E)` over a boundary facet topology         |
+| `f * dS`                                 | `integral(f, E)` over an interior facet topology        |
+| `f * dx(1)`                              | `integral(f, E)` over a marked subdomain topology       |
 | `u('+')`                                 | `restriction(u, E, "+")`                                |
 | `FacetNormal(mesh)`                      | `normal(D, E, "+")`                                     |
 | `TestFunction`, `TrialFunction`          | functions bound by `form(e, (v, u))`                    |
