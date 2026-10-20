@@ -35,8 +35,8 @@ reached without an LLM. Sections generated entirely by the LLM are marked.
   - [No simplification during construction](#no-simplification-during-construction)
   - [Passes](#passes)
   - [Kinds of code that produce objects](#kinds-of-code-that-produce-objects)
-  - [Enforcement](#enforcement)
-- [Coordinate domains](#coordinate-domains)
+- [Domains](#domains)
+  - [AbstractDomain](#abstractdomain)
   - [AbstractCoordinateDomain](#abstractcoordinatedomain)
   - [RD](#rd)
   - [Example: the unit simplex](#example-the-unit-simplex)
@@ -74,7 +74,7 @@ reached without an LLM. Sections generated entirely by the LLM are marked.
   - [Inverse](#inverse)
   - [Operator overloads](#operator-overloads)
   - [Numbers in expressions](#numbers-in-expressions)
-- [Calculus on a coordinate domain](#calculus-on-a-coordinate-domain)
+- [Calculus on a domain](#calculus-on-a-domain)
   - [Coordinate](#coordinate)
   - [Valid pair](#valid-pair)
   - [ExteriorDerivative](#exteriorderivative)
@@ -82,8 +82,8 @@ reached without an LLM. Sections generated entirely by the LLM are marked.
   - [Volume form](#volume-form)
   - [Integral](#integral)
 - [Maps between domains](#maps-between-domains)
-  - [Domains](#domains)
-  - [ParameterisedDomain](#parameteriseddomain)
+  - [Domains and parameterisations](#domains-and-parameterisations)
+  - [DomainMap](#domainmap)
   - [Example: a paraboloid](#example-a-paraboloid)
   - [Example: an affinely mapped triangle](#example-an-affinely-mapped-triangle)
   - [PullBack](#pullback)
@@ -122,6 +122,7 @@ reached without an LLM. Sections generated entirely by the LLM are marked.
   - [Example: the Laplace-Beltrami operator](#example-the-laplace-beltrami-operator)
   - [Example: the flux through a surface](#example-the-flux-through-a-surface)
 - [Core transformations](#core-transformations)
+  - [Expanding integrals](#expanding-integrals)
   - [Expanding pull-backs](#expanding-pull-backs)
   - [Applying derivatives](#applying-derivatives)
   - [Expanding components](#expanding-components)
@@ -227,7 +228,7 @@ x = component_tensor(
     p[c, 0, k] + (p[c, 1, k] - p[c, 0, k]) * X[0] + (p[c, 2, k] - p[c, 0, k]) * X[1],
     (k,),
 )
-D = decomposed_domain((parameterised_domain(K, x, RD(2)),))
+D = decomposed_domain((domain_map(K, x, RD(2)),))
 
 # Functions in a space of a library, such as Lagrange of polynomial degree 1.
 u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
@@ -269,7 +270,8 @@ L = form(integral(L_D, D), (v,))
 
 Nothing is evaluated during construction. The [core
 transformations](#core-transformations) then rewrite the graph:
-`apply_derivatives` and `expand_pull_backs` move the derivatives and the
+`expand_integrals` splits each integral over `D` into the sum over the cells,
+and `apply_derivatives` and `expand_pull_backs` move the derivatives and the
 pull-backs to the leaves, and turn the components on `D` into the inverse
 Jacobian times the components on `K`. `pull_back(u, cell_domain(D, 0))`
 remains, because the library of `V` gives `u` on each cell. A form compiler
@@ -290,7 +292,7 @@ M = ...  # a topology with the cell types (Kt, Kq)
 x_tri, x_quad = ..., ...
 
 D = decomposed_domain(
-    (parameterised_domain(Kt, x_tri, RD(2)), parameterised_domain(Kq, x_quad, RD(2)))
+    (domain_map(Kt, x_tri, RD(2)), domain_map(Kq, x_quad, RD(2)))
 )
 ```
 
@@ -317,7 +319,7 @@ j = index("j")
 q_j = component_tensor(q[j, k], (k,))
 
 # The family of points, each a copy of RD(0) placed in D at q_j.
-points = parameterised_domain(RD(0), q_j, D)
+points = domain_map(RD(0), q_j, D)
 
 # The points as a domain, one piece with the ordinary index j.
 S = decomposed_domain((points,))
@@ -441,16 +443,16 @@ hash and compare, and that the graph implementation must be fast.
 
 Requires: [The base object `Base`](#the-base-object-base).
 
-See also: [RD](#rd), [ParameterisedDomain](#parameteriseddomain), [Language
+See also: [RD](#rd), [DomainMap](#domainmap), [Language
 extensions](#language-extensions).
 
 Only leaves are subclassed. A leaf is an object that the core cannot build
 from other objects, such as the coordinate domain `RD(n)` or a function whose
 values an external library supplies. An object built from other objects is a
 single class of the core or a free function that returns objects of the core,
-never a subclass. For example, every domain is a `ParameterisedDomain`, and an
+never a subclass. For example, every domain is a `DomainMap`, and an
 affinely mapped triangle is a free function that returns a
-`ParameterisedDomain`. A language extension is the one exception (see
+`DomainMap`. A language extension is the one exception (see
 [Language extensions](#language-extensions)).
 
 A concrete class of the core is final. A library subclasses only an abstract
@@ -485,7 +487,7 @@ objects in the graph. Operator overloads call the free functions.
 A constructor takes the construction arguments by position only, in order, and
 raises `TypeError` for an argument by name. So an object has one `tuple` of
 construction arguments. A free function may take arguments by name, such as
-`parameterised_domain(P=T, psi=psi, Q=RD(2))`.
+`domain_map(P=T, psi=psi, Q=RD(2))`.
 
 A stored property returns a construction argument. A derived property returns
 data derived from the class and the construction arguments. A concrete class
@@ -581,31 +583,58 @@ metric beyond the Euclidean metric of the ambient coordinate domain, which
 gives the components of a differential form on a domain of lower dimension
 (see [Components](#components)) and the unit normal (see [Normal](#normal)).
 
-### AbstractCoordinateDomain
+### AbstractDomain
 
 Requires: [The base object `Base`](#the-base-object-base).
 
 See also: [Support](#support), [Coordinate](#coordinate),
-[ParameterisedDomain](#parameteriseddomain).
+[AbstractCoordinateDomain](#abstractcoordinatedomain),
+[DecomposedDomain](#decomposeddomain).
 
-An abstract base class for coordinate domains `AbstractCoordinateDomain`.
+An abstract base class for domains `AbstractDomain`. A domain is the set on
+which an expression is defined. A domain is a coordinate domain, a leaf that a
+library supplies (see [AbstractCoordinateDomain](#abstractcoordinatedomain)),
+or a decomposed domain, the union of the images of families of domain maps
+that the core builds (see [DecomposedDomain](#decomposeddomain)). Every node class that
+takes a domain accepts either kind, and a core transformation gives the meaning
+of the node on a decomposed domain through the pieces of the decomposed domain.
+
+| `AbstractDomain` |                                                                             |
+| ---------------- | --------------------------------------------------------------------------- |
+| Provides         | `dimension`, an `int` $k \ge 0$, and `ambient_domain`, an `AbstractDomain` |
+| Defined by       | `AbstractCoordinateDomain` and `DecomposedDomain`                           |
+
+The ambient domain of a domain $D$ is the domain whose coordinates name the
+points of $D$. The ambient domain of a coordinate domain is the coordinate
+domain itself. The ambient domains of $D$ are `D.ambient_domain`, the ambient
+domain of `D.ambient_domain`, and so on. The *ambient coordinate domain* of
+$D$ is the first coordinate domain among the ambient domains of $D$, with the
+dimension $n \ge k$.
+
+### AbstractCoordinateDomain
+
+Requires: [AbstractDomain](#abstractdomain).
+
+See also: [Support](#support), [Coordinate](#coordinate),
+[DomainMap](#domainmap).
+
+An abstract subclass of `AbstractDomain` for a coordinate domain, a leaf
+domain.
 
 A coordinate domain is a subset of $R^n$ with non-empty interior in $R^n$ whose
-points are named by the coordinates of the points themselves. A coordinate
-domain is a parameter space. A coordinate domain is the parameter domain of a
-domain, the ambient coordinate domain of a domain, and the support of an
-expression. A coordinate domain is not a
-`ParameterisedDomain`. The domain whose points are the points of a coordinate domain
-$P$ is `parameterised_domain(P, coordinate(P), P)` (see
-[ParameterisedDomain](#parameteriseddomain)).
-
-A new coordinate domain, such as a reference cell, is a subclass of
-`AbstractCoordinateDomain`, because the core cannot build the set from smaller
-objects.
+points are named by the coordinates of the points themselves. The core cannot
+build the set from smaller objects, so a new coordinate domain, such as a
+reference cell, is a subclass of `AbstractCoordinateDomain`. On a coordinate
+domain the coordinates are canonical: the coordinate function is the identity
+(see [Coordinate](#coordinate)), the volume form is the coordinate volume form
+(see [Volume form](#volume-form)), and the integral is the Lebesgue integral in
+the coordinates (see [Integral](#integral)). Every other domain gets these by
+pull-back.
 
 | `AbstractCoordinateDomain` |                                              |
 | -------------------------- | -------------------------------------------- |
 | Provides                   | `dimension`, an `int` $n \ge 0$              |
+| Derived                    | `ambient_domain`, the coordinate domain itself |
 | Defined by                 | A subclass, such as `RD` or a reference cell |
 
 Examples:
@@ -613,8 +642,11 @@ Examples:
 - The unit simplex in $R^n$ and $R^n$ itself are coordinate domains.
 - A face of codimension 1 of the unit simplex in $R^n$ is *not* a coordinate
   domain, because the face has empty interior in $R^n$. The face is the image
-  of the unit simplex in $R^{n-1}$ under a map, so the face is a parameterised
-  domain (defined below).
+  of the unit simplex in $R^{n-1}$ under a map, so the face is the image of a
+  domain map (defined below).
+- A mesh of triangles is *not* a coordinate domain, because the core builds the
+  mesh from the reference triangle and the maps of the cells. The mesh is a
+  decomposed domain.
 
 ### RD
 
@@ -926,11 +958,10 @@ not a real number, such as `square_root(Integer(-1))`, is undefined.
 ### Support
 
 Requires: [`AbstractExpression`](#abstractexpression),
-[AbstractCoordinateDomain](#abstractcoordinatedomain).
+[AbstractDomain](#abstractdomain).
 
-The support is an `AbstractCoordinateDomain` or a
-[`DecomposedDomain`](#decomposeddomain). The support is absent for an expression
-with no support, such as a literal. Unless the [static type
+The support is an [`AbstractDomain`](#abstractdomain). The support is absent
+for an expression with no support, such as a literal. Unless the [static type
 table](#appendix-static-type-table) states otherwise, the support
 of a node is the support of the edges of the node that are expressions with a support.
 All such edges must have the same support, or construction raises `ValueError`. A
@@ -994,7 +1025,7 @@ degree on every support.
 Requires: [Properties and free functions](#properties-and-free-functions),
 [`AbstractExpression`](#abstractexpression), [Free indices](#free-indices),
 [Scalar type](#scalar-type), [Support](#support), [Degree](#degree),
-[AbstractCoordinateDomain](#abstractcoordinatedomain).
+[AbstractDomain](#abstractdomain).
 
 See also: [Transpose and matrix product](#transpose-and-matrix-product), [Volume
 form](#volume-form), [ExteriorDerivative](#exteriorderivative),
@@ -1015,7 +1046,11 @@ composition, and never reads the structure of an argument, such as the class,
 the edges or the values. Otherwise the concept gets its own node class. A
 concept that is evaluated by a numerical algorithm that the user supplies also
 gets its own node class, even if a fixed composition exists, because the
-composition would fix the algorithm.
+composition would fix the algorithm. A concept that a core transformation must
+meet as the user wrote the concept also gets its own node class, even if a
+fixed composition exists, and the core transformation states the composition.
+`Integral` over a decomposed domain is such a concept (see
+[Integral](#integral)).
 
 For example, the transpose is always `component_tensor(A[k, l], (l, k))`, and
 `volume_form(P)` is the product of the $n$ coordinate 1-forms of a coordinate
@@ -1270,7 +1305,7 @@ Requires: [Arithmetic](#arithmetic), [Product](#product), [Free
 indices](#free-indices), [Degree](#degree).
 
 See also: [ExteriorDerivative](#exteriorderivative),
-[ParameterisedDomain](#parameteriseddomain).
+[DomainMap](#domainmap).
 
 | `TensorProduct(first, second)` |                                                                                 |
 | ------------------------------ | ------------------------------------------------------------------------------- |
@@ -1299,7 +1334,7 @@ Examples, with the setup of [ExteriorDerivative](#exteriorderivative) on
 | `tensor_product(dx, dy) * tensor_product(dy, dz)` | raises `ValueError` | Each operand of `Product` with a slot has exactly one slot |
 | `tensor_product(dX, dX)`                          | raises `ValueError` | `dX` has value shape `(3,)`                                |
 
-For a parameterised domain $D$ with the parameter domain $P$ and
+For a domain map $D$ with the parameter domain $P$ and
 `dpsi = exterior_derivative(D.parameterisation, P)`,
 `index_sum(tensor_product(dpsi[i], dpsi[i]), (i,))` is the metric that $\psi$
 induces on $P$, the pull-back of the Euclidean metric.
@@ -1658,7 +1693,7 @@ class AbstractExpression(Base, ABC):
 
     @property
     @abstractmethod
-    def support(self) -> AbstractCoordinateDomain | DecomposedDomain | None:
+    def support(self) -> AbstractDomain | None:
         """The support of the expression, or None for an expression with no support."""
 
     @property
@@ -1768,44 +1803,44 @@ Examples, with `X = coordinate(RD(2))`:
 - `2 + X[0]` raises `TypeError`, because `AbstractExpression` defines no
   reflected overloads.
 
-## Calculus on a coordinate domain
+## Calculus on a domain
 
 ### Coordinate
 
-Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain),
+Requires: [AbstractDomain](#abstractdomain),
 [`AbstractExpression`](#abstractexpression), [Support](#support),
 [Degree](#degree).
 
 See also: [ExteriorDerivative](#exteriorderivative),
-[ParameterisedDomain](#parameteriseddomain).
+[DomainMap](#domainmap).
 
 A concrete subclass of `AbstractExpression` for the coordinate function of a
-coordinate domain.
+domain.
 
-Every concrete coordinate domain $P$ provides a coordinate function
-`Coordinate(P)`. The coordinate function $X$ of $P$ is the terminal expression
-that maps each point of $P$ to the $n$-tuple of that point:
+Every domain $P$ provides a coordinate function `Coordinate(P)`. The
+coordinate function $X$ of $P$ is the terminal expression that maps each point
+of $P$ to the coordinates of the point in the ambient coordinate domain of $P$,
+of dimension $n$. For a coordinate domain $P$, the coordinate function is the
+identity:
 
 $X : P \to R^n$, $X(p) = p$.
 
-| `Coordinate(P)` |                                                          |
-| --------------- | -------------------------------------------------------- |
-| Free function   | `coordinate(P)`                                          |
-| Properties      | `domain`, a coordinate domain or a decomposed domain $P$ |
-| Static type     | Value shape `(n,)`, real                                 |
+| `Coordinate(P)` |                                                    |
+| --------------- | -------------------------------------------------- |
+| Free function   | `coordinate(P)`                                    |
+| Properties      | `domain`, an `AbstractDomain` $P$                  |
+| Static type     | Value shape `(n,)`, real, the support $P$          |
+| Raises          | `TypeError` if $P$ is not an `AbstractDomain`      |
 
 The coordinate function is a 0-form.
 The 1-forms $\mathrm{d}X_i$ come from the exterior derivative, not from
 `Coordinate`.
 
-Only coordinate domains and decomposed domains provide a coordinate function.
-The coordinate function of a decomposed domain $D$ maps each point of $D$ to
-the coordinates of the point in the ambient coordinate domain of $D$, with the
-value shape `(n,)` for the dimension $n$ of the ambient coordinate domain (see
-[DecomposedDomain](#decomposeddomain)). The coordinates of the points of a
-domain are given by the parameterisation of the domain (see
-[ParameterisedDomain](#parameteriseddomain)), which is built from the
-coordinate function of the parameter domain.
+The coordinate function of a decomposed domain $D$ is defined through the
+pieces of $D$. The pull-back of `coordinate(D)` by a piece is the
+parameterisation of the piece (see [DecomposedDomain](#decomposeddomain)),
+which is built from the coordinate function of the parameter domain of the
+piece (see [DomainMap](#domainmap)).
 
 Examples:
 
@@ -1817,14 +1852,12 @@ Examples:
 
 ### Valid pair
 
-Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain),
-[Support](#support).
+Requires: [AbstractDomain](#abstractdomain), [Support](#support).
 
-An expression and a coordinate domain $(f, P)$ are a valid pair if $P$ is an
-`AbstractCoordinateDomain` or a [`DecomposedDomain`](#decomposeddomain) and $f$
-has the support $P$ or no support. Otherwise
-construction raises `TypeError` for $P$ or `ValueError` for $f$. An $f$ with
-no support is a constant on $P$.
+An expression and a domain $(f, P)$ are a valid pair if $P$ is an
+[`AbstractDomain`](#abstractdomain) and $f$ has the support $P$ or no support.
+Otherwise construction raises `TypeError` for $P$ or `ValueError` for $f$. An
+$f$ with no support is a constant on $P$.
 
 ### ExteriorDerivative
 
@@ -1834,7 +1867,7 @@ Requires: [Valid pair](#valid-pair), [Coordinate](#coordinate),
 See also: [Applying derivatives](#applying-derivatives).
 
 A concrete subclass of `AbstractExpression` for the exterior derivative
-$\mathrm{d}\omega$ of a differential form $\omega$ on a coordinate domain $P$.
+$\mathrm{d}\omega$ of a differential form $\omega$ on a domain $P$.
 
 | `ExteriorDerivative(f, P)` |                                                                     |
 | -------------------------- | ------------------------------------------------------------------- |
@@ -1910,25 +1943,25 @@ Requires: [Valid pair](#valid-pair), [ExteriorDerivative](#exteriorderivative),
 IndexSum](#componenttensor-and-indexsum).
 
 See also: [PullBack](#pullback), [Expanding components](#expanding-components),
-[ParameterisedDomain](#parameteriseddomain).
+[DomainMap](#domainmap).
 
 A concrete subclass of `AbstractExpression` that turns the first slot of a
 differential form into an axis of the value shape, with the coordinate frame of
-a coordinate domain $P$ of dimension $n$, or of the ambient coordinate domain
-of a decomposed domain $P$.
+the ambient coordinate domain of a domain $P$, of dimension $n$.
 
-| `Components(f, P)` |                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Free function      | `components(f, P)`                                                                                                        |
-| Properties         | `expression` $f$ and `domain` $P$, with $n$ the dimension of $P$, or of the ambient coordinate domain of a decomposed $P$ |
-| Requires           | A [valid pair](#valid-pair) $(f, P)$, and $f$ with at least one slot                                                      |
-| Static type        | Value shape `f.value_shape + (n,)`                                                                                        |
-| Raises             | `ValueError` if a requirement fails                                                                                       |
-| Evaluated by       | [`expand_components`](#expanding-components)                                                                              |
+| `Components(f, P)` |                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------ |
+| Free function      | `components(f, P)`                                                                                     |
+| Properties         | `expression` $f$ and `domain` $P$, with $n$ the dimension of the ambient coordinate domain of $P$ |
+| Requires           | A [valid pair](#valid-pair) $(f, P)$, and $f$ with at least one slot                                   |
+| Static type        | Value shape `f.value_shape + (n,)`                                                                     |
+| Raises             | `ValueError` if a requirement fails                                                                    |
+| Evaluated by       | [`expand_components`](#expanding-components)                                                           |
 
-For a decomposed domain $P$ of dimension $k$, the frame is the coordinate
-frame of the ambient coordinate domain of $P$, of dimension $n$. For $k = n$,
-that frame is a frame of $P$. For $k < n$, such as a surface in $R^3$, the
+For a domain $P$ of dimension $k$, the frame is the coordinate frame of the
+ambient coordinate domain of $P$, of dimension $n$. A coordinate domain has
+$k = n$. For $k = n$, that frame is a frame of $P$. For $k < n$, such as a
+decomposed domain that is a surface in $R^3$, the
 coordinate vector fields $\partial_j$ of the ambient coordinate domain are not
 tangent to $P$, and $\partial_j$ in the definition below is the orthogonal
 projection of $\partial_j$ onto the tangent space of $P$, with the Euclidean
@@ -1975,7 +2008,7 @@ on `RD(3)`, and `f = x * y * z`:
 | `components(components(dx * dy, P), P)` | `(3, 3)`    | `()`   | The antisymmetric matrix of $\mathrm{d}x \wedge \mathrm{d}y$ |
 
 - `components(x, P)` raises `ValueError`, because `x` has no slot.
-- For a parameterised domain $D$ with the parameter domain $P$,
+- For a domain map $D$ with the parameter domain $P$,
   `components(exterior_derivative(D.parameterisation, P), P)` is the Jacobian
   matrix of value shape `(m, n)`, with $m$ the dimension of the ambient
   coordinate domain of $D$.
@@ -2023,13 +2056,19 @@ Requires: [Valid pair](#valid-pair), [Volume form](#volume-form),
 [Support](#support), [Degree](#degree).
 
 See also: [Example: an affinely mapped
-triangle](#example-an-affinely-mapped-triangle).
+triangle](#example-an-affinely-mapped-triangle), [Integral over a decomposed
+domain](#integral-over-a-decomposed-domain), [Expanding
+integrals](#expanding-integrals).
 
 At this point the core has everything needed to integrate an expression over
-a single domain. A basic integral needs no topological notion of the domain.
+a coordinate domain. A basic integral needs no topological notion of the
+domain.
 
-`Integral(f, P)` is the integral of a top form $f$ over a coordinate domain
-$P$ of dimension $n$, with the orientation
+A concrete subclass of `AbstractExpression` for the integral of a differential
+form $f$ over a domain $P$ of dimension $k$.
+
+For a coordinate domain $P$ of dimension $n$, `Integral(f, P)` is the integral
+of a top form $f$, with the orientation
 $\mathrm{d}X_0 \wedge \dots \wedge \mathrm{d}X_{n-1}$ of the coordinates $X$
 of $P$. With $f = f_{0 \dots n-1} \, \mathrm{d}X_0 \wedge \dots \wedge \mathrm{d}X_{n-1}$,
 
@@ -2040,19 +2079,34 @@ $$
 with the Lebesgue measure $\mathrm{d}X$ on $P$. For $n = 0$, the top form is a
 0-form, and the integral is the value of $f$ at the single point of $R^0$.
 
-| `Integral(f, P)` |                                                                                          |
-| ---------------- | ---------------------------------------------------------------------------------------- |
-| Free function    | `integral(f, P)`                                                                         |
-| Properties       | `expression` $f$ and `domain` $P$, an `AbstractCoordinateDomain` of dimension $n$        |
-| Requires         | A [valid pair](#valid-pair) $(f, P)$, with $f$ of the degree `(n,)`, or `()` for $n = 0$ |
-| Static type      | The value shape and the free indices of $f$                                              |
-| Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                      |
+For a decomposed domain $P$ of dimension $k$, `Integral(f, P)` is the integral
+of a $k$-form $f$ with the orientation of the pieces, or of a 0-form $f$
+against the density that the pieces induce, as the sum of the integrals over
+the pieces (see [Integral over a decomposed
+domain](#integral-over-a-decomposed-domain)). For $k = 0$, a 0-form is a top
+form, and the two readings agree.
 
-An array-valued differential form integrates component by component. The
-free function `integral(f, D)` also accepts a decomposed domain, as a sum of
-integrals over the parameter domains of the pieces (see [Integral over a
-decomposed domain](#integral-over-a-decomposed-domain)). `Integral` is lazy, and a later
-pass might evaluate the integral, for example by quadrature.
+| `Integral(f, P)` |                                                                                                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free function    | `integral(f, P)`                                                                                                                                                      |
+| Properties       | `expression` $f$ and `domain` $P$, an `AbstractDomain` of dimension $k$                                                                                               |
+| Requires         | A [valid pair](#valid-pair) $(f, P)$, or $f$ with the support `P.ambient_domain`, and $f$ of the degree `(k,)`, or of the degree `()` if $k = 0$ or $P$ is decomposed |
+| Static type      | The value shape and the free indices of $f$, with no support                                                                                                          |
+| Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                                                                                                   |
+| Evaluated by     | [`expand_integrals`](#expanding-integrals), for a decomposed domain $P$                                                                                               |
+
+An array-valued differential form integrates component by component.
+`Integral` is lazy. `expand_integrals` rewrites an `Integral` over a
+decomposed domain as `Integral`s over the parameter domains of the pieces, and
+a later pass might evaluate an `Integral` over a coordinate domain, for example
+by quadrature.
+
+No fixed composition integrates over a coordinate domain, so `Integral` is a
+node class. The integral over a decomposed domain is a fixed composition of
+`Integral`s over the parameter domains of the pieces, but `Integral` keeps the
+integral over the decomposed domain as the user wrote the integral, so that a
+form compiler meets the domain of the integral and not the composition (see
+[Node class or free function](#node-class-or-free-function)).
 
 An `Integral` is an expression, so integrals can be added, multiplied and
 used wherever an expression is accepted.
@@ -2070,57 +2124,72 @@ With `T = UnitSimplex(2)` and `X = coordinate(T)`:
 
 ## Maps between domains
 
-### Domains
+### Domains and parameterisations
 
-Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain), [Node class or
+Requires: [AbstractDomain](#abstractdomain), [Node class or
 free function](#node-class-or-free-function).
 
-See also: [ParameterisedDomain](#parameteriseddomain).
+See also: [DomainMap](#domainmap),
+[DecomposedDomain](#decomposeddomain).
 
-A domain $D$ is the image $\psi(P)$ of a coordinate domain $P$ under a
-parameterisation $\psi$ into a coordinate domain $Q$. The core has two classes
-of domain, [`ParameterisedDomain`](#parameteriseddomain), which stores $P$,
-$\psi$ and $Q$, and [`DecomposedDomain`](#decomposeddomain), a union of
-families of parameterised domains, such as the cells of a mesh.
+A domain is an [`AbstractDomain`](#abstractdomain), a coordinate domain or a
+decomposed domain. The image $\psi(P)$ of a domain $P$ under a
+parameterisation $\psi$ into a domain $Q$ is recorded by a
+[`DomainMap`](#domainmap), which stores $P$, $\psi$ and
+$Q$. A `DomainMap` is not an `AbstractDomain` and is not the support
+of an expression. A `DomainMap` is the second operand of a
+[`PullBack`](#pullback), which moves an expression on $Q$ to $P$, and a piece
+of a [`DecomposedDomain`](#decomposeddomain), the union of the images of
+families of domain maps, such as the cells of a mesh. The domain whose points
+are the points of $\psi(P)$ is the decomposed domain of the one piece
+`domain_map(P, psi, Q)`.
 
-A particular kind of domain, such as an affinely mapped triangle or a point, is
-a free function that returns a `ParameterisedDomain`, not a subclass. Every
-kind of domain is a fixed composition of $P$, $\psi$ and $Q$, so every kind of
-domain is a free function (see
+A particular kind of domain map, such as an affinely mapped triangle
+or a point, is a free function that returns a `DomainMap`, not a
+subclass. Every kind is a fixed composition of $P$, $\psi$ and $Q$, so every
+kind is a free function (see
 [Node class or free function](#node-class-or-free-function)).
 
-### ParameterisedDomain
+### DomainMap
 
-Requires: [Domains](#domains),
-[AbstractCoordinateDomain](#abstractcoordinatedomain),
+Requires: [Domains and parameterisations](#domains-and-parameterisations),
+[AbstractDomain](#abstractdomain),
 [Coordinate](#coordinate), [Support](#support), [Valid pair](#valid-pair), [Free indices](#free-indices),
 [Scalar type](#scalar-type), [Degree](#degree).
 
-See also: [PullBack](#pullback), [Example: an affinely mapped
-triangle](#example-an-affinely-mapped-triangle).
+See also: [PullBack](#pullback), [DecomposedDomain](#decomposeddomain),
+[Example: an affinely mapped triangle](#example-an-affinely-mapped-triangle).
 
-A concrete subclass of `Base` for a domain $D$, the image of a parameter
-domain $P$ under a parameterisation $\psi$ into an ambient coordinate domain
-$Q$.
+A concrete subclass of `Base` for a map $\psi$ from a parameter domain $P$
+into an ambient domain $Q$, with the image $D = \psi(P)$. The sections below
+write $D$ for the domain map and for the image of the domain map.
 
-| `ParameterisedDomain(P, psi, Q)` |                                                                                                                                                                                                                                 |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Free function                    | `parameterised_domain(P, psi, Q)`                                                                                                                                                                                               |
-| Properties                       | `parameter_domain` $P$, an `AbstractCoordinateDomain` of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractCoordinateDomain` or a [`DecomposedDomain`](#decomposeddomain)                         |
-| Requires                         | A [valid pair](#valid-pair) $(\psi, P)$, $\psi$ real with value shape `(n,)` for the dimension $n$ of $Q$, or of the ambient coordinate domain of a decomposed $Q$, the degree `()` and the argument spaces `()`, and $k \le n$ |
-| Static type                      | `free_indices`, the free indices of $\psi$                                                                                                                                                                                      |
-| Raises                           | `TypeError` for $Q$, and `ValueError` if another requirement fails                                                                                                                                                              |
+| `DomainMap(P, psi, Q)` |                                                                                                                                                                                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Free function                    | `domain_map(P, psi, Q)`                                                                                                                                                                           |
+| Properties                       | `parameter_domain` $P$, an [`AbstractDomain`](#abstractdomain) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractDomain`                                                   |
+| Requires                         | A [valid pair](#valid-pair) $(\psi, P)$, $\psi$ real with value shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$, the degree `()` and the argument spaces `()`, and $k \le n$ |
+| Static type                      | `free_indices`, the free indices of $\psi$                                                                                                                                                                  |
+| Raises                           | `TypeError` for $P$ or $Q$, and `ValueError` if another requirement fails                                                                                                                                   |
 
 $\psi$ maps each point of $P$ to a point of $Q$, and the image $\psi(P)$ is
-$D$. The coordinates of $Q$ name the points of $D$. The 'topological dimension'
-of $D$ is $k$, `D.parameter_domain.dimension`, and the 'geometric dimension' is
-$n$, `D.ambient_domain.dimension`. Construction does not check that $\psi(P)$
-lies in $Q$.
+$D$. The coordinates of the ambient coordinate domain of $Q$ name the points of
+$D$. The 'topological dimension' of $D$ is $k$,
+`D.parameter_domain.dimension`, and the 'geometric dimension' is $n$, the
+dimension of the ambient coordinate domain of $Q$. Construction does not check
+that $\psi(P)$ lies in $Q$.
+
+$P$ is usually a coordinate domain, such as a reference cell. A decomposed
+domain as $P$ makes a composite cell, such as a macro element whose parameter
+domain is the decomposed domain of the sub-cells of a reference cell. The
+pull-back of an expression on $Q$ by $D$ is then an expression on the
+decomposed domain $P$, defined through the pieces of $P$ (see
+[DecomposedDomain](#decomposeddomain)).
 
 A $\psi$ with free indices makes $D$ a family of domains, with one domain for
 each value of the free indices. For example, with an array `x` of value shape
 `(m, n)` and indices `i` and `k`,
-`parameterised_domain(RD(0), component_tensor(x[i, k], (k,)), RD(n))` is a
+`domain_map(RD(0), component_tensor(x[i, k], (k,)), RD(n))` is a
 family of $m$ points in `RD(n)`. A family of domains writes a set of points
 once, such as the points of a quadrature rule.
 
@@ -2133,26 +2202,26 @@ Examples:
 
 - A sphere in $R^3$ has geometric dimension 3, topological dimension 2 and the
   ambient coordinate domain `RD(3)`.
-- With `T = UnitSimplex(2)`, `parameterised_domain(T, coordinate(T), T)` is the
-  unit triangle as a domain, with $k = n = 2$.
-- The hypotenuse of the unit triangle is a parameterised domain with $k = 1$
+- With `T = UnitSimplex(2)`, `T` is already a domain, so an expression on the
+  unit triangle has the support `T` and needs no domain map.
+- The hypotenuse of the unit triangle is the image of a domain map with $k = 1$
   and $n = 2$. $P$ is the unit interval in $R^1$, and
   $\psi(X) = (1 - X_0, X_0)$. $Q$ is `RD(2)` for the hypotenuse in the plane,
   and `UnitSimplex(2)` for the hypotenuse in the unit triangle.
 - With `X = coordinate(RD(2))` and `h = X[0]**Integer(2) + X[1]**Integer(2)`,
-  `parameterised_domain(RD(2), tensor((X[0], X[1], h)), RD(3))` is the
+  `domain_map(RD(2), tensor((X[0], X[1], h)), RD(3))` is the
   paraboloid, with $k = 2$ and $n = 3$.
-- A physical triangle in $R^2$ is a parameterised domain with $k = n = 2$. $P$
+- A physical triangle in $R^2$ is the image of a domain map with $k = n = 2$. $P$
   is the unit triangle, $\psi$ is the affine map from $P$ onto the physical
   triangle, and $Q$ is `RD(2)`. See the affinely mapped triangle example.
-- A point $p$ in $R^2$ is a parameterised domain with $k = 0$ and $n = 2$. $P$
+- A point $p$ in $R^2$ is the image of a domain map with $k = 0$ and $n = 2$. $P$
   is `RD(0)`, $\psi$ is the constant `tensor((p0, p1))`, with no support, and $Q$
   is `RD(2)`.
 
 ### Example: a paraboloid
 
 Requires: [RD](#rd), [Coordinate](#coordinate), [Tensor](#tensor),
-[Indexed](#indexed), [ParameterisedDomain](#parameteriseddomain).
+[Indexed](#indexed), [DomainMap](#domainmap).
 
 The paraboloid over `RD(2)` collects the examples of the sections above.
 
@@ -2167,15 +2236,15 @@ X = coordinate(P)
 # value shape (3,).
 psi = tensor((X[0], X[1], X[0]**Integer(2) + X[1]**Integer(2)))
 
-# ParameterisedDomain(RD(2), psi, RD(3)), k = 2, n = 3.
-D = parameterised_domain(P, psi, RD(3))
+# DomainMap(RD(2), psi, RD(3)), k = 2, n = 3.
+D = domain_map(P, psi, RD(3))
 ```
 
 ### Example: an affinely mapped triangle
 
 Requires: [Example: the unit simplex](#example-the-unit-simplex),
 [Coordinate](#coordinate), [Tensor](#tensor), [Components](#components),
-[ParameterisedDomain](#parameteriseddomain).
+[DomainMap](#domainmap).
 
 The physical triangle with vertices $v_0 = (1, 0)$, $v_1 = (3, 1)$ and
 $v_2 = (2, 3)$ is the image of the unit triangle under an affine map.
@@ -2198,8 +2267,8 @@ X = coordinate(T)
 one, two, three = Integer(1), Integer(2), Integer(3)
 psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
 
-# ParameterisedDomain(UnitSimplex(2), psi, RD(2)), k = n = 2.
-K = parameterised_domain(T, psi, RD(2))
+# DomainMap(UnitSimplex(2), psi, RD(2)), k = n = 2.
+K = domain_map(T, psi, RD(2))
 ```
 
 The Jacobian matrix of $\psi$ is the constant matrix
@@ -2209,13 +2278,13 @@ $$J = \begin{pmatrix} 2 & 1 \\ 1 & 3 \end{pmatrix},$$
 so $\det J = 5$, and the area of the physical triangle is $5$ times the area
 $1/2$ of the unit triangle.
 
-The physical triangle is a parameterised domain with $k = n$, not a coordinate
-domain, although the physical triangle has non-empty interior in $R^2$. The
-class records how the domain is built.
+The physical triangle is the image of a domain map with $k = n$, not a
+coordinate domain, although the physical triangle has non-empty interior in
+$R^2$. The class records how the domain is built.
 
 ### PullBack
 
-Requires: [ParameterisedDomain](#parameteriseddomain), [Valid pair](#valid-pair),
+Requires: [DomainMap](#domainmap), [Valid pair](#valid-pair),
 [Support](#support),
 [Free indices](#free-indices), [Degree](#degree),
 [ExteriorDerivative](#exteriorderivative), [Example: an
@@ -2225,12 +2294,12 @@ See also: [Expanding pull-backs](#expanding-pull-backs).
 
 A concrete subclass of `AbstractExpression` for the pull-back $\psi^* f$ of a
 differential form $f$ on $Q$ by the parameterisation $\psi$ of a domain $D$,
-with $P$ the parameter domain and $Q$ the ambient coordinate domain of $D$.
+with $P$ the parameter domain and $Q$ the ambient domain of $D$.
 
 | `PullBack(f, D)` |                                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
 | Free function    | `pull_back(f, D)`                                                                                          |
-| Properties       | `expression` $f$, and `domain` $D$, a `ParameterisedDomain` or a [`SideMap`](#restriction)                 |
+| Properties       | `expression` $f$, and `domain` $D$, a `DomainMap` or a [`SideMap`](#restriction)                 |
 | Requires         | A [valid pair](#valid-pair) $(f, Q)$, and an equal extent for an `Index` free in both $f$ and $D$          |
 | Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
 | Raises           | `TypeError` for $D$, and `ValueError` if another requirement fails                                         |
@@ -2260,9 +2329,9 @@ evaluates the pull-back. A `PullBack` of a downstream terminal or of a
 terminal at $\psi(p)$ and transforms the slots.
 
 A domain $E$ in the parameter domain of $D$ has the image $\psi(E)$, a subset
-of $D$. The image is the parameterised domain with the parameterisation
+of $D$. The image is given by the domain map with the parameterisation
 `pull_back(D.parameterisation, E)` on the parameter domain of $E$, in the
-ambient coordinate domain of $D$, such as `E` in the example below.
+ambient domain of $D$, such as `E` in the example below.
 
 Example, with `T`, `X`, `psi`, `one` and `K` of the affinely mapped triangle:
 
@@ -2272,7 +2341,7 @@ S = UnitSimplex(1)
 t = coordinate(S)[0]
 
 # The edge of T from (1, 0) to (0, 1), as a domain in T.
-e = parameterised_domain(S, tensor((one - t, t)), T)
+e = domain_map(S, tensor((one - t, t)), T)
 
 # PullBack(f, e), with the support UnitSimplex(1), value shape () and the degree ().
 f = X[0] * X[1]
@@ -2283,7 +2352,7 @@ dx = exterior_derivative(X[0], T)
 dxe = pull_back(dx, e)
 
 # The edge of K from (3, 1) to (2, 3), as a domain in RD(2).
-E = parameterised_domain(S, pull_back(psi, e), RD(2))
+E = domain_map(S, pull_back(psi, e), RD(2))
 ```
 
 - A later pass evaluates `fe` to $(1 - t) t$ and the parameterisation of `E`
@@ -2296,18 +2365,18 @@ E = parameterised_domain(S, pull_back(psi, e), RD(2))
   $\begin{pmatrix} 2 & 1 \\ 1 & 3 \end{pmatrix} \begin{pmatrix} -1 \\ 1
   \end{pmatrix} = \begin{pmatrix} -1 \\ 2 \end{pmatrix}$, so the edge of `K`
   has the length $\sqrt{5}$.
-- `pull_back(f, parameterised_domain(S, tensor((one - t, t)), RD(2)))`
+- `pull_back(f, domain_map(S, tensor((one - t, t)), RD(2)))`
   raises `ValueError`, because that domain lies in `RD(2)`, not in `T`.
 
 ### Concept: orientation of a domain
 
-Requires: [ParameterisedDomain](#parameteriseddomain),
+Requires: [DomainMap](#domainmap),
 [Volume form](#volume-form), [PullBack](#pullback).
 
 An orientation is a choice of direction, such as which way an edge runs or
 which side of a surface is up. A coordinate domain $P$ is oriented by the order of
 the coordinates of $P$, as fixed by the volume form of $P$ (see
-[Volume form](#volume-form)). A domain $D$ = `ParameterisedDomain(P, psi, Q)`
+[Volume form](#volume-form)). A domain $D$ = `DomainMap(P, psi, Q)`
 takes the orientation of $P$ through $\psi$. For example, an edge runs in the
 direction in which $\psi$ moves as the parameter increases. For a map $r$ of
 $P$ onto $P$, $\psi$ and $\psi \circ r$ parameterise the same set. The two
@@ -2356,7 +2425,7 @@ Requires: [PullBack](#pullback), [Integral](#integral),
 [Concept: orientation of a domain](#concept-orientation-of-a-domain).
 
 The integral of a $k$-form $\omega$ on $Q$ over a domain $D$ =
-`ParameterisedDomain(P, psi, Q)` of dimension $k$, with the orientation of $D$,
+`DomainMap(P, psi, Q)` of dimension $k$, with the orientation of $D$,
 is
 
 $$
@@ -2392,7 +2461,7 @@ x, y = X[0], X[1]
 dy = exterior_derivative(y, T)
 
 # The edge e reversed, the same set with the opposite orientation.
-e_reversed = parameterised_domain(S, tensor((t, one - t)), T)
+e_reversed = domain_map(S, tensor((t, one - t)), T)
 
 # A later pass evaluates the two integrals to 1/2 and -1/2.
 integral(pull_back(x * dy, e), S)
@@ -2473,9 +2542,9 @@ element $|\psi'| \, \mathrm{d}t$, which comes from the Euclidean metric of
 > This example writes the length element by hand, for a curve in the
 > Euclidean plane, because `Integral` over a coordinate domain takes the
 > density from the user. The general concept is the volume form of the metric
-> that $\psi$ induces, $\sqrt{\det(J^T J)} \, \mathrm{d}t$. The free function
-> `integral(f, D)` over a decomposed domain builds that density for each piece
-> (see [Integral over a decomposed
+> that $\psi$ induces, $\sqrt{\det(J^T J)} \, \mathrm{d}t$. For an `Integral`
+> over a decomposed domain, `expand_integrals` builds that density for each
+> piece (see [Integral over a decomposed
 > domain](#integral-over-a-decomposed-domain)).
 
 ```python
@@ -2494,7 +2563,7 @@ integral(pull_back(x * y, e) * ds, S)
 
 ### Example: integrating over the boundary of a triangle
 
-Requires: [ParameterisedDomain](#parameteriseddomain),
+Requires: [DomainMap](#domainmap),
 [ComponentTensor and IndexSum](#componenttensor-and-indexsum),
 [Example: integrating over an edge](#example-integrating-over-an-edge).
 
@@ -2512,7 +2581,7 @@ ends = tensor((tensor((one, zero)), tensor((zero, one)), tensor((zero, zero))))
 
 # The family of the three edges of T, with the free index i.
 psi_edges = component_tensor(starts[i, k] + t * (ends[i, k] - starts[i, k]), (k,))
-edges = parameterised_domain(S, psi_edges, T)
+edges = domain_map(S, psi_edges, T)
 
 # A later pass evaluates the integral to 1/2.
 index_sum(integral(pull_back(x * dy, edges), S), (i,))
@@ -2528,13 +2597,14 @@ domain of a family has the same parameter domain, here `S`.
 
 ### Points and point evaluation
 
-Requires: [RD](#rd), [ParameterisedDomain](#parameteriseddomain),
+Requires: [RD](#rd), [DomainMap](#domainmap),
 [PullBack](#pullback), [Integral](#integral), [Example: an affinely mapped
 triangle](#example-an-affinely-mapped-triangle).
 
-A point is a domain. A point in a coordinate domain $Q$ of dimension $n$ is
-`parameterised_domain(RD(0), x, Q)`, with $x$ a constant expression of value
-shape `(n,)`. The core needs no node class and no free function for a point.
+A point is the image of a domain map. A point in a domain $Q$ is
+`domain_map(RD(0), x, Q)`, with $x$ a constant expression of value
+shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$. The
+core needs no node class and no free function for a point.
 
 The value of a 0-form $f$ of any value shape at a point $p$ is
 `integral(pull_back(f, p), RD(0))`, because the integral of a 0-form over
@@ -2553,26 +2623,26 @@ Examples, with `T`, `X`, `psi` and `K` of the affinely mapped triangle, and
 ```python
 third = Integer(1) / Integer(3)
 
-# ParameterisedDomain: the centroid of T, as a point in T.
-c = parameterised_domain(RD(0), tensor((third, third)), T)
+# DomainMap: the centroid of T, as a point in T.
+c = domain_map(RD(0), tensor((third, third)), T)
 
 # Integral: the value of f at the centroid, with no support and value shape ().
 # A later pass evaluates the integral to 1/9.
 fc = integral(pull_back(f, c), RD(0))
 
-# ParameterisedDomain: the centroid of K, as a point in RD(2). A later pass
+# DomainMap: the centroid of K, as a point in RD(2). A later pass
 # evaluates pull_back(psi, c) to (2, 4/3).
-C = parameterised_domain(RD(0), pull_back(psi, c), RD(2))
+C = domain_map(RD(0), pull_back(psi, c), RD(2))
 ```
 
 - With a second point
-  `d = parameterised_domain(RD(0), tensor((third, Integer(2) / Integer(3))), T)`,
+  `d = domain_map(RD(0), tensor((third, Integer(2) / Integer(3))), T)`,
   `integral(pull_back(f, c), RD(0)) + integral(pull_back(f, d), RD(0))` is the action of
   a sum of two Dirac measures on $f$.
-- `parameterised_domain(RD(0), tensor((third, third)), RD(2))` is the point
+- `domain_map(RD(0), tensor((third, third)), RD(2))` is the point
   $(1/3, 1/3)$ in the plane. With that point as `q`, `pull_back(f, q)` raises
   `ValueError`, because `q` lies in `RD(2)`, not in `T`.
-- `parameterised_domain(RD(0), X, T)` raises `ValueError`, because `X` has the
+- `domain_map(RD(0), X, T)` raises `ValueError`, because `X` has the
   support `T`, not `RD(0)`.
 
 ### Example: quadrature
@@ -2582,7 +2652,7 @@ C = parameterised_domain(RD(0), pull_back(psi, c), RD(2))
 > Quadrature in UFLx may make TSFC simpler, if TSFC eventually targets UFLx.
 
 Requires: [Points and point evaluation](#points-and-point-evaluation),
-[ParameterisedDomain](#parameteriseddomain), [PullBack](#pullback),
+[DomainMap](#domainmap), [PullBack](#pullback),
 [Integral](#integral), [Components](#components), [Tensor](#tensor),
 [ComponentTensor and IndexSum](#componenttensor-and-indexsum),
 [Extents](#extents).
@@ -2603,7 +2673,7 @@ points = tensor((tensor((half, zero)), tensor((half, half)), tensor((zero, half)
 weights = tensor((sixth, sixth, sixth))
 
 # A family of three points in T, with the free index i.
-xs = parameterised_domain(RD(0), component_tensor(points[i, k], (k,)), T)
+xs = domain_map(RD(0), component_tensor(points[i, k], (k,)), T)
 
 q = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
 ```
@@ -3035,7 +3105,7 @@ coordinates. The positions of the vertices come from the
 ### Reference cell
 
 Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain), [RD](#rd),
-[Tensor](#tensor), [ParameterisedDomain](#parameteriseddomain),
+[Tensor](#tensor), [DomainMap](#domainmap),
 [Inverse](#inverse), [AbstractCellType](#abstractcelltype).
 
 See also: [AbstractTopology](#abstracttopology).
@@ -3069,7 +3139,7 @@ row $v$ of `points` the vertex $w_v$ of $K$. The core does not check that the
 image is a sub-entity of $K$.
 
 > A downstream library such as Basix provides the vertex numbers of the
-> facets, so a facet is an ordinary `ParameterisedDomain` in the form, and an
+> facets, so a facet is an ordinary `DomainMap` in the form, and an
 > integral over a facet is the integral of a pull-back, as in the [boundary
 > example](#example-integrating-over-the-boundary-of-a-triangle).
 
@@ -3078,7 +3148,7 @@ Examples:
 - The unit triangle has the vertices $(0, 0)$, $(1, 0)$ and $(0, 1)$. The
   sub-entity with the vertex numbers $(1, 2)$ and the unit interval as $F$ is
   the hypotenuse, with $\psi(t) = (1 - t, t)$, as in the
-  [ParameterisedDomain](#parameteriseddomain) examples.
+  [DomainMap](#domainmap) examples.
 - The unit interval has the vertices $(0)$ and $(1)$, and the sub-entity with
   the vertex number $(1)$ and the reference point as $F$ is the end point.
 - The reference point has the single vertex $()$, the point of $R^0$.
@@ -3127,41 +3197,47 @@ expression on one is not an expression on the other. Likewise,
 ### DecomposedDomain
 
 Requires: [AbstractTopology](#abstracttopology),
-[Reference cell](#reference-cell), [ParameterisedDomain](#parameteriseddomain),
+[Reference cell](#reference-cell), [DomainMap](#domainmap),
 [PullBack](#pullback), [Free indices](#free-indices).
 
 See also: [Sides of a topology](#sides-of-a-topology),
 [AbstractFunctionSpace](#abstractfunctionspace).
 
-A concrete subclass of `Base` for a domain that is a union of pieces, each a
-family of parameterised domains.
+A concrete subclass of [`AbstractDomain`](#abstractdomain) for a domain that
+is the union of the images of pieces, each a family of domain maps.
 
 | `DecomposedDomain(pieces)` |                                                                                                                                                           |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Free function              | `decomposed_domain(pieces)`                                                                                                                               |
-| Properties                 | `pieces`, a non-empty `tuple` of [`ParameterisedDomain`](#parameteriseddomain)s with the same ambient coordinate domain $Q$ and the same dimension $k$    |
+| Properties                 | `pieces`, a non-empty `tuple` of [`DomainMap`](#domainmap)s with the same ambient domain $Q$ and the same dimension $k$               |
 | Derived                    | `ambient_domain` $Q$, `dimension` $k$, and `topology`, $T$ if the free indices of piece $j$ are `(cell_index(T, j),)` for every $j$, and otherwise `None` |
-| Raises                     | `TypeError` for a piece that is not a `ParameterisedDomain`, and `ValueError` if another requirement fails                                                |
+| Raises                     | `TypeError` for a piece that is not a `DomainMap`, and `ValueError` if another requirement fails                                                |
 
 A piece with free indices is a family, one domain for each value of the free
 indices, and $D$ is the union of all the domains of all the pieces. A mesh has
-one piece for each cell type $j$, `parameterised_domain(K_j, x_j, Q)`, with the
+one piece for each cell type $j$, `domain_map(K_j, x_j, Q)`, with the
 reference cell $K_j$ and the coordinates $x_j$ of the cells, with the free
 index `cell_index(T, j)`. Then the topology of $D$ is $T$. A piece with an
 ordinary `Index`, such as a cloud of points, gives no topology, and a single
-`ParameterisedDomain` with no free indices is a decomposed domain of one
+`DomainMap` with no free indices is a decomposed domain of one
 piece. The core does not check that the domains meet only in sets of measure
 zero.
 
 A decomposed domain $D$ is a domain, not a coordinate domain. The points of $D$
-are named by the coordinates of $Q$, and $D$ may have a lower dimension than
-$Q$, such as a surface in $R^3$. Two decomposed domains are the same only if
-the two decomposed domains are equal as base objects, so expressions on two
-decomposed domains have different supports and do not combine (see
-[Support](#support)).
+are named by the coordinates of the ambient coordinate domain of $D$, and $D$
+may have a lower dimension than the ambient coordinate domain, such as a
+surface in $R^3$. Two decomposed domains are the same only if the two
+decomposed domains are equal as base objects, so expressions on two decomposed
+domains have different supports and do not combine (see [Support](#support)).
+
+The parameter domain of a piece may itself be a decomposed domain, so
+decomposed domains nest. An expression on $D$ pulled back by such a piece is an
+expression on the parameter domain of the piece, defined through the pieces of
+the parameter domain in turn. The ambient domain $Q$ may also be a decomposed
+domain, such as a mesh in which a family of points lies.
 
 The free function `cell_domain(D, j)` returns piece $j$ with the ambient domain
-$D$, `parameterised_domain(P_j, psi_j, D)`, with the free indices of piece $j$.
+$D$, `domain_map(P_j, psi_j, D)`, with the free indices of piece $j$.
 An expression $f$ with the support $D$ is defined through the pieces.
 `pull_back(f, cell_domain(D, j))` is an expression on $P_j$, the value of $f$
 on each domain of piece $j$. The pull-back of `coordinate(D)` is $\psi_j$, and
@@ -3196,7 +3272,7 @@ x = component_tensor(
     p[c, 0, k] + (p[c, 1, k] - p[c, 0, k]) * X[0] + (p[c, 2, k] - p[c, 0, k]) * X[1],
     (k,),
 )
-D = decomposed_domain((parameterised_domain(K, x, RD(2)),))
+D = decomposed_domain((domain_map(K, x, RD(2)),))
 ```
 
 - `D.topology` is `square`, because `x` has the free index `c`.
@@ -3205,8 +3281,10 @@ D = decomposed_domain((parameterised_domain(K, x, RD(2)),))
 - `pull_back(coordinate(D), cell_domain(D, 0))` is `x`, which a later pass
   evaluates on triangle 1 to $(1 - X_1, X_0 + X_1)$.
 - With `x` of value shape `(3,)` and `RD(3)`, the decomposed domain is a
-  surface of dimension 2 in `RD(3)`, and `components(du, D)` raises
-  `ValueError`, because the frame of `RD(3)` is not a frame of the surface.
+  surface of dimension 2 in `RD(3)`. `components(du, D)` has value shape
+  `(3,)` and is the surface gradient of `u`, the array of $\mathrm{d}u$ in the
+  frame of `RD(3)` projected onto the tangent plane of each cell (see
+  [Components](#components)).
 
 For a topology `M` of triangles and quadrilaterals, with the cell types
 `(Kt, Kq)`, $D$ has one piece for each cell type, and a function `u` on `D` is
@@ -3214,7 +3292,7 @@ one expression, pulled back through each cell type:
 
 ```python
 D = decomposed_domain(
-    (parameterised_domain(Kt, x_tri, RD(2)), parameterised_domain(Kq, x_quad, RD(2)))
+    (domain_map(Kt, x_tri, RD(2)), domain_map(Kq, x_quad, RD(2)))
 )
 
 # On Kt with the free index cell_index(M, 0), and on Kq with cell_index(M, 1).
@@ -3239,8 +3317,8 @@ needs no node class of its own.
 
 For the group $i$ of $S$ with the side `(s, T, j)`, with $T$ the topology of $D$,
 the side tables `(cells, vertices)`, the cell type $F$ of group $i$ and
-`e = cell_index(S, i)`, two families of domains with the free index `e` make
-the inclusion:
+`e = cell_index(S, i)`, two families of domain maps with the free index `e`
+make the inclusion:
 
 - The cell on the side, $B_i$, is `cell_domain(D, j)` with every `Indexed`
   entry `cell_index(T, j)` of the parameterisation replaced by
@@ -3333,40 +3411,48 @@ Requires: [Integral](#integral),
 [Concept: integral over a domain](#concept-integral-over-a-domain),
 [DecomposedDomain](#decomposeddomain).
 
-The free function `integral(f, D)` for a decomposed domain $D$ of dimension $k$
-integrates a 0-form against the density that the pieces induce, and a $k$-form
-with the orientation of the pieces. $f$ has the support $D$ or no support, and
-the integral is the sum over the pieces $j$ of
+See also: [Expanding integrals](#expanding-integrals).
+
+`Integral(f, D)` for a decomposed domain $D$ of dimension $k$ integrates a
+0-form against the density that the pieces induce, and a $k$-form with the
+orientation of the pieces. $f$ has the support $D$, the support
+`D.ambient_domain` or no support. The integral is the sum over the pieces $j$
+of the integrals over the domains of piece $j$, and
+[`expand_integrals`](#expanding-integrals) rewrites `Integral(f, D)` as that
+sum:
 
 ```python
 # A 0-form f, with the density rho_j of piece j.
-index_sum(integral(pull_back(f, cell_domain(D, j)) * rho_j * volume_form(P_j), P_j), indices_j)
+index_sum(integral(pull_back(f, cell_domain(D, j)) * rho_j * vol_j, P_j), indices_j)
 
 # A k-form f, with the orientation of piece j.
 index_sum(integral(pull_back(f, cell_domain(D, j)), P_j), indices_j)
 ```
 
 with $P_j$ the parameter domain and `indices_j` the free indices of piece $j$,
-and no `IndexSum` for a piece with no free indices. With the Jacobian matrix
+and no `IndexSum` for a piece with no free indices. `vol_j` is
+`volume_form(P_j)` for a coordinate domain $P_j$. For a decomposed domain
+$P_j$, the inner integral is again the integral of a 0-form against a density,
+so `vol_j` is absent and `expand_integrals` rewrites the inner integral in
+turn. With the Jacobian matrix
 $J_j$ = `components(exterior_derivative(psi_j, P_j), P_j)` of value shape
 `(n, k)`, the density is $\rho_j = \sqrt{\det(J_j^T J_j)}$, the length, the
-area or the volume of the image of a small region of $P_j$. The determinant of
-a $k \times k$ matrix is a fixed composition for each $k$. For $k = n$,
-$\rho_j = \lvert \det J_j \rvert$, and for $k = 0$, the empty determinant is 1,
-so the integral over a set of points is the sum of the values.
+area or the volume of the image of a small region of $P_j$, written as
+`square_root` of the Leibniz formula for the determinant of the $k \times k$
+matrix $J_j^T J_j$, a fixed composition for each $k$. For $k = 0$, the empty
+determinant is `Integer(1)`, so the integral over a set of points is the sum of
+the values.
 
 The density needs no orientation, so the cells of a mesh may be oriented in any
 way, and an integral of a positive 0-form is positive. The integral of a
 $k$-form, such as for Stokes' theorem, uses the orientation of the pieces (see
 [Concept: orientation of a domain](#concept-orientation-of-a-domain)).
 
-An $f$ with the support of the ambient domain $Q$ of $D$ is pulled back by
-piece $j$ itself in place of `cell_domain(D, j)`, so $D$ may be a set of points
-or of curves in a mesh. A free index of $f$ that is also a free index of piece
-$j$ takes the value of the member, so `d[i]` pairs a datum with each point of a
-family with the index `i`. The free function reads only the pieces of $D$,
-which are static, so the integral is one fixed composition for each $D$, and
-`Integral` stays a node class over a coordinate domain.
+An $f$ with the support `D.ambient_domain` is pulled back by piece $j$ itself
+in place of `cell_domain(D, j)`, so $D$ may be a set of points or of curves in
+a mesh. A free index of $f$ that is also a free index of piece $j$ takes the
+value of the member, so `d[i]` pairs a datum with each point of a family with
+the index `i`.
 
 > Legacy note: `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the
 > decomposed domain of the cells, of the boundary facets and of the interior
@@ -3499,11 +3585,11 @@ Requires: [DecomposedDomain](#decomposeddomain), [Degree](#degree),
 See also: [PullBack](#pullback).
 
 An abstract subclass of the base object `AbstractFunctionSpace` for a space of
-functions on a decomposed domain.
+functions on a domain.
 
-| `AbstractFunctionSpace` |                                                                                                                                                             |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Provides                | `domain`, a [`DecomposedDomain`](#decomposeddomain) $D$ or `None`, `degree`, `value_shape`, `scalar_type` and `argument_spaces`, `()` for a space of fields |
+| `AbstractFunctionSpace` |                                                                                                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provides                | `domain`, an [`AbstractDomain`](#abstractdomain) $D$ or `None`, `degree`, `value_shape`, `scalar_type` and `argument_spaces`, `()` for a space of fields |
 | Defined by              | A subclass outside the core, such as a subclass for the finite element spaces of Basix, and [`DualSpace`](#dualspace) in the core                           |
 
 A space with the domain `None` has functions that do not depend on a domain.
@@ -3511,8 +3597,9 @@ A space with the domain `None` has functions that do not depend on a domain.
 The dual space of $V$ is [`dual(V)`](#dualspace), a space of the core.
 
 A function in $V$ is an expression with the support $D$ and with the degree,
-the value shape and the scalar type of $V$, defined through the cells of $D$
-(see [DecomposedDomain](#decomposeddomain)). The concrete subclass defines the
+the value shape and the scalar type of $V$. For a decomposed domain $D$, the
+function is defined through the cells of $D$ (see
+[DecomposedDomain](#decomposeddomain)), and the concrete subclass defines the
 pull-back of a function in $V$ by `cell_domain(D, j)` for every cell type $j$
 of $D$, such as with one finite element for each cell type. The core does not
 represent the polynomials, the degrees of freedom or the basis of $V$, which
@@ -3743,7 +3830,9 @@ A form binds the arguments, as a `ComponentTensor` binds indices. The slot of an
 entry is the position in `arguments`. The expression is linear or antilinear in
 each slot, as the expression makes it, such as antilinear under a `Conjugate`.
 For a `tuple` entry, the expression is linear in the members jointly, so a term
-may depend on one member only. Construction does not check the linearity. Every
+may depend on one member only. Construction does not check the linearity, and
+a pass may check the linearity by the conjugations on the path from each
+occurrence of the function to the root. Every
 other function in the expression is fixed, so one function may be an argument
 of one form and fixed in another.
 
@@ -3773,7 +3862,7 @@ Examples, with `u`, `v` and a fixed `w` in a space `V` on `D`, and an
 expression `a` linear in `u` and `v`:
 
 - `form(a, (v, u))` is a bilinear form with the argument spaces `(V, V)`.
-- `form(a, (v,))` is a linear form in `v`, such as a residual.
+- `form(a, (v,))` is a linear form in `v`.
 - `form(a, (v, u)) + form(a, (v,))` raises `ValueError`.
 - With a velocity space `V` and a pressure space `Q`, functions `u`, `v` in `V`
   and `p`, `q` in `Q`, and the Stokes expression `e` of the terms
@@ -3837,7 +3926,7 @@ x = component_tensor(
     p[c, 0, k] + (p[c, 1, k] - p[c, 0, k]) * X[0] + (p[c, 2, k] - p[c, 0, k]) * X[1],
     (k,),
 )
-M = decomposed_domain((parameterised_domain(K, x, RD(3)),))
+M = decomposed_domain((domain_map(K, x, RD(3)),))
 
 # Functions in a space of a library on M.
 u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
@@ -3933,7 +4022,7 @@ scalar curl of a 1-form on `M`.
 
 ## Core transformations
 
-Requires: [Passes](#passes), [PullBack](#pullback),
+Requires: [Passes](#passes), [Integral](#integral), [PullBack](#pullback),
 [ExteriorDerivative](#exteriorderivative), [Components](#components),
 [Action](#action).
 
@@ -3982,11 +4071,34 @@ A terminal is a `Coordinate`, a [`Function`](#function), or an expression with a
 support whose class is a leaf class of a downstream library. After evaluation,
 every `PullBack`, `ExteriorDerivative`, `Components` and `Action` applies to an
 expression that contains a downstream terminal, except the coordinate frame
-$\mathrm{d}X$, the components of $\mathrm{d}X$ on a decomposed domain of lower
-dimension than the ambient coordinate domain, and a `PullBack` of a constant
-by a family of domains. An expression without a downstream terminal evaluates
+$\mathrm{d}X$ and the components of $\mathrm{d}X$ on a decomposed domain of
+lower dimension than the ambient coordinate domain. An expression without a
+downstream terminal evaluates
 to a sum of products and tensor products of 0-forms and the coordinate 1-forms
 $\mathrm{d}X_i$, inside any `Form`.
+
+### Expanding integrals
+
+Requires: [Core transformations](#core-transformations), [Integral](#integral),
+[Integral over a decomposed domain](#integral-over-a-decomposed-domain).
+
+`expand_integrals` rewrites every `Integral` whose domain is a decomposed
+domain as the sum over the pieces of [Integral over a decomposed
+domain](#integral-over-a-decomposed-domain), with these rules:
+
+| Domain of the `Integral`                    | Rewrite of `Integral(f, D)`                                                                          |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| A coordinate domain                         | Remains                                                                                              |
+| A decomposed domain, $f$ of the degree `()` | The sum over the pieces of the integrals of the pull-back of $f$ times the density $\rho_j$ `vol_j` |
+| A decomposed domain, $f$ of the degree `(k,)`, $k \ge 1$ | The sum over the pieces of the integrals of the pull-back of $f$                             |
+
+The pull-back is by `cell_domain(D, j)` for $f$ with the support $D$, and by
+piece $j$ itself for $f$ with the support `D.ambient_domain`. An $f$ with no
+support takes either, with the same result. The rule does not dispatch on the
+class of $f$, so the pass needs no rule for the node classes, and the rule
+rewrites the `Integral` whatever the operand. The pass rewrites inner integrals
+first, so an `Integral` over a nested decomposed domain is rewritten from the
+inside out.
 
 ### Expanding pull-backs
 
@@ -3995,15 +4107,15 @@ Requires: [Core transformations](#core-transformations), [PullBack](#pullback),
 [Components](#components), [Inverse](#inverse).
 
 For a domain $D$ with the parameterisation $\psi$, the parameter domain $P$
-and the ambient coordinate domain $Q$, $\psi^*$ commutes with every node class
+and the ambient domain $Q$, $\psi^*$ commutes with every node class
 of the core, with these rules:
 
 | Operand                                                                   | Rewrite of $\psi^*$ applied to the operand                                           |
 | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| An expression $c$ with no support                                         | $c$, if every free index of $D$ is free in $c$, and otherwise remains                |
+| An expression $c$ with no support                                         | $c$ if every free index of $D$ is free in $c$, and otherwise $c$ `+ Zero(...)` with the free indices of $D$ that are not free in $c$ |
 | `Coordinate(Q)`                                                           | $\psi$                                                                               |
 | `ExteriorDerivative(f, Q)`                                                | $\mathrm{d}(\psi^* f)$, with the exterior derivative on $P$                          |
-| `PullBack(g, D2)`, for a `ParameterisedDomain` `D2`                       | The pull-back of $g$ by the image of $D$ under `D2`                                  |
+| `PullBack(g, D2)`, for a `DomainMap` `D2`                       | The pull-back of $g$ by the image of $D$ under `D2`                                  |
 | `PullBack(f, SideMap(D2, E, s))`, for `cell_domain(E, i)`                 | `pull_back(pull_back(f, B_i), A_i)` (see [Restriction](#restriction))                |
 | `Normal(D2, E, s)`, for `cell_domain(E, i)`                               | $K^T \hat m / \lvert K^T \hat m \rvert$ (see [Normal](#normal))                      |
 | `PullBack(f, SideMap(D2, E, s))` or `Normal(D2, E, s)`, for any other $D$ | Remains                                                                              |
@@ -4022,7 +4134,7 @@ points `xs` of [Example: quadrature](#example-quadrature),
 points.
 
 The image of $D$ under `D2` is
-`parameterised_domain(P, pull_back(D2.parameterisation, D), D2.ambient_domain)`
+`domain_map(P, pull_back(D2.parameterisation, D), D2.ambient_domain)`
 (see [PullBack](#pullback)). So every `PullBack` that remains applies to `g`
 directly, such as a function on a physical cell pulled back to a facet of the
 reference cell.
@@ -4388,10 +4500,12 @@ form the following hierarchy.
 > LLM generated graphs.
 
 ```
-# Coordinate domains
+# Domains
 Base
-└── AbstractCoordinateDomain              parameter space, stores n
-    └── RD                                R^n
+└── AbstractDomain                        support of an expression, dimension and ambient domain
+    ├── AbstractCoordinateDomain          leaf, subset of R^n with the coordinates canonical
+    │   └── RD                            R^n
+    └── DecomposedDomain                  see Decomposed domains
 
 # Expressions and static type
 Base
@@ -4422,18 +4536,18 @@ AbstractExpression
 ├── ComponentTensor                       binds indices to tensor axes
 └── IndexSum                              sums over bound indices
 
-# Calculus on a coordinate domain
+# Calculus on a domain
 AbstractExpression
 ├── Coordinate                            terminal, X on P
 ├── ExteriorDerivative                    d with respect to P
 ├── Components                            first slot to an axis, with the frame of P
-└── Integral                              integral of a top form over P, no support
+└── Integral                              integral over P, no support
 
 # Maps between domains
 Base
-└── ParameterisedDomain                   stores P, ψ and Q
+└── DomainMap                             map ψ from P into Q, stores P, ψ and Q
 AbstractExpression
-└── PullBack                              pull-back of a differential form by a domain, support P of the domain
+└── PullBack                              pull-back of a differential form by a domain map, support P of the map
 
 # Topology
 Base
@@ -4445,8 +4559,9 @@ AbstractCoordinateDomain, AbstractCellType
 └── AbstractReferenceCell                 coordinates of the vertices
 
 # Decomposed domains
+AbstractDomain
+└── DecomposedDomain                      union of the images of families of domain maps
 Base
-├── DecomposedDomain                      union of families of parameterised domains
 └── SideMap                               the cells of a topology with sides into the cells on one side
 AbstractExpression
 └── Normal                                unit outward normal of the cell on a side
@@ -4490,13 +4605,13 @@ AbstractExpression
 |                                 | [`transpose(f)`](#transpose-and-matrix-product)                 |                               | `f: AbstractExpression`                                                                                     | `ComponentTensor` of an `Indexed`                                           |
 |                                 | [`matrix_product(f, g)`](#transpose-and-matrix-product)         | `@`                           | `f, g: AbstractExpression`                                                                                  | `ComponentTensor` of an `IndexSum`                                          |
 |                                 | [`inverse(f)`](#inverse)                                        |                               | `f: AbstractExpression`                                                                                     | `Inverse`                                                                   |
-| Calculus on a coordinate domain | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractCoordinateDomain \| DecomposedDomain`                                                           | `Coordinate`                                                                |
-|                                 | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain \| DecomposedDomain`                                  | `ExteriorDerivative`                                                        |
-|                                 | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain \| DecomposedDomain`                                  | `Components`                                                                |
+| Calculus on a domain            | [`coordinate(P)`](#coordinate)                                  |                               | `P: AbstractDomain`                                                                                         | `Coordinate`                                                                |
+|                                 | [`exterior_derivative(f, P)`](#exteriorderivative)              |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                | `ExteriorDerivative`                                                        |
+|                                 | [`components(f, P)`](#components)                               |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                | `Components`                                                                |
 |                                 | [`volume_form(P)`](#volume-form)                                |                               | `P: AbstractCoordinateDomain`                                                                               | `Product` of the coordinate 1-forms                                         |
-|                                 | [`integral(f, P)`](#integral)                                   |                               | `f: AbstractExpression`, `P: AbstractCoordinateDomain \| DecomposedDomain`                                  | `Integral`, or a sum of `IndexSum`s of `Integral`s for a `DecomposedDomain` |
-| Maps between domains            | [`parameterised_domain(P, psi, Q)`](#parameteriseddomain)       |                               | `P: AbstractCoordinateDomain`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain \| DecomposedDomain` | `ParameterisedDomain`                                                       |
-|                                 | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: ParameterisedDomain \| SideMap`                                                | `PullBack`                                                                  |
+|                                 | [`integral(f, P)`](#integral)                                   |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                | `Integral`                                                                  |
+| Maps between domains            | [`domain_map(P, psi, Q)`](#domainmap)       |                               | `P: AbstractDomain`, `psi: AbstractExpression`, `Q: AbstractDomain`                                         | `DomainMap`                                                       |
+|                                 | [`pull_back(f, D)`](#pullback)                                  |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap`                                                | `PullBack`                                                                  |
 | Topology                        | [`cell_index(T, j)`](#abstracttopology)                         |                               | `T: AbstractTopology`, `j: int`                                                                             | `Index`                                                                     |
 | Reference cells                 | [`affine_map(F, points)`](#reference-cell)                      |                               | `F: AbstractReferenceCell`, `points: AbstractExpression`                                                    | The affine map of the vertices                                              |
 | Decomposed domains              | [`decomposed_domain(pieces)`](#decomposeddomain)                |                               | `pieces: tuple[ParameterisedDomain, ...]`                                                                   | `DecomposedDomain`                                                          |
@@ -4530,7 +4645,8 @@ rules in the section of the concrete class.
 | Class                                          | Stored properties                                                                               | Derived properties                                                                   |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `Base`                                         | `construction_arguments`                                                                        |                                                                                      |
-| `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`                                            |                                                                                      |
+| `AbstractDomain`                               |                                                                                                 | `dimension`, `ambient_domain`                                                        |
+| `AbstractCoordinateDomain`                     | `dimension`, in every concrete subclass such as `RD`                                            | `ambient_domain`, the coordinate domain itself                                       |
 | `AbstractExpression`                           |                                                                                                 | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree`, `argument_spaces` |
 | `Index`, `EllipsisIndex`                       | `label`                                                                                         |                                                                                      |
 | `AbstractIndexValue`                           | `extent`, `shape`, in every concrete subclass                                                   |                                                                                      |
@@ -4545,7 +4661,7 @@ rules in the section of the concrete class.
 | `Indexed`, `ComponentTensor`, `IndexSum`       | `expression`, `indices`                                                                         |                                                                                      |
 | `Coordinate`                                   | `domain`                                                                                        |                                                                                      |
 | `ExteriorDerivative`, `Components`, `Integral` | `expression`, `domain`                                                                          |                                                                                      |
-| `ParameterisedDomain`                          | `parameter_domain`, `parameterisation`, `ambient_domain`                                        | `free_indices`                                                                       |
+| `DomainMap`                          | `parameter_domain`, `parameterisation`, `ambient_domain`                                        | `free_indices`                                                                       |
 | `PullBack`                                     | `expression`, `domain`                                                                          |                                                                                      |
 | `AbstractCellType`                             | `dimension`, `num_vertices`, in every concrete subclass                                         |                                                                                      |
 | `AbstractReferenceCell`                        | `vertices`, in every concrete subclass                                                          |                                                                                      |
@@ -4596,7 +4712,7 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 | `ImaginaryUnit`                                  | None                               | Complex                           |
 | `Zero`                                           | None                               | Real                              |
 | `Absolute`                                       | The default                        | Real                              |
-| `Coordinate`, `ExteriorDerivative`, `Components` | The coordinate domain $P$          | The default                       |
+| `Coordinate`, `ExteriorDerivative`, `Components` | The domain $P$                     | The default                       |
 | `Integral`                                       | None                               | The default                       |
 | `PullBack`                                       | The parameter domain of the domain | The default                       |
 | `Normal`                                         | $E$                                | Real                              |
@@ -4609,8 +4725,8 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 What each core transformation does with each node class as the operand of the
 evaluated node. "In" moves the evaluated node into the operands, by linearity
 or commuting. "Chain" is the chain rule. "Rule" is a rule of the
-transformation. "Slot" moves the evaluated node into the expression or the
-form only. "Remains" keeps the
+transformation. "Bound" moves the evaluated node into the expression or the
+form only, past the bound arguments. "Remains" keeps the
 evaluated node on the operand. "Rule, Remains" is a rule for some operands of
 the class and "Remains" for the others, as the table of the transformation
 states. "—" cannot occur, because the static type rules out the pair.
