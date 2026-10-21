@@ -883,32 +883,25 @@ evaluation](LANGUAGE.md#points-and-point-evaluation), [Form](LANGUAGE.md#form).
 
 A network of vessels, a mesh of segments in $R^3$, coupled to the tissue
 around it, a mesh of tetrahedra, with the pressure of each in a space on its
-own mesh. The segments pass through the tetrahedra and are not sub-entities
-of them. The mesh library cuts each segment where it crosses a face, so that
-each piece lies in one tetrahedron, and the pieces are a topology with two
-sides, into the network and into the tissue, as the interface of [Example: a
-fluid and a solid](#example-a-fluid-and-a-solid) has a side into each part.
-The positions in the side tables are not vertices: from the network, a piece
-is a sub-interval of the reference interval, and from the tissue, a segment
-between two points of the reference tetrahedron.
+own mesh. The network is conforming: each segment is an edge of a
+tetrahedron. The topology of the segments then has a side into the tissue,
+as the interface of [Example: a fluid and a solid](#example-a-fluid-and-a-solid)
+has a side into each part, and the restriction of the tissue pressure to the
+network is a pull-back by that side.
 
 With `K3 = ReferenceSimplex(3)` and `I = ReferenceSimplex(1)`, the
-coordinates `x3` of the tetrahedra with the free index `cell_index(T3, 0)`
-and `x1` of the segments with the free index `cell_index(T1, 0)`, both built
-as in the [DecomposedDomain](LANGUAGE.md#decomposeddomain) example, a
-topology `pieces` of the library, spaces of a library `V3` on `D3` and `V1`
-on `D1` of the degree `()` and the value shape `()`, and `runtime_extent` and
+coordinates `x3` of the tetrahedra with the free index `cell_index(T3, 0)`,
+built as in the [DecomposedDomain](LANGUAGE.md#decomposeddomain) example, the
+topology `T1` of the segments with the cell type `I` and the side
+`(("tissue", T3, 0),)`, spaces of a library `V3` on `D3` and `V1` on `D1` of
+the degree `()` and the value shape `()`, and `runtime_extent` and
 `runtime_array` of [Example: integrating over a cut
 cell](#example-integrating-over-a-cut-cell):
 
 ```python
 # The tissue, of dimension 3, and the network, of dimension 1, both in RD(3).
 D3 = decomposed_domain((domain_map(K3, x3, RD(3)),))
-D1 = decomposed_domain((domain_map(I, x1, RD(3)),))
-
-# The pieces of the segments, each inside one tetrahedron, with the cell type I
-# and the sides (("vessel", T1, 0), ("tissue", T3, 0)), and their domain.
-P = side_domain(D1, pieces)
+D1 = side_domain(D3, T1)
 
 p3, q3 = function(V3, "p3"), function(V3, "q3")
 p1, q1 = function(V1, "p1"), function(V1, "q1")
@@ -924,92 +917,69 @@ grad_q1 = components(exterior_derivative(q1, D1), D1)
 tissue = integral(index_sum(grad_p3[m] * grad_q3[m], (m,)), D3)
 vessel = integral(index_sum(grad_p1[m] * grad_q1[m], (m,)), D1)
 
-# The two pressures on the pieces, each from its own mesh.
-p1_P, q1_P = restriction(p1, P, "vessel"), restriction(q1, P, "vessel")
-p3_P, q3_P = restriction(p3, P, "tissue"), restriction(q3, P, "tissue")
-
-# The exchange between the vessel and the tissue around it.
-coupling = integral(beta * (p1_P - p3_P) * (q1_P - q3_P), P)
+# The tissue pressure on the network, and the exchange between the two.
+p3_1, q3_1 = restriction(p3, D1, "tissue"), restriction(q3, D1, "tissue")
+coupling = integral(beta * (p1 - p3_1) * (q1 - q3_1), D1)
 a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
 ```
 
-- `pieces` has the cell type `I` and the sides
-  `(("vessel", T1, 0), ("tissue", T3, 0))`. For a piece `e`, the side table
-  from `"vessel"` holds the segment `cells_v[e]` and the positions
-  `positions_v[e, v, 0]`, the two parameters in `I` of the ends of the piece
-  along the segment, and the side table from `"tissue"` holds the tetrahedron
-  `cells_t[e]` and the positions `positions_t[e, v, k]`, the two ends in
-  `K3`. The library computes the pieces and both tables, outside the
-  language, once for the pair of meshes.
-- `restriction(p3, P, "tissue")` is `pull_back(pull_back(p3, B_t), A_t)` with
-  $B_t$ the tetrahedron of each piece and $A_t$ =
-  `domain_map(I, affine_map(I, points_t), K3)` the segment between the two
-  ends, by [Restriction](LANGUAGE.md#restriction). `restriction(p1, P, "vessel")`
-  is the same with the sub-interval of `I`. Both are expressions on `P` at
-  the same points of each piece, so `p1_P - p3_P` is a difference at one
-  point.
-- `side_domain(D1, pieces)` takes its geometry from the first side, the
-  segment, so the first argument is `D1`, whose topology is `T1`, and the
-  integral over `P` uses the length element along the segment. The pieces
-  cover the segments, so `integral(f, P)` and `integral(f, D1)` agree for an
-  `f` on `D1`, and only the coupling, which needs `p3`, is written over `P`.
+- The side tables of `T1` hold, for each segment `e`, one tetrahedron
+  `cells_t[e]` that has the segment as an edge, chosen by the library among
+  those that share the edge, and the positions `positions_t[e, v, k]` of the
+  two ends in `K3`, the coordinates of two vertices of `K3`. The tables come
+  from the connectivity of the mesh, and a segment and its tetrahedron share
+  vertices, so the partition of `T3` gives the partition of `T1`.
+- `restriction(p3, D1, "tissue")` is `pull_back(pull_back(p3, B_t), A_t)` with
+  $B_t$ the tetrahedron of each segment and $A_t$ =
+  `domain_map(I, affine_map(I, points_t), K3)` the edge, by
+  [Restriction](LANGUAGE.md#restriction), an expression on `D1` that combines
+  with `p1`. `p3` is continuous, so the restriction is the same from every
+  tetrahedron that shares the edge, and the choice of the library does not
+  change the form.
+- `side_domain(D3, T1)` takes its geometry from the tissue side, the edge of
+  the tetrahedron, so the integrals over `D1` use the length element of the
+  edge.
 - `p3` and `p1` have the supports `D3` and `D1` and never combine directly.
   Every integral has no support, so the three terms add, and the arguments of
   `a` are tuples of functions on the two meshes.
-- In a curved tetrahedron a piece is a curve in `K3`, and the straight segment
-  between its ends is an approximation, as a quadrature rule is.
-
-The core transformations rewrite `a` as in the [interior facet
-example](#example-an-interior-facet-integral). `expand_integrals` gives one
-`IndexSum` for `tissue`, over `cell_index(T3, 0)`, one for `vessel`, over
-`cell_index(T1, 0)`, and one for `coupling`, over `cell_index(pieces, 0)`.
-On `coupling`, `expand_pull_backs` lowers the four restrictions to pull-backs
-by one segment and one tetrahedron, selected through the two side tables, and
-then by the affine maps through the positions. The kernel of `coupling` for a
-piece reads the reference basis of `V1` on one segment and of `V3` on one
-tetrahedron, at the points of the piece in the reference coordinates of each:
-the interface of a two-sided facet kernel, with the cells of two meshes and
-of two dimensions. The local matrix couples the degrees of freedom of `V1` on
-the segment with those of `V3` on the tetrahedron, and the assembler scatters
-the matrix through the maps of degrees of freedom of both.
-
-For a network whose segments are edges of the tetrahedra, the pieces are the
-segments themselves, so the library gives `T1` the tissue side directly,
-`(("tissue", T3, 0),)`, with the tetrahedron of each segment chosen by the
-library among those that share the edge, and the positions the coordinates of
-two vertices of `K3`. `D1` is then `side_domain(D3, T1)`, `p1` needs no
-restriction, and the coupling is an integral over `D1`:
-
-```python
-D1 = side_domain(D3, T1)
-p3_1, q3_1 = restriction(p3, D1, "tissue"), restriction(q3, D1, "tissue")
-coupling = integral(beta * (p1 - p3_1) * (q1 - q3_1), D1)
-```
-
-- The side tables come from the connectivity of the mesh, with no cutting,
-  and a segment and its tetrahedron share vertices, so the partition of `T3`
-  gives the partition of `T1`.
-- `p3` is continuous, so the restriction is the same from every tetrahedron
-  that shares the edge, and the choice of the library does not change the
-  form.
 - The positions take one of twelve values, an edge of `K3` in one of two
   orientations. A library may write the table as a gather from the twelve by
   a `RuntimeIndex` of [Example: integrating over a cut
   cell](#example-integrating-over-a-cut-cell), as `StaticTopology` computes
   the positions from vertex numbers, and a form compiler may then tabulate
   the basis of `V3` on each edge of `K3` once and select by the index, as a
-  legacy facet kernel selects by the local facet number. For the pieces of a
-  non-conforming network the positions are arbitrary points of `K3`, and the
-  kernel evaluates the basis of `V3` at run time, as for a cut cell.
+  legacy facet kernel selects by the local facet number.
+- For a network that is not conforming, the library provides a topology of
+  the parts of the segments that lie in one tetrahedron each, with a side into
+  the network and a side into the tissue, and the positions from the tissue
+  two points of `K3` (see [Sides of a
+  topology](LANGUAGE.md#sides-of-a-topology)). The same lines apply with
+  `side_domain(D1, parts)` in place of `D1` and `p1` restricted from the
+  network side, and the kernel evaluates the basis of `V3` at run time, as for
+  a cut cell.
+
+The core transformations rewrite `a` as in the [interior facet
+example](#example-an-interior-facet-integral). `expand_integrals` gives one
+`IndexSum` for `tissue`, over `cell_index(T3, 0)`, and one for `vessel` and
+one for `coupling`, over `cell_index(T1, 0)`. On `coupling`,
+`expand_pull_backs` lowers the two restrictions to pull-backs by one
+tetrahedron, selected through the side table, and then by the affine map
+through the positions. The kernel of `coupling` for a segment reads the
+reference basis of `V1` on the segment and of `V3` on one tetrahedron, at the
+points of the edge in the reference coordinates of each: the interface of a
+facet kernel, with the cells of two meshes and of two dimensions. The local
+matrix couples the degrees of freedom of `V1` on the segment with those of
+`V3` on the tetrahedron, and the assembler scatters the matrix through the
+maps of degrees of freedom of both.
 
 The trace of a function in $H^1(\Omega)$ on a curve is not defined, so a
 model may replace `p3` on the network by its average over a ring of radius
 $R$ around each point of the network, in the plane of two unit normals `n1`
 and `n2` of the segment, functions in a space `N` on `D1` of the value shape
-`(3,)` that the solver provides. The ring points are not pieces of the
-network, so the average is a family of maps from `D1` into `D3` and point
-evaluation, with the cosines and sines of the angles and the weights as
-tables, because the core has no `cos`:
+`(3,)` that the solver provides. The ring points are not on the edges, so
+the average is a family of maps from `D1` into `D3` and point evaluation,
+with the cosines and sines of the angles and the weights as tables, because
+the core has no `cos`:
 
 ```python
 L = runtime_extent("L")
@@ -1032,9 +1002,9 @@ coupling_avg = integral(beta * (p1 - p3_avg) * (q1 - q3_avg), D1)
 - `ring` is a `DomainMap` with the parameter domain `D1`, a family with the
   free index `l`, and the ambient domain `D3`, a decomposed domain.
   `pull_back(p3, ring)` has the support `D1` and the free index `l`, so
-  `p3_avg` is an expression on `D1`, and `coupling_avg` needs no pieces. With
-  `R = 0`, `pull_back(p3, ring)` is the trace of `p3` on the network,
-  `pull_back(p3, domain_map(D1, X1, D3))`.
+  `p3_avg` is an expression on `D1`. With `R = 0`, `pull_back(p3, ring)` is
+  the trace of `p3` on the network, `pull_back(p3, domain_map(D1, X1, D3))`,
+  equal to `p3_1` for a conforming network.
 - The pull-back of `p3` by `ring` remains after `expand_pull_backs`, and the
   pass of [Points and point evaluation](LANGUAGE.md#points-and-point-evaluation)
   lowers it after a quadrature pass on `I` as in [Example:
