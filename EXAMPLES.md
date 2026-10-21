@@ -1427,9 +1427,14 @@ class Mesh:
 With the module, a Poisson problem with a conductivity, a reaction term on a
 marked subdomain, a source from a flux field and a Neumann condition from the
 same field on a marked part of the boundary reads as a classic FEniCS demo.
-`D`, `square` and `K` are those of the
-[`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, and `boundary`
-and `I` those of [Example: a static topology](#example-a-static-topology).
+`D` is the mesh of the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain)
+example and `boundary` the topology of its boundary facets of [Example: a
+static topology](#example-a-static-topology). `lower` and `left` are marker
+data that a mesh library supplies: the topology of the lower triangle and the
+topology of the left edge, each with a side `"inside"` into the mesh, built as
+`fluid_cells` and `inlet` of [Example: a fluid and a
+solid](#example-a-fluid-and-a-solid) are. A user script of the module sees
+none of the topologies, as a legacy script sees only a `MeshFunction`.
 
 ```python
 from uflx.legacy import (
@@ -1445,10 +1450,6 @@ from uflx.legacy import (
     grad,
     inner,
 )
-
-# The marked subdomain, the lower triangle, and the marked boundary, the left edge.
-lower = StaticTopology((K,), (((0, 1, 2),),), ((("inside", square, 0),),))
-left = StaticTopology((I,), (((2, 0),),), ((("inside", square, 0),),))
 
 mesh = Mesh(D, boundary, {1: lower}, {1: left})
 V = FunctionSpace(mesh, "Lagrange", 1)
@@ -1487,11 +1488,9 @@ L = inner(f - div(q), v) * dx + inner(inner(q, n), v) * ds(1)
   `split` would collect the members of a mixed space into a `tuple` argument.
 - The legacy `dx` finds the mesh in the integrand. The measures of the module
   hold the domain, so `dx` and `ds` belong to the mesh, and `dx(1)` and
-  `ds(1)` are the measures over the marked topologies `lower` and `left`,
-  each with a side `"inside"` into the mesh, as the markers of [Example: a
-  fluid and a solid](#example-a-fluid-and-a-solid) are. The legacy measure
-  carries a marker value and the mesh carries the marker data; here each
-  marker value is a topology.
+  `ds(1)` are the measures over the marked topologies `lower` and `left`.
+  The legacy measure carries a marker value and a `MeshFunction` carries the
+  marker data; here the mesh carries one topology for each marker value.
 - A measure other than `dx` restricts the integrand to its domain from the
   side `"inside"`, which legacy UFL does without saying so for exterior facets
   and subdomains. `restrict` is the legacy `apply_restrictions`, run when the
