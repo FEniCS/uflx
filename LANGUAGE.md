@@ -53,16 +53,16 @@ implementation and is not a rule.
   - [Passes](#passes)
   - [Kinds of code that produce objects](#kinds-of-code-that-produce-objects)
 - [Domains](#domains)
-  - [AbstractDomain](#abstractdomain)
-  - [AbstractCoordinateDomain](#abstractcoordinatedomain)
-  - [RD](#rd)
+  - [`AbstractDomain`](#abstractdomain)
+  - [`AbstractCoordinateDomain`](#abstractcoordinatedomain)
+  - [`RD`](#rd)
 - [Expressions and static type](#expressions-and-static-type)
   - [`AbstractExpression`](#abstractexpression)
-  - [Index](#index)
-  - [EllipsisIndex](#ellipsisindex)
+  - [`Index`](#index)
+  - [`EllipsisIndex`](#ellipsisindex)
   - [Extents](#extents)
-  - [AbstractIndexValue](#abstractindexvalue)
-  - [GatheredIndex](#gatheredindex)
+  - [`AbstractIndexValue`](#abstractindexvalue)
+  - [`GatheredIndex`](#gatheredindex)
   - [Free indices](#free-indices)
   - [Scalar type](#scalar-type)
   - [Support](#support)
@@ -71,59 +71,59 @@ implementation and is not a rule.
   - [Node class or free function](#node-class-or-free-function)
 - [Algebra](#algebra)
   - [Literals](#literals)
-  - [Zero](#zero)
+  - [`Zero`](#zero)
   - [Arithmetic](#arithmetic)
-  - [Sum](#sum)
-  - [Product](#product)
-  - [Power](#power)
+  - [`Sum`](#sum)
+  - [`Product`](#product)
+  - [`Power`](#power)
   - [Negation and subtraction](#negation-and-subtraction)
-  - [Division](#division)
-  - [Absolute](#absolute)
-  - [Conjugate](#conjugate)
-  - [TensorProduct](#tensorproduct)
+  - [`Division`](#division)
+  - [`Absolute`](#absolute)
+  - [`Conjugate`](#conjugate)
+  - [`TensorProduct`](#tensorproduct)
   - [Elementary functions (very incomplete)](#elementary-functions-very-incomplete)
-  - [Tensor](#tensor)
-  - [Indexed](#indexed)
-  - [ComponentTensor and IndexSum](#componenttensor-and-indexsum)
-  - [Tensor algebra with EllipsisIndex](#tensor-algebra-with-ellipsisindex)
-  - [Inverse](#inverse)
+  - [`Tensor`](#tensor)
+  - [`Indexed`](#indexed)
+  - [`ComponentTensor` and `IndexSum`](#componenttensor-and-indexsum)
+  - [Tensor algebra with `EllipsisIndex`](#tensor-algebra-with-ellipsisindex)
+  - [`Inverse`](#inverse)
   - [Operator overloads](#operator-overloads)
   - [Numbers in expressions](#numbers-in-expressions)
 - [Calculus on a domain](#calculus-on-a-domain)
-  - [Coordinate](#coordinate)
+  - [`Coordinate`](#coordinate)
   - [Valid pair](#valid-pair)
-  - [ExteriorDerivative](#exteriorderivative)
-  - [Components](#components)
+  - [`ExteriorDerivative`](#exteriorderivative)
+  - [`Components`](#components)
   - [Volume form](#volume-form)
-  - [Integral](#integral)
+  - [`Integral`](#integral)
 - [Maps between domains](#maps-between-domains)
   - [Domains and parameterisations](#domains-and-parameterisations)
-  - [DomainMap](#domainmap)
-  - [PullBack](#pullback)
+  - [`DomainMap`](#domainmap)
+  - [`PullBack`](#pullback)
   - [Concept: orientation of a domain](#concept-orientation-of-a-domain)
   - [Concept: integral over a domain](#concept-integral-over-a-domain)
   - [Points and point evaluation](#points-and-point-evaluation)
 - [Topology](#topology)
-  - [AbstractCellType](#abstractcelltype)
-  - [AbstractTopology](#abstracttopology)
+  - [`AbstractCellType`](#abstractcelltype)
+  - [`AbstractTopology`](#abstracttopology)
   - [Sides of a topology](#sides-of-a-topology)
 - [Reference cells](#reference-cells)
   - [Reference cell](#reference-cell)
 - [Decomposed domains](#decomposed-domains)
-  - [DecomposedDomain](#decomposeddomain)
+  - [`DecomposedDomain`](#decomposeddomain)
   - [Restriction](#restriction)
-  - [Integral over a decomposed domain](#integral-over-a-decomposed-domain)
-  - [Normal](#normal)
+  - [`Integral` over a decomposed domain](#integral-over-a-decomposed-domain)
+  - [`Normal`](#normal)
   - [Concept: kernels](#concept-kernels)
 - [Function spaces](#function-spaces)
-  - [AbstractFunctionSpace](#abstractfunctionspace)
-  - [Function](#function)
+  - [`AbstractFunctionSpace`](#abstractfunctionspace)
+  - [`Function`](#function)
 - [Variational forms](#variational-forms)
   - [Argument spaces](#argument-spaces)
-  - [ConjugateSpace](#conjugatespace)
-  - [DualSpace](#dualspace)
-  - [Form](#form)
-  - [Action](#action)
+  - [`ConjugateSpace`](#conjugatespace)
+  - [`DualSpace`](#dualspace)
+  - [`Form`](#form)
+  - [`Action`](#action)
   - [Example: the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator)
 - [Core transformations](#core-transformations)
   - [Expanding integrals](#expanding-integrals)
@@ -269,7 +269,7 @@ L = form(integral(L_D, D), (v,))
 - **Forms.** [`form`](#form) binds `v` as the argument at position 0 and `u`
   at position 1. The tour is in real arithmetic. For a complex `V`, the
   integrands take `conjugate(v)` and the forms bind `conjugate(v)`, so that the
-  forms are sesquilinear (see [Form](#form)). `f` stays
+  forms are sesquilinear (see [`Form`](#form)). `f` stays
   fixed. `a` and `L` are expressions with the [argument
   spaces](#argument-spaces) `(V, V)` and `(V,)`.
 
@@ -431,7 +431,7 @@ hash and compare, and that the graph implementation must be fast.
 
 Requires: [The base object `Base`](#the-base-object-base).
 
-See also: [RD](#rd), [DomainMap](#domainmap), [Language
+See also: [`RD`](#rd), [`DomainMap`](#domainmap), [Language
 extensions](#language-extensions).
 
 Only leaves are subclassed. A leaf is an object that the core cannot build
@@ -460,7 +460,7 @@ type of a property.
 Requires: [The base object `Base`](#the-base-object-base).
 
 See also: [`AbstractExpression`](#abstractexpression),
-[DomainMap](#domainmap), [Coordinate](#coordinate),
+[`DomainMap`](#domainmap), [`Coordinate`](#coordinate),
 [Example: transpose and matrix product](EXAMPLES.md#example-transpose-and-matrix-product).
 
 A property reads and a free function builds. Data that an object stores, or
@@ -497,8 +497,8 @@ later, the user may need `(a + b)` evaluated before `c` is added.
 
 Requires: [The base object `Base`](#the-base-object-base).
 
-See also: [Index](#index), [ComponentTensor and
-IndexSum](#componenttensor-and-indexsum).
+See also: [`Index`](#index), [`ComponentTensor` and
+`IndexSum`](#componenttensor-and-indexsum).
 
 A pass is a pure free function that walks a graph after construction of the
 graph. The result of a pass depends only on the arguments of the pass. A pass
@@ -513,8 +513,8 @@ replacement commutes with the free functions: replacing `A` by `B` in
 may cache results for each object, because objects are immutable.
 
 Substitution avoids capture. A `ComponentTensor` or an `IndexSum` binds
-indices (see [ComponentTensor and
-IndexSum](#componenttensor-and-indexsum)), and a [`Form`](#form) binds
+indices (see [`ComponentTensor` and
+`IndexSum`](#componenttensor-and-indexsum)), and a [`Form`](#form) binds
 functions. If a pass substitutes an expression
 into the expression of a binding node, and a bound index of the binding node is
 free in the substituted expression, the pass renames the bound index. The new
@@ -537,7 +537,7 @@ Requires: [The base object `Base`](#the-base-object-base), [Properties and free
 functions](#properties-and-free-functions), [Passes](#passes).
 
 See also: [Example: transpose and matrix product](EXAMPLES.md#example-transpose-and-matrix-product),
-[Indexed](#indexed), [New questions](#new-questions).
+[`Indexed`](#indexed), [New questions](#new-questions).
 
 Three kinds of code produce objects:
 
@@ -562,21 +562,21 @@ topological structure of the domain, which is the dimension, boundary,
 orientation and decomposition into cells of the domain. The core needs no
 metric beyond the Euclidean metric of the ambient coordinate domain, which
 gives the components of a differential form on a domain of lower dimension
-(see [Components](#components)) and the unit normal (see [Normal](#normal)).
+(see [`Components`](#components)) and the unit normal (see [`Normal`](#normal)).
 
-### AbstractDomain
+### `AbstractDomain`
 
 Requires: [The base object `Base`](#the-base-object-base).
 
-See also: [Support](#support), [Coordinate](#coordinate),
-[AbstractCoordinateDomain](#abstractcoordinatedomain),
-[DecomposedDomain](#decomposeddomain).
+See also: [Support](#support), [`Coordinate`](#coordinate),
+[`AbstractCoordinateDomain`](#abstractcoordinatedomain),
+[`DecomposedDomain`](#decomposeddomain).
 
 An abstract base class for domains `AbstractDomain`. A domain is the set on
 which an expression is defined. A domain is a coordinate domain, a leaf that a
-library supplies (see [AbstractCoordinateDomain](#abstractcoordinatedomain)),
+library supplies (see [`AbstractCoordinateDomain`](#abstractcoordinatedomain)),
 or a decomposed domain, the union of the images of families of domain maps
-that the core builds (see [DecomposedDomain](#decomposeddomain)). Every node class that
+that the core builds (see [`DecomposedDomain`](#decomposeddomain)). Every node class that
 takes a domain accepts either kind, and a core transformation gives the meaning
 of the node on a decomposed domain through the pieces of the decomposed domain.
 
@@ -592,12 +592,12 @@ domain of `D.ambient_domain`, and so on. The *ambient coordinate domain* of
 $D$ is the first coordinate domain among the ambient domains of $D$, with the
 dimension $n \ge k$.
 
-### AbstractCoordinateDomain
+### `AbstractCoordinateDomain`
 
-Requires: [AbstractDomain](#abstractdomain).
+Requires: [`AbstractDomain`](#abstractdomain).
 
-See also: [Support](#support), [Coordinate](#coordinate),
-[DomainMap](#domainmap).
+See also: [Support](#support), [`Coordinate`](#coordinate),
+[`DomainMap`](#domainmap).
 
 An abstract subclass of `AbstractDomain` for a coordinate domain, a leaf
 domain.
@@ -607,9 +607,9 @@ points are named by the coordinates of the points themselves. The core cannot
 build the set from smaller objects, so a new coordinate domain, such as a
 reference cell, is a subclass of `AbstractCoordinateDomain`. On a coordinate
 domain the coordinates are canonical: the coordinate function is the identity
-(see [Coordinate](#coordinate)), the volume form is the coordinate volume form
+(see [`Coordinate`](#coordinate)), the volume form is the coordinate volume form
 (see [Volume form](#volume-form)), and the integral is the Lebesgue integral in
-the coordinates (see [Integral](#integral)). Every other domain gets these by
+the coordinates (see [`Integral`](#integral)). Every other domain gets these by
 pull-back.
 
 | `AbstractCoordinateDomain` |                                              |
@@ -629,9 +629,9 @@ Examples:
   mesh from the reference triangle and the maps of the cells. The mesh is a
   decomposed domain.
 
-### RD
+### `RD`
 
-Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain).
+Requires: [`AbstractCoordinateDomain`](#abstractcoordinatedomain).
 
 See also: [Example: a paraboloid](EXAMPLES.md#example-a-paraboloid).
 
@@ -660,12 +660,12 @@ spaces](#argument-spaces) of the expression. The value shape is
 a `tuple` of [extents](#extents), one for each axis. An expression with value
 shape `()` is a scalar.
 
-### Index
+### `Index`
 
 Requires: [The base object `Base`](#the-base-object-base), [Properties and free
 functions](#properties-and-free-functions).
 
-See also: [Indexed](#indexed), [Example: transpose and matrix
+See also: [`Indexed`](#indexed), [Example: transpose and matrix
 product](EXAMPLES.md#example-transpose-and-matrix-product).
 
 > LLM generated content.
@@ -687,9 +687,9 @@ An `Index` has no extent of its own, and takes the extent of the axis that the
 The user names user indices. Two free occurrences of one `Index` in one scope
 are the same index, so `a[i] * b[i]` is the component-wise product (see [Free
 indices](#free-indices)), and `A[i, i]` is the diagonal entry (see
-[Indexed](#indexed)). An index that the user means to be new needs a new name.
-The scope of an index is given in [ComponentTensor and
-IndexSum](#componenttensor-and-indexsum).
+[`Indexed`](#indexed)). An index that the user means to be new needs a new name.
+The scope of an index is given in [`ComponentTensor` and
+`IndexSum`](#componenttensor-and-indexsum).
 
 A free function that needs fresh indices derives the indices from the
 operands. The label of a derived index is the identifier of the free function,
@@ -723,12 +723,12 @@ reconstructs every index whose label contains the object (see
 operands, and the derived index stays fresh with respect to the current
 operands by the argument above.
 
-### EllipsisIndex
+### `EllipsisIndex`
 
-Requires: [Index](#index).
+Requires: [`Index`](#index).
 
-See also: [Indexed](#indexed), [Tensor algebra with
-EllipsisIndex](#tensor-algebra-with-ellipsisindex).
+See also: [`Indexed`](#indexed), [Tensor algebra with
+`EllipsisIndex`](#tensor-algebra-with-ellipsisindex).
 
 > LLM generated content.
 
@@ -750,7 +750,7 @@ notation, an `EllipsisIndex` behaves as an `Index`.
 
 Requires: [The base object `Base`](#the-base-object-base).
 
-See also: [Free indices](#free-indices), [Indexed](#indexed),
+See also: [Free indices](#free-indices), [`Indexed`](#indexed),
 [Example: quadrature](EXAMPLES.md#example-quadrature), [Example: integrating over a cut
 cell](EXAMPLES.md#example-integrating-over-a-cut-cell).
 
@@ -781,13 +781,13 @@ Example:
 > as the quadrature points of each cut cell, cannot be written. A dependent
 > extent, an `AbstractExtent` whose label contains the other index, would cover
 > the case. An index value read from a table is a
-> [GatheredIndex](#gatheredindex).
+> [`GatheredIndex`](#gatheredindex).
 
-### AbstractIndexValue
+### `AbstractIndexValue`
 
 Requires: [The base object `Base`](#the-base-object-base), [Extents](#extents).
 
-See also: [Indexed](#indexed), [Sides of a topology](#sides-of-a-topology).
+See also: [`Indexed`](#indexed), [Sides of a topology](#sides-of-a-topology).
 
 An abstract subclass of the base object `AbstractIndexValue` for an index whose
 value is fixed but not known during construction, such as the local number of
@@ -802,7 +802,7 @@ An `AbstractIndexValue` is not an expression and not a free index.
 An `AbstractIndexValue` is a table of values, each an `int` $v$ with
 $0 \le v <$ `extent`, such as the cell on one side of each facet, which the
 mesh gives. An `AbstractIndexValue` with the shape `()` is one value. A table
-is read only through a [GatheredIndex](#gatheredindex), so one value is read
+is read only through a [`GatheredIndex`](#gatheredindex), so one value is read
 as `gathered_index(v, ())`.
 
 Example:
@@ -814,12 +814,12 @@ Example:
   index `k`. With an `AbstractIndexValue` with the extent 4, the same
   expression raises `IndexError`.
 
-### GatheredIndex
+### `GatheredIndex`
 
-Requires: [AbstractIndexValue](#abstractindexvalue), [Index](#index),
+Requires: [`AbstractIndexValue`](#abstractindexvalue), [`Index`](#index),
 [Extents](#extents).
 
-See also: [Indexed](#indexed), [Restriction](#restriction).
+See also: [`Indexed`](#indexed), [Restriction](#restriction).
 
 A concrete subclass of the base object for an index value read from a table.
 A `GatheredIndex` is not an expression and not a free index.
@@ -833,7 +833,7 @@ A `GatheredIndex` is not an expression and not a free index.
 
 The value is the entry of the table at the indices.
 
-A `GatheredIndex` is an entry of [Indexed](#indexed), and covers one axis
+A `GatheredIndex` is an entry of [`Indexed`](#indexed), and covers one axis
 whose extent equals the extent of the `GatheredIndex`. The free indices of the
 `GatheredIndex` are free in the `Indexed`. A `GatheredIndex` is also an entry
 of a `GatheredIndex`, with the same rule, so gathers nest, such as the
@@ -869,11 +869,11 @@ total = index_sum(a_e, (e,))
 
 ### Free indices
 
-Requires: [`AbstractExpression`](#abstractexpression), [Index](#index),
-[EllipsisIndex](#ellipsisindex), [Extents](#extents).
+Requires: [`AbstractExpression`](#abstractexpression), [`Index`](#index),
+[`EllipsisIndex`](#ellipsisindex), [Extents](#extents).
 
-See also: [Sum](#sum), [Tensor](#tensor), [Indexed](#indexed), [ComponentTensor
-and IndexSum](#componenttensor-and-indexsum).
+See also: [`Sum`](#sum), [`Tensor`](#tensor), [`Indexed`](#indexed), [`ComponentTensor`
+and `IndexSum`](#componenttensor-and-indexsum).
 
 Every `AbstractExpression` derives the free indices, a `tuple` of pairs of an
 `Index` and an extent, or of an `EllipsisIndex` and a `tuple` of extents. The
@@ -886,10 +886,10 @@ must have the same extent in both edges, or construction raises `ValueError`.
 
 The following node classes state otherwise:
 
-- `Indexed`: see [Indexed](#indexed).
+- `Indexed`: see [`Indexed`](#indexed).
 - `ComponentTensor` and `IndexSum`: see
-  [ComponentTensor and IndexSum](#componenttensor-and-indexsum).
-- `PullBack`: see [PullBack](#pullback).
+  [`ComponentTensor` and `IndexSum`](#componenttensor-and-indexsum).
+- `PullBack`: see [`PullBack`](#pullback).
 
 Summation is never implicit. `a[i] * b[i]` has the free index `i` and denotes
 the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], (i,))`.
@@ -900,7 +900,7 @@ the free indices `i` and `j` and denotes the outer sum.
 
 Requires: [`AbstractExpression`](#abstractexpression).
 
-See also: [Literals](#literals), [Absolute](#absolute).
+See also: [Literals](#literals), [`Absolute`](#absolute).
 
 The scalar type is real or complex. Unless the [static type
 table](#appendix-static-type-table) states otherwise, an expression is complex
@@ -913,7 +913,7 @@ not a real number, such as `square_root(Integer(-1))`, is undefined.
 ### Support
 
 Requires: [`AbstractExpression`](#abstractexpression),
-[AbstractDomain](#abstractdomain).
+[`AbstractDomain`](#abstractdomain).
 
 The support is an [`AbstractDomain`](#abstractdomain). The support is absent
 for an expression with no support, such as a literal. Unless the [static type
@@ -927,7 +927,7 @@ node with no such edge has no support.
 Requires: [`AbstractExpression`](#abstractexpression).
 
 See also: [Appendix: Static type table](#appendix-static-type-table), [New
-subclasses](#new-subclasses), [ExteriorDerivative](#exteriorderivative).
+subclasses](#new-subclasses), [`ExteriorDerivative`](#exteriorderivative).
 
 The degree is a `tuple` with the form degree of each slot of the expression,
 and every entry is at least 1. An expression with the degree `()` has no
@@ -962,7 +962,7 @@ coordinates $x, y, z$ and a scalar function $f$:
 
 Requires: [Support](#support), [Degree](#degree).
 
-See also: [Zero](#zero).
+See also: [`Zero`](#zero).
 
 An expression denotes an array-valued differential form, a multi-form, on the
 support of the expression, with the degree of the expression. A 0-form is an
@@ -980,14 +980,14 @@ degree on every support.
 Requires: [Properties and free functions](#properties-and-free-functions),
 [`AbstractExpression`](#abstractexpression), [Free indices](#free-indices),
 [Scalar type](#scalar-type), [Support](#support), [Degree](#degree),
-[AbstractDomain](#abstractdomain).
+[`AbstractDomain`](#abstractdomain).
 
 See also: [Example: transpose and matrix product](EXAMPLES.md#example-transpose-and-matrix-product), [Volume
-form](#volume-form), [ExteriorDerivative](#exteriorderivative),
-[Division](#division), [Elementary functions (very
+form](#volume-form), [`ExteriorDerivative`](#exteriorderivative),
+[`Division`](#division), [Elementary functions (very
 incomplete)](#elementary-functions-very-incomplete),
 [Tensor algebra with
-EllipsisIndex](#tensor-algebra-with-ellipsisindex),
+`EllipsisIndex`](#tensor-algebra-with-ellipsisindex),
 [Language extensions](#language-extensions).
 
 A concept must be a free function, not a node class, if the free function can
@@ -1005,19 +1005,19 @@ composition would fix the algorithm. A concept that a core transformation must
 meet as the user wrote the concept also gets its own node class, even if a
 fixed composition exists, and the core transformation states the composition.
 `Integral` over a decomposed domain is such a concept (see
-[Integral](#integral)).
+[`Integral`](#integral)).
 
 For example, the transpose is always `component_tensor(A[k, l], (l, k))`, and
 `volume_form(P)` is the product of the $n$ coordinate 1-forms of a coordinate
 domain of dimension $n$, so both are free functions.
 
 A free function is part of the core only if a definition or a rule of the
-core uses the free function, such as `volume_form` in [Integral over a
+core uses the free function, such as `volume_form` in [`Integral` over a
 decomposed domain](#integral-over-a-decomposed-domain) and `cell_domain` in
 [Restriction](#restriction). Every other free function belongs to a library,
 such as `transpose` (see [Example: transpose and matrix
 product](EXAMPLES.md#example-transpose-and-matrix-product)) and the operations of
-[Tensor algebra with EllipsisIndex](#tensor-algebra-with-ellipsisindex). The
+[Tensor algebra with `EllipsisIndex`](#tensor-algebra-with-ellipsisindex). The
 operator overloads of the core are those of the free functions of the core,
 so `A + B` on tensors is not an overload (see
 [Operator overloads](#operator-overloads)).
@@ -1026,7 +1026,7 @@ A free function that builds a fixed composition is a definition, not a
 simplification. The free function does not read the structure of the
 operands, so the free function never removes structure that the user built.
 An `EllipsisIndex` makes most tensor algebra one fixed composition for every
-value shape (see [EllipsisIndex](#tensor-algebra-with-ellipsisindex)), so a
+value shape (see [`EllipsisIndex`](#tensor-algebra-with-ellipsisindex)), so a
 free function rarely needs to read a value shape.
 
 A node class is part of the core only if a definition or a rule of the core
@@ -1065,7 +1065,7 @@ Requires: [`AbstractExpression`](#abstractexpression), [Free
 indices](#free-indices), [Scalar type](#scalar-type), [Support](#support),
 [Degree](#degree).
 
-See also: [Division](#division).
+See also: [`Division`](#division).
 
 A literal is a number written down in an expression, such as
 `Integer(2) * u`. The value of a literal is part of the expression itself. Every literal has value shape
@@ -1094,12 +1094,12 @@ integers rounds once, the same as the conversion of a rational number, so the
 core has no rational literal. A complex number is a composition such as
 `a + ImaginaryUnit() * b`, so the core has no complex literal.
 
-### Zero
+### `Zero`
 
 Requires: [`AbstractExpression`](#abstractexpression), [Free
 indices](#free-indices), [Support](#support), [Degree](#degree).
 
-See also: [Indexed](#indexed), [Applying derivatives](#applying-derivatives).
+See also: [`Indexed`](#indexed), [Applying derivatives](#applying-derivatives).
 
 A concrete subclass of `AbstractExpression` for the zero of any static type.
 
@@ -1120,8 +1120,8 @@ linear form on a space `V`.
 Requires: [`AbstractExpression`](#abstractexpression), [Free
 indices](#free-indices).
 
-See also: [ComponentTensor and IndexSum](#componenttensor-and-indexsum), [Tensor
-algebra with EllipsisIndex](#tensor-algebra-with-ellipsisindex).
+See also: [`ComponentTensor` and `IndexSum`](#componenttensor-and-indexsum), [`Tensor`
+algebra with `EllipsisIndex`](#tensor-algebra-with-ellipsisindex).
 
 `Sum`, `Product`, `Division` and `Power` are concrete subclasses of
 `AbstractExpression` that each store two expressions. Arithmetic is scalar.
@@ -1130,7 +1130,7 @@ Both operands must have value shape `()`, or construction raises
 arithmetic (see [Free indices](#free-indices)), so tensor arithmetic is
 written in index notation. For example, a scalar `a` times a tensor `T` of any
 rank is `component_tensor(a * T[r], (r,))`, with `r` an
-[EllipsisIndex](#ellipsisindex).
+[`EllipsisIndex`](#ellipsisindex).
 
 | Class      | Free function | Overload |
 | ---------- | ------------- | -------- |
@@ -1139,11 +1139,11 @@ rank is `component_tensor(a * T[r], (r,))`, with `r` an
 | `Division` | `divide`      | `/`      |
 | `Power`    | `power`       | `**`     |
 
-### Sum
+### `Sum`
 
 Requires: [Arithmetic](#arithmetic), [Degree](#degree).
 
-See also: [ExteriorDerivative](#exteriorderivative).
+See also: [`ExteriorDerivative`](#exteriorderivative).
 
 A concrete subclass of `AbstractExpression` for the sum of two differential
 forms of the same degree.
@@ -1157,15 +1157,15 @@ forms of the same degree.
 For example, $\mathrm{d}x + \mathrm{d}y$ has the degree `(1,)`, and
 $f + \mathrm{d}x$ raises `ValueError`.
 
-### Product
+### `Product`
 
 Requires: [Arithmetic](#arithmetic), [Free indices](#free-indices),
 [Support](#support), [Degree](#degree),
-[AbstractCoordinateDomain](#abstractcoordinatedomain).
+[`AbstractCoordinateDomain`](#abstractcoordinatedomain).
 
-See also: [TensorProduct](#tensorproduct), [ComponentTensor and
-IndexSum](#componenttensor-and-indexsum),
-[ExteriorDerivative](#exteriorderivative).
+See also: [`TensorProduct`](#tensorproduct), [`ComponentTensor` and
+`IndexSum`](#componenttensor-and-indexsum),
+[`ExteriorDerivative`](#exteriorderivative).
 
 A concrete subclass of `AbstractExpression` for the wedge product
 $\alpha \wedge \beta$ of two differential forms.
@@ -1195,7 +1195,7 @@ double form with the degree `(1, 1)`.
 Examples, with a scalar $f$, the 1-forms $\mathrm{d}x$ and $\mathrm{d}y$ and a
 double form $S$ with the degree `(1, 1)`:
 
-| Product                                         | Degree              |
+| `Product`                                         | Degree              |
 | ----------------------------------------------- | ------------------- |
 | $f \cdot f$                                     | `()`                |
 | $f \, \mathrm{d}x$                              | `(1,)`              |
@@ -1204,7 +1204,7 @@ double form $S$ with the degree `(1, 1)`:
 | $f \, S$                                        | `(1, 1)`            |
 | $\mathrm{d}x \wedge S$                          | raises `ValueError` |
 
-### Power
+### `Power`
 
 Requires: [Arithmetic](#arithmetic), [Support](#support).
 
@@ -1226,7 +1226,7 @@ derivative of such a power remains after
 
 ### Negation and subtraction
 
-Requires: [Sum](#sum), [Product](#product), [Literals](#literals).
+Requires: [`Sum`](#sum), [`Product`](#product), [Literals](#literals).
 
 Negation and subtraction are free functions, not node classes:
 
@@ -1236,9 +1236,9 @@ Negation and subtraction are free functions, not node classes:
 Both compositions are exact in floating-point arithmetic, so neither
 composition changes the arithmetic that the user wrote.
 
-### Division
+### `Division`
 
-Requires: [Arithmetic](#arithmetic), [Product](#product), [Power](#power),
+Requires: [Arithmetic](#arithmetic), [`Product`](#product), [`Power`](#power),
 [Literals](#literals).
 
 A concrete subclass of `AbstractExpression` for the quotient of a
@@ -1253,7 +1253,7 @@ differential form by a scalar.
 The quotient has the degree of the first operand, so `dx / Integer(2)` is a
 1-form.
 
-### Absolute
+### `Absolute`
 
 Requires: [`AbstractExpression`](#abstractexpression), [Scalar
 type](#scalar-type).
@@ -1268,7 +1268,7 @@ modulus of a complex scalar.
 | Static type   | Value shape `()`, real                    |
 | Raises        | `ValueError` if a requirement fails       |
 
-### Conjugate
+### `Conjugate`
 
 Requires: [`AbstractExpression`](#abstractexpression), [Scalar
 type](#scalar-type), [Degree](#degree).
@@ -1282,7 +1282,7 @@ on the coefficients of a differential form.
 | -------------- | ------------------------------------------------------------------------------------------- |
 | Free function  | `conjugate(f)`                                                                              |
 | Requires       | A scalar differential form $f$ of any degree                                                |
-| Static type    | The argument spaces of $f$ with each space conjugated (see [ConjugateSpace](#conjugatespace)) |
+| Static type    | The argument spaces of $f$ with each space conjugated (see [`ConjugateSpace`](#conjugatespace)) |
 | Raises         | `ValueError` if a requirement fails                                                         |
 
 A sesquilinear variational form, such as the $L^2$ inner product
@@ -1291,13 +1291,13 @@ antilinear in the argument after conjugation, so `Conjugate` conjugates each
 argument space, with `conjugate_space(V)` for $V$ and $V$ for
 `ConjugateSpace(V)`.
 
-### TensorProduct
+### `TensorProduct`
 
-Requires: [Arithmetic](#arithmetic), [Product](#product), [Free
+Requires: [Arithmetic](#arithmetic), [`Product`](#product), [Free
 indices](#free-indices), [Degree](#degree).
 
-See also: [ExteriorDerivative](#exteriorderivative),
-[DomainMap](#domainmap).
+See also: [`ExteriorDerivative`](#exteriorderivative),
+[`DomainMap`](#domainmap).
 
 A concrete subclass of `AbstractExpression` for the tensor product
 $\alpha \otimes \beta$ of two differential forms, which adds a slot.
@@ -1316,7 +1316,7 @@ The tensor product is not commutative, and `TensorProduct` never reorders the
 operands. `Product` adds degrees within a slot, and `TensorProduct` adds
 slots.
 
-Examples, with the setup of [ExteriorDerivative](#exteriorderivative) on
+Examples, with the setup of [`ExteriorDerivative`](#exteriorderivative) on
 `RD(3)` and `i = index("i")`:
 
 | Expression                                        | Degree              | Meaning                                                    |
@@ -1334,8 +1334,8 @@ induces on $P$, the pull-back of the Euclidean metric.
 
 ### Elementary functions (very incomplete)
 
-Requires: [`AbstractExpression`](#abstractexpression), [Power](#power),
-[Division](#division), [Literals](#literals).
+Requires: [`AbstractExpression`](#abstractexpression), [`Power`](#power),
+[`Division`](#division), [Literals](#literals).
 
 > The UFLx core is likely to contain few elementary functions. A language
 > extension, such as `uflx.elementary`, will implement the rest later.
@@ -1354,11 +1354,11 @@ Requires: [`AbstractExpression`](#abstractexpression), [Power](#power),
 because IEEE 754 requires a correctly rounded square root and not a correctly
 rounded power, so the result of `power` depends on the math library.
 
-### Tensor
+### `Tensor`
 
 Requires: [`AbstractExpression`](#abstractexpression), [Degree](#degree).
 
-See also: [Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative).
+See also: [`Coordinate`](#coordinate), [`ExteriorDerivative`](#exteriorderivative).
 
 A concrete subclass of `AbstractExpression` that stacks expressions along a
 new first axis.
@@ -1396,14 +1396,14 @@ Examples, with `zero, one, two = Integer(0), Integer(1), Integer(2)`:
 - `tensor((one, dx))` raises `ValueError`, because the degrees of the entries
   differ.
 
-### Indexed
+### `Indexed`
 
-Requires: [`AbstractExpression`](#abstractexpression), [Index](#index),
-[EllipsisIndex](#ellipsisindex), [Extents](#extents),
-[AbstractIndexValue](#abstractindexvalue), [Free indices](#free-indices),
+Requires: [`AbstractExpression`](#abstractexpression), [`Index`](#index),
+[`EllipsisIndex`](#ellipsisindex), [Extents](#extents),
+[`AbstractIndexValue`](#abstractindexvalue), [Free indices](#free-indices),
 [Support](#support), [Degree](#degree).
 
-See also: [Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative),
+See also: [`Coordinate`](#coordinate), [`ExteriorDerivative`](#exteriorderivative),
 [Example: a paraboloid](EXAMPLES.md#example-a-paraboloid).
 
 > LLM generated content.
@@ -1473,12 +1473,12 @@ Examples:
 - In the paraboloid example, the height `X[0]**Integer(2) + X[1]**Integer(2)`
   is an expression on `RD(2)` with value shape `()`.
 
-### ComponentTensor and IndexSum
+### `ComponentTensor` and `IndexSum`
 
-Requires: [Index](#index), [EllipsisIndex](#ellipsisindex), [Free
-indices](#free-indices), [Degree](#degree), [Indexed](#indexed).
+Requires: [`Index`](#index), [`EllipsisIndex`](#ellipsisindex), [Free
+indices](#free-indices), [Degree](#degree), [`Indexed`](#indexed).
 
-See also: [ExteriorDerivative](#exteriorderivative).
+See also: [`ExteriorDerivative`](#exteriorderivative).
 
 `ComponentTensor` and `IndexSum` are concrete subclasses of
 `AbstractExpression` that bind free indices.
@@ -1536,11 +1536,11 @@ shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
 > Implementation note: `opt_einsum` can plan a contraction path for a given
 > contraction, but assumes dense operators.
 
-### Tensor algebra with EllipsisIndex
+### Tensor algebra with `EllipsisIndex`
 
-Requires: [EllipsisIndex](#ellipsisindex), [Indexed](#indexed), [ComponentTensor
-and IndexSum](#componenttensor-and-indexsum), [Sum](#sum), [Product](#product),
-[Conjugate](#conjugate).
+Requires: [`EllipsisIndex`](#ellipsisindex), [`Indexed`](#indexed), [`ComponentTensor`
+and `IndexSum`](#componenttensor-and-indexsum), [`Sum`](#sum), [`Product`](#product),
+[`Conjugate`](#conjugate).
 
 An `EllipsisIndex` writes an operation on tensors of every rank as one fixed
 composition. The operations in the table below are not part of the core. A
@@ -1560,10 +1560,10 @@ and an ordinary index `k`:
 because the extents of `r` differ. The overload `A + B` calls `add`, so
 `A + B` accepts only scalars (see [Arithmetic](#arithmetic)).
 
-### Inverse
+### `Inverse`
 
 Requires: [`AbstractExpression`](#abstractexpression), [Degree](#degree),
-[Division](#division), [Elementary
+[`Division`](#division), [Elementary
 functions](#elementary-functions-very-incomplete), [Example: transpose and matrix
 product](EXAMPLES.md#example-transpose-and-matrix-product).
 
@@ -1595,7 +1595,7 @@ for `Components` in [Expanding pull-backs](#expanding-pull-backs). A pass
 chooses how to evaluate `Inverse`, in closed form for a small matrix or by a
 factorisation. The determinant of a $k \times k$ matrix is an exact
 polynomial, the Leibniz formula, so the core writes the determinant as that
-composition, such as in the density of [Integral over a decomposed
+composition, such as in the density of [`Integral` over a decomposed
 domain](#integral-over-a-decomposed-domain), and has no node class for the
 determinant.
 
@@ -1619,10 +1619,10 @@ Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
 
 ### Operator overloads
 
-Requires: [`AbstractExpression`](#abstractexpression), [Sum](#sum),
-[Product](#product), [Division](#division), [Power](#power), [Negation and
-subtraction](#negation-and-subtraction), [Absolute](#absolute),
-[Indexed](#indexed), [Example: transpose and matrix
+Requires: [`AbstractExpression`](#abstractexpression), [`Sum`](#sum),
+[`Product`](#product), [`Division`](#division), [`Power`](#power), [Negation and
+subtraction](#negation-and-subtraction), [`Absolute`](#absolute),
+[`Indexed`](#indexed), [Example: transpose and matrix
 product](EXAMPLES.md#example-transpose-and-matrix-product).
 
 See also: [Numbers in expressions](#numbers-in-expressions), [Appendix: Free
@@ -1761,9 +1761,9 @@ def add(first: AbstractExpression, second: AbstractExpression) -> Sum:
 ### Numbers in expressions
 
 Requires: [Literals](#literals), [Operator overloads](#operator-overloads),
-[Tensor](#tensor), [Indexed](#indexed), [RD](#rd).
+[`Tensor`](#tensor), [`Indexed`](#indexed), [`RD`](#rd).
 
-See also: [Coordinate](#coordinate).
+See also: [`Coordinate`](#coordinate).
 
 Every number in an expression is written with literals, such as `Integer(2)`,
 `Float(0.5)`, `Integer(1) / Integer(3)` or `ImaginaryUnit()`. A Python `int`, `float`,
@@ -1785,14 +1785,14 @@ Worked examples for this chapter in EXAMPLES.md: [transpose and matrix product](
 
 ## Calculus on a domain
 
-### Coordinate
+### `Coordinate`
 
-Requires: [AbstractDomain](#abstractdomain),
+Requires: [`AbstractDomain`](#abstractdomain),
 [`AbstractExpression`](#abstractexpression), [Support](#support),
 [Degree](#degree).
 
-See also: [ExteriorDerivative](#exteriorderivative),
-[DomainMap](#domainmap).
+See also: [`ExteriorDerivative`](#exteriorderivative),
+[`DomainMap`](#domainmap).
 
 A concrete subclass of `AbstractExpression` for the coordinate function of a
 domain, the terminal that maps each point of the domain to the coordinates of
@@ -1812,9 +1812,9 @@ $\mathrm{d}X_i$ come from the exterior derivative, not from `Coordinate`.
 
 The coordinate function of a decomposed domain $D$ is defined through the
 pieces of $D$. The pull-back of `coordinate(D)` by a piece is the
-parameterisation of the piece (see [DecomposedDomain](#decomposeddomain)),
+parameterisation of the piece (see [`DecomposedDomain`](#decomposeddomain)),
 which is built from the coordinate function of the parameter domain of the
-piece (see [DomainMap](#domainmap)).
+piece (see [`DomainMap`](#domainmap)).
 
 Examples:
 
@@ -1826,17 +1826,17 @@ Examples:
 
 ### Valid pair
 
-Requires: [AbstractDomain](#abstractdomain), [Support](#support).
+Requires: [`AbstractDomain`](#abstractdomain), [Support](#support).
 
 An expression and a domain $(f, P)$ are a valid pair if $P$ is an
 [`AbstractDomain`](#abstractdomain) and $f$ has the support $P$ or no support.
 Otherwise construction raises `TypeError` for $P$ or `ValueError` for $f$. An
 $f$ with no support is a constant on $P$.
 
-### ExteriorDerivative
+### `ExteriorDerivative`
 
-Requires: [Valid pair](#valid-pair), [Coordinate](#coordinate),
-[Degree](#degree), [Product](#product), [Indexed](#indexed).
+Requires: [Valid pair](#valid-pair), [`Coordinate`](#coordinate),
+[Degree](#degree), [`Product`](#product), [`Indexed`](#indexed).
 
 See also: [Applying derivatives](#applying-derivatives).
 
@@ -1909,14 +1909,14 @@ the enclosed area, by Stokes' theorem.
 - `exterior_derivative(X, RD(2))` raises `ValueError`, because `X` has the
   support `RD(3)`.
 
-### Components
+### `Components`
 
-Requires: [Valid pair](#valid-pair), [ExteriorDerivative](#exteriorderivative),
-[Degree](#degree), [ComponentTensor and
-IndexSum](#componenttensor-and-indexsum).
+Requires: [Valid pair](#valid-pair), [`ExteriorDerivative`](#exteriorderivative),
+[Degree](#degree), [`ComponentTensor` and
+`IndexSum`](#componenttensor-and-indexsum).
 
-See also: [PullBack](#pullback), [Expanding components](#expanding-components),
-[DomainMap](#domainmap).
+See also: [`PullBack`](#pullback), [Expanding components](#expanding-components),
+[`DomainMap`](#domainmap).
 
 A concrete subclass of `AbstractExpression` that turns the first slot of a
 differential form into an axis of the value shape, with the coordinate frame of
@@ -1968,7 +1968,7 @@ inverse of the Jacobian matrix (see
 `Components` (see [Expanding components](#expanding-components)).
 
 With `Components`, the arrays of standard differential calculus are fixed
-compositions. With the examples of [ExteriorDerivative](#exteriorderivative)
+compositions. With the examples of [`ExteriorDerivative`](#exteriorderivative)
 on `RD(3)`, and `f = x * y * z`:
 
 | Expression                              | Value shape | Degree | Meaning                                                      |
@@ -1992,10 +1992,10 @@ on `RD(3)`, and `f = x * y * z`:
 
 ### Volume form
 
-Requires: [Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative),
-[Product](#product), [Literals](#literals).
+Requires: [`Coordinate`](#coordinate), [`ExteriorDerivative`](#exteriorderivative),
+[`Product`](#product), [Literals](#literals).
 
-See also: [Integral](#integral), [Example: an affinely mapped
+See also: [`Integral`](#integral), [Example: an affinely mapped
 triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 The free function `volume_form(P)` is the coordinate volume form of an
@@ -2010,7 +2010,7 @@ With `dX = exterior_derivative(coordinate(P), P)`, `volume_form(P)` is
 `volume_form(RD(3))` is `(dX[0] * dX[1]) * dX[2]`. The degree is `(n,)`. For $n = 0$,
 `volume_form(P)` is `Integer(1)`. The free function reads the dimension of
 $P$, so the free function is one fixed composition for each dimension. The
-volume form fixes the orientation of $P$ (see [Integral](#integral)). The
+volume form fixes the orientation of $P$ (see [`Integral`](#integral)). The
 volume form needs no metric. A Riemannian volume form is a density times
 `volume_form(P)`.
 
@@ -2022,13 +2022,13 @@ Examples:
   of `T`.
 - `volume_form(RD(0))` is `Integer(1)`.
 
-### Integral
+### `Integral`
 
 Requires: [Valid pair](#valid-pair), [Volume form](#volume-form),
 [Support](#support), [Degree](#degree).
 
 See also: [Example: an affinely mapped
-triangle](EXAMPLES.md#example-an-affinely-mapped-triangle), [Integral over a decomposed
+triangle](EXAMPLES.md#example-an-affinely-mapped-triangle), [`Integral` over a decomposed
 domain](#integral-over-a-decomposed-domain), [Expanding
 integrals](#expanding-integrals).
 
@@ -2060,7 +2060,7 @@ with the Lebesgue measure $\mathrm{d}X$ on $P$. For $n = 0$, the top form is a
 For a decomposed domain $P$ of dimension $k$, `Integral(f, P)` is the integral
 of a $k$-form $f$ with the orientation of the pieces, or of a 0-form $f$
 against the density that the pieces induce, as the sum of the integrals over
-the pieces (see [Integral over a decomposed
+the pieces (see [`Integral` over a decomposed
 domain](#integral-over-a-decomposed-domain)). For $k = 0$, a 0-form is a top
 form, and the two readings agree.
 
@@ -2092,11 +2092,11 @@ With `T = UnitSimplex(2)` and `X = coordinate(T)`:
 
 ### Domains and parameterisations
 
-Requires: [AbstractDomain](#abstractdomain), [Node class or
+Requires: [`AbstractDomain`](#abstractdomain), [Node class or
 free function](#node-class-or-free-function).
 
-See also: [DomainMap](#domainmap),
-[DecomposedDomain](#decomposeddomain).
+See also: [`DomainMap`](#domainmap),
+[`DecomposedDomain`](#decomposeddomain).
 
 A domain is an [`AbstractDomain`](#abstractdomain), a coordinate domain or a
 decomposed domain. The image $\psi(P)$ of a domain $P$ under a
@@ -2116,14 +2116,14 @@ subclass. Every kind is a fixed composition of $P$, $\psi$ and $Q$, so every
 kind is a free function (see
 [Node class or free function](#node-class-or-free-function)).
 
-### DomainMap
+### `DomainMap`
 
 Requires: [Domains and parameterisations](#domains-and-parameterisations),
-[AbstractDomain](#abstractdomain),
-[Coordinate](#coordinate), [Support](#support), [Valid pair](#valid-pair), [Free indices](#free-indices),
+[`AbstractDomain`](#abstractdomain),
+[`Coordinate`](#coordinate), [Support](#support), [Valid pair](#valid-pair), [Free indices](#free-indices),
 [Scalar type](#scalar-type), [Degree](#degree).
 
-See also: [PullBack](#pullback), [DecomposedDomain](#decomposeddomain),
+See also: [`PullBack`](#pullback), [`DecomposedDomain`](#decomposeddomain),
 [Example: an affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 A concrete subclass of `Base` for a map $\psi$ from a parameter domain $P$
@@ -2150,7 +2150,7 @@ domain as $P$ makes a composite cell, such as a macro element whose parameter
 domain is the decomposed domain of the sub-cells of a reference cell. The
 pull-back of an expression on $Q$ by $D$ is then an expression on the
 decomposed domain $P$, defined through the pieces of $P$ (see
-[DecomposedDomain](#decomposeddomain)).
+[`DecomposedDomain`](#decomposeddomain)).
 
 A $\psi$ with free indices makes $D$ a family of domains, with one domain for
 each value of the free indices. For example, with an array `x` of value shape
@@ -2162,7 +2162,7 @@ once, such as the points of a quadrature rule.
 $Q$ is usually `RD(n)`. A domain in a smaller $Q$, such as an edge of the unit
 triangle in the unit triangle, or a cell of a decomposed domain in the
 decomposed domain, pulls back an expression on $Q$ (see
-[PullBack](#pullback)).
+[`PullBack`](#pullback)).
 
 Examples:
 
@@ -2184,12 +2184,12 @@ Examples:
   is `RD(0)`, $\psi$ is the constant `tensor((p0, p1))`, with no support, and $Q$
   is `RD(2)`.
 
-### PullBack
+### `PullBack`
 
-Requires: [DomainMap](#domainmap), [Valid pair](#valid-pair),
+Requires: [`DomainMap`](#domainmap), [Valid pair](#valid-pair),
 [Support](#support),
 [Free indices](#free-indices), [Degree](#degree),
-[ExteriorDerivative](#exteriorderivative), [Example: an
+[`ExteriorDerivative`](#exteriorderivative), [Example: an
 affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 See also: [Expanding pull-backs](#expanding-pull-backs).
@@ -2230,7 +2230,7 @@ evaluates the pull-back. A `PullBack` of a downstream terminal or of a
 [`Function`](#function) remains, and the library of the terminal evaluates the
 terminal at $\psi(p)$ and transforms the slots. For a function, the library
 evaluates the pull-back by a cell domain or a gathered cell domain of the
-domain of the space (see [AbstractFunctionSpace](#abstractfunctionspace)), and
+domain of the space (see [`AbstractFunctionSpace`](#abstractfunctionspace)), and
 the pull-back by another domain map into a decomposed domain is rewritten
 through those (see [Points and point
 evaluation](#points-and-point-evaluation)).
@@ -2277,8 +2277,8 @@ E = domain_map(S, pull_back(psi, e), RD(2))
 
 ### Concept: orientation of a domain
 
-Requires: [DomainMap](#domainmap),
-[Volume form](#volume-form), [PullBack](#pullback).
+Requires: [`DomainMap`](#domainmap),
+[Volume form](#volume-form), [`PullBack`](#pullback).
 
 An orientation is a choice of direction, such as which way an edge runs or
 which side of a surface is up. A coordinate domain $P$ is oriented by the order of
@@ -2317,7 +2317,7 @@ with the sign $+1$ or $-1$ for each cell, and the core needs nothing more (see
 [Example: the flux through a surface](EXAMPLES.md#example-the-flux-through-a-surface)).
 
 An integral of a 0-form uses a density and needs no orientation (see
-[Integral over a decomposed domain](#integral-over-a-decomposed-domain)). A
+[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain)). A
 flux of a vector field through a facet needs a side and a density, but no
 orientation. The side $s$ says which cell the facet is seen from, and
 [`normal(D, E, s)`](#normal) points out of that cell, whatever the orientation
@@ -2327,8 +2327,8 @@ of a function `u` of value shape `(n,)` needs no orientation of $D$ or $E$.
 
 ### Concept: integral over a domain
 
-Requires: [PullBack](#pullback), [Integral](#integral),
-[Absolute](#absolute), [Division](#division),
+Requires: [`PullBack`](#pullback), [`Integral`](#integral),
+[`Absolute`](#absolute), [`Division`](#division),
 [Concept: orientation of a domain](#concept-orientation-of-a-domain).
 
 The integral of a $k$-form $\omega$ on $Q$ over a domain $D$ =
@@ -2350,8 +2350,8 @@ $\int_P s \, \psi^* (f \, \mathrm{d}Y_0 \wedge \dots \wedge \mathrm{d}Y_{n-1})
 
 ### Points and point evaluation
 
-Requires: [RD](#rd), [DomainMap](#domainmap),
-[PullBack](#pullback), [Integral](#integral), [Example: an affinely mapped
+Requires: [`RD`](#rd), [`DomainMap`](#domainmap),
+[`PullBack`](#pullback), [`Integral`](#integral), [Example: an affinely mapped
 triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 A point is the image of a domain map. A point in a domain $Q$ is
@@ -2361,7 +2361,7 @@ core needs no node class and no free function for a point.
 
 The value of a 0-form $f$ of any value shape at a point $p$ is
 `integral(pull_back(f, p), RD(0))`, because the integral of a 0-form over
-`RD(0)` is the value at the single point (see [Integral](#integral)).
+`RD(0)` is the value at the single point (see [`Integral`](#integral)).
 `pull_back(f, p)` is an expression on `RD(0)`, and the integral has no support, so
 the integral combines with any expression.
 
@@ -2381,7 +2381,7 @@ map of each cell, for example by Newton's method, outside the language, as
 the mesh library computes every side table. `pull_back(u, M)` for a function
 `u` on $D$ remains after `expand_pull_backs`, because the library of the
 space of `u` defines `u` on the cells only (see
-[AbstractFunctionSpace](#abstractfunctionspace)). A pass of the mesh library
+[`AbstractFunctionSpace`](#abstractfunctionspace)). A pass of the mesh library
 rewrites the pull-back as the [restriction](#restriction) to the topology of
 the points, with the index $i$ of the family in place of the cell index,
 
@@ -2434,12 +2434,12 @@ Worked examples for this chapter in EXAMPLES.md: [a paraboloid](EXAMPLES.md#exam
 
 ## Topology
 
-### AbstractCellType
+### `AbstractCellType`
 
 Requires: [The base object `Base`](#the-base-object-base).
 
 See also: [Reference cell](#reference-cell),
-[AbstractTopology](#abstracttopology).
+[`AbstractTopology`](#abstracttopology).
 
 An abstract subclass of the base object `AbstractCellType` for the type of a
 cell, with numbered vertices.
@@ -2459,16 +2459,16 @@ A topology of polygons, as for the virtual element method, has a cell type for
 each number of vertices. A cell type whose number of vertices is known only at
 run time is not yet covered.
 
-### AbstractTopology
+### `AbstractTopology`
 
-Requires: [The base object `Base`](#the-base-object-base), [Index](#index),
+Requires: [The base object `Base`](#the-base-object-base), [`Index`](#index),
 [Extents](#extents), [Free indices](#free-indices),
-[AbstractCellType](#abstractcelltype).
+[`AbstractCellType`](#abstractcelltype).
 
 See also: [Sides of a topology](#sides-of-a-topology),
 [Restriction](#restriction),
-[Integral over a decomposed domain](#integral-over-a-decomposed-domain),
-[DecomposedDomain](#decomposeddomain).
+[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain),
+[`DecomposedDomain`](#decomposeddomain).
 
 An abstract subclass of the base object `AbstractTopology` for a set of cells
 of given cell types, without coordinates.
@@ -2515,8 +2515,8 @@ Examples:
 
 ### Sides of a topology
 
-Requires: [AbstractCellType](#abstractcelltype),
-[AbstractTopology](#abstracttopology).
+Requires: [`AbstractCellType`](#abstractcelltype),
+[`AbstractTopology`](#abstracttopology).
 
 See also: [Restriction](#restriction).
 
@@ -2647,11 +2647,11 @@ Worked examples for this chapter in EXAMPLES.md: [the simplex as a cell type](EX
 
 ### Reference cell
 
-Requires: [AbstractCoordinateDomain](#abstractcoordinatedomain), [RD](#rd),
-[Tensor](#tensor), [DomainMap](#domainmap),
-[Inverse](#inverse), [AbstractCellType](#abstractcelltype).
+Requires: [`AbstractCoordinateDomain`](#abstractcoordinatedomain), [`RD`](#rd),
+[`Tensor`](#tensor), [`DomainMap`](#domainmap),
+[`Inverse`](#inverse), [`AbstractCellType`](#abstractcelltype).
 
-See also: [AbstractTopology](#abstracttopology).
+See also: [`AbstractTopology`](#abstracttopology).
 
 An abstract subclass of `AbstractCoordinateDomain` and of `AbstractCellType`
 for a reference cell `AbstractReferenceCell`, a cell type whose vertices have
@@ -2675,7 +2675,7 @@ X \mapsto p_0 + \sum_{d < k} (p_{d+1} - p_0) \, \big(E^{-1} (X - V_0)\big)_d,
 $$
 
 an expression on $F$ with value shape `(m,)`, a fixed composition for each $k$
-with [Inverse](#inverse). For $k = 0$ the map is the constant $p_0$. The first
+with [`Inverse`](#inverse). For $k = 0$ the map is the constant $p_0$. The first
 $k + 1$ vertices of $F$ must not lie in a hyperplane of $F$.
 
 A sub-entity of $K$ with the vertex numbers $(w_0, w_1, \dots)$ and the
@@ -2694,7 +2694,7 @@ Examples:
 - The unit triangle has the vertices $(0, 0)$, $(1, 0)$ and $(0, 1)$. The
   sub-entity with the vertex numbers $(1, 2)$ and the unit interval as $F$ is
   the hypotenuse, with $\psi(t) = (1 - t, t)$, as in the
-  [DomainMap](#domainmap) examples.
+  [`DomainMap`](#domainmap) examples.
 - The unit interval has the vertices $(0)$ and $(1)$, and the sub-entity with
   the vertex number $(1)$ and the reference point as $F$ is the end point.
 - The reference point has the single vertex $()$, the point of $R^0$.
@@ -2703,14 +2703,14 @@ Worked examples for this chapter in EXAMPLES.md: [the unit simplex as a referenc
 
 ## Decomposed domains
 
-### DecomposedDomain
+### `DecomposedDomain`
 
-Requires: [AbstractTopology](#abstracttopology),
-[Reference cell](#reference-cell), [DomainMap](#domainmap),
-[PullBack](#pullback), [Free indices](#free-indices).
+Requires: [`AbstractTopology`](#abstracttopology),
+[Reference cell](#reference-cell), [`DomainMap`](#domainmap),
+[`PullBack`](#pullback), [Free indices](#free-indices).
 
 See also: [Sides of a topology](#sides-of-a-topology),
-[AbstractFunctionSpace](#abstractfunctionspace).
+[`AbstractFunctionSpace`](#abstractfunctionspace).
 
 A concrete subclass of [`AbstractDomain`](#abstractdomain) for a domain that
 is the union of the images of pieces, each a family of domain maps.
@@ -2751,7 +2751,7 @@ An expression $f$ with the support $D$ is defined through the pieces.
 `pull_back(f, cell_domain(D, j))` is an expression on $P_j$, the value of $f$
 on each domain of piece $j$. The pull-back of `coordinate(D)` is $\psi_j$, and
 the pull-back of a function in a space on $D$ is evaluated by the library of
-the space (see [PullBack](#pullback)).
+the space (see [`PullBack`](#pullback)).
 
 The free function `gathered_cell_domain(D, j, g)`, for a decomposed domain $D$
 with a topology $T$, returns the domains of piece $j$ selected by a
@@ -2770,7 +2770,7 @@ $g$, so `chi` has the free indices of $g$. The free function reads only the
 free indices of piece $j$, which are static. The library of a function in a
 space on $D$ evaluates the pull-back by `gathered_cell_domain(D, j, g)` as the
 pull-back by `cell_domain(D, j)` on the cell $g$ (see
-[AbstractFunctionSpace](#abstractfunctionspace)).
+[`AbstractFunctionSpace`](#abstractfunctionspace)).
 
 [Restriction](#restriction) moves an expression on $D$ to the cells of a
 topology with sides, through `gathered_cell_domain`.
@@ -2809,7 +2809,7 @@ D = decomposed_domain((domain_map(K, x, RD(2)),))
   surface of dimension 2 in `RD(3)`. `components(du, D)` has value shape
   `(3,)` and is the surface gradient of `u`, the array of $\mathrm{d}u$ in the
   frame of `RD(3)` projected onto the tangent plane of each cell (see
-  [Components](#components)).
+  [`Components`](#components)).
 
 For a topology `M` of triangles and quadrilaterals, with the cell types
 `(Kt, Kq)`, $D$ has one piece for each cell type, and a function `u` on `D` is
@@ -2827,16 +2827,16 @@ u_quad = pull_back(u, cell_domain(D, 1))
 
 ### Restriction
 
-Requires: [DecomposedDomain](#decomposeddomain),
-[Sides of a topology](#sides-of-a-topology), [GatheredIndex](#gatheredindex),
-[PullBack](#pullback), [Reference cell](#reference-cell).
+Requires: [`DecomposedDomain`](#decomposeddomain),
+[Sides of a topology](#sides-of-a-topology), [`GatheredIndex`](#gatheredindex),
+[`PullBack`](#pullback), [Reference cell](#reference-cell).
 
-See also: [Integral over a decomposed domain](#integral-over-a-decomposed-domain).
+See also: [`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
 
 The restriction of an expression on a decomposed domain $D$ to the cells of a
 topology $S$ with sides, from the side $s$, is the pull-back along the
 inclusion of each cell of $S$ into the cell on the side $s$. The side tables of
-$S$ give the cell, through a [GatheredIndex](#gatheredindex) entry, and the
+$S$ give the cell, through a [`GatheredIndex`](#gatheredindex) entry, and the
 positions of the vertices of the inclusion, so the restriction is a pull-back
 and needs no node class of its own.
 
@@ -2848,7 +2848,7 @@ make the inclusion:
 - The cell on the side, $B_i$, is
   `gathered_cell_domain(D, j, gathered_index(cells, (e,)))`, the cell of type
   $j$ of $T$ on the side of each cell $e$ of $S$ (see
-  [DecomposedDomain](#decomposeddomain)).
+  [`DecomposedDomain`](#decomposeddomain)).
 - The inclusion into the cell, $A_i$, is
   `domain_map(F, affine_map(F, points), K_j)`, with
   `points = component_tensor(positions[e, v, k], (v, k))`, the position in
@@ -2900,7 +2900,7 @@ $\mathrm{d}u$, as for a normal derivative, restrict `components(du, D)`, whose
 axes are in the frame of the ambient coordinate domain from every side. The
 outward normal of the cell on a side is [`normal(D, E, s)`](#normal).
 
-Example, with `D` and `square` of the [DecomposedDomain](#decomposeddomain)
+Example, with `D` and `square` of the [`DecomposedDomain`](#decomposeddomain)
 example, `I = ReferenceSimplex(1)`, a function `u` on `D`, and the diagonal of
 `square`:
 
@@ -2933,12 +2933,12 @@ jump = restriction(u, E, "+") - restriction(u, E, "-")
   groups of [Sides of a topology](#sides-of-a-topology), the same two lines
   with `E = side_domain(D, S)` give one jump for all three groups.
 
-### Integral over a decomposed domain
+### `Integral` over a decomposed domain
 
-Requires: [Integral](#integral),
+Requires: [`Integral`](#integral),
 [Concept: orientation of a domain](#concept-orientation-of-a-domain),
 [Concept: integral over a domain](#concept-integral-over-a-domain),
-[DecomposedDomain](#decomposeddomain).
+[`DecomposedDomain`](#decomposeddomain).
 
 See also: [Expanding integrals](#expanding-integrals).
 
@@ -2983,7 +2983,7 @@ a mesh. A free index of $f$ that is also a free index of piece $j$ takes the
 value of the member, so `d[i]` pairs a datum with each point of a family with
 the index `i`.
 
-Examples, with `D` of the [DecomposedDomain](#decomposeddomain) example, a
+Examples, with `D` of the [`DecomposedDomain`](#decomposeddomain) example, a
 function `u` on `D`, and the decomposed domain `B` of the boundary facets of
 `D`, with the side `"inside"`:
 
@@ -2995,10 +2995,10 @@ function `u` on `D`, and the decomposed domain `B` of the boundary facets of
 - `integral(restriction(du, B, "inside"), B)` integrates the 1-form
   $\mathrm{d}u$ along the boundary facets, with the orientation of each facet.
 
-### Normal
+### `Normal`
 
 Requires: [Restriction](#restriction), [Reference cell](#reference-cell),
-[Inverse](#inverse).
+[`Inverse`](#inverse).
 
 A concrete subclass of `AbstractExpression` for the unit outward normal of the
 cell on a side, on the cells of a topology with sides.
@@ -3042,7 +3042,7 @@ domain of dimension $n - 1$, such as of a surface in $R^3$. That field needs
 an orientation of the domain (see [Concept: orientation of a
 domain](#concept-orientation-of-a-domain)) and belongs to a downstream library.
 
-Examples, with `B` of the [Integral over a decomposed
+Examples, with `B` of the [`Integral` over a decomposed
 domain](#integral-over-a-decomposed-domain) examples, the decomposed domain `E`
 of the interior facets of `D` with the sides `"+"` and `"-"`,
 `grad_u = components(exterior_derivative(u, D), D)` and `i = index("i")`:
@@ -3061,8 +3061,8 @@ penalty = integral(index_sum(jump[i] * n_E[i], (i,)) ** Integer(2), E)
 
 ### Concept: kernels
 
-Requires: [DecomposedDomain](#decomposeddomain), [GatheredIndex](#gatheredindex),
-[Integral over a decomposed domain](#integral-over-a-decomposed-domain).
+Requires: [`DecomposedDomain`](#decomposeddomain), [`GatheredIndex`](#gatheredindex),
+[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
 
 > This section describes how a downstream library is expected to use the core,
 > not a rule of the core.
@@ -3109,12 +3109,12 @@ Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EX
 A function is a member of a function space, such as a coefficient or an
 argument of a variational form.
 
-### AbstractFunctionSpace
+### `AbstractFunctionSpace`
 
-Requires: [AbstractDomain](#abstractdomain), [Degree](#degree),
+Requires: [`AbstractDomain`](#abstractdomain), [Degree](#degree),
 [Scalar type](#scalar-type).
 
-See also: [PullBack](#pullback).
+See also: [`PullBack`](#pullback).
 
 An abstract subclass of the base object `AbstractFunctionSpace` for a space of
 functions on a domain.
@@ -3131,11 +3131,11 @@ The dual space of $V$ is [`dual(V)`](#dualspace), a space of the core.
 A function in $V$ is an expression with the support $D$ and with the degree,
 the value shape and the scalar type of $V$. For a decomposed domain $D$, the
 function is defined through the cells of $D$ (see
-[DecomposedDomain](#decomposeddomain)), and the concrete subclass defines the
+[`DecomposedDomain`](#decomposeddomain)), and the concrete subclass defines the
 pull-back of a function in $V$ by `cell_domain(D, j)` for every cell type $j$
 of $D$, such as with one finite element for each cell type, and evaluates the
 pull-back by `gathered_cell_domain(D, j, g)` as the same function on the cell
-$g$ (see [DecomposedDomain](#decomposeddomain)). The pull-back of a function
+$g$ (see [`DecomposedDomain`](#decomposeddomain)). The pull-back of a function
 by any other domain map into $D$, such as a family of points, is rewritten
 through these two (see [Points and point
 evaluation](#points-and-point-evaluation)). For a coordinate
@@ -3161,7 +3161,7 @@ that a kernel receives, is already a constant.
 
 The pull-back by a cell fixes what a function in $V$ is on the cell. The
 pull-back transforms each slot and keeps the frame of each axis of the value
-shape (see [PullBack](#pullback)). The library of $V$ fixes how the function is
+shape (see [`PullBack`](#pullback)). The library of $V$ fixes how the function is
 represented on the reference cell. For a space of differential forms, the
 natural representation is the pull-back itself, and the legacy UFL map is the
 pull-back of the slots. For a space of vector fields, the library chooses the
@@ -3188,7 +3188,7 @@ divergence `index_sum(components(exterior_derivative(u, D), D)[i, i], (i,))`, a
 space of vector fields on a cell as $J \hat u / \rho$, with $\hat u$ a
 function on the reference cell, $J$ the Jacobian matrix of the cell and
 $\rho = \sqrt{\det(J^T J)}$ the density of
-[Integral over a decomposed domain](#integral-over-a-decomposed-domain).
+[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
 
 A mixed problem needs no mixed space, because an argument of a [form](#form)
 may be a `tuple` of functions in several spaces. The Sobolev space of $V$ is not
@@ -3207,13 +3207,13 @@ Examples, with a decomposed domain `D` of `ReferenceSimplex(2)` cells in
 - The discontinuous Lagrange space of polynomial degree 0 on `D`, as densities,
   has the degree `(2,)`.
 
-### Function
+### `Function`
 
-Requires: [AbstractFunctionSpace](#abstractfunctionspace),
+Requires: [`AbstractFunctionSpace`](#abstractfunctionspace),
 [`AbstractExpression`](#abstractexpression), [Support](#support),
 [Degree](#degree).
 
-See also: [PullBack](#pullback), [Restriction](#restriction),
+See also: [`PullBack`](#pullback), [Restriction](#restriction),
 [Variational forms](#variational-forms).
 
 A concrete subclass of `AbstractExpression` for a function, a member of a
@@ -3222,7 +3222,7 @@ function space.
 | `Function(V, label)` |                                                                                                                              |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Free function        | `function(V, label)`                                                                                                         |
-| Properties           | `space` $V$, an `AbstractFunctionSpace`, and `label`, a `str` or a `tuple` with the rules of the label of an [Index](#index) |
+| Properties           | `space` $V$, an `AbstractFunctionSpace`, and `label`, a `str` or a `tuple` with the rules of the label of an [`Index`](#index) |
 | Static type          | The value shape of $V$, and no free indices                                                                                  |
 | Raises               | `TypeError` if a requirement fails                                                                                           |
 
@@ -3232,12 +3232,12 @@ antilinear form, such as a known load.
 
 A `Function` is a terminal. The core does not represent the values of a
 function. The pull-back of a function by a cell of the domain is evaluated by
-the library of the space (see [PullBack](#pullback)), so a library chooses how
+the library of the space (see [`PullBack`](#pullback)), so a library chooses how
 a function is represented on a cell. The exterior derivative of a function
 remains after [applying derivatives](#applying-derivatives).
 
 A function is not an argument or a coefficient by itself. Whether a function is
-an argument of a form is stated by the form (see [Form](#form)).
+an argument of a form is stated by the form (see [`Form`](#form)).
 
 Examples, with a decomposed domain `D` and a space `V` on `D` of the degree
 `()` and the value shape `()`:
@@ -3259,7 +3259,7 @@ indices, and an action gives a function to an argument of a form, as an
 ### Argument spaces
 
 Requires: [`AbstractExpression`](#abstractexpression),
-[AbstractFunctionSpace](#abstractfunctionspace).
+[`AbstractFunctionSpace`](#abstractfunctionspace).
 
 Every `AbstractExpression` derives the argument spaces, a `tuple` with the
 space of each argument of a form, in order of position, and `()` for an
@@ -3280,9 +3280,9 @@ degree.
 The argument spaces record the linearity of the form in each argument. A form
 is linear in an argument with the space $V$, and antilinear in an argument
 with the space `conjugate_space(V)`, the complex conjugate space $\bar V$ of
-$V$ (see [ConjugateSpace](#conjugatespace)), because an antilinear form on
+$V$ (see [`ConjugateSpace`](#conjugatespace)), because an antilinear form on
 $V$ is a linear form on $\bar V$. The form states the linearity when the form
-binds the argument (see [Form](#form)).
+binds the argument (see [`Form`](#form)).
 
 The argument spaces are static, as the value shape and the degree are, so a
 form with a wrong arity is rejected during construction, and a load that is
@@ -3291,13 +3291,13 @@ the degree are independent. The degree counts the slots of a differential
 form, and the arity counts the arguments that a form binds. The word slot is
 used only for differential forms.
 
-### ConjugateSpace
+### `ConjugateSpace`
 
 Requires: [Argument spaces](#argument-spaces),
-[AbstractFunctionSpace](#abstractfunctionspace), [Scalar type](#scalar-type),
-[Conjugate](#conjugate).
+[`AbstractFunctionSpace`](#abstractfunctionspace), [Scalar type](#scalar-type),
+[`Conjugate`](#conjugate).
 
-See also: [DualSpace](#dualspace), [Form](#form).
+See also: [`DualSpace`](#dualspace), [`Form`](#form).
 
 A concrete subclass of `AbstractFunctionSpace` for the complex conjugate space
 $\bar V$ of a complex space $V$.
@@ -3317,14 +3317,14 @@ real $V$, linear and antilinear coincide, so `conjugate_space(V)` is $V$
 itself, and the free function reads only the scalar type of $V$. The conjugate
 of an argument space is `conjugate_space(V)` for a space $V$ and $V$ for
 `ConjugateSpace(V)`, so conjugating twice gives the space back (see
-[Conjugate](#conjugate)).
+[`Conjugate`](#conjugate)).
 
-### DualSpace
+### `DualSpace`
 
 Requires: [Argument spaces](#argument-spaces),
-[AbstractFunctionSpace](#abstractfunctionspace), [Function](#function).
+[`AbstractFunctionSpace`](#abstractfunctionspace), [`Function`](#function).
 
-See also: [Action](#action).
+See also: [`Action`](#action).
 
 A concrete subclass of `AbstractFunctionSpace` for the space of antilinear
 forms on a space or on the product of spaces.
@@ -3333,11 +3333,11 @@ forms on a space or on the product of spaces.
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Free function  | `dual(S)`                                                                                                                                                     |
 | Properties     | `space` $S$, an `AbstractFunctionSpace`, or a `tuple` of at least two spaces                                                                                  |
-| Provides       | The domain `None`, the degree `()`, the value shape `()`, the argument spaces `(S',)` with $S'$ the conjugate of $S$ as in [Conjugate](#conjugate), member by member for a `tuple` $S$, and the scalar type of $S$, complex if any space of a `tuple` is complex |
+| Provides       | The domain `None`, the degree `()`, the value shape `()`, the argument spaces `(S',)` with $S'$ the conjugate of $S$ as in [`Conjugate`](#conjugate), member by member for a `tuple` $S$, and the scalar type of $S$, complex if any space of a `tuple` is complex |
 | Raises         | `TypeError` for an $S$ that is not a space or a `tuple` of spaces, and `ValueError` for a `tuple` of fewer than two spaces                                    |
 
 A function in `dual(S)` is an antilinear form on $S$, a linear form on
-`conjugate_space(S)` (see [ConjugateSpace](#conjugatespace)), as a form is in
+`conjugate_space(S)` (see [`ConjugateSpace`](#conjugatespace)), as a form is in
 an argument bound as `conjugate(v)`, such as the argument $v$ of
 $\int u \bar v$. So a residual bound as `(conjugate(v),)` and an assembled
 load have the same argument spaces, and the difference of the two is a form.
@@ -3363,7 +3363,7 @@ function `l` in `dual(V)`, linear in `w` and antilinear in `l`, and a library
 may store both with the same values.
 
 Examples, with the spaces `V` and `Q` and the functions `v` in `V` and `q` in
-`Q` of the [Form](#form) examples:
+`Q` of the [`Form`](#form) examples:
 
 - `l = function(dual(V), "l")` has the argument spaces
   `(conjugate_space(V),)`, and `action(l, 0, v)` is the pairing
@@ -3381,9 +3381,9 @@ Examples, with the spaces `V` and `Q` and the functions `v` in `V` and `q` in
   the interpolation from `V` to `W` applied to `l`, with the argument spaces
   `(conjugate_space(V),)`, the static type of a function in `dual(V)`.
 
-### Form
+### `Form`
 
-Requires: [Argument spaces](#argument-spaces), [Function](#function).
+Requires: [Argument spaces](#argument-spaces), [`Function`](#function).
 
 A concrete subclass of `AbstractExpression` for a variational form, an
 expression with some of its functions bound as arguments.
@@ -3400,7 +3400,7 @@ A form binds the arguments, as a `ComponentTensor` binds indices. The position
 of an argument is the index of the entry in `arguments`. The entry states the
 linearity: for an entry `v`, the expression is linear in `v`, and for an entry
 `conjugate(v)`, the expression is linear in $\bar v$, so antilinear in `v`,
-as in $\int u \bar v$ (see [ConjugateSpace](#conjugatespace)). For a real
+as in $\int u \bar v$ (see [`ConjugateSpace`](#conjugatespace)). For a real
 space, the two entries give the same argument space.
 For a `tuple` entry, the expression is linear in the members jointly, so a term
 may depend on one member only. Construction does not check the linearity, and
@@ -3408,8 +3408,8 @@ a pass may check the linearity by the conjugations on the path from each
 occurrence of the function to the root. Every
 other function in the expression is fixed, so one function may be an argument
 of one form and fixed in another. The scope of a bound function is lexical, as
-the scope of an index is (see [ComponentTensor and
-IndexSum](#componenttensor-and-indexsum)): an occurrence of a function refers
+the scope of an index is (see [`ComponentTensor` and
+`IndexSum`](#componenttensor-and-indexsum)): an occurrence of a function refers
 to the innermost enclosing `Form` that binds the function, and is fixed
 otherwise.
 
@@ -3450,9 +3450,9 @@ expression `a` linear in `u` and `v`:
   `((V, Q), (V, Q))`. `form(e, (v, q, u, p))` states a wrong form of arity
   4, because no term of `e` is linear in all four functions.
 
-### Action
+### `Action`
 
-Requires: [Form](#form).
+Requires: [`Form`](#form).
 
 A concrete subclass of `AbstractExpression` for the action of a form, an
 expression given to one argument of the form.
@@ -3478,7 +3478,7 @@ Legacy UFL operations are actions and rebindings:
 - The Gateaux derivative with respect to a function adds an argument (see
   [Gateaux derivative](#gateaux-derivative)).
 
-Examples, with `a`, `u`, `v` and `w` of the [Form](#form) examples and
+Examples, with `a`, `u`, `v` and `w` of the [`Form`](#form) examples and
 `l = function(dual(V), "l")`:
 
 - `action(form(a, (v, u)), 1, w)` is a linear form in `v`, which a pass
@@ -3488,7 +3488,7 @@ Examples, with `a`, `u`, `v` and `w` of the [Form](#form) examples and
 - `action(l, 0, w)` is the pairing of `l` with `w`, with no support.
 - `action(form(a, (v, u)) + 2 * form(a, (v, u)), 1, w)` moves into both
   operands of the sum, and into the form of the product.
-- With the Stokes form of the [Form](#form) examples and fixed functions
+- With the Stokes form of the [`Form`](#form) examples and fixed functions
   `w` in `V` and `r` in `Q`, `action(form(e, ((v, q), (u, p))), 1, (w, r))`
   is a linear form in `(v, q)`, the residual at `(w, r)`.
 
@@ -3496,9 +3496,9 @@ Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator]
 
 ## Core transformations
 
-Requires: [Passes](#passes), [Integral](#integral), [PullBack](#pullback),
-[ExteriorDerivative](#exteriorderivative), [Components](#components),
-[Action](#action).
+Requires: [Passes](#passes), [`Integral`](#integral), [`PullBack`](#pullback),
+[`ExteriorDerivative`](#exteriorderivative), [`Components`](#components),
+[`Action`](#action).
 
 The core has six transformations, each a pass (see [Passes](#passes)) that
 evaluates one node class. `expand_integrals` dispatches on the domain of the
@@ -3562,11 +3562,11 @@ $\mathrm{d}X_i$, inside any `Form`.
 
 ### Expanding integrals
 
-Requires: [Core transformations](#core-transformations), [Integral](#integral),
-[Integral over a decomposed domain](#integral-over-a-decomposed-domain).
+Requires: [Core transformations](#core-transformations), [`Integral`](#integral),
+[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
 
 `expand_integrals` rewrites every `Integral` whose domain is a decomposed
-domain as the sum over the pieces of [Integral over a decomposed
+domain as the sum over the pieces of [`Integral` over a decomposed
 domain](#integral-over-a-decomposed-domain), with these rules:
 
 | Domain of the `Integral`                    | Rewrite of `Integral(f, D)`                                                                          |
@@ -3585,9 +3585,9 @@ inside out.
 
 ### Expanding pull-backs
 
-Requires: [Core transformations](#core-transformations), [PullBack](#pullback),
-[Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative),
-[Components](#components), [Inverse](#inverse).
+Requires: [Core transformations](#core-transformations), [`PullBack`](#pullback),
+[`Coordinate`](#coordinate), [`ExteriorDerivative`](#exteriorderivative),
+[`Components`](#components), [`Inverse`](#inverse).
 
 For a domain $D$ with the parameterisation $\psi$, the parameter domain $P$
 and the ambient domain $Q$, $\psi^*$ commutes with every node class
@@ -3600,7 +3600,7 @@ of the core, with these rules:
 | `ExteriorDerivative(f, Q)`                                                | $\mathrm{d}(\psi^* f)$, with the exterior derivative on $P$                          |
 | `PullBack(g, D2)`, for a `DomainMap` `D2`                       | Remains, so pull-backs nest                                                          |
 | `PullBack(f, SideMap(D2, E, s))`, for `cell_domain(E, i)`                 | `pull_back(pull_back(f, B_i), A_i)` (see [Restriction](#restriction))                |
-| `Normal(D2, E, s)`, for `cell_domain(E, i)`                               | $K^T \hat m / \lvert K^T \hat m \rvert$ (see [Normal](#normal))                      |
+| `Normal(D2, E, s)`, for `cell_domain(E, i)`                               | $K^T \hat m / \lvert K^T \hat m \rvert$ (see [`Normal`](#normal))                      |
 | `PullBack(f, SideMap(D2, E, s))` or `Normal(D2, E, s)`, for any other $D$ | Remains                                                                              |
 | `Components(f, Q)`, $P$ of the dimension of $Q$                           | $\sum_i K_{ij} \, \mathrm{Components}(\psi^* f, P)_i$ for entry $j$ of the last axis |
 | `Components(f, Q)`, $P$ of lower dimension than $Q$                       | Remains                                                                              |
@@ -3612,7 +3612,7 @@ moves inside an `Integral`. The integral has no support, and
 the integrand stays on the domain of the integral. `PullBack(c, D)` has the
 free indices of the family $D$, and $c$ may not, so the rule adds the `Zero`
 with the value shape, the degree and the argument spaces of $c$ and the
-missing free indices with the extents of the family (see [Zero](#zero)), a
+missing free indices with the extents of the family (see [`Zero`](#zero)), a
 constant with the free indices of the family. For example, with the family of
 three quadrature points `xs` of [Example: quadrature](EXAMPLES.md#example-quadrature),
 `pull_back(Integer(1), xs)` is rewritten as
@@ -3640,11 +3640,11 @@ In the rule for `Components`, $J$ is
 `components(exterior_derivative(D.parameterisation, P), P)`, of value shape
 `(n, k)` with $k$ the dimension of $P$ and $n$ the dimension of the frame of
 `Components(f, Q)`, and $K$ is `inverse(J)`, the pseudo-inverse for $k < n$
-(see [Inverse](#inverse)). The vector fields $\sum_i K_{ij} \, \partial_i$ on $P$
+(see [`Inverse`](#inverse)). The vector fields $\sum_i K_{ij} \, \partial_i$ on $P$
 push forward to the orthogonal projections of the $\partial_j$ of the frame
 onto the tangent space of $D$, which are the $\partial_j$ themselves for
 $k = n$. For a decomposed $Q$ of dimension $k < n$, `Components(f, Q)` is
-defined with those projections (see [Components](#components)), so the rule
+defined with those projections (see [`Components`](#components)), so the rule
 holds for $f$ on $Q$. If $P$ has lower dimension than $Q$, the same
 composition gives the components of the part of $f$ tangent to $D$, not the
 components of $f$, so the pull-back remains.
@@ -3652,8 +3652,8 @@ components of $f$, so the pull-back remains.
 ### Applying derivatives
 
 Requires: [Core transformations](#core-transformations),
-[ExteriorDerivative](#exteriorderivative), [Product](#product),
-[TensorProduct](#tensorproduct), [Zero](#zero), [Conjugate](#conjugate).
+[`ExteriorDerivative`](#exteriorderivative), [`Product`](#product),
+[`TensorProduct`](#tensorproduct), [`Zero`](#zero), [`Conjugate`](#conjugate).
 
 The exterior derivative is linear for the linear node classes and follows the
 chain rule for the node classes of the degree `()`, with these rules:
@@ -3694,8 +3694,8 @@ exterior derivative of `Coordinate(P)` is the coordinate frame $\mathrm{d}X$.
 ### Expanding components
 
 Requires: [Core transformations](#core-transformations),
-[Components](#components), [Product](#product), [TensorProduct](#tensorproduct),
-[Zero](#zero), [Conjugate](#conjugate).
+[`Components`](#components), [`Product`](#product), [`TensorProduct`](#tensorproduct),
+[`Zero`](#zero), [`Conjugate`](#conjugate).
 
 The interior product $\iota_j$ with $\partial_j$ is linear for the linear node
 classes, and the new axis stays the last axis of the value shape, with these
@@ -3724,8 +3724,8 @@ for `Conjugate` holds because $\partial_j$ is real.
 
 ### Applying actions
 
-Requires: [Core transformations](#core-transformations), [Action](#action),
-[Form](#form), [Passes](#passes).
+Requires: [Core transformations](#core-transformations), [`Action`](#action),
+[`Form`](#form), [Passes](#passes).
 
 An action moves into the operand that carries the argument, with these rules:
 
@@ -3744,8 +3744,8 @@ a leaf, and the outer action remains.
 
 ### Reducing component tensors
 
-Requires: [Core transformations](#core-transformations), [Indexed](#indexed),
-[ComponentTensor and IndexSum](#componenttensor-and-indexsum),
+Requires: [Core transformations](#core-transformations), [`Indexed`](#indexed),
+[`ComponentTensor` and `IndexSum`](#componenttensor-and-indexsum),
 [Passes](#passes).
 
 `reduce_component_tensors` evaluates an `Indexed` whose operand is a
@@ -3781,8 +3781,8 @@ that a kernel reads through gathered indices are visible without a binder
 
 ### Gateaux derivative
 
-Requires: [Core transformations](#core-transformations), [Form](#form),
-[Function](#function).
+Requires: [Core transformations](#core-transformations), [`Form`](#form),
+[`Function`](#function).
 
 > Not yet covered. This section states only the shape of the transformation.
 
@@ -3797,7 +3797,7 @@ cell are not yet decided.
 
 ## Extending the core
 
-Requires: [Passes](#passes), [Scalar type](#scalar-type), [Absolute](#absolute).
+Requires: [Passes](#passes), [Scalar type](#scalar-type), [`Absolute`](#absolute).
 
 Extensibility is a requirement of the core. Downstream libraries must be able
 to extend UFLx without changing the core.
@@ -3868,8 +3868,8 @@ the transpose is pointwise, so `Transpose` survives the pull-back.
 ### The interpolation extension
 
 Requires: [Language extensions](#language-extensions),
-[AbstractFunctionSpace](#abstractfunctionspace), [DualSpace](#dualspace),
-[Form](#form), [Action](#action).
+[`AbstractFunctionSpace`](#abstractfunctionspace), [`DualSpace`](#dualspace),
+[`Form`](#form), [`Action`](#action).
 
 The interpolation extension ships with UFLx and adds the node class
 `Interpolate` for the interpolant of an expression in a space.
@@ -3932,8 +3932,8 @@ polynomial degrees 1 and 2 on `D`, a Nédélec space `W` on `D` of the degree
 ### New questions
 
 Requires: [Passes](#passes), [Language extensions](#language-extensions),
-[Coordinate](#coordinate), [ExteriorDerivative](#exteriorderivative),
-[Components](#components).
+[`Coordinate`](#coordinate), [`ExteriorDerivative`](#exteriorderivative),
+[`Components`](#components).
 
 A downstream library asks a new question of an expression with a pass. The pass
 has one rule for each node class of the core and one rule for each leaf class
@@ -3968,8 +3968,8 @@ expression has inconsistent units.
 
 ### New operations
 
-Requires: [Node class or free function](#node-class-or-free-function), [Tensor
-algebra with EllipsisIndex](#tensor-algebra-with-ellipsisindex), [Language
+Requires: [Node class or free function](#node-class-or-free-function), [`Tensor`
+algebra with `EllipsisIndex`](#tensor-algebra-with-ellipsisindex), [Language
 extensions](#language-extensions).
 
 A downstream library builds a new operation from existing node classes, as a
@@ -3982,7 +3982,7 @@ for an $n \times n$ matrix. So `determinant(A)` requires an `int` extent $n$
 `index_sum(A[k, k], (k,))`, with a derived index `k`, is the trace for every
 extent. An operation that an `EllipsisIndex` expresses, such as
 `scale(a, T)`, needs no value shape (see
-[EllipsisIndex](#tensor-algebra-with-ellipsisindex)).
+[`EllipsisIndex`](#tensor-algebra-with-ellipsisindex)).
 
 A library node class that a pass replaces by node classes of the core gives
 nothing that the free function does not give, unless a core transformation
@@ -3994,7 +3994,7 @@ extension.
 
 Requires: [Leaves and subclassing](#leaves-and-subclassing), [New
 operations](#new-operations), [Language extensions](#language-extensions),
-[Coordinate](#coordinate), [Example: an affinely mapped
+[`Coordinate`](#coordinate), [Example: an affinely mapped
 triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 Every abstract class is a contract. The contract states what a subclass
@@ -4041,20 +4041,20 @@ of the core.
 The notes that relate rules of the core to legacy UFL, by section.
 
 - **Basic principles.** TSFC lowers a UFL form to GEM, which repeats much of the algebra of UFL, partly because UFL simplifies during construction. The UFLx core does not simplify during construction, so a form compiler may be able to use a lowered UFLx form directly, adding only leaves for tables and kernel inputs. This has not been confirmed with the TSFC or FFCx developers.
-- **EllipsisIndex.** This numpy-like concept does not appear to be in legacy UFL.
-- **AbstractIndexValue.** GEM, the intermediate language of TSFC, appears to have `VariableIndex` for the same purpose.
-- **AbstractTopology.** In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and the measure `dx` hides the sum over the cells. In UFLx, the topology, the parameterisations of the pieces of a decomposed domain and the `IndexSum` over `cell_index(T, j)` are separate.
+- **`EllipsisIndex`.** This numpy-like concept does not appear to be in legacy UFL.
+- **`AbstractIndexValue`.** GEM, the intermediate language of TSFC, appears to have `VariableIndex` for the same purpose.
+- **`AbstractTopology`.** In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and the measure `dx` hides the sum over the cells. In UFLx, the topology, the parameterisations of the pieces of a decomposed domain and the `IndexSum` over `cell_index(T, j)` are separate.
 - **Sides of a topology.** The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
-- **DecomposedDomain.** In legacy UFL, a `Mesh` is a decomposed domain, and `SpatialCoordinate(mesh)` is `coordinate(D)`.
+- **`DecomposedDomain`.** In legacy UFL, a `Mesh` is a decomposed domain, and `SpatialCoordinate(mesh)` is `coordinate(D)`.
 - **Restriction.** The legacy UFL restriction `f('+')` is `restriction(f, E, "+")` on the decomposed domain $E$ of the interior facets, whose sides are named `'+'` and `'-'`.
-- **Integral over a decomposed domain.** `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the decomposed domain of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
+- **`Integral` over a decomposed domain.** `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the decomposed domain of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
 - **Example: an interior facet integral.** The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal and the facet domain are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
 - **Example: a fluid and a solid.** The legacy UFL `dx(1)`, `ds(3)` and `ds((3, 4))` are integrals over the decomposed domains of marked topologies, one topology for each marker value. A DOLFINx submesh is the decomposed domain of a marked topology, and its entity map is the side table into the parent.
-- **AbstractFunctionSpace.** The legacy UFL `Real` space is a space of constants, and the legacy UFL `Constant` is constant data.
-- **AbstractFunctionSpace.** In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, the pull-back states the meaning of a function on a cell, the library states the representation, and the space holds a decomposed domain, the legacy mesh.
-- **Function.** The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functions. A test function and a trial function are the functions that a form states as the arguments at the positions 0 and 1.
-- **DualSpace.** The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the canonical map is a form, so the spaces keep distinct argument spaces.
-- **Form.** In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
+- **`AbstractFunctionSpace`.** The legacy UFL `Real` space is a space of constants, and the legacy UFL `Constant` is constant data.
+- **`AbstractFunctionSpace`.** In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, the pull-back states the meaning of a function on a cell, the library states the representation, and the space holds a decomposed domain, the legacy mesh.
+- **`Function`.** The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functions. A test function and a trial function are the functions that a form states as the arguments at the positions 0 and 1.
+- **`DualSpace`.** The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the canonical map is a form, so the spaces keep distinct argument spaces.
+- **`Form`.** In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
 - **Example: the Laplace-Beltrami operator.** Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Components` gives the gradient in every dimension.
 - **Extending the core.** In legacy UFL, properties are stored on the node classes, and the set of properties is fixed. Every new property touches every node class, so features such as complex numbers and dual spaces were patched in across the node classes.
 - **The interpolation extension.** In legacy UFL, `Interpolate(f, V)` is a `BaseFormOperator`, as an external operator is, and the adjoint interpolation takes a `Coargument`. In DOLFINx, interpolation happens outside UFL.
@@ -4254,7 +4254,7 @@ not named in the argument spaces column must have the argument spaces `()`.
 | `Integer`, `Float`, `ImaginaryUnit`      | No such edges                                             | `()`                                          | `()`                                       |
 | `Zero`                                   | No such edges                                             | The stored degree                             | The stored argument spaces                 |
 | `Sum`                                    | Equal degrees                                             | The degree of the operands                    | Those of the operands, which must be equal |
-| `Product`                                | The degree `()`, or exactly one slot each                 | The slotwise sum (see [Product](#product))    | Those of the operands, concatenated        |
+| `Product`                                | The degree `()`, or exactly one slot each                 | The slotwise sum (see [`Product`](#product))    | Those of the operands, concatenated        |
 | `Power`, `Absolute`                      | The degree `()`                                           | `()`                                          | `()`                                       |
 | `Division`                               | The degree `()` for the second operand                    | The degree of the first operand               | Those of the first operand                 |
 | `Conjugate`                              | Any degree                                                | The degree of the operand                     | Those of the operand, each conjugated      |

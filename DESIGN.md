@@ -82,13 +82,13 @@ as separate kinds, each with its own algebra.
   ratio of two integrals is a scalar, the centroid of a cell is a vector of
   such ratios, a point value is an integral over `RD(0)`, and a quadrature
   rule is an index sum of weighted point integrals. None of these needs a
-  node of its own (Integral, Points and point evaluation, Example:
+  node of its own (`Integral`, Points and point evaluation, Example:
   quadrature).
 - A form is an expression whose argument spaces are not `()`. Forms add,
   scale and subtract by the ordinary operators, and a functional is any
   expression with the argument spaces `()`. A form whose expression is a
   field rather than an integral is a linear operator, which is how
-  interpolation and its adjoint are written without new classes (Form,
+  interpolation and its adjoint are written without new classes (`Form`,
   The interpolation extension).
 - A pass has one rule per node class and nothing else. Because a form and an
   action are nodes like any other, a pull-back moves into a form's expression
@@ -141,7 +141,7 @@ operators, which is the point of Basic principles.
 Index notation does a second job beyond tensor algebra. It is the only way
 that a set of things enters the language: a mesh of cells, a family of
 points, a table of neighbours. It is also the only way that data unknown
-until assembly enters it (Index, Extents, GatheredIndex, DomainMap).
+until assembly enters it (`Index`, Extents, `GatheredIndex`, `DomainMap`).
 
 - **A family is a free index.** A `DomainMap` whose parameterisation has a
   free index is one map for each value of the index. A mesh is such a family
@@ -249,7 +249,7 @@ into that cell through the vertex positions (Restriction). Two restrictions of
 one field land on the same reference facet with the same parameter, so a jump
 is a subtraction. The outward normal of the cell on a side is the inverse
 Jacobian applied to the reference facet normal, which the vertex positions
-determine (Normal). The interior facet example in EXAMPLES.md follows one
+determine (`Normal`). The interior facet example in EXAMPLES.md follows one
 `dS` form through all of this to a kernel.
 
 ## Idea 7: a function is a terminal, and a form binds it
@@ -258,7 +258,7 @@ A `Function` is a member of a space and nothing more. It is not a test
 function, a trial function or a coefficient by itself. A `Form` binds some of
 the functions in an expression as its arguments, by position, and the same
 function may be bound in one form and fixed in another, which is what the
-Gateaux derivative and the action of a form need (Function, Form).
+Gateaux derivative and the action of a form need (`Function`, `Form`).
 
 The form also declares the linearity of each argument. Binding `v` says the
 expression is linear in `v`; binding `conjugate(v)` says it is linear in the
@@ -266,12 +266,12 @@ conjugate, so antilinear in `v`. The argument spaces record this through the
 complex conjugate space `conjugate_space(V)`, which is `V` itself when `V` is
 real. So a load, a function in `dual(V)`, adds to a residual only when their
 linearities agree, and there is no convention about which argument is
-conjugated (Argument spaces, ConjugateSpace, DualSpace). For real problems
+conjugated (Argument spaces, `ConjugateSpace`, `DualSpace`). For real problems
 none of this is visible.
 
 Mixed problems need no mixed space. An argument may be a tuple of functions
 in different spaces, on different domains, with different degrees, and a
-library assembles the tuple as one system or in blocks (Form).
+library assembles the tuple as one system or in blocks (`Form`).
 
 ## Idea 8: six lazy transformations do all the work
 
@@ -353,34 +353,34 @@ here so that a reader knows which choices are load-bearing.
   concept as written (Node class or free function).
 - **Integrals, forms and actions are expressions**, with one static type and
   one set of passes for functionals, forms, operators and point values
-  (Integral, Form, Action).
+  (`Integral`, `Form`, `Action`).
 - **Index notation and ellipsis indices** instead of tensor operators, so
-  every tensor operation is one composition for every rank (Index,
-  EllipsisIndex).
+  every tensor operation is one composition for every rank (`Index`,
+  `EllipsisIndex`).
 - **Families, tables and sizes are indices**: a free index for a family, a
   derived index per topology for the cells, gathers for tables and abstract
-  extents for sizes, so no node class stands for a mesh (Index, Extents,
-  GatheredIndex).
+  extents for sizes, so no node class stands for a mesh (`Index`, Extents,
+  `GatheredIndex`).
 - **Exterior calculus with one derivative**, and `Components` as the bridge
   to arrays, so there are no dimension-specific operators (Degree,
-  ExteriorDerivative, Components).
+  `ExteriorDerivative`, `Components`).
 - **One kind of domain with two forms**, leaf and decomposed, and `DomainMap`
   as the only way between them, so every node that takes a domain takes any
-  domain (AbstractDomain, DomainMap).
+  domain (`AbstractDomain`, `DomainMap`).
 - **`Integral` is lazy over a decomposed domain**, so the user's integral
-  survives to the compiler and the lowering lives in one pass (Integral,
+  survives to the compiler and the lowering lives in one pass (`Integral`,
   Expanding integrals).
 - **The core numbers nothing**: no facets, no sub-entities, no argument
   numbers. Side tables and vertex positions replace facet numbers, and
   positions in `arguments` replace argument numbers (Sides of a topology,
-  Form).
+  `Form`).
 - **Pull-backs nest**, so the cell a function is read on is never lost and a
   library sees only pull-backs by cells (Expanding pull-backs).
 - **Linearity is declared, not inferred**, and recorded as a conjugate space,
-  so complex forms are typed and real forms are untouched (ConjugateSpace).
+  so complex forms are typed and real forms are untouched (`ConjugateSpace`).
 - **Constants have no support**, and a constant with free indices is written
   with `Zero`, so a literal is the same object on every domain (Support,
-  Zero).
+  `Zero`).
 - **Extension is by passes and leaves**, never by properties on core nodes,
   so a new question such as units touches no core class (Extending the core).
 
@@ -392,7 +392,7 @@ here so that a reader knows which choices are load-bearing.
   (Sides of a topology, Points and point evaluation).
 - Finite elements: how a function is represented on a cell, including the
   Piola maps, is the library's choice behind the pull-back by a cell
-  (AbstractFunctionSpace).
+  (`AbstractFunctionSpace`).
 - Quadrature: a pass with the rule as an argument, not a node (Example:
   quadrature).
 - Elementary functions beyond `SquareRoot`, conditionals, and `min` and
