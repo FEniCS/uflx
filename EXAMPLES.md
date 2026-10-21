@@ -725,7 +725,8 @@ spaces on that part only: the legacy UFL `dx(1)`, `dx(2)` and `ds(3)` with
 markers, and the submeshes and entity maps of a solver such as DOLFINx. The
 square of the [DecomposedDomain](LANGUAGE.md#decomposeddomain) example is the
 whole, triangle `(0, 1, 2)` is the fluid, triangle `(1, 3, 2)` is the solid,
-and the diagonal is the interface. The example uses `D`, `square`, `K` and
+and the diagonal is the interface, the smallest mesh with every part of the
+problem. The example uses `D`, `square`, `K` and
 `I` of the [interior facet example](#example-an-interior-facet-integral), and
 `runtime_array` of [Example: integrating over a cut
 cell](#example-integrating-over-a-cut-cell).
@@ -760,6 +761,15 @@ side is a name and two tables, so a facet may have more sides than
 neighbours: a field on `D` restricted to the interface needs a third side
 `("parent", square, 0)`, because a restriction needs a side with the
 topology of the support of the field.
+
+On the mesh of a solver, the four `StaticTopology`s are the only lines that
+change. The library provides `fluid_cells`, `solid_cells`, `interface` and
+`inlet` as topologies with `AbstractExtent`s as the numbers of cells and the
+side tables as arrays of the solver, from the cell markers, the facet markers
+and the entity maps of the submeshes. The domains, the spaces and the forms
+below are written in the same way for two triangles and for a million cells,
+and a solver mesh with several cell types adds a group to each topology, as
+in the [interior facet example](#example-an-interior-facet-integral).
 
 The problem is Stokes flow in the fluid and linear elasticity in the solid,
 coupled by a multiplier on the interface that equates the fluid velocity to
