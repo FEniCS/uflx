@@ -230,20 +230,25 @@ cell as an ordinary expression (Concept: orientation of a domain).
 
 The core does not number facets, edges or vertices of a cell. A topology of
 sub-entities names, for each of its cells, the cell it is seen from on each
-side and the pairing of vertices, as two tables from the mesh library (Sides
-of a topology). That one construction covers boundary facets, interior facets
-with two sides, marked subdomains, submesh interfaces, periodic boundaries,
-vertices for point loads, and edges where three surface triangles meet. Each
-is a topology whose groups list their sides.
+side and the positions of its vertices in that cell, as two tables from the
+mesh library (Sides of a topology). That one construction covers boundary
+facets, interior facets with two sides, marked subdomains, submesh interfaces,
+periodic boundaries, vertices for point loads, and edges where three surface
+triangles meet. Because the tables hold positions and not vertex numbers, a
+cell of the topology may be a piece of the cell on a side. That covers
+hanging nodes, non-matching interfaces and a line through a 3D mesh, once the
+mesh library has cut them into pieces that lie in one cell on each side, and
+the points of a point evaluation. Each is a topology whose groups list their
+sides.
 
 Restriction is then not a node. `restriction(u, E, "+")` is the pull-back of
 `u` by a lazy `SideMap`, and a pass rewrites it on each piece as two nested
 pull-backs: first by the cell on that side, selected through the table by
 `gathered_cell_domain`, then by the affine inclusion of the reference facet
-into that cell through the paired vertices (Restriction). Two restrictions of
+into that cell through the vertex positions (Restriction). Two restrictions of
 one field land on the same reference facet with the same parameter, so a jump
 is a subtraction. The outward normal of the cell on a side is the inverse
-Jacobian applied to the reference facet normal, which the paired vertices
+Jacobian applied to the reference facet normal, which the vertex positions
 determine (Normal). The interior facet example in EXAMPLES.md follows one
 `dS` form through all of this to a kernel.
 
@@ -366,7 +371,7 @@ here so that a reader knows which choices are load-bearing.
   survives to the compiler and the lowering lives in one pass (Integral,
   Expanding integrals).
 - **The core numbers nothing**: no facets, no sub-entities, no argument
-  numbers. Side tables and paired vertices replace facet numbers, and
+  numbers. Side tables and vertex positions replace facet numbers, and
   positions in `arguments` replace argument numbers (Sides of a topology,
   Form).
 - **Pull-backs nest**, so the cell a function is read on is never lost and a
@@ -381,10 +386,10 @@ here so that a reader knows which choices are load-bearing.
 
 ## What is outside the core, on purpose
 
-- Mesh data: coordinates, connectivity, side tables, marked regions, point
-  location and the inverse of a cell map are tables and arrays that a mesh
-  library supplies as leaves (Sides of a topology, Points and point
-  evaluation).
+- Mesh data: coordinates, connectivity, side tables, marked regions, the
+  pieces where entities of two meshes meet, point location and the inverse of
+  a cell map are tables and arrays that a mesh library supplies as leaves
+  (Sides of a topology, Points and point evaluation).
 - Finite elements: how a function is represented on a cell, including the
   Piola maps, is the library's choice behind the pull-back by a cell
   (AbstractFunctionSpace).
@@ -395,8 +400,7 @@ here so that a reader knows which choices are load-bearing.
 - The Gateaux derivative: planned as a core transformation, with only its
   shape stated so far (Gateaux derivative).
 - Ragged indexing, such as a different number of quadrature points per cut
-  cell, and interfaces that are not whole sub-entities: not yet covered
-  (Extents, Sides of a topology).
+  cell: not yet covered (Extents).
 
 ## Correspondence with legacy UFL
 

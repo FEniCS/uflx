@@ -2372,25 +2372,33 @@ point.
 A family of points $M$ = `domain_map(RD(0), q, D)` in a decomposed domain $D$
 with a topology $T$, with the free index $i$ of the family of the extent $m$,
 needs the cell of $D$ that contains each point and the position of each point
-in that cell. `pull_back(u, M)` for a function `u` on $D$ remains after
-`expand_pull_backs`, because the library of the space of `u` defines `u` on
-the cells only (see [AbstractFunctionSpace](#abstractfunctionspace)). A pass
-of the mesh library rewrites the pull-back as
+in that cell. These are the side tables `(cells, positions)` of the topology
+of the points, with one cell of a reference cell type of dimension 0 for each
+point and the side `("inside", T, j)` (see [Sides of a
+topology](#sides-of-a-topology)). So a family of points in a mesh is a
+topology with a side, and the mesh library locates the cells and inverts the
+map of each cell, for example by Newton's method, outside the language, as
+the mesh library computes every side table. `pull_back(u, M)` for a function
+`u` on $D$ remains after `expand_pull_backs`, because the library of the
+space of `u` defines `u` on the cells only (see
+[AbstractFunctionSpace](#abstractfunctionspace)). A pass of the mesh library
+rewrites the pull-back as the [restriction](#restriction) to the topology of
+the points, with the index $i$ of the family in place of the cell index,
 
 ```python
 g = gathered_index(cells, (i,))
-R = domain_map(RD(0), component_tensor(Xp[i, k], (k,)), K_j)
+R = domain_map(RD(0), component_tensor(positions[i, 0, k], (k,)), K_j)
 pull_back(pull_back(u, gathered_cell_domain(D, j, g)), R)
 ```
 
-with `cells` a table of the cell of type $j$ that contains each point, an
-[`AbstractIndexValue`](#abstractindexvalue) of the shape `(m,)` and the extent
-`T.num_cells[j]`, and `Xp` an array of value shape `(m, k_j)` with the position
-of each point in $K_j$, both leaves that the mesh library supplies, as the
-mesh library supplies the side tables. The mesh library locates the cells and
-inverts the map of each cell, for example by Newton's method, outside the
-language. The result has the free index $i$, and the pull-back of `u` by a
-gathered cell domain is in the contract of the space. A family whose points
+with `cells` of the shape `(m,)` and the extent `T.num_cells[j]`, and
+`positions` of the value shape `(m, 1, k_j)`. The result has the free index
+$i$, and the pull-back of `u` by a gathered cell domain is in the contract of
+the space. The maps below `u` may be a chain, such as a family of maps from a
+decomposed domain, pulled back by a cell of that domain and then by a family
+of points of the reference cell, and the pass reads the chain as one family
+with all of its free indices (see [Example: a 1D network in a 3D
+mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh)). A family whose points
 lie in cells of several types is not yet covered, because the family would
 need one piece for each cell type.
 
@@ -2521,32 +2529,37 @@ fixed by the cell type and the sides together. A topology whose cells are not
 seen from other cells has the sides `()`.
 
 Each cell of type $i$ of $S$ is seen from one cell of type $j$ of $T$ on each
-side, and is a whole sub-entity of that cell, the image of cell type $i$ of
-$S$ under the affine map through the paired vertices (see
-[Restriction](#restriction)). The sub-entity may be the cell itself, with the
-vertices in the order of the cell, a facet, or a sub-entity of lower
-dimension, such as an edge of a tetrahedron or a vertex. The concrete mesh
-pairs each vertex of a cell of $S$ with a vertex of the cell on each side, the
-same vertex for a matching facet, and a vertex one period away for a periodic
-boundary.
+side, and is the image of cell type $i$ of $S$ under the affine map through
+the positions of its vertices in the reference cell of that cell (see
+[Restriction](#restriction)). The image may be a sub-entity of the cell on
+the side: the cell itself, with the vertices in the order of the cell, a
+facet, or a sub-entity of lower dimension, such as an edge of a tetrahedron
+or a vertex. The image may also be a piece of the cell that is not a
+sub-entity, such as half of a facet at a hanging node or a segment of a line
+through the cell. The concrete mesh gives the position of each vertex of a
+cell of $S$ in the reference cell on each side: the position of the same
+vertex for a matching facet, of the vertex one period away for a periodic
+boundary, and of a point of the cell for a piece.
 
-A concrete topology with sides also provides `side_tables(i, side)`, a pair of
-[`AbstractIndexValue`](#abstractindexvalue) tables `(cells, vertices)` for the
-side named `side` of group $i$, with the side `(side, T, j)`:
+A concrete topology with sides also provides `side_tables(i, side)`, a pair
+of tables `(cells, positions)` for the side named `side` of group $i$, with
+the side `(side, T, j)` and $K_j$ the reference cell of cell type $j$ of $T$:
 
-- `cells`, of the shape `(S.num_cells[i],)` and the extent `T.num_cells[j]`.
-  Entry $e$ is the cell of type $j$ of $T$ on the side of the cell $e$ of $S$.
-- `vertices`, of the shape `(S.num_cells[i], m)`, with $m$ the number of
-  vertices of cell type $i$ of $S$, and the extent the number of vertices of
-  cell type $j$ of $T$. Entry $(e, v)$ is the local vertex of the cell on the
-  side that is paired with vertex $v$ of the cell $e$.
+- `cells`, an [`AbstractIndexValue`](#abstractindexvalue) of the shape
+  `(S.num_cells[i],)` and the extent `T.num_cells[j]`. Entry $e$ is the cell
+  of type $j$ of $T$ on the side of the cell $e$ of $S$.
+- `positions`, a constant expression with no support and the value shape
+  `(S.num_cells[i], m, k_j)`, with $m$ the number of vertices of cell type $i$
+  of $S$ and $k_j$ the dimension of $K_j$. Entry $(e, v)$ is the position in
+  $K_j$ of vertex $v$ of the cell $e$, the coordinates of a vertex of $K_j$
+  for a sub-entity, and any point of $K_j$ for a piece.
 
 [Restriction](#restriction) reads the tables, and picks the value of an
 expression on a cell of $S$ by the side name. The core does not check the
 sides or the tables.
 
-The concrete mesh decides which sub-entities are the cells of $S$, and from
-which cells on each side each cell of $S$ is seen. For example, the cells of
+The concrete mesh decides which sub-entities or pieces are the cells of $S$,
+and from which cells on each side each cell of $S$ is seen. For example, the cells of
 $S$ may be the facets of a marked boundary or the cells of a marked subdomain,
 and a facet of two cells may be seen from one cell only. The sides may have
 different topologies, such as a mesh and a submesh, or two meshes that meet.
@@ -2565,17 +2578,20 @@ triangles of the one cell type 0 of `T` have the sides
 `(("fluid", T, 0), ("solid", T, 0))`, and the cell on the side `"fluid"` is the
 fluid triangle.
 
-A cell of $S$ that is not a whole sub-entity of the cell on a side, as with
-hanging nodes, a mortar interface or a line through the cells of a 3D mesh, is
-not yet covered. For such a side, the inclusion of
-[Restriction](#restriction) is expected to be $\phi_c^{-1} \circ \psi_e$, with
-$\psi_e$ the map of the cell $e$ of $S$ into the ambient coordinate domain and
-$\phi_c^{-1}$ the inverse of the map of the cell $c$ on the side, a terminal
-that a downstream library provides. Which parts of a cell of $S$ meet which
-cells of a side stays outside the language.
-A line through the cells of a 3D mesh is covered without sides, by a
-`DomainMap` into the mesh and point evaluation (see [Example: a 1D network in
-a 3D mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh)).
+A cell of $S$ that is a piece of the cell on a side covers the cases where
+one entity meets several cells. At a hanging node, the facet of the small
+cell is half of a facet of the large cell, seen from the large cell through a
+vertex and an edge midpoint of $K_j$. At a mortar interface between two
+meshes, the cells of $S$ are the pieces of the intersections of the facets,
+each seen from one cell of each mesh. For a line through the cells of a 3D
+mesh, the cells of $S$ are the segments of the line inside one cell each,
+seen from the cell of the line and from the cell of the mesh (see [Example: a
+1D network in a 3D mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh)). The
+concrete mesh computes which parts of an entity meet which cells, outside the
+language, as it locates the cell that contains a point (see [Points and point
+evaluation](#points-and-point-evaluation)). The positions of a piece of a
+curved cell are an approximation, as a quadrature rule is. The core does not
+check that the image of a cell of $S$ lies in the cell on the side.
 
 Examples, with a topology `T` of triangles with the cell types `(K,)`,
 `I = Simplex(1)` and `P = Simplex(0)`. A topology of sub-entities that an
@@ -2600,8 +2616,8 @@ the examples here show the topology only:
   `(I,)`, a topology of the facets has the sides
   `((("mesh", T, 0), ("submesh", M, 0)),)`, and each facet is a cell of `M`.
 - A topology of the left boundary facets of a periodic `T` has the sides
-  `((("left", T, 0), ("right", T, 0)),)`, with each vertex paired with the
-  vertex one period to the right.
+  `((("left", T, 0), ("right", T, 0)),)`, with the position of each vertex
+  from `"right"` that of the vertex one period to the right.
 - For a surface mesh `U` of triangles in $R^3$, a topology of the edges where
   three triangles meet has the sides `((("a", U, 0), ("b", U, 0), ("c", U, 0)),)`.
 - For a topology `M` of triangles and quadrilaterals with the cell types
@@ -2615,6 +2631,15 @@ the examples here show the topology only:
 - For a topology `U3` of prisms with the cell types `(W,)`, a topology of the
   boundary facets has the cell types `(K, Q)`, with the quadrilateral cell type
   `Q`, and the sides `((("inside", U3, 0),), (("inside", U3, 0),))`.
+- For a triangle mesh `T` with a hanging node, a topology of the half facets
+  has the cell types `(I,)` and the sides `((("small", T, 0), ("large", T, 0)),)`.
+  The positions from `"small"` are two vertices of `K`, and from `"large"` a
+  vertex and an edge midpoint of `K`.
+- For a mesh `T1` of segments through a tetrahedral mesh `T3`, a topology of
+  the pieces of the segments that lie in one tetrahedron each has the cell
+  types `(I,)` and the sides `((("vessel", T1, 0), ("tissue", T3, 0)),)`. The
+  positions from `"vessel"` are two parameters of the segment, and from
+  `"tissue"` two points of the tetrahedron.
 
 Worked examples for this chapter in EXAMPLES.md: [the simplex as a cell type](EXAMPLES.md#example-the-simplex-as-a-cell-type), [a static topology](EXAMPLES.md#example-a-static-topology).
 
@@ -2811,12 +2836,12 @@ See also: [Integral over a decomposed domain](#integral-over-a-decomposed-domain
 The restriction of an expression on a decomposed domain $D$ to the cells of a
 topology $S$ with sides, from the side $s$, is the pull-back along the
 inclusion of each cell of $S$ into the cell on the side $s$. The side tables of
-$S$ give the cell and the vertices of the inclusion, through
-[GatheredIndex](#gatheredindex) entries, so the restriction is a pull-back and
-needs no node class of its own.
+$S$ give the cell, through a [GatheredIndex](#gatheredindex) entry, and the
+positions of the vertices of the inclusion, so the restriction is a pull-back
+and needs no node class of its own.
 
 For the group $i$ of $S$ with the side `(s, T, j)`, with $T$ the topology of $D$,
-the side tables `(cells, vertices)`, the cell type $F$ of group $i$ and
+the side tables `(cells, positions)`, the cell type $F$ of group $i$ and
 `e = cell_index(S, i)`, two families of domain maps with the free index `e`
 make the inclusion:
 
@@ -2826,12 +2851,12 @@ make the inclusion:
   [DecomposedDomain](#decomposeddomain)).
 - The inclusion into the cell, $A_i$, is
   `domain_map(F, affine_map(F, points), K_j)`, with
-  `points = component_tensor(K_j.vertices[gathered_index(vertices, (e, v)), k], (v, k))`,
-  the coordinates in $K_j$ of the paired vertex of each vertex $v$ of the cell
-  $e$, with derived indices $v$ and $k$. $F$ must be a reference cell. $A_i$ sends
-  each vertex of the cell $e$ to the paired vertex of the cell on the side. For
-  a vertex, $A_i$ is the constant vertex, and for the cell itself with the
-  vertices in order, $A_i$ is the identity map.
+  `points = component_tensor(positions[e, v, k], (v, k))`, the position in
+  $K_j$ of each vertex $v$ of the cell $e$, with derived indices $v$ and $k$.
+  $F$ must be a reference cell. $A_i$ sends each vertex of the cell $e$ to its
+  position in the cell on the side. For a vertex, $A_i$ is the constant point,
+  for the cell itself with the vertices in order, $A_i$ is the identity map,
+  and for a piece of the cell, $A_i$ is the affine map onto the piece.
 
 The restriction of $f$ to group $i$ from the side $s$ is
 `pull_back(pull_back(f, B_i), A_i)`, an expression on $F$ with the free index
@@ -2887,22 +2912,23 @@ E = side_domain(D, diagonal)
 jump = restriction(u, E, "+") - restriction(u, E, "-")
 ```
 
-- The side tables from `"+"` are the cells `(0,)` and the vertices `((1, 2),)`,
-  and from `"-"` the cells `(1,)` and the vertices `((0, 2),)`, so
-  $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$. The coordinates of `E` are
-  $(1 - t, t)$.
+- The side tables from `"+"` are the cells `(0,)` and the positions
+  `(((1, 0), (0, 1)),)`, those of the local vertices 1 and 2 of `K`, and from
+  `"-"` the cells `(1,)` and the positions `(((0, 0), (0, 1)),)`, those of the
+  local vertices 0 and 2, so $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$. The
+  coordinates of `E` are $(1 - t, t)$.
 - If `pull_back(u, cell_domain(D, 0))` is
   `a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]`, the two restrictions pulled
   back to the diagonal are $a_{0,0} + a_{0,1}(1 - t) + a_{0,2} t$ and
   $a_{1,0} + a_{1,2} t$, equal for all $t$ if `u` is continuous at the
   vertices 1 and 2.
-- With the diagonal listed as `(2, 1)`, the vertices from `"+"` are
-  `((2, 1),)`, $A_+(t) = (t, 1 - t)$, and the restriction of
+- With the diagonal listed as `(2, 1)`, the positions from `"+"` are
+  `(((0, 1), (1, 0)),)`, $A_+(t) = (t, 1 - t)$, and the restriction of
   $\mathrm{d}x_0$ from `"+"` changes sign, from $-\mathrm{d}t$ to
   $\mathrm{d}t$.
 - On the topology of the vertices of `square`, with the cell type
-  `ReferenceSimplex(0)`, vertex 3 is seen from cell 1 as local vertex 1, so
-  `u` restricts to $a_{1,0} + a_{1,1}$ there.
+  `ReferenceSimplex(0)`, vertex 3 is seen from cell 1 at the position
+  `(1, 0)`, local vertex 1, so `u` restricts to $a_{1,0} + a_{1,1}$ there.
 - For the facets `S` of a triangle and quadrilateral mesh, with the three
   groups of [Sides of a topology](#sides-of-a-topology), the same two lines
   with `E = side_domain(D, S)` give one jump for all three groups.
@@ -2999,11 +3025,13 @@ with $K$ the [inverse](#inverse) of the Jacobian matrix of $B_i$ at the
 points of $A_i$, the pseudo-inverse for $k < n$, and $\hat m$ a normal of the
 cell of $E$ in $K_j$, orthogonal to the columns of the Jacobian matrix of
 $A_i$ and pointing away from the centroid of the vertices of $K_j$. Both are
-fixed compositions for each $k$ and $n$, from the vertices of $K_j$ and the
-side tables, so the core needs no numbering of the facets.
+fixed compositions for each $k$ and $n$, from the side tables and the
+vertices of $K_j$, so the core needs no numbering of the facets.
 The centroid lies inside a convex reference cell, so $\hat m$ points out of
-$K_j$. For $k = n$, the normals from two sides of one cell of $E$ are
-opposite. For $k < n$, such as on the edges of a surface in $R^3$, $\nu$ is
+$K_j$ for a cell of $E$ on the boundary of $K_j$, such as a facet or a piece
+of a facet. For a cell of $E$ inside $K_j$, such as a cut through the cell,
+$\hat m$ points away from the centroid, a convention. For $k = n$, the
+normals from two sides of one cell of $E$ are opposite. For $k < n$, such as on the edges of a surface in $R^3$, $\nu$ is
 the unit conormal, tangent to the cell on the side and orthogonal to the cell
 of $E$. The conormals from two sides are opposite only where the cells on the
 two sides have the same tangent space, so on a surface a jump weights each
