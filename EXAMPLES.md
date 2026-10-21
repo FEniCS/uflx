@@ -1446,8 +1446,8 @@ dx = Measure("dx")
 ds = Measure("ds")
 ```
 
-With the module, a Poisson problem with a conductivity, a reaction term on a
-marked subdomain, a source from a flux field and a Neumann condition from the
+With the module, a Poisson problem with a conductivity, a source on a marked
+subdomain, a second source from a flux field and a Neumann condition from the
 same field on a marked part of the boundary reads as a classic FEniCS demo.
 `D` is the mesh of the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain)
 example and `boundary` the topology of its boundary facets of [Example: a
@@ -1484,17 +1484,16 @@ n = FacetNormal(mesh)
 dx = Measure("dx", domain=mesh, subdomain_data={1: lower})
 ds = Measure("ds", domain=mesh, subdomain_data={1: left})
 
-a = kappa * inner(grad(u), grad(v)) * dx + inner(u, v) * dx(1)
-L = inner(f - div(q), v) * dx + inner(inner(q, n), v) * ds(1)
+a = kappa * inner(grad(u), grad(v)) * dx
+L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
 ```
 
-- For a real `V`, the first term of `a` is the bilinear form `a` of the tour
-  times `kappa`, `form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))`,
-  up to the labels of `u`, `v` and `i` and the conjugates, which change
-  nothing in real arithmetic: `conjugate_space(V)` is `V`, so the argument
-  spaces are `(V, V)`. `a` and `L` are sums of two forms each, with the
-  argument spaces `(V, V)` and `(V,)`. `f * dx` with no argument stays an
-  `Integral`, a functional.
+- For a real `V`, `a` is the bilinear form `a` of the tour times `kappa`,
+  `form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))`, up to
+  the labels of `u`, `v` and `i` and the conjugates, which change nothing in
+  real arithmetic: `conjugate_space(V)` is `V`, so the argument spaces are
+  `(V, V)`. `L` is a sum of three forms with the argument spaces `(V,)`.
+  `f * dx` with no argument stays an `Integral`, a functional.
 - For a complex `V`, the same lines give the sesquilinear forms of a
   complex-mode legacy demo. `inner` conjugates the second operand, as the
   legacy `inner` does, and the measure binds `conjugate(v)` at position 0, so
