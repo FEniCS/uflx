@@ -956,9 +956,6 @@ a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
 - `p3` and `p1` have the supports `D3` and `D1` and never combine directly.
   Every integral has no support, so the three terms add, and the arguments of
   `a` are tuples of functions on the two meshes.
-- A network whose segments are edges of the tetrahedra is the same example
-  with the pieces the segments themselves and the positions in `K3` the
-  coordinates of two vertices.
 - In a curved tetrahedron a piece is a curve in `K3`, and the straight segment
   between its ends is an approximation, as a quadrature rule is.
 
@@ -975,6 +972,35 @@ the interface of a two-sided facet kernel, with the cells of two meshes and
 of two dimensions. The local matrix couples the degrees of freedom of `V1` on
 the segment with those of `V3` on the tetrahedron, and the assembler scatters
 the matrix through the maps of degrees of freedom of both.
+
+For a network whose segments are edges of the tetrahedra, the pieces are the
+segments themselves, so the library gives `T1` the tissue side directly,
+`(("tissue", T3, 0),)`, with the tetrahedron of each segment chosen by the
+library among those that share the edge, and the positions the coordinates of
+two vertices of `K3`. `D1` is then `side_domain(D3, T1)`, `p1` needs no
+restriction, and the coupling is an integral over `D1`:
+
+```python
+D1 = side_domain(D3, T1)
+p3_1, q3_1 = restriction(p3, D1, "tissue"), restriction(q3, D1, "tissue")
+coupling = integral(beta * (p1 - p3_1) * (q1 - q3_1), D1)
+```
+
+- The side tables come from the connectivity of the mesh, with no cutting,
+  and a segment and its tetrahedron share vertices, so the partition of `T3`
+  gives the partition of `T1`.
+- `p3` is continuous, so the restriction is the same from every tetrahedron
+  that shares the edge, and the choice of the library does not change the
+  form.
+- The positions take one of twelve values, an edge of `K3` in one of two
+  orientations. A library may write the table as a gather from the twelve by
+  a `RuntimeIndex` of [Example: integrating over a cut
+  cell](#example-integrating-over-a-cut-cell), as `StaticTopology` computes
+  the positions from vertex numbers, and a form compiler may then tabulate
+  the basis of `V3` on each edge of `K3` once and select by the index, as a
+  legacy facet kernel selects by the local facet number. For the pieces of a
+  non-conforming network the positions are arbitrary points of `K3`, and the
+  kernel evaluates the basis of `V3` at run time, as for a cut cell.
 
 The trace of a function in $H^1(\Omega)$ on a curve is not defined, so a
 model may replace `p3` on the network by its average over a ring of radius
