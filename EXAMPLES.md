@@ -1270,9 +1270,9 @@ does not exist, of a page of free functions and two plain Python classes over
 the core. Nothing in the module subclasses a core class, so the forms that the
 module produces are ordinary core graphs, the same graphs as the tour builds
 by hand. The example shows what the core leaves to a layer: the argument
-numbers of test and trial functions, measures that know their domain, restrict
-the integrand and bind the arguments, a facet normal that belongs to the mesh,
-and `grad`, `div` and `curl` that read the domain from the function.
+numbers of test and trial functions, measures that find or hold their domain,
+restrict the integrand and bind the arguments, a facet normal that belongs to
+the mesh, and `grad`, `div` and `curl` that read the domain from the function.
 `Lagrange`, `Constants` and `Fields` stand for spaces of a library: Lagrange
 elements of a value shape, constants with no domain, and fields of a value
 shape with no element.
@@ -1323,7 +1323,13 @@ def VectorFunctionSpace(mesh, family, degree):
 
 
 def FacetNormal(mesh):
-    return mesh.n
+    # A placeholder on the mesh, which restrict replaces by the normal of the facets.
+    n = mesh.domain.ambient_domain.dimension
+    return function(Fields(mesh.domain, (n,)), "facet normal")
+
+
+def is_facet_normal(obj):
+    return isinstance(obj, Function) and obj.label == "facet normal"
 
 
 def grad(f):
@@ -1351,13 +1357,13 @@ def inner(a, b):
     return index_sum(a[i] * conjugate(b[i]), (i,))
 
 
-def contains(obj, target):
-    if obj == target:
+def contains(obj, predicate):
+    if predicate(obj):
         return True
     if isinstance(obj, tuple):
-        return any(contains(item, target) for item in obj)
+        return any(contains(item, predicate) for item in obj)
     return isinstance(obj, Base) and any(
-        contains(item, target) for item in obj.construction_arguments
+        contains(item, predicate) for item in obj.construction_arguments
     )
 
 
@@ -1380,34 +1386,55 @@ def arguments(expression):
     return tuple(found[n] for n in sorted(found))
 
 
-def restrict(obj, mesh, E):
+def restrict(obj, E):
     # The legacy apply_restrictions, at construction: the largest subtrees on the
     # mesh are pulled back to E, and the facet normal of the mesh becomes the
     # normal of E.
-    if obj == mesh.n:
-        return normal(mesh.domain, E, "inside")
+    if is_facet_normal(obj):
+        return normal(obj.support, E, "inside")
     if isinstance(obj, tuple):
-        return tuple(restrict(item, mesh, E) for item in obj)
+        return tuple(restrict(item, E) for item in obj)
     if not isinstance(obj, AbstractExpression) or obj.support is None:
         return obj
-    if not contains(obj, mesh.n):
+    if not contains(obj, is_facet_normal):
         return restriction(obj, E, "inside")
-    return obj.__class__(*restrict(obj.construction_arguments, mesh, E))
+    return obj.__class__(*restrict(obj.construction_arguments, E))
+
+
+class Mesh:
+    def __init__(self, domain, boundary):
+        self.domain, self.boundary = domain, boundary
 
 
 class Measure:
-    def __init__(self, mesh, domain, markers):
-        self.mesh, self.domain, self.markers = mesh, domain, markers
+    def __init__(self, integral_type, domain=None, subdomain_id="everywhere", subdomain_data=None):
+        self.integral_type = integral_type
+        self.domain = domain
+        self.subdomain_id = subdomain_id
+        self.subdomain_data = subdomain_data
 
-    def __call__(self, marker):
-        # dx(1) and ds(1): the marked topology, with a side "inside" into the mesh.
-        return Measure(self.mesh, side_domain(self.mesh.domain, self.markers[marker]), {})
+    def __call__(self, subdomain_id="everywhere", domain=None, subdomain_data=None):
+        # dx(1), or dx(domain=mesh, subdomain_data=markers), fills the slots.
+        return Measure(
+            self.integral_type,
+            self.domain if domain is None else domain,
+            subdomain_id,
+            self.subdomain_data if subdomain_data is None else subdomain_data,
+        )
 
     def __rmul__(self, integrand):
         # expr * dx is a form in legacy UFL, so the measure binds the arguments.
-        if self.domain != self.mesh.domain:
-            integrand = restrict(integrand, self.mesh, self.domain)
-        expression = integral(integrand, self.domain)
+        mesh = self.domain
+        if self.subdomain_id != "everywhere":
+            # The marker value names a topology with a side "inside" into the mesh.
+            E = side_domain(mesh.domain, self.subdomain_data[self.subdomain_id])
+        elif self.integral_type == "ds":
+            E = side_domain(mesh.domain, mesh.boundary)
+        else:
+            E = integrand.support if mesh is None else mesh.domain
+        if E != integrand.support:
+            integrand = restrict(integrand, E)
+        expression = integral(integrand, E)
         args = arguments(expression)
         if not args:
             return expression
@@ -1415,13 +1442,8 @@ class Measure:
         return form(expression, (conjugate(args[0]),) + args[1:])
 
 
-class Mesh:
-    def __init__(self, domain, boundary, cell_markers, facet_markers):
-        self.domain = domain
-        n = domain.ambient_domain.dimension
-        self.n = function(Fields(domain, (n,)), "facet normal")
-        self.dx = Measure(self, domain, cell_markers)
-        self.ds = Measure(self, side_domain(domain, boundary), facet_markers)
+dx = Measure("dx")
+ds = Measure("ds")
 ```
 
 With the module, a Poisson problem with a conductivity, a reaction term on a
@@ -1442,6 +1464,7 @@ from uflx.legacy import (
     Constant,
     FacetNormal,
     FunctionSpace,
+    Measure,
     Mesh,
     TestFunction,
     TrialFunction,
@@ -1451,14 +1474,15 @@ from uflx.legacy import (
     inner,
 )
 
-mesh = Mesh(D, boundary, {1: lower}, {1: left})
+mesh = Mesh(D, boundary)
 V = FunctionSpace(mesh, "Lagrange", 1)
 W = VectorFunctionSpace(mesh, "Lagrange", 1)
 u, v = TrialFunction(V), TestFunction(V)
 f, q = Coefficient(V, "f"), Coefficient(W, "q")
 kappa = Constant("kappa")
 n = FacetNormal(mesh)
-dx, ds = mesh.dx, mesh.ds
+dx = Measure("dx", domain=mesh, subdomain_data={1: lower})
+ds = Measure("ds", domain=mesh, subdomain_data={1: left})
 
 a = kappa * inner(grad(u), grad(v)) * dx + inner(u, v) * dx(1)
 L = inner(f - div(q), v) * dx + inner(inner(q, n), v) * ds(1)
@@ -1486,28 +1510,36 @@ L = inner(f - div(q), v) * dx + inner(inner(q, n), v) * ds(1)
   construction arguments, which rule 5 of [`Base`](LANGUAGE.md#the-base-object-base)
   makes possible for every expression. A module with `MixedElement` and
   `split` would collect the members of a mixed space into a `tuple` argument.
-- The legacy `dx` finds the mesh in the integrand. The measures of the module
-  hold the domain, so `dx` and `ds` belong to the mesh, and `dx(1)` and
-  `ds(1)` are the measures over the marked topologies `lower` and `left`.
-  The legacy measure carries a marker value and a `MeshFunction` carries the
-  marker data; here the mesh carries one topology for each marker value.
+- `Measure` has the four slots of the legacy `Measure`: the integral type,
+  the domain, the subdomain id and the subdomain data, and calling a measure
+  fills slots, so `dx(1)` and `Measure("dx", domain=mesh, subdomain_data=...)`
+  read as in a DOLFINx script. The module-level `dx` has no domain and finds
+  the domain in the support of the integrand, as the legacy `dx` finds the
+  mesh in the integrand; `f * dx` with a constant `f` raises in `integral`,
+  the legacy "missing an integration domain". `ds` needs the mesh, because
+  the boundary facets are mesh data. The legacy subdomain data is opaque to
+  UFL and read by the assembler; here it is a `dict` from marker value to
+  topology, and `dx(1)` and `ds(1)` are the measures over `lower` and
+  `left`.
 - A measure other than `dx` restricts the integrand to its domain from the
   side `"inside"`, which legacy UFL does without saying so for exterior facets
   and subdomains. `restrict` is the legacy `apply_restrictions`, run when the
   form is built: the largest subtrees on the mesh become one restriction each,
   so `grad(u)` becomes `restriction(grad(u), E, "inside")` and not the
   derivative of a restriction, and the rebuilding of the other nodes uses
-  rule 4 of [`Base`](LANGUAGE.md#the-base-object-base). A `dS` would be a
+  rule 4 of [`Base`](LANGUAGE.md#the-base-object-base). `dx` with the mesh
+  as domain restricts nothing, since the domain of the measure is the support
+  of the integrand. A `dS` would be a
   measure over the interior facets with a side for each restriction, the
   legacy `u('+')` would be `restriction(u, E, "+")`, and `avg` and `jump`
   would be arithmetic, as in [Example: an interior facet
   integral](#example-an-interior-facet-integral).
 - The legacy `FacetNormal` belongs to the mesh and is resolved per integral.
   `n` is a placeholder function of the module in a space of fields on the
-  mesh, so that `inner(q, n)` is an expression on the mesh like any other,
-  and `restrict` replaces `n` by `normal(D, E, "inside")` on the domain `E` of
-  the measure. A subtree that contains `n` is rebuilt rather than restricted,
-  because the normal has no meaning on the mesh.
+  mesh, known by its label, so that `inner(q, n)` is an expression on the
+  mesh like any other, and `restrict` replaces `n` by `normal(D, E, "inside")`
+  on the domain `E` of the measure. A subtree that contains `n` is rebuilt
+  rather than restricted, because the normal has no meaning on the mesh.
 - `grad` reads the domain from the support of the function, as the legacy
   `grad` reads the mesh from the coefficient, and `grad(w)[i, j]` is the
   derivative of `w[i]` along `x[j]`, as in legacy UFL, so `div` is the trace
