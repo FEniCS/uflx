@@ -1257,7 +1257,8 @@ scalar curl of a 1-form on `M`.
 Requires: [A tour: the Poisson problem](LANGUAGE.md#a-tour-the-poisson-problem),
 [The base object `Base`](LANGUAGE.md#the-base-object-base),
 [`Function`](LANGUAGE.md#function), [`Form`](LANGUAGE.md#form),
-[Restriction](LANGUAGE.md#restriction), [`Integral` over a decomposed
+[Restriction](LANGUAGE.md#restriction), [`Normal`](LANGUAGE.md#normal),
+[`Integral` over a decomposed
 domain](LANGUAGE.md#integral-over-a-decomposed-domain).
 
 See also: [Appendix: Correspondence with legacy
@@ -1265,17 +1266,21 @@ UFL](LANGUAGE.md#appendix-correspondence-with-legacy-ufl).
 
 The Poisson problem of the tour, written as classic FEniCS writes it:
 `inner(grad(u), grad(v)) * dx`. The layer is a module `uflx.legacy`, which
-does not exist, of a few free functions and two plain Python classes over the
-core. Nothing in the module subclasses a core class, so the forms that the
+does not exist, of a page of free functions and two plain Python classes over
+the core. Nothing in the module subclasses a core class, so the forms that the
 module produces are ordinary core graphs, the same graphs as the tour builds
 by hand. The example shows what the core leaves to a layer: the argument
-numbers of test and trial functions, measures that know their domain and bind
-the arguments, and `grad` that reads the domain from the function. `Lagrange`
-stands for a space of a library, as in the tour.
+numbers of test and trial functions, measures that know their domain, restrict
+the integrand and bind the arguments, a facet normal that belongs to the mesh,
+and `grad`, `div` and `curl` that read the domain from the function.
+`Lagrange`, `Constants` and `Fields` stand for spaces of a library: Lagrange
+elements of a value shape, constants with no domain, and fields of a value
+shape with no element.
 
 ```python
 # uflx/legacy.py
 from uflx import (
+    AbstractExpression,
     Base,
     Function,
     components,
@@ -1286,8 +1291,10 @@ from uflx import (
     index,
     index_sum,
     integral,
+    normal,
     restriction,
     side_domain,
+    tensor,
 )
 
 
@@ -1301,6 +1308,57 @@ def TrialFunction(V):
 
 def Coefficient(V, name):
     return function(V, name)
+
+
+def Constant(name, shape=()):
+    return function(Constants(shape), name)
+
+
+def FunctionSpace(mesh, family, degree, shape=()):
+    return Lagrange(mesh.domain, degree, shape)
+
+
+def VectorFunctionSpace(mesh, family, degree):
+    return FunctionSpace(mesh, family, degree, (mesh.domain.ambient_domain.dimension,))
+
+
+def FacetNormal(mesh):
+    return mesh.n
+
+
+def grad(f):
+    return components(exterior_derivative(f, f.support), f.support)
+
+
+def div(w):
+    i = index("div")
+    return index_sum(grad(w)[i, i], (i,))
+
+
+def curl(w):
+    # grad(w)[i, j] is the derivative of w[i] along x[j], as in legacy UFL.
+    G = grad(w)
+    if w.value_shape == (2,):
+        return G[1, 0] - G[0, 1]
+    return tensor((G[2, 1] - G[1, 2], G[0, 2] - G[2, 0], G[1, 0] - G[0, 1]))
+
+
+def inner(a, b):
+    # For scalars and vectors, conjugating the second operand as legacy UFL does.
+    if a.value_shape == ():
+        return a * conjugate(b)
+    i = index("inner")
+    return index_sum(a[i] * conjugate(b[i]), (i,))
+
+
+def contains(obj, target):
+    if obj == target:
+        return True
+    if isinstance(obj, tuple):
+        return any(contains(item, target) for item in obj)
+    return isinstance(obj, Base) and any(
+        contains(item, target) for item in obj.construction_arguments
+    )
 
 
 def arguments(expression):
@@ -1322,14 +1380,33 @@ def arguments(expression):
     return tuple(found[n] for n in sorted(found))
 
 
+def restrict(obj, mesh, E):
+    # The legacy apply_restrictions, at construction: the largest subtrees on the
+    # mesh are pulled back to E, and the facet normal of the mesh becomes the
+    # normal of E.
+    if obj == mesh.n:
+        return normal(mesh.domain, E, "inside")
+    if isinstance(obj, tuple):
+        return tuple(restrict(item, mesh, E) for item in obj)
+    if not isinstance(obj, AbstractExpression) or obj.support is None:
+        return obj
+    if not contains(obj, mesh.n):
+        return restriction(obj, E, "inside")
+    return obj.__class__(*restrict(obj.construction_arguments, mesh, E))
+
+
 class Measure:
-    def __init__(self, domain, side):
-        self.domain, self.side = domain, side
+    def __init__(self, mesh, domain, markers):
+        self.mesh, self.domain, self.markers = mesh, domain, markers
+
+    def __call__(self, marker):
+        # dx(1) and ds(1): the marked topology, with a side "inside" into the mesh.
+        return Measure(self.mesh, side_domain(self.mesh.domain, self.markers[marker]), {})
 
     def __rmul__(self, integrand):
         # expr * dx is a form in legacy UFL, so the measure binds the arguments.
-        if self.side is not None:
-            integrand = restriction(integrand, self.domain, self.side)
+        if self.domain != self.mesh.domain:
+            integrand = restrict(integrand, self.mesh, self.domain)
         expression = integral(integrand, self.domain)
         args = arguments(expression)
         if not args:
@@ -1339,55 +1416,61 @@ class Measure:
 
 
 class Mesh:
-    def __init__(self, domain, boundary):
+    def __init__(self, domain, boundary, cell_markers, facet_markers):
         self.domain = domain
-        self.dx = Measure(domain, None)
-        self.ds = Measure(side_domain(domain, boundary), "inside")
-
-
-def FunctionSpace(mesh, family, degree):
-    return Lagrange(mesh.domain, degree)
-
-
-def grad(f):
-    return components(exterior_derivative(f, f.support), f.support)
-
-
-def inner(a, b):
-    # For scalars and vectors, conjugating the second operand as legacy UFL does.
-    if a.value_shape == ():
-        return a * conjugate(b)
-    i = index("inner")
-    return index_sum(a[i] * conjugate(b[i]), (i,))
+        n = domain.ambient_domain.dimension
+        self.n = function(Fields(domain, (n,)), "facet normal")
+        self.dx = Measure(self, domain, cell_markers)
+        self.ds = Measure(self, side_domain(domain, boundary), facet_markers)
 ```
 
-With the module, the Poisson problem with a Neumann datum `g` reads as a
-classic FEniCS demo. `D` and `square` are those of the
-[`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example and `boundary` is
-that of [Example: a static topology](#example-a-static-topology).
+With the module, a Poisson problem with a conductivity, a reaction term on a
+marked subdomain, a source from a flux field and a Neumann condition from the
+same field on a marked part of the boundary reads as a classic FEniCS demo.
+`D`, `square` and `K` are those of the
+[`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, and `boundary`
+and `I` those of [Example: a static topology](#example-a-static-topology).
 
 ```python
-from uflx.legacy import Coefficient, FunctionSpace, Mesh, TestFunction, TrialFunction, grad, inner
+from uflx.legacy import (
+    Coefficient,
+    Constant,
+    FacetNormal,
+    FunctionSpace,
+    Mesh,
+    TestFunction,
+    TrialFunction,
+    VectorFunctionSpace,
+    div,
+    grad,
+    inner,
+)
 
-mesh = Mesh(D, boundary)
+# The marked subdomain, the lower triangle, and the marked boundary, the left edge.
+lower = StaticTopology((K,), (((0, 1, 2),),), ((("inside", square, 0),),))
+left = StaticTopology((I,), (((2, 0),),), ((("inside", square, 0),),))
+
+mesh = Mesh(D, boundary, {1: lower}, {1: left})
 V = FunctionSpace(mesh, "Lagrange", 1)
+W = VectorFunctionSpace(mesh, "Lagrange", 1)
 u, v = TrialFunction(V), TestFunction(V)
-f, g = Coefficient(V, "f"), Coefficient(V, "g")
+f, q = Coefficient(V, "f"), Coefficient(W, "q")
+kappa = Constant("kappa")
+n = FacetNormal(mesh)
 dx, ds = mesh.dx, mesh.ds
 
-a = inner(grad(u), grad(v)) * dx
-L = inner(f, v) * dx + inner(g, v) * ds
+a = kappa * inner(grad(u), grad(v)) * dx + inner(u, v) * dx(1)
+L = inner(f - div(q), v) * dx + inner(inner(q, n), v) * ds(1)
 ```
 
-- For a real `V`, `a` is the bilinear form `a` of the tour,
-  `form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))`, up to
-  the labels of `u`, `v` and `i` and the conjugates, which change nothing in
-  real arithmetic: `conjugate_space(V)` is `V`, so the argument spaces are
-  `(V, V)`. `L` is the sum of two forms with the argument spaces `(V,)`, one
-  over `D` and one over the boundary domain `side_domain(D, boundary)`, so
-  `L` is a linear form. `f * dx` with no argument stays an `Integral`, a
-  functional.
-- For a complex `V`, the same two lines give the sesquilinear forms of a
+- For a real `V`, the first term of `a` is the bilinear form `a` of the tour
+  times `kappa`, `form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))`,
+  up to the labels of `u`, `v` and `i` and the conjugates, which change
+  nothing in real arithmetic: `conjugate_space(V)` is `V`, so the argument
+  spaces are `(V, V)`. `a` and `L` are sums of two forms each, with the
+  argument spaces `(V, V)` and `(V,)`. `f * dx` with no argument stays an
+  `Integral`, a functional.
+- For a complex `V`, the same lines give the sesquilinear forms of a
   complex-mode legacy demo. `inner` conjugates the second operand, as the
   legacy `inner` does, and the measure binds `conjugate(v)` at position 0, so
   `a` has the argument spaces `(conjugate_space(V), V)` and is antilinear in
@@ -1403,25 +1486,42 @@ L = inner(f, v) * dx + inner(g, v) * ds
   makes possible for every expression. A module with `MixedElement` and
   `split` would collect the members of a mixed space into a `tuple` argument.
 - The legacy `dx` finds the mesh in the integrand. The measures of the module
-  hold the domain, so `dx` and `ds` belong to the mesh. `ds` restricts the
-  integrand to the boundary from the side `"inside"`, which legacy UFL does
-  without saying so for exterior facets. A `dS` would be a measure over the
-  interior facets with no restriction, the legacy `u('+')` would be
-  `restriction(u, E, "+")`, and `avg` and `jump` would be arithmetic, as in
-  [Example: an interior facet integral](#example-an-interior-facet-integral).
+  hold the domain, so `dx` and `ds` belong to the mesh, and `dx(1)` and
+  `ds(1)` are the measures over the marked topologies `lower` and `left`,
+  each with a side `"inside"` into the mesh, as the markers of [Example: a
+  fluid and a solid](#example-a-fluid-and-a-solid) are. The legacy measure
+  carries a marker value and the mesh carries the marker data; here each
+  marker value is a topology.
+- A measure other than `dx` restricts the integrand to its domain from the
+  side `"inside"`, which legacy UFL does without saying so for exterior facets
+  and subdomains. `restrict` is the legacy `apply_restrictions`, run when the
+  form is built: the largest subtrees on the mesh become one restriction each,
+  so `grad(u)` becomes `restriction(grad(u), E, "inside")` and not the
+  derivative of a restriction, and the rebuilding of the other nodes uses
+  rule 4 of [`Base`](LANGUAGE.md#the-base-object-base). A `dS` would be a
+  measure over the interior facets with a side for each restriction, the
+  legacy `u('+')` would be `restriction(u, E, "+")`, and `avg` and `jump`
+  would be arithmetic, as in [Example: an interior facet
+  integral](#example-an-interior-facet-integral).
+- The legacy `FacetNormal` belongs to the mesh and is resolved per integral.
+  `n` is a placeholder function of the module in a space of fields on the
+  mesh, so that `inner(q, n)` is an expression on the mesh like any other,
+  and `restrict` replaces `n` by `normal(D, E, "inside")` on the domain `E` of
+  the measure. A subtree that contains `n` is rebuilt rather than restricted,
+  because the normal has no meaning on the mesh.
 - `grad` reads the domain from the support of the function, as the legacy
-  `grad` reads the mesh from the coefficient. On the surface mesh of [Example:
-  the Laplace-Beltrami operator](#example-the-laplace-beltrami-operator) the
-  same `grad` is the surface gradient. The legacy `grad` of a `Constant` is
-  zero, so a module with constants returns `Zero` for an expression with no
-  support.
+  `grad` reads the mesh from the coefficient, and `grad(w)[i, j]` is the
+  derivative of `w[i]` along `x[j]`, as in legacy UFL, so `div` is the trace
+  and `curl` reads off the antisymmetric part. On the surface mesh of
+  [Example: the Laplace-Beltrami operator](#example-the-laplace-beltrami-operator)
+  the same `grad` is the surface gradient. The legacy `grad` of a `Constant`
+  is the zero of the shape of the mesh. `kappa` has no support, so `grad(kappa)`
+  raises in the module; a module that wants the legacy behaviour gives
+  `Constant` the mesh and returns a `Zero`.
 - A form compiler sees only core graphs, so the module costs nothing at
   compile time, and the core transformations apply unchanged.
 
-Not in the module, and each a few lines more: `Constant` as a function in a
-space with no domain, `dx(1)` and `ds(1)` as measures over marked topologies
-(see [Example: a fluid and a solid](#example-a-fluid-and-a-solid)),
-`FacetNormal` as `normal(D, E, "inside")`, `div` and `curl` as compositions
-of `exterior_derivative` and `components`, and `derivative` as the Gateaux
-derivative, not yet covered. Boundary conditions, assembly and solving are
-outside legacy UFL too.
+Not in the module: `derivative`, which is the Gateaux derivative, not yet
+covered, and `u('+')`, which calls a core `Function`, so a module writes a
+free function for it. Boundary conditions, assembly and solving are outside
+legacy UFL too.
