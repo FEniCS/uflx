@@ -3,10 +3,11 @@
 These examples accompany [LANGUAGE.md](LANGUAGE.md) and use its names. The
 first part defines the library classes that the examples and the tour of
 LANGUAGE.md use; none of them is part of the core. The second part exercises
-the core on small problems with known answers, and then on five larger
-problems: an interior facet integral, a fluid and a solid, a 1D network in a
-3D mesh, the Laplace-Beltrami operator and the flux through a surface. A
-reader of LANGUAGE.md needs none of this to follow the rules.
+the core on small problems with known answers, and then on six larger
+problems: an interior facet integral, a Bank-Weiser error estimator, a fluid
+and a solid, a 1D network in a 3D mesh, the Laplace-Beltrami operator and
+the flux through a surface. A reader of LANGUAGE.md needs none of this to
+follow the rules.
 
 ## Reference library
 
@@ -716,6 +717,128 @@ facet from each side.
 - `restriction(u, E, "-")` on the same `t` reads `u` on triangle 1 at
   $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
   is a difference at one point.
+
+### Example: a Bank-Weiser error estimator
+
+Requires: [Example: an interior facet
+integral](#example-an-interior-facet-integral), [Restriction](LANGUAGE.md#restriction),
+[Normal](LANGUAGE.md#normal), [Form](LANGUAGE.md#form), [Concept:
+kernels](LANGUAGE.md#concept-kernels).
+
+The local problems of the Bank-Weiser estimator for the Poisson problem, as
+in Bulle et al. On each cell, with `u_h` the Galerkin solution, the local
+problem seeks `e` in a space of quadratic functions with zero vertex values
+such that
+
+$$\int_K \nabla e \cdot \nabla v = \int_K (f + \Delta u_h) v
+- \frac{1}{2} \int_{\partial K \cap \Omega} n_K \cdot (\nabla u_h|_K - \nabla u_h|_{K'}) \, v
++ \int_{\partial K \cap \Gamma_N} (g - \partial_n u_h) \, v,$$
+
+and the estimator on the cell is the energy norm of `e`. The facet terms need
+the solution on every cell attached to `K`. The example writes the local
+problems as one global form on a discontinuous space, so the local matrix and
+vector of each cell are the blocks of the global matrix and vector, and an
+assembler may form them cell by cell without a global array.
+
+The example uses `D`, `square`, `K`, `I` and the interior facet domain `E`
+with the sides `"+"` and `"-"` of the [interior facet
+example](#example-an-interior-facet-integral), the boundary facet domain `B`
+with the side `"inside"`, a Lagrange space `V` of polynomial degree 1 on `D`,
+a space `F` on `D` for the data, and the Bank-Weiser space `W` on `D`, a
+discontinuous space whose pull-back by each cell is the space of quadratic
+functions on `K` with zero vertex values, a representation of the library:
+
+```python
+u_h, f, g = function(V, "u_h"), function(F, "f"), function(F, "g")
+e, v = function(W, "e"), function(W, "v")
+i = index("i")
+half = Integer(1) / Integer(2)
+
+# The local bilinear form, one block for each cell because W is discontinuous.
+grad_e = components(exterior_derivative(e, D), D)
+grad_v = components(exterior_derivative(v, D), D)
+a = form(integral(index_sum(grad_e[i] * grad_v[i], (i,)), D), (v, e))
+
+# The interior residual. The Laplacian of u_h is zero for degree 1, and is kept
+# for higher degrees.
+grad_u = components(exterior_derivative(u_h, D), D)
+lap_u = index_sum(components(exterior_derivative(grad_u, D), D)[i, i], (i,))
+r_cell = integral((f + lap_u) * v, D)
+
+# The jump of the normal derivative with the normal of "+". From "-" the normal
+# and the jump both change sign, so the same scalar serves both cells.
+n = normal(D, E, "+")
+jump_n = index_sum(
+    (restriction(grad_u, E, "+")[i] - restriction(grad_u, E, "-")[i]) * n[i], (i,)
+)
+r_facets = integral(
+    -half * jump_n * (restriction(v, E, "+") + restriction(v, E, "-")), E
+)
+
+# The Neumann residual on the boundary.
+n_B = normal(D, B, "inside")
+dn_u = index_sum(restriction(grad_u, B, "inside")[i] * n_B[i], (i,))
+r_boundary = integral((g - dn_u) * restriction(v, B, "inside"), B)
+
+r = form(r_cell + r_facets + r_boundary, (v,))
+```
+
+- `W` is discontinuous, so the matrix of `a` is block diagonal with one block
+  for each cell, the local matrix of the cell. The vector of `r` holds, in the
+  block of each cell, the interior residual, one half-jump term for each
+  interior facet of the cell and the Neumann residual for each boundary facet
+  of the cell. These are the local matrix and the local vector of the
+  Bank-Weiser problem of the cell.
+- `jump_n` is the same expression from both sides. For the cell on `"-"`, the
+  outward normal is `-n` and the jump of the gradient changes sign, so the
+  product does not. One `Integral` over `E` therefore writes the facet term of
+  both cells, and `v` is restricted from both sides so that each cell receives
+  its half.
+- A Dirichlet facet contributes nothing, so `B` here is the topology of the
+  Neumann facets only. The library decides which facets are in `B`.
+- The core does not represent the basis of `W`. The library may represent a
+  function in `W` on `K` through a quadratic Lagrange basis and a change of
+  basis to the functions with zero vertex values, as Bulle et al. do. That
+  choice stays behind the pull-back and is invisible to the form.
+
+The core transformations rewrite `a` and `r` as in the [interior facet
+example](#example-an-interior-facet-integral). After the passes `a` is one
+`IndexSum` over the cells, `r_cell` and `r_boundary` are an `IndexSum` over
+the cells and over the boundary facets, and `r_facets` is an `IndexSum` over
+the interior facets of an expression on `I` that reads `u_h` on the two cells
+through the side tables. The kernels, by [Concept:
+kernels](LANGUAGE.md#concept-kernels), are:
+
+- the cell kernel of `a`, which returns the local matrix;
+- the cell kernel of `r_cell`, which returns the interior residual of the cell;
+- the facet kernel of `r_facets`, which reads the two cells, evaluates
+  `jump_n` once and returns the contribution to the rows of both cells,
+  because `v` appears from both sides;
+- the facet kernel of `r_boundary`, which returns the rows of the one cell.
+
+Where the results go is outside the language. A global assembler scatters
+them into a global matrix and vector, and the blocks are the local systems. A
+local assembler instead loops over the cells and, for each cell, calls the
+cell kernels, calls the facet kernel for each facet of the cell and keeps the
+rows of the cell, solves the local problem and computes the estimator, with
+no global array. That is the loop of the custom assembler of Bulle et al.,
+with the two kernels of the global form in place of hand-written code.
+
+- With a topology of the pairs (cell, local facet) in place of `E`, with the
+  sides `"self"` and `"other"` and `v` restricted from `"self"` only, the
+  facet kernel returns the rows of the one cell and the pairs come packed by
+  cell. The form is the same with `restriction(v, E, "self")` in place of the
+  sum of the two restrictions.
+- The per-cell estimator $\eta_K^2 = \int_K \lvert \nabla e \rvert^2$ is
+  `integral(pull_back(index_sum(grad_e[i] * grad_e[i], (i,)), cell_domain(D, 0)) * rho * volume_form(K), K)`,
+  with `rho` the density of the cell of [Integral over a decomposed
+  domain](LANGUAGE.md#integral-over-a-decomposed-domain), an expression with
+  no support and the cell index free: one value for each cell.
+- A kernel for one cell that contains the loop over the facets, and so reads
+  the cell and every attached cell, is expressible through gathers over a
+  (cell, local facet) table, but the two-kernel loop above gives the same
+  local systems with the ordinary facet kernel, so the example does not use
+  it.
 
 ### Example: a fluid and a solid
 

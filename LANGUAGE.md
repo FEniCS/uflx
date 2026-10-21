@@ -3102,7 +3102,7 @@ of the arguments and of the indices. Equality is structural (rule 7), so
 without the renaming two kernels that differ only in the names of indices
 would compile twice.
 
-Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral), [a fluid and a solid](EXAMPLES.md#example-a-fluid-and-a-solid), [a 1D network in a 3D mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh).
+Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral), [a Bank-Weiser error estimator](EXAMPLES.md#example-a-bank-weiser-error-estimator), [a fluid and a solid](EXAMPLES.md#example-a-fluid-and-a-solid), [a 1D network in a 3D mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh).
 
 ## Function spaces
 
