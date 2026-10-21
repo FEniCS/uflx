@@ -1279,6 +1279,7 @@ from uflx import (
     Base,
     Function,
     components,
+    conjugate,
     exterior_derivative,
     form,
     function,
@@ -1331,7 +1332,10 @@ class Measure:
             integrand = restriction(integrand, self.domain, self.side)
         expression = integral(integrand, self.domain)
         args = arguments(expression)
-        return form(expression, args) if args else expression
+        if not args:
+            return expression
+        # Legacy forms are antilinear in the test function.
+        return form(expression, (conjugate(args[0]),) + args[1:])
 
 
 class Mesh:
@@ -1350,11 +1354,11 @@ def grad(f):
 
 
 def inner(a, b):
-    # Real arithmetic, for scalars and vectors.
+    # For scalars and vectors, conjugating the second operand as legacy UFL does.
     if a.value_shape == ():
-        return a * b
+        return a * conjugate(b)
     i = index("inner")
-    return index_sum(a[i] * b[i], (i,))
+    return index_sum(a[i] * conjugate(b[i]), (i,))
 ```
 
 With the module, the Poisson problem with a Neumann datum `g` reads as a
@@ -1372,15 +1376,26 @@ f, g = Coefficient(V, "f"), Coefficient(V, "g")
 dx, ds = mesh.dx, mesh.ds
 
 a = inner(grad(u), grad(v)) * dx
-L = f * v * dx + g * v * ds
+L = inner(f, v) * dx + inner(g, v) * ds
 ```
 
-- `a` is the bilinear form `a` of the tour,
+- For a real `V`, `a` is the bilinear form `a` of the tour,
   `form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))`, up to
-  the labels of `u`, `v` and `i`. `L` is the sum of two forms with the
-  argument spaces `(V,)`, one over `D` and one over the boundary domain
-  `side_domain(D, boundary)`, so `L` is a linear form. `f * dx` with no
-  argument stays an `Integral`, a functional.
+  the labels of `u`, `v` and `i` and the conjugates, which change nothing in
+  real arithmetic: `conjugate_space(V)` is `V`, so the argument spaces are
+  `(V, V)`. `L` is the sum of two forms with the argument spaces `(V,)`, one
+  over `D` and one over the boundary domain `side_domain(D, boundary)`, so
+  `L` is a linear form. `f * dx` with no argument stays an `Integral`, a
+  functional.
+- For a complex `V`, the same two lines give the sesquilinear forms of a
+  complex-mode legacy demo. `inner` conjugates the second operand, as the
+  legacy `inner` does, and the measure binds `conjugate(v)` at position 0, so
+  `a` has the argument spaces `(conjugate_space(V), V)` and is antilinear in
+  `v`, and `L` has `(conjugate_space(V),)`. The convention is the module's,
+  not the core's: the core records the linearity that the form states (see
+  [`Form`](LANGUAGE.md#form)). `f * v * dx` in complex mode is linear in `v`
+  but bound as antilinear, which a pass that checks the linearity rejects, as
+  legacy UFL rejects an unconjugated test function in complex mode.
 - The argument numbers of legacy UFL live in the labels of the module. The
   core has none: `u` and `v` are functions, and the measure states the
   arguments. `arguments` is the legacy `extract_arguments`, a walk of the
@@ -1400,9 +1415,6 @@ L = f * v * dx + g * v * ds
   same `grad` is the surface gradient. The legacy `grad` of a `Constant` is
   zero, so a module with constants returns `Zero` for an expression with no
   support.
-- The module is real. A complex module conjugates `b` in `inner` and binds
-  `conjugate(v)` at position 0 in `Measure`, so the sesquilinear convention
-  of legacy UFL is a choice of the module, not of the core.
 - A form compiler sees only core graphs, so the module costs nothing at
   compile time, and the core transformations apply unchanged.
 
