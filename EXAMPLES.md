@@ -6,8 +6,9 @@ LANGUAGE.md use; none of them is part of the core. The second part exercises
 the core on small problems with known answers, and then on six larger
 problems: an interior facet integral, a Bank-Weiser error estimator, a fluid
 and a solid, a 1D network in a 3D mesh, the Laplace-Beltrami operator and
-the flux through a surface. A reader of LANGUAGE.md needs none of this to
-follow the rules.
+the flux through a surface, and ends with a classic FEniCS layer for the
+Poisson problem. A reader of LANGUAGE.md needs none of this to follow the
+rules.
 
 ## Reference library
 
@@ -1250,3 +1251,148 @@ area = integral(Integer(1), M)
 integrating over a cut cell](#example-integrating-over-a-cut-cell)). The same
 signs enter a term that turns a 2-form on `M` into a 0-form, such as the
 scalar curl of a 1-form on `M`.
+
+### Example: a classic FEniCS layer for the Poisson problem
+
+Requires: [A tour: the Poisson problem](LANGUAGE.md#a-tour-the-poisson-problem),
+[The base object `Base`](LANGUAGE.md#the-base-object-base),
+[`Function`](LANGUAGE.md#function), [`Form`](LANGUAGE.md#form),
+[Restriction](LANGUAGE.md#restriction), [`Integral` over a decomposed
+domain](LANGUAGE.md#integral-over-a-decomposed-domain).
+
+See also: [Appendix: Correspondence with legacy
+UFL](LANGUAGE.md#appendix-correspondence-with-legacy-ufl).
+
+The Poisson problem of the tour, written as classic FEniCS writes it:
+`inner(grad(u), grad(v)) * dx`. The layer below is a few free functions and
+two plain Python classes over the core. Nothing in the layer subclasses a core
+class, so the forms that the layer produces are ordinary core graphs, the same
+graphs as the tour builds by hand. The example shows what the core leaves to a
+layer: the argument numbers of test and trial functions, measures that know
+their domain, and `grad` that reads the domain from the function. The example
+uses `D` and `square` of the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain)
+example and `boundary` of [Example: a static
+topology](#example-a-static-topology). `Lagrange` stands for a space of a
+library, as in the tour.
+
+```python
+class Measure:
+    def __init__(self, domain, side):
+        self.domain, self.side = domain, side
+
+    def __rmul__(self, integrand):
+        if self.side is None:
+            return integral(integrand, self.domain)
+        return integral(restriction(integrand, self.domain, self.side), self.domain)
+
+
+class Mesh:
+    def __init__(self, domain, boundary):
+        self.domain = domain
+        self.dx = Measure(domain, None)
+        self.ds = Measure(side_domain(domain, boundary), "inside")
+
+
+def FunctionSpace(mesh, family, degree):
+    return Lagrange(mesh.domain, degree)
+
+
+def TestFunction(V):
+    return function(V, ("argument", 0))
+
+
+def TrialFunction(V):
+    return function(V, ("argument", 1))
+
+
+def Coefficient(V, name):
+    return function(V, name)
+
+
+def grad(f):
+    return components(exterior_derivative(f, f.support), f.support)
+
+
+def inner(a, b):
+    # Real arithmetic, for scalars and vectors.
+    if a.value_shape == ():
+        return a * b
+    i = index("inner")
+    return index_sum(a[i] * b[i], (i,))
+
+
+def arguments(expression):
+    # The legacy extract_arguments: the functions labelled ("argument", n), by n.
+    found = {}
+
+    def visit(obj):
+        if isinstance(obj, Function) and isinstance(obj.label, tuple):
+            if obj.label[0] == "argument":
+                found[obj.label[1]] = obj
+        if isinstance(obj, tuple):
+            for item in obj:
+                visit(item)
+        elif isinstance(obj, Base):
+            for item in obj.construction_arguments:
+                visit(item)
+
+    visit(expression)
+    return tuple(found[n] for n in sorted(found))
+
+
+def legacy_form(expression):
+    return form(expression, arguments(expression))
+```
+
+With the layer, the Poisson problem with a Neumann datum `g` reads as a
+classic FEniCS demo:
+
+```python
+mesh = Mesh(D, boundary)
+V = FunctionSpace(mesh, "Lagrange", 1)
+u, v = TrialFunction(V), TestFunction(V)
+f, g = Coefficient(V, "f"), Coefficient(V, "g")
+dx, ds = mesh.dx, mesh.ds
+
+a = inner(grad(u), grad(v)) * dx
+L = f * v * dx + g * v * ds
+
+A, b = legacy_form(a), legacy_form(L)
+```
+
+- `A` is the bilinear form `a` of the tour,
+  `form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))`, up to
+  the labels of `u`, `v` and `i`. `b` binds `v` in the sum of an `Integral`
+  over `D` and an `Integral` over the boundary domain `side_domain(D, boundary)`.
+- The argument numbers of legacy UFL live in the labels of the layer. The
+  core has none: `u` and `v` are functions, and `legacy_form` states the
+  arguments. `arguments` is the legacy `extract_arguments`, a walk of the
+  construction arguments, which rule 5 of [`Base`](LANGUAGE.md#the-base-object-base)
+  makes possible for every expression. A layer with `MixedElement` and `split`
+  would collect the members of a mixed space into a `tuple` argument.
+- The legacy `dx` finds the mesh in the integrand. The measures of the layer
+  hold the domain, so `dx` and `ds` belong to the mesh. `ds` restricts the
+  integrand to the boundary from the side `"inside"`, which legacy UFL does
+  without saying so for exterior facets. A `dS` would be a measure over the
+  interior facets with no restriction, the legacy `u('+')` would be
+  `restriction(u, E, "+")`, and `avg` and `jump` would be arithmetic, as in
+  [Example: an interior facet integral](#example-an-interior-facet-integral).
+- `grad` reads the domain from the support of the function, as the legacy
+  `grad` reads the mesh from the coefficient. On the surface mesh of [Example:
+  the Laplace-Beltrami operator](#example-the-laplace-beltrami-operator) the
+  same `grad` is the surface gradient. The legacy `grad` of a `Constant` is
+  zero, so a layer with constants returns `Zero` for an expression with no
+  support.
+- The layer is real. A complex layer conjugates `b` in `inner` and binds
+  `conjugate(v)` at position 0 in `legacy_form`, so the sesquilinear
+  convention of legacy UFL is a choice of the layer, not of the core.
+- A form compiler sees only core graphs, so the layer costs nothing at
+  compile time, and the core transformations apply unchanged.
+
+Not in the layer, and each a few lines more: `Constant` as a function in a
+space with no domain, `dx(1)` and `ds(1)` as measures over marked topologies
+(see [Example: a fluid and a solid](#example-a-fluid-and-a-solid)),
+`FacetNormal` as `normal(D, E, "inside")`, `div` and `curl` as compositions
+of `exterior_derivative` and `components`, and `derivative` as the Gateaux
+derivative, not yet covered. Boundary conditions, assembly and solving are
+outside legacy UFL too.

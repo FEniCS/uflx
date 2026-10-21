@@ -285,6 +285,10 @@ The `IndexSum` over `c` becomes the loop of the assembler, the gathers of the
 vertex positions become the packing of the kernel inputs, and the rest is the
 kernel.
 
+The classic FEniCS spelling of the same forms, `inner(grad(u), grad(v)) * dx`,
+is a thin layer over the core (see [Example: a classic FEniCS layer for the
+Poisson problem](EXAMPLES.md#example-a-classic-fenics-layer-for-the-poisson-problem)).
+
 On a mesh of triangles and quadrilaterals, only the domain changes. The
 topology has two cell types, and the domain one piece for each:
 
@@ -3492,7 +3496,7 @@ Examples, with `a`, `u`, `v` and `w` of the [`Form`](#form) examples and
   `w` in `V` and `r` in `Q`, `action(form(e, ((v, q), (u, p))), 1, (w, r))`
   is a linear form in `(v, q)`, the residual at `(w, r)`.
 
-Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES.md#example-the-flux-through-a-surface).
+Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES.md#example-the-flux-through-a-surface), [a classic FEniCS layer for the Poisson problem](EXAMPLES.md#example-a-classic-fenics-layer-for-the-poisson-problem).
 
 ## Core transformations
 
@@ -4055,6 +4059,7 @@ The notes that relate rules of the core to legacy UFL, by section.
 - **`Function`.** The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functions. A test function and a trial function are the functions that a form states as the arguments at the positions 0 and 1.
 - **`DualSpace`.** The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the canonical map is a form, so the spaces keep distinct argument spaces.
 - **`Form`.** In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
+- **Example: a classic FEniCS layer for the Poisson problem.** The legacy spelling `inner(grad(u), grad(v)) * dx` is a layer of free functions over the core. The argument numbers of `TestFunction` and `TrialFunction` are labels of the layer, `extract_arguments` is a walk of the construction arguments, and a measure is a domain, with `ds` restricting the integrand from the side `"inside"`.
 - **Example: the Laplace-Beltrami operator.** Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Components` gives the gradient in every dimension.
 - **Extending the core.** In legacy UFL, properties are stored on the node classes, and the set of properties is fixed. Every new property touches every node class, so features such as complex numbers and dual spaces were patched in across the node classes.
 - **The interpolation extension.** In legacy UFL, `Interpolate(f, V)` is a `BaseFormOperator`, as an external operator is, and the adjoint interpolation takes a `Coargument`. In DOLFINx, interpolation happens outside UFL.
