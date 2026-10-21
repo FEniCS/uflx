@@ -3,10 +3,10 @@
 These examples accompany [LANGUAGE.md](LANGUAGE.md) and use its names. The
 first part defines the library classes that the examples and the tour of
 LANGUAGE.md use; none of them is part of the core. The second part exercises
-the core on small problems with known answers, and then on three larger
-problems: an interior facet integral, the Laplace-Beltrami operator and the
-flux through a surface. A reader of LANGUAGE.md needs none of this to follow
-the rules.
+the core on small problems with known answers, and then on four larger
+problems: an interior facet integral, a fluid and a solid, the
+Laplace-Beltrami operator and the flux through a surface. A reader of
+LANGUAGE.md needs none of this to follow the rules.
 
 ## Reference library
 
@@ -712,6 +712,152 @@ facet from each side.
 - `restriction(u, E, "-")` on the same `t` reads `u` on triangle 1 at
   $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
   is a difference at one point.
+
+### Example: a fluid and a solid
+
+Requires: [Example: an interior facet
+integral](#example-an-interior-facet-integral), [Sides of a
+topology](LANGUAGE.md#sides-of-a-topology), [Restriction](LANGUAGE.md#restriction),
+[Form](LANGUAGE.md#form), [Concept: kernels](LANGUAGE.md#concept-kernels).
+
+A fluid and a solid that share an interface, with the fields of each part in
+spaces on that part only: the legacy UFL `dx(1)`, `dx(2)` and `ds(3)` with
+markers, and the submeshes and entity maps of a solver such as DOLFINx. The
+square of the [DecomposedDomain](LANGUAGE.md#decomposeddomain) example is the
+whole, triangle `(0, 1, 2)` is the fluid, triangle `(1, 3, 2)` is the solid,
+and the diagonal is the interface. The example uses `D`, `square`, `K` and
+`I` of the [interior facet example](#example-an-interior-facet-integral), and
+`runtime_array` of [Example: integrating over a cut
+cell](#example-integrating-over-a-cut-cell).
+
+A marked set of entities is a topology with sides, and a marker value is the
+identity of the topology. A submesh is the decomposed domain of such a
+topology, and the entity map of the submesh is the side table into the
+parent:
+
+```python
+# dx(1) and dx(2): the fluid cells and the solid cells, each seen as itself in square.
+fluid_cells = StaticTopology((K,), (((0, 1, 2),),), ((("inside", square, 0),),))
+solid_cells = StaticTopology((K,), (((1, 3, 2),),), ((("inside", square, 0),),))
+
+# The fluid and the solid, each a decomposed domain with its own topology.
+F = side_domain(D, fluid_cells)
+S = side_domain(D, solid_cells)
+
+# The interface, seen from a fluid cell and from a solid cell.
+interface = StaticTopology(
+    (I,), (((1, 2),),), ((("fluid", fluid_cells, 0), ("solid", solid_cells, 0)),)
+)
+G = side_domain(F, interface)
+
+# ds(3) on the fluid: the left edge, seen from a fluid cell.
+inlet = StaticTopology((I,), (((2, 0),),), ((("fluid", fluid_cells, 0),),))
+G_in = side_domain(F, inlet)
+```
+
+The sides of `interface` name the two submesh topologies, not `square`. A
+side is a name and two tables, so a facet may have more sides than
+neighbours: a field on `D` restricted to the interface needs a third side
+`("parent", square, 0)`, because a restriction needs a side with the
+topology of the support of the field.
+
+The problem is Stokes flow in the fluid and linear elasticity in the solid,
+coupled by a multiplier on the interface that equates the fluid velocity to
+the velocity of the solid over a time step. With spaces of a library, `V` and
+`Q` on `F`, `W` on `S` and `L` on `G`, all of the degree `()`, with `V`, `W`
+and `L` of the value shape `(2,)` and `Q` of the value shape `()`:
+
+```python
+u, v = function(V, "u"), function(V, "v")
+p, q = function(Q, "p"), function(Q, "q")
+d, w, d_old = function(W, "d"), function(W, "w"), function(W, "d_old")
+lam, mu = function(L, "lam"), function(L, "mu")
+
+# Material constants, the time step and the inlet traction, arrays of the solver.
+nu, mu_s, lam_s = runtime_array("nu", ()), runtime_array("mu_s", ()), runtime_array("lam_s", ())
+dt, g = runtime_array("dt", ()), runtime_array("g", (2,))
+i, j = index("i"), index("j")
+half, two = Integer(1) / Integer(2), Integer(2)
+
+# Stokes flow on F.
+grad_u = components(exterior_derivative(u, F), F)
+grad_v = components(exterior_derivative(v, F), F)
+div_u, div_v = index_sum(grad_u[i, i], (i,)), index_sum(grad_v[i, i], (i,))
+fluid = integral(
+    nu * index_sum(grad_u[i, j] * grad_v[i, j], (i, j)) - p * div_v - q * div_u, F
+)
+
+# Linear elasticity on S.
+grad_d = components(exterior_derivative(d, S), S)
+grad_w = components(exterior_derivative(w, S), S)
+eps_d, eps_w = half * (grad_d[i, j] + grad_d[j, i]), half * (grad_w[i, j] + grad_w[j, i])
+div_d, div_w = index_sum(grad_d[i, i], (i,)), index_sum(grad_w[i, i], (i,))
+solid = integral(two * mu_s * index_sum(eps_d * eps_w, (i, j)) + lam_s * div_d * div_w, S)
+
+# The restrictions to the interface, expressions on G.
+u_G, v_G = restriction(u, G, "fluid"), restriction(v, G, "fluid")
+d_G, w_G = restriction(d, G, "solid"), restriction(w, G, "solid")
+d_old_G = restriction(d_old, G, "solid")
+
+# The coupling: lam is the traction on both parts, and mu enforces u = (d - d_old) / dt.
+coupling = integral(
+    index_sum(lam[i] * (w_G[i] / dt - v_G[i]) + mu[i] * (d_G[i] / dt - u_G[i]), (i,)), G
+)
+a = form(fluid + solid + coupling, ((v, q, w, mu), (u, p, d, lam)))
+
+# The right-hand side: the inlet traction and the old displacement.
+traction = integral(index_sum(g[i] * restriction(v, G_in, "fluid")[i], (i,)), G_in)
+l = form(traction + integral(index_sum(mu[i] * d_old_G[i], (i,)) / dt, G), ((v, q, w, mu),))
+```
+
+- `u` has the support `F` and `d` the support `S`, two decomposed domains with
+  different topologies, so `u` and `d` do not combine. They meet only on `G`,
+  through the restrictions, as two expressions on `G` at the same points of
+  the reference facet `I`. Every integral has no support, so `fluid`, `solid`
+  and `coupling` add into one expression, and the arguments of `a` are tuples
+  of functions on three domains (see [Form](LANGUAGE.md#form)).
+- `side_domain(F, interface)` takes the geometry of the first side, so the
+  first argument is `F`, whose topology is `fluid_cells`. `normal(F, G, "fluid")`
+  is the normal out of the fluid, and `normal(S, G, "solid")` is the negative
+  of it.
+- An integral is over the smallest domain, and the fields of the larger domains
+  are restricted into it. A field on a submesh is never extended by zero onto
+  the parent. This is the rule of a mixed-domain assembler, which fixes the
+  mesh of the integration domain and reads the other fields through entity
+  maps.
+- Two groups of one topology differ in cell type or in sides, so a second
+  marked set of inlet facets with the same side is a second topology, and the
+  legacy `ds((3, 4))` is the sum of two integrals. The two kernels are one
+  kernel after the renaming of [Concept: kernels](LANGUAGE.md#concept-kernels),
+  because the two topologies become the same placeholder.
+- A material coefficient that differs between the fluid and the solid needs no
+  submeshes when the fields live on `D`. With `c = cell_index(square, 0)`, an
+  array `nu[c]` under `integral(..., D)` takes the value of the cell (see
+  [Integral over a decomposed domain](LANGUAGE.md#integral-over-a-decomposed-domain)).
+- A solver that builds the fluid submesh from the coordinates of the submesh
+  gives a decomposed domain with the points of `F` but not equal to `F`, and a
+  space on one does not combine with a space on the other. The restriction
+  rules hold for either, because the inclusion of a cell into itself is the
+  identity and only the side tables enter. A library picks one construction.
+- Dirichlet conditions, such as a clamped solid and a no-slip wall, belong to
+  the solver.
+- A fluid domain that moves with the solid is not covered. The moved domain is
+  a decomposed domain with the topology `fluid_cells` and new coordinates, so a
+  function in a space on `F` has a different support from an expression on the
+  moved domain, and the two do not combine. A map between two decomposed
+  domains with the same topology, the identity in the reference coordinates of
+  each cell, is a fixed composition that a later version may add.
+
+The core transformations rewrite `a` as in the [interior facet
+example](#example-an-interior-facet-integral). `expand_integrals` gives one
+`IndexSum` for each of `F`, `S` and `G`, over the cell index of its topology.
+On `G`, with `e = cell_index(interface, 0)`, the restriction `u_G` lowers to
+the pull-back of `u` by the fluid cell `cells_fluid[e]` and then by the
+inclusion of the facet into that cell, and `d_G` to the pull-back of `d` by
+the solid cell `cells_solid[e]`. The kernel of `coupling` is an expression on
+`I` that reads the reference basis of `V` on one fluid cell, of `W` on one
+solid cell and of `L` on the facet, and the assembler packs the two cells
+through the two side tables, the entity maps of the two submeshes.
 
 ### Example: the Laplace-Beltrami operator
 

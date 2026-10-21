@@ -3071,7 +3071,7 @@ of the arguments and of the indices. Equality is structural (rule 7), so
 without the renaming two kernels that differ only in the names of indices
 would compile twice.
 
-Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral).
+Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral), [a fluid and a solid](EXAMPLES.md#example-a-fluid-and-a-solid).
 
 ## Function spaces
 
@@ -4018,6 +4018,7 @@ The notes that relate rules of the core to legacy UFL, by section.
 - **Restriction.** The legacy UFL restriction `f('+')` is `restriction(f, E, "+")` on the decomposed domain $E$ of the interior facets, whose sides are named `'+'` and `'-'`.
 - **Integral over a decomposed domain.** `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the decomposed domain of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
 - **Example: an interior facet integral.** The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal and the facet domain are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
+- **Example: a fluid and a solid.** The legacy UFL `dx(1)`, `ds(3)` and `ds((3, 4))` are integrals over the decomposed domains of marked topologies, one topology for each marker value. A DOLFINx submesh is the decomposed domain of a marked topology, and its entity map is the side table into the parent.
 - **AbstractFunctionSpace.** The legacy UFL `Real` space is a space of constants, and the legacy UFL `Constant` is constant data.
 - **AbstractFunctionSpace.** In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, the pull-back states the meaning of a function on a cell, the library states the representation, and the space holds a decomposed domain, the legacy mesh.
 - **Function.** The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functions. A test function and a trial function are the functions that a form states as the arguments at the positions 0 and 1.
