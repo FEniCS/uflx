@@ -2573,6 +2573,9 @@ $\psi_e$ the map of the cell $e$ of $S$ into the ambient coordinate domain and
 $\phi_c^{-1}$ the inverse of the map of the cell $c$ on the side, a terminal
 that a downstream library provides. Which parts of a cell of $S$ meet which
 cells of a side stays outside the language.
+A line through the cells of a 3D mesh is covered without sides, by a
+`DomainMap` into the mesh and point evaluation (see [Example: a 1D network in
+a 3D mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh)).
 
 Examples, with a topology `T` of triangles with the cell types `(K,)`,
 `I = Simplex(1)` and `P = Simplex(0)`. A topology of sub-entities that an
@@ -3071,7 +3074,7 @@ of the arguments and of the indices. Equality is structural (rule 7), so
 without the renaming two kernels that differ only in the names of indices
 would compile twice.
 
-Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral), [a fluid and a solid](EXAMPLES.md#example-a-fluid-and-a-solid).
+Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral), [a fluid and a solid](EXAMPLES.md#example-a-fluid-and-a-solid), [a 1D network in a 3D mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh).
 
 ## Function spaces
 

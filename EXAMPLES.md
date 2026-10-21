@@ -3,10 +3,10 @@
 These examples accompany [LANGUAGE.md](LANGUAGE.md) and use its names. The
 first part defines the library classes that the examples and the tour of
 LANGUAGE.md use; none of them is part of the core. The second part exercises
-the core on small problems with known answers, and then on four larger
-problems: an interior facet integral, a fluid and a solid, the
-Laplace-Beltrami operator and the flux through a surface. A reader of
-LANGUAGE.md needs none of this to follow the rules.
+the core on small problems with known answers, and then on five larger
+problems: an interior facet integral, a fluid and a solid, a 1D network in a
+3D mesh, the Laplace-Beltrami operator and the flux through a surface. A
+reader of LANGUAGE.md needs none of this to follow the rules.
 
 ## Reference library
 
@@ -868,6 +868,148 @@ the solid cell `cells_solid[e]`. The kernel of `coupling` is an expression on
 `I` that reads the reference basis of `V` on one fluid cell, of `W` on one
 solid cell and of `L` on the facet, and the assembler packs the two cells
 through the two side tables, the entity maps of the two submeshes.
+
+### Example: a 1D network in a 3D mesh
+
+Requires: [DecomposedDomain](LANGUAGE.md#decomposeddomain),
+[DomainMap](LANGUAGE.md#domainmap), [PullBack](LANGUAGE.md#pullback),
+[Points and point evaluation](LANGUAGE.md#points-and-point-evaluation),
+[Example: quadrature](#example-quadrature), [Example: the Laplace-Beltrami
+operator](#example-the-laplace-beltrami-operator), [Form](LANGUAGE.md#form).
+
+A network of vessels, a mesh of segments in $R^3$, coupled to the tissue
+around it, a mesh of tetrahedra, with the pressure of each in a space on its
+own mesh. The segments pass through the tetrahedra and are not sub-entities
+of them, so the network is the line through the cells of a 3D mesh that
+[Sides of a topology](LANGUAGE.md#sides-of-a-topology) leaves out. The
+coupling needs no side. The network is mapped into the tissue by a
+`DomainMap`, and the pull-back of the tissue pressure by that map is
+evaluated at points, with the containing cells located by the mesh library.
+
+With `K3 = ReferenceSimplex(3)` and `I = ReferenceSimplex(1)`, the
+coordinates `x3` of the tetrahedra with the free index `cell_index(T3, 0)`
+and `x1` of the segments with the free index `cell_index(T1, 0)`, both built
+as in the [DecomposedDomain](LANGUAGE.md#decomposeddomain) example, spaces of
+a library `V3` on `D3` and `V1` on `D1` of the degree `()` and the value shape
+`()`, a space `N` on `D1` of the value shape `(3,)`, and `runtime_extent` and
+`runtime_array` of [Example: integrating over a cut
+cell](#example-integrating-over-a-cut-cell):
+
+```python
+# The tissue, of dimension 3, and the network, of dimension 1, both in RD(3).
+D3 = decomposed_domain((domain_map(K3, x3, RD(3)),))
+D1 = decomposed_domain((domain_map(I, x1, RD(3)),))
+
+p3, q3 = function(V3, "p3"), function(V3, "q3")
+p1, q1 = function(V1, "p1"), function(V1, "q1")
+beta, R = runtime_array("beta", ()), runtime_array("R", ())
+m, l = index("m"), index("l")
+
+# The Laplacian of each part on its own mesh. On D1 the gradient is the
+# derivative along the segment, in the frame of RD(3).
+grad_p3 = components(exterior_derivative(p3, D3), D3)
+grad_q3 = components(exterior_derivative(q3, D3), D3)
+grad_p1 = components(exterior_derivative(p1, D1), D1)
+grad_q1 = components(exterior_derivative(q1, D1), D1)
+tissue = integral(index_sum(grad_p3[m] * grad_q3[m], (m,)), D3)
+vessel = integral(index_sum(grad_p1[m] * grad_q1[m], (m,)), D1)
+
+# The inclusion of the network into the tissue, and the trace of p3 on the network.
+X1 = coordinate(D1)
+embedding = domain_map(D1, X1, D3)
+p3_trace = pull_back(p3, embedding)
+
+# A ring of L points at the distance R around each point of the network, in the
+# plane of the two normals n1 and n2 of the segment, and the average of p3 and q3
+# over the ring, with the cosines and sines of the angles and the weights as tables.
+L = runtime_extent("L")
+n1, n2 = function(N, "n1"), function(N, "n2")
+cs, w = runtime_array("cs", (L, 2)), runtime_array("w", (L,))
+ring = domain_map(
+    D1, component_tensor(X1[m] + R * (cs[l, 0] * n1[m] + cs[l, 1] * n2[m]), (m,)), D3
+)
+p3_avg = index_sum(w[l] * pull_back(p3, ring), (l,))
+q3_avg = index_sum(w[l] * pull_back(q3, ring), (l,))
+
+# The exchange between the vessel and the tissue around it.
+coupling = integral(beta * (p1 - p3_avg) * (q1 - q3_avg), D1)
+a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
+```
+
+- `embedding` is a `DomainMap` with the parameter domain `D1`, the
+  parameterisation `coordinate(D1)` and the ambient domain `D3`, a decomposed
+  domain. Its image is the network as a subset of the tissue, so
+  `pull_back(p3, embedding)` is the trace of `p3` on the network, an
+  expression on `D1` that combines with `p1`. Construction does not check that
+  the network lies in the tissue.
+- `ring` is a family of domain maps from `D1` into `D3` with the free index
+  `l`, one map for each point of the ring. `pull_back(p3, ring)` has the
+  support `D1` and the free index `l`, and `p3_avg` sums over the ring with the
+  weights. The trace is the average with `R = 0`. The trace of a function in
+  $H^1(\Omega)$ on a curve is not defined, so the averaged coupling is the one
+  with a well-posed limit, and the language expresses both.
+- `n1` and `n2` are functions in a space on `D1`, two unit normals of each
+  segment that the solver provides, as the side tables are provided. The
+  cosines and sines are a table because the core has no `cos` (see
+  [Elementary functions (very
+  incomplete)](LANGUAGE.md#elementary-functions-very-incomplete)).
+- `p3` and `p1` have the supports `D3` and `D1` and never combine directly.
+  Every integral has no support, so the three terms add, and the arguments of
+  `a` are tuples of functions on the two meshes, as in [Example: a fluid and a
+  solid](#example-a-fluid-and-a-solid).
+- A network whose segments are edges of the tetrahedra needs none of this. The
+  topology of the segments then has the side `(("inside", T3, 0),)`, as a
+  sub-entity of lower dimension than a facet, `D1` is `side_domain(D3, T1)`,
+  and `restriction(p3, D1, "inside")` is the trace. The mesh chooses one
+  tetrahedron for each segment, and a continuous `p3` restricts the same from
+  any of them.
+
+The core transformations rewrite `a` as follows. `expand_integrals` gives one
+`IndexSum` for `tissue`, over `c3 = cell_index(T3, 0)`, and one for each of
+`vessel` and `coupling`, over `c1 = cell_index(T1, 0)`, with the length
+element of the segment as the density of `D1`. `expand_pull_backs` moves the
+pull-back by `cell_domain(D1, 0)` into the integrand of `coupling`. On
+`pull_back(p3, ring)` the rule that pull-backs nest gives
+`pull_back(pull_back(p3, ring), cell_domain(D1, 0))`, and the inner pull-back
+remains, because the library of `V3` defines `p3` on the cells of `D3` only.
+
+The remaining pull-back is lowered as in [Points and point
+evaluation](LANGUAGE.md#points-and-point-evaluation), after a quadrature pass
+on `I` as in [Example: quadrature](#example-quadrature). The pass replaces the
+integral over `I` by a weighted sum over a family `xs` of points of `I` with
+the index `k`, so the pull-backs below `p3` are, from the inside, `ring`,
+`cell_domain(D1, 0)` and `xs`, a chain of maps from `RD(0)` into `D3` with the
+free indices `c1`, `k` and `l`: the ring point `l` at the quadrature point `k`
+of the segment `c1`. The pass of the mesh library reads the chain as one family
+of points in `D3`, locates the tetrahedron `cells[c1, k, l]` that contains
+each point and its position `Xp[c1, k, l, :]` in `K3`, and rewrites the chain
+as the pull-back of `p3` by `gathered_cell_domain(D3, 0, gathered_index(cells, (c1, k, l)))`
+and then by that position. The coordinates of the points, which the library
+needs to locate the cells, are the parameterisation of the chain, an
+expression in the vertex positions of the segment, `n1`, `n2`, `cs` and `R`.
+
+After the passes, the kernel of `coupling` for the segment `c1` reads the
+reference basis of `V1` on the segment, and the reference basis of `V3` on
+one tetrahedron for each pair `(k, l)`, each through its own gathered cell
+index. The local matrix couples the degrees of freedom of `V1` on the segment
+with those of `V3` on every tetrahedron the ring points fall in, and the
+assembler scatters each block through the map of degrees of freedom of that
+tetrahedron. The kernel reads a list of cells rather than one cell on each
+side, which [Concept: kernels](LANGUAGE.md#concept-kernels) allows, because
+the interface of a kernel follows from the expression. A whole-array compiler
+keeps the integral as a batched gather over `(c1, k, l)` with no kernel at
+all.
+
+- The pass of [Points and point evaluation](LANGUAGE.md#points-and-point-evaluation)
+  is stated for one family of points. Here the family is a chain of three
+  maps, and the pass reads the chain. That is the one extension of the
+  statement that the example needs.
+- A tissue mesh with several cell types is not yet covered, because a family
+  of points in cells of several types needs one piece for each cell type (see
+  [Points and point evaluation](LANGUAGE.md#points-and-point-evaluation)).
+- A ring point outside the tissue, near the boundary, is a point with no
+  containing cell. What the table holds for such a point is the choice of the
+  solver, outside the language.
 
 ### Example: the Laplace-Beltrami operator
 
