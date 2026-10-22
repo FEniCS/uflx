@@ -3167,11 +3167,13 @@ expression `a` linear in `u` and `v`:
 
 #### Checking linearity
 
-A linearity check is a pass that asks a new question of a form (see [New
-questions](#new-questions)). For each entry of each `Form`, the pass gives
-every node one of five classes: zero, constant, linear, antilinear or
-nonlinear in the entry. The pass accepts the `Form` if the expression is linear
-or zero in every entry.
+A linearity check is a pass that asks whether an expression is linear in a
+function `v`, or jointly in a `tuple` of functions (see [New
+questions](#new-questions)). The pass gives every node one of five classes:
+zero, constant, linear, antilinear or nonlinear in `v`. A `Form` is checked
+one entry at a time. The expression of the `Form` must be linear or zero in
+`v` for an entry `v`, and antilinear or zero in `v` for an entry
+`conjugate(v)`.
 
 #### Legacy UFL
 
