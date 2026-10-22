@@ -9,18 +9,20 @@ for variational forms, such as UFL.
 
 Readers may want to start with the **[Worked examples](EXAMPLES.md)**.
 
-- **[The design of the UFLx core](DESIGN.md).** 
-- **[Core UFLx language definition](LANGUAGE.md).** 
+- **[The design of the UFLx core](DESIGN.md).**
+- **[Core UFLx language definition](LANGUAGE.md).**
 - **[Worked examples](EXAMPLES.md)**.
 - **[Design choices](DESIGN_CHOICES.md).**
 
 ## Building
 
-The notes build to HTML and PDF with pandoc, into `design/build/`. The PDF
-needs xelatex.
+The site builds with [Jupyter Book](https://jupyterbook.org) into
+`design/_build/html/`, and the PDFs build with pandoc and xelatex into
+`design/build/`.
 
 ```
-design/build.sh            # html
-design/build.sh pdf
-design/build.sh all LANGUAGE.md
+cd design && jupyter-book build --html   # the site
+cd design && jupyter-book start          # serve the site locally
+design/build-pdf.sh                      # every PDF
+design/build-pdf.sh LANGUAGE.md
 ```

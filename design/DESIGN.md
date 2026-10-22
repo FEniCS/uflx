@@ -1,7 +1,5 @@
 # The design of the UFLx core
 
-Authors: Jack S. Hale, Matthew Scroggs, Michal Habera
-
 This note is the argument behind [LANGUAGE.md](LANGUAGE.md). LANGUAGE.md is the
 specification and is normative. This note explains the eight ideas the
 specification is built on, the decisions that shape every section of it, and

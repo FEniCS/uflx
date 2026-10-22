@@ -1,7 +1,5 @@
 # Core UFLx language definition
 
-Authors: Jack S. Hale, Matthew Scroggs, Michal Habera
-
 This note describes the smallest core language behind UFLx. The note leaves
 out implementation details, compiler algorithms and broad redesign ideas.
 The argument behind the design, with a reading guide, is in DESIGN.md. The
@@ -24,110 +22,6 @@ leaves open. A statement in the present tense, such as "the degree is a
 part of the language that the authors intend to specify later. "Open" marks a
 question that the authors have not decided. A "Legacy UFL" subsection relates
 a section to legacy UFL and is not a rule.
-
-## Contents
-
-- [Conventions](#conventions)
-
-- [Scope](#scope)
-  - [What UFLx is and isn't](#what-uflx-is-and-isnt)
-  - [Basic principles](#basic-principles)
-- [Rules of the language](#rules-of-the-language)
-  - [The base object `Base`](#the-base-object-base)
-  - [Leaves and subclassing](#leaves-and-subclassing)
-  - [Properties and free functions](#properties-and-free-functions)
-  - [No simplification during construction](#no-simplification-during-construction)
-  - [Passes](#passes)
-  - [Kinds of code that produce objects](#kinds-of-code-that-produce-objects)
-- [Domains](#domains)
-  - [`AbstractDomain`](#abstractdomain)
-  - [`AbstractCoordinateDomain`](#abstractcoordinatedomain)
-  - [`RD`](#rd)
-- [Expressions and static type](#expressions-and-static-type)
-  - [`AbstractExpression`](#abstractexpression)
-  - [`Index`](#index)
-  - [`EllipsisIndex`](#ellipsisindex)
-  - [Extents](#extents)
-  - [`AbstractIndexValue`](#abstractindexvalue)
-  - [`GatheredIndex`](#gatheredindex)
-  - [Free indices](#free-indices)
-  - [Scalar type](#scalar-type)
-  - [Support](#support)
-  - [Degree](#degree)
-  - [Expressions as differential forms](#expressions-as-differential-forms)
-  - [Node class or free function](#node-class-or-free-function)
-- [Algebra](#algebra)
-  - [Literals](#literals)
-  - [`Zero`](#zero)
-  - [Arithmetic](#arithmetic)
-  - [`Sum`](#sum)
-  - [`Product`](#product)
-  - [`Power`](#power)
-  - [Negation and subtraction](#negation-and-subtraction)
-  - [`Division`](#division)
-  - [`Absolute`](#absolute)
-  - [`Conjugate`](#conjugate)
-  - [`TensorProduct`](#tensorproduct)
-  - [Elementary functions (very incomplete)](#elementary-functions-very-incomplete)
-  - [`Tensor`](#tensor)
-  - [`Indexed`](#indexed)
-  - [`ComponentTensor` and `IndexSum`](#componenttensor-and-indexsum)
-  - [Tensor algebra with `EllipsisIndex`](#tensor-algebra-with-ellipsisindex)
-  - [`Inverse`](#inverse)
-  - [Operator overloads](#operator-overloads)
-  - [Numbers in expressions](#numbers-in-expressions)
-- [Calculus on a domain](#calculus-on-a-domain)
-  - [`Coordinate`](#coordinate)
-  - [Valid pair](#valid-pair)
-  - [`ExteriorDerivative`](#exteriorderivative)
-  - [`Components`](#components)
-  - [Volume form](#volume-form)
-  - [`Integral`](#integral)
-- [Maps between domains](#maps-between-domains)
-  - [`DomainMap`](#domainmap)
-  - [`PullBack`](#pullback)
-  - [Concept: orientation of a domain](#concept-orientation-of-a-domain)
-  - [Concept: integral over a domain](#concept-integral-over-a-domain)
-  - [Points and point evaluation](#points-and-point-evaluation)
-- [Topology](#topology)
-  - [`AbstractCellType`](#abstractcelltype)
-  - [`AbstractTopology`](#abstracttopology)
-  - [Sides of a topology](#sides-of-a-topology)
-- [Reference cells](#reference-cells)
-  - [Reference cell](#reference-cell)
-- [Decomposed domains](#decomposed-domains)
-  - [`DecomposedDomain`](#decomposeddomain)
-  - [Restriction](#restriction)
-  - [`Integral` over a decomposed domain](#integral-over-a-decomposed-domain)
-  - [`Normal`](#normal)
-- [Function spaces](#function-spaces)
-  - [`AbstractFunctionSpace`](#abstractfunctionspace)
-  - [`Function`](#function)
-- [Variational forms](#variational-forms)
-  - [Argument spaces](#argument-spaces)
-  - [`ConjugateSpace`](#conjugatespace)
-  - [`DualSpace`](#dualspace)
-  - [`Form`](#form)
-  - [`Action`](#action)
-  - [Example: the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator)
-- [Core transformations](#core-transformations)
-  - [Expanding integrals](#expanding-integrals)
-  - [Expanding pull-backs](#expanding-pull-backs)
-  - [Applying derivatives](#applying-derivatives)
-  - [Expanding components](#expanding-components)
-  - [Applying actions](#applying-actions)
-  - [Reducing component tensors](#reducing-component-tensors)
-  - [Gateaux derivative](#gateaux-derivative)
-- [Extending the core](#extending-the-core)
-  - [Language extensions](#language-extensions)
-  - [New questions](#new-questions)
-  - [New operations](#new-operations)
-  - [New subclasses](#new-subclasses)
-  - [New transformations](#new-transformations)
-- [Appendix: Class hierarchy](#appendix-class-hierarchy)
-- [Appendix: Free functions](#appendix-free-functions)
-- [Appendix: Static type table](#appendix-static-type-table)
-- [Appendix: Pass table](#appendix-pass-table)
 
 ## Scope
 
@@ -2249,7 +2143,7 @@ reference cell on each side:
 - For a periodic boundary, the position is that of the vertex one period away.
 - For a piece, the position is that of a point of the cell.
 
-#### `side_tables`
+#### Side tables
 
 A concrete topology with sides also provides `side_tables(i, side)`, a pair of
 tables `(cells, positions)` for the side named `side` of group $i$, with the
@@ -2372,7 +2266,7 @@ coordinates.
 | Provides                | `vertices`, a constant expression with no support and value shape `(m, n)`, with row $v$ the coordinates of vertex $v$, for dimension $n$ and $m$ vertices |
 | Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](EXAMPLES.md#example-the-unit-simplex-as-a-reference-cell)                                                   |
 
-#### `affine_map`
+#### Affine maps
 
 Notation, for `affine_map(F, points)`:
 
@@ -2476,7 +2370,7 @@ The core does not check that the domains meet only in sets of measure zero.
 - The ambient domain $Q$ may also be a decomposed domain, such as a mesh in
   which a family of points lies.
 
-#### `cell_domain`
+#### Cell domains
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -2489,7 +2383,7 @@ An expression $f$ with the support $D$ is defined through the pieces.
 `pull_back(f, cell_domain(D, j))` is an expression on $P_j$, the value of $f$
 on each domain of piece $j$. The pull-back of `coordinate(D)` is $\psi_j$.
 
-#### `gathered_cell_domain`
+#### Gathered cell domains
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -2649,7 +2543,7 @@ restriction of $f$ to all the groups at once. The pull-back of that expression
 by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)` (see
 [Expanding pull-backs](#expanding-pull-backs)).
 
-#### `side_domain`
+#### Side domains
 
 Piece $i$ of `side_domain(D, S)` is
 `domain_map(F_i, pull_back(pull_back(coordinate(D), B_i), A_i), Q)`, with
@@ -3861,10 +3755,10 @@ chapter that extend the classes in the Extends column.
 | Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractDomain`, `psi: AbstractExpression`, `Q: AbstractDomain`                                 | `DomainMap`                                                                                  |
 |                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap`                                                  | `PullBack`                                                                                   |
 | Topology                    | [`cell_index(T, j)`](#abstracttopology)                                  |                               | `T: AbstractTopology`, `j: int`                                                                     | `Index`                                                                                      |
-| Reference cells             | [`affine_map(F, points)`](#affine_map)                                   |                               | `F: AbstractReferenceCell`, `points: AbstractExpression`                                            | The affine map of the vertices                                                               |
+| Reference cells             | [`affine_map(F, points)`](#affine-maps)                                  |                               | `F: AbstractReferenceCell`, `points: AbstractExpression`                                            | The affine map of the vertices                                                               |
 | Decomposed domains          | [`decomposed_domain(pieces)`](#decomposeddomain)                         |                               | `pieces: tuple[DomainMap, ...]`                                                                     | `DecomposedDomain`                                                                           |
-|                             | [`cell_domain(D, j)`](#cell_domain)                                      |                               | `D: DecomposedDomain`, `j: int`                                                                     | `DomainMap` of the cells of type `j`                                                         |
-|                             | [`gathered_cell_domain(D, j, g)`](#gathered_cell_domain)                 |                               | `D: DecomposedDomain`, `j: int`, `g: GatheredIndex`                                                 | `DomainMap` of the cells of type `j` selected by `g`                                         |
+|                             | [`cell_domain(D, j)`](#cell-domains)                                     |                               | `D: DecomposedDomain`, `j: int`                                                                     | `DomainMap` of the cells of type `j`                                                         |
+|                             | [`gathered_cell_domain(D, j, g)`](#gathered-cell-domains)                |                               | `D: DecomposedDomain`, `j: int`, `g: GatheredIndex`                                                 | `DomainMap` of the cells of type `j` selected by `g`                                         |
 |                             | [`restriction(f, E, s)`](#restriction)                                   |                               | `f: AbstractExpression`, `E: DecomposedDomain`, `s: str`                                            | `pull_back(f, side_map(D, E, s))`, with $D$ the support of $f$, or $f$ if $f$ has no support |
 |                             | [`side_domain(D, S)`](#restriction)                                      |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                        | The decomposed domain of the cells of $S$, with the geometry of the first side of each group |
 |                             | [`side_map(D, E, s)`](#sidemap)                                          |                               | `D, E: DecomposedDomain`, `s: str`                                                                  | `SideMap`                                                                                    |

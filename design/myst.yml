@@ -18,11 +18,8 @@ project:
       severity: ignore
   exclude:
     - build/**
-  exports:
-    - format: pdf
-      template: plain_latex
-      articles: [LANGUAGE.md]
-      output: _build/exports/LANGUAGE.pdf
+    - OPEN_ISSUES.md
+    - gaps.md
 site:
   template: book-theme
   options:

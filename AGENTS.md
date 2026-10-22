@@ -50,18 +50,20 @@ Build docs:
 cd doc && make html
 ```
 
-Build the design notes in `design/` to HTML and PDF with pandoc (output in
-`design/build/`, PDF needs xelatex). `design/README.md` is the landing page and
-builds to `index.html`:
+Build the design notes in `design/`. The site uses Jupyter Book
+(`pip install jupyter-book`, configured in `design/myst.yml`, output in
+`design/_build/html/`, landing page `design/README.md`). The PDFs use pandoc
+and xelatex (output in `design/build/`):
 
 ```
-design/build.sh            # html
-design/build.sh pdf
-design/build.sh all LANGUAGE.md
+cd design && jupyter-book build --html   # the site
+cd design && jupyter-book start          # serve the site locally
+design/build-pdf.sh                      # every PDF
+design/build-pdf.sh LANGUAGE.md
 ```
 
 The class hierarchy and free functions appendices of `design/LANGUAGE.md`
-are generated from the class tables. Edit the sections, then regenerate (the build runs `--check`):
+are generated from the class tables. Edit the sections, then regenerate (the PDF build runs `--check`):
 
 ```
 python3 design/appendices.py
