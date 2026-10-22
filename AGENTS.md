@@ -50,6 +50,15 @@ Build docs:
 cd doc && make html
 ```
 
+Build the design notes in `design/` to HTML and PDF with pandoc (output in
+`design/build/`, PDF needs xelatex):
+
+```
+design/build.sh            # html
+design/build.sh pdf
+design/build.sh all LANGUAGE.md
+```
+
 ## Architecture
 
 Expression trees (the symbolic core) are not plain Python object graphs — they are
