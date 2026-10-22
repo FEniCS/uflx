@@ -2525,83 +2525,118 @@ Requires: [`AbstractCellType`](#abstractcelltype),
 See also: [Restriction](#restriction).
 
 A topology $S$ whose cells are sub-entities of cells of other topologies has
-sides. `S.sides` has one entry for each cell type of $S$. Entry $i$ is a
-`tuple` of one or more sides with distinct names, each a triple `(name, T, j)`
-of a side name, a `str`, a topology $T$ and a cell type number $j$ of $T$. Two
-entries of the same cell type of $S$ differ, so a group of cells of $S$ is
-fixed by the cell type and the sides together. A topology whose cells are not
-seen from other cells has the sides `()`.
+sides. A cell of $S$ is seen from one cell of another topology on each side,
+and [Restriction](#restriction) picks the value of an expression on a cell of
+$S$ by the side name.
+
+#### `sides`
+
+`S.sides` describes the sides of $S$:
+
+- `S.sides` has one entry for each cell type of $S$.
+- Entry $i$ is a `tuple` of one or more sides with distinct names.
+- Each side is a triple `(name, T, j)` of a side name, a `str`, a topology
+  $T$ and a cell type number $j$ of $T$.
+- Two entries of the same cell type of $S$ differ. A group of cells of $S$ is
+  therefore fixed by the cell type and the sides together.
+- A topology whose cells are not seen from other cells has the sides `()`.
+
+Notation, for the group $i$ of $S$ with a side `(name, T, j)`:
+
+- $K_j$ is the reference cell of cell type $j$ of $T$, and $k_j$ is the
+  dimension of $K_j$.
+- $m$ is the number of vertices of cell type $i$ of $S$.
+
+#### The image of a cell on a side
 
 Each cell of type $i$ of $S$ is seen from one cell of type $j$ of $T$ on each
-side, and is the image of cell type $i$ of $S$ under the affine map through
-the positions of its vertices in the reference cell of that cell (see
-[Restriction](#restriction)). The image may be a sub-entity of the cell on
-the side: the cell itself, with the vertices in the order of the cell, a
-facet, or a sub-entity of lower dimension, such as an edge of a tetrahedron
-or a vertex. The image may also be a piece of the cell that is not a
-sub-entity, such as half of a facet at a hanging node or a segment of a line
-through the cell. The concrete mesh gives the position of each vertex of a
-cell of $S$ in the reference cell on each side: the position of the same
-vertex for a matching facet, of the vertex one period away for a periodic
-boundary, and of a point of the cell for a piece.
+side. The cell of $S$ is the image of cell type $i$ of $S$ under the affine map
+through the positions of the vertices of the cell of $S$ in $K_j$ (see
+[Restriction](#restriction)). The image is one of the following:
 
-A concrete topology with sides also provides `side_tables(i, side)`, a pair
-of tables `(cells, positions)` for the side named `side` of group $i$, with
-the side `(side, T, j)` and $K_j$ the reference cell of cell type $j$ of $T$:
+- A sub-entity of the cell on the side. The sub-entity is the cell itself, with
+  the vertices in the order of the cell, a facet, or a sub-entity of lower
+  dimension, such as an edge of a tetrahedron or a vertex.
+- A piece of the cell on the side that is not a sub-entity, such as half of a
+  facet at a hanging node or a segment of a line through the cell.
 
-- `cells`, an [`AbstractIndexValue`](#abstractindexvalue) of the shape
-  `(S.num_cells[i],)` and the extent `T.num_cells[j]`. Entry $e$ is the cell
-  of type $j$ of $T$ on the side of the cell $e$ of $S$.
-- `positions`, a constant expression with no support and the value shape
-  `(S.num_cells[i], m, k_j)`, with $m$ the number of vertices of cell type $i$
-  of $S$ and $k_j$ the dimension of $K_j$. Entry $(e, v)$ is the position in
-  $K_j$ of vertex $v$ of the cell $e$, the coordinates of a vertex of $K_j$
-  for a sub-entity, and any point of $K_j$ for a piece.
+The concrete mesh gives the position of each vertex of a cell of $S$ in the
+reference cell on each side:
 
-[Restriction](#restriction) reads the tables, and picks the value of an
-expression on a cell of $S$ by the side name. The core does not check the
+- For a matching facet, the position is that of the same vertex.
+- For a periodic boundary, the position is that of the vertex one period away.
+- For a piece, the position is that of a point of the cell.
+
+#### `side_tables`
+
+A concrete topology with sides also provides `side_tables(i, side)`, a pair of
+tables `(cells, positions)` for the side named `side` of group $i$, with the
+side `(side, T, j)`:
+
+- `cells` is an [`AbstractIndexValue`](#abstractindexvalue) of the shape
+  `(S.num_cells[i],)` and the extent `T.num_cells[j]`. Entry $e$ is the cell of
+  type $j$ of $T$ on the side of the cell $e$ of $S$.
+- `positions` is a constant expression with no support and the value shape
+  `(S.num_cells[i], m, k_j)`. Entry $(e, v)$ is the position in $K_j$ of vertex
+  $v$ of the cell $e$. For a sub-entity, the position is the coordinates of a
+  vertex of $K_j$. For a piece, the position is any point of $K_j$.
+
+[Restriction](#restriction) reads the tables. The core does not check the
 sides or the tables.
 
-The concrete mesh decides which sub-entities or pieces are the cells of $S$,
-and from which cells on each side each cell of $S$ is seen. For example, the cells of
-$S$ may be the facets of a marked boundary or the cells of a marked subdomain,
-and a facet of two cells may be seen from one cell only. The sides may have
-different topologies, such as a mesh and a submesh, or two meshes that meet.
-The topology of a side may itself have sides, so the cells of $S$ may be
-facets of facets.
+#### What the concrete mesh decides
 
-For a sub-entity of lower dimension than a facet, such as a vertex of a
-triangle mesh, several cells contain the sub-entity, and the concrete mesh
-chooses the one cell on a side. A function that is continuous across the cells
-has the same restriction from each of the cells, and the restriction of any
-other function depends on the choice.
+The concrete mesh decides the following:
 
-The concrete mesh also names the sides, and decides which cell is on which
-side. For example, the facets of an interface between fluid and solid
-triangles of the one cell type 0 of `T` have the sides
-`(("fluid", T, 0), ("solid", T, 0))`, and the cell on the side `"fluid"` is the
-fluid triangle.
+- Which sub-entities or pieces are the cells of $S$. For example, the cells of
+  $S$ may be the facets of a marked boundary or the cells of a marked
+  subdomain.
+- From which cells on each side each cell of $S$ is seen. For example, a facet
+  of two cells may be seen from one cell only.
+- For a sub-entity of lower dimension than a facet, such as a vertex of a
+  triangle mesh, which one of the several cells that contain the sub-entity is
+  on a side. A function that is continuous across the cells has the same
+  restriction from each of the cells. The restriction of any other function
+  depends on the choice.
+- The names of the sides, and which cell is on which side. For example, the
+  facets of an interface between fluid and solid triangles of the one cell
+  type 0 of `T` have the sides `(("fluid", T, 0), ("solid", T, 0))`. The cell
+  on the side `"fluid"` is the fluid triangle.
 
-A cell of $S$ that is a piece of the cell on a side covers the cases where
-one entity meets several cells. At a hanging node, the facet of the small
-cell is half of a facet of the large cell, seen from the large cell through a
-vertex and an edge midpoint of $K_j$. At a mortar interface between two
-meshes, the cells of $S$ are the pieces of the intersections of the facets,
-each seen from one cell of each mesh. For a line through the cells of a 3D
-mesh, the cells of $S$ are the segments of the line inside one cell each,
-seen from the cell of the line and from the cell of the mesh (see [Example: a
-1D network in a 3D mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh)). The
-concrete mesh computes which parts of an entity meet which cells, outside the
-language, as it locates the cell that contains a point (see [Points and point
-evaluation](#points-and-point-evaluation)). The positions of a piece of a
-curved cell are an approximation, as a quadrature rule is. The core does not
-check that the image of a cell of $S$ lies in the cell on the side.
+The sides may have different topologies, such as a mesh and a submesh, or two
+meshes that meet. The topology of a side may itself have sides, so the cells
+of $S$ may be facets of facets.
 
-Examples, with a topology `T` of triangles with the cell types `(K,)`,
-`I = Simplex(1)` and `P = Simplex(0)`. A topology of sub-entities that an
-expression is restricted to needs reference cells as cell types, such as
-`ReferenceSimplex(1)` in place of `I` (see [Restriction](#restriction)), and
-the examples here show the topology only:
+#### Pieces
+
+A cell of $S$ that is a piece of the cell on a side covers the cases where one
+entity meets several cells:
+
+- At a hanging node, the facet of the small cell is half of a facet of the
+  large cell. The large cell sees the half facet through a vertex and an edge
+  midpoint of $K_j$.
+- At a mortar interface between two meshes, the cells of $S$ are the pieces of
+  the intersections of the facets. Each piece is seen from one cell of each
+  mesh.
+- For a line through the cells of a 3D mesh, the cells of $S$ are the segments
+  of the line inside one cell each. Each segment is seen from the cell of the
+  line and from the cell of the mesh (see [Example: a 1D network in a 3D
+  mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh)).
+
+The concrete mesh computes which parts of an entity meet which cells, outside
+the language, as the concrete mesh locates the cell that contains a point (see
+[Points and point evaluation](#points-and-point-evaluation)). The positions of
+a piece of a curved cell are an approximation, as a quadrature rule is. The
+core does not check that the image of a cell of $S$ lies in the cell on the
+side.
+
+#### Examples
+
+The examples use a topology `T` of triangles with the cell types `(K,)`,
+`I = Simplex(1)` and `P = Simplex(0)`. The examples show the topology only. A
+topology of sub-entities that an expression is restricted to needs reference
+cells as cell types, such as `ReferenceSimplex(1)` in place of `I` (see
+[Restriction](#restriction)).
 
 - A topology `B` of the boundary facets of `T` has the cell types `(I,)` and
   the sides `((("inside", T, 0),),)`. `cell_index(B, 0)` is the index of the
@@ -2616,34 +2651,34 @@ the examples here show the topology only:
 - A topology of the vertices of `T`, such as for point loads, has the cell
   types `(P,)` and the sides `((("inside", T, 0),),)`, with one triangle chosen
   for each vertex.
-- With a submesh `M` of the boundary facets of `T`, with the cell types
-  `(I,)`, a topology of the facets has the sides
+- Let `M` be a submesh of the boundary facets of `T`, with the cell types
+  `(I,)`. A topology of the facets has the sides
   `((("mesh", T, 0), ("submesh", M, 0)),)`, and each facet is a cell of `M`.
 - A topology of the left boundary facets of a periodic `T` has the sides
-  `((("left", T, 0), ("right", T, 0)),)`, with the position of each vertex
-  from `"right"` that of the vertex one period to the right.
+  `((("left", T, 0), ("right", T, 0)),)`. From `"right"`, the position of each
+  vertex is that of the vertex one period to the right.
 - For a surface mesh `U` of triangles in $R^3$, a topology of the edges where
   three triangles meet has the sides `((("a", U, 0), ("b", U, 0), ("c", U, 0)),)`.
-- For a topology `M` of triangles and quadrilaterals with the cell types
-  `(Kt, Kq)`, a topology of all the facets shared by two cells has three
-  groups of the cell type `I`, with the cell types `(I, I, I)` and the sides
-  `((("+", M, 0), ("-", M, 0)), (("+", M, 0), ("-", M, 1)), (("+", M, 1), ("-", M, 1)))`,
-  for the facets between two triangles, between a triangle and a
-  quadrilateral, and between two quadrilaterals. An integral over the topology
-  has one term for each group, and a form compiler may generate one kernel for
-  each group or one kernel for all of them.
+- Let `M` be a topology of triangles and quadrilaterals with the cell types
+  `(Kt, Kq)`. A topology of all the facets shared by two cells has three groups
+  of the cell type `I`, with the cell types `(I, I, I)` and the sides
+  `((("+", M, 0), ("-", M, 0)), (("+", M, 0), ("-", M, 1)), (("+", M, 1), ("-", M, 1)))`.
+  The three groups are the facets between two triangles, between a triangle
+  and a quadrilateral, and between two quadrilaterals. An integral over the
+  topology has one term for each group. A form compiler may generate one
+  kernel for each group or one kernel for all of them.
 - For a topology `U3` of prisms with the cell types `(W,)`, a topology of the
   boundary facets has the cell types `(K, Q)`, with the quadrilateral cell type
   `Q`, and the sides `((("inside", U3, 0),), (("inside", U3, 0),))`.
 - For a triangle mesh `T` with a hanging node, a topology of the half facets
   has the cell types `(I,)` and the sides `((("small", T, 0), ("large", T, 0)),)`.
-  The positions from `"small"` are two vertices of `K`, and from `"large"` a
-  vertex and an edge midpoint of `K`.
-- For a mesh `T1` of segments through a tetrahedral mesh `T3`, a topology of
+  From `"small"`, the positions are two vertices of `K`. From `"large"`, the
+  positions are a vertex and an edge midpoint of `K`.
+- Let `T1` be a mesh of segments through a tetrahedral mesh `T3`. A topology of
   the pieces of the segments that lie in one tetrahedron each has the cell
-  types `(I,)` and the sides `((("vessel", T1, 0), ("tissue", T3, 0)),)`. The
-  positions from `"vessel"` are two parameters of the segment, and from
-  `"tissue"` two points of the tetrahedron.
+  types `(I,)` and the sides `((("vessel", T1, 0), ("tissue", T3, 0)),)`. From
+  `"vessel"`, the positions are two parameters of the segment. From
+  `"tissue"`, the positions are two points of the tetrahedron.
 
 Worked examples for this chapter in EXAMPLES.md: [the simplex as a cell type](EXAMPLES.md#example-the-simplex-as-a-cell-type), [a static topology](EXAMPLES.md#example-a-static-topology).
 
@@ -3047,40 +3082,64 @@ cell on a side, on the cells of a topology with sides.
 | Raises            | `ValueError` if a requirement fails                                                                   |
 | Evaluated by      | [`expand_pull_backs`](#expanding-pull-backs)                                                          |
 
-`Normal(D, E, s)` is a terminal of the geometry, as `Coordinate` is. The
-pull-back by `cell_domain(E, i)`, with $B_i$ and $A_i$ of
-[Restriction](#restriction) for the side $s$ and the reference cell $K_j$ of
-the cell on the side, is
+`Normal(D, E, s)` is a terminal of the geometry, as `Coordinate` is.
+
+Notation, for the piece $i$ of $E$:
+
+- $B_i$ and $A_i$ are the maps of [Restriction](#restriction) for the side $s$.
+- $K_j$ is the reference cell of the cell on the side.
+- $k$ is the dimension of $D$, and $n$ is the dimension of the ambient
+  coordinate domain.
+
+#### The pull-back of `Normal`
+
+The pull-back of `Normal(D, E, s)` by `cell_domain(E, i)` is
 
 $$
 \nu = \frac{K^T \hat m}{\lvert K^T \hat m \rvert},
 $$
 
-with $K$ the [inverse](#inverse) of the Jacobian matrix of $B_i$ at the
-points of $A_i$, the pseudo-inverse for $k < n$, and $\hat m$ a normal of the
-cell of $E$ in $K_j$, orthogonal to the columns of the Jacobian matrix of
-$A_i$ and pointing away from the centroid of the vertices of $K_j$. Both are
-fixed compositions for each $k$ and $n$, from the side tables and the
-vertices of $K_j$, so the core needs no numbering of the facets.
-The centroid lies inside a convex reference cell, so $\hat m$ points out of
-$K_j$ for a cell of $E$ on the boundary of $K_j$, such as a facet or a piece
-of a facet. For a cell of $E$ inside $K_j$, such as a cut through the cell,
-$\hat m$ points away from the centroid, a convention. For $k = n$, the
-normals from two sides of one cell of $E$ are opposite. For $k < n$, such as on the edges of a surface in $R^3$, $\nu$ is
-the unit conormal, tangent to the cell on the side and orthogonal to the cell
-of $E$. The conormals from two sides are opposite only where the cells on the
-two sides have the same tangent space, so on a surface a jump weights each
-side by the normal of that side, as in `u_p * n_p + u_m * n_m`.
+where:
+
+- $K$ is the [inverse](#inverse) of the Jacobian matrix of $B_i$ at the points
+  of $A_i$. For $k < n$, $K$ is the pseudo-inverse.
+- $\hat m$ is a normal of the cell of $E$ in $K_j$. $\hat m$ is orthogonal to
+  the columns of the Jacobian matrix of $A_i$, and $\hat m$ points away from
+  the centroid of the vertices of $K_j$.
+
+$K$ and $\hat m$ are fixed compositions for each $k$ and $n$, from the side
+tables and the vertices of $K_j$, so the core needs no numbering of the
+facets.
+
+#### The direction of the normal
+
+- For a cell of $E$ on the boundary of $K_j$, such as a facet or a piece of a
+  facet, $\hat m$ points out of $K_j$. The reason is that the centroid lies
+  inside a convex reference cell.
+- For a cell of $E$ inside $K_j$, such as a cut through the cell, $\hat m$
+  points away from the centroid, by convention.
+- For $k = n$, the normals from two sides of one cell of $E$ are opposite.
+- For $k < n$, such as on the edges of a surface in $R^3$, $\nu$ is the unit
+  conormal. The conormal is tangent to the cell on the side and orthogonal to
+  the cell of $E$. The conormals from two sides are opposite only where the
+  cells on the two sides have the same tangent space. On a surface, a jump
+  therefore weights each side by the normal of that side, as in
+  `u_p * n_p + u_m * n_m`.
 
 `Normal` is the normal of a cell on a side, not the unit normal field of a
-domain of dimension $n - 1$, such as of a surface in $R^3$. That field needs
-an orientation of the domain (see [Concept: orientation of a
+domain of dimension $n - 1$, such as of a surface in $R^3$. The unit normal
+field needs an orientation of the domain (see [Concept: orientation of a
 domain](#concept-orientation-of-a-domain)) and belongs to a downstream library.
 
-Examples, with `B` of the [`Integral` over a decomposed
-domain](#integral-over-a-decomposed-domain) examples, the decomposed domain `E`
-of the interior facets of `D` with the sides `"+"` and `"-"`,
-`grad_u = components(exterior_derivative(u, D), D)` and `i = index("i")`:
+#### Examples
+
+The examples use the following objects:
+
+- `B` of the [`Integral` over a decomposed
+  domain](#integral-over-a-decomposed-domain) examples.
+- The decomposed domain `E` of the interior facets of `D`, with the sides
+  `"+"` and `"-"`.
+- `grad_u = components(exterior_derivative(u, D), D)` and `i = index("i")`.
 
 ```python
 n_B = normal(D, B, "inside")
