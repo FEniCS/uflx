@@ -16,17 +16,27 @@
     --link: #4493f8;
   }
 }
-html { background: var(--bg); color: var(--fg); }
+html { background: var(--bg); color: var(--fg); scroll-padding-top: 3.5rem; }
 body {
   font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
   max-width: 52rem;
   margin: 0 auto;
-  padding: 2rem 1rem 4rem;
+  padding: 4.5rem 1rem 4rem;
 }
+nav.notes {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1;
+  display: flex; gap: 1.25rem; align-items: center;
+  height: 2.75rem; padding: 0 1rem; overflow-x: auto; white-space: nowrap;
+  background: var(--bg); border-bottom: 1px solid var(--border); font-size: 0.9rem;
+}
+nav.notes a { color: var(--muted); text-decoration: none; }
+nav.notes a:first-child { color: var(--fg); font-weight: 600; margin-right: 0.5rem; }
+nav.notes a:hover { color: var(--link); }
+nav.notes a[aria-current="page"] { color: var(--fg); box-shadow: inset 0 -2px var(--link); padding: 0.6rem 0; }
 @media (min-width: 80rem) {
   body { margin-left: 22rem; }
   nav#TOC {
-    position: fixed; top: 0; left: 0; bottom: 0; width: 19rem;
+    position: fixed; top: 2.75rem; left: 0; bottom: 0; width: 19rem;
     overflow-y: auto; padding: 1.5rem 1rem; font-size: 0.85rem;
     border-right: 1px solid var(--border);
   }
