@@ -828,26 +828,48 @@ See also: [`Indexed`](#indexed), [Restriction](#restriction).
 A concrete subclass of the base object for an index value read from a table.
 A `GatheredIndex` is not an expression and not a free index.
 
-| `GatheredIndex(table, indices)` |                                                                                                                                                                                   |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Free function                   | `gathered_index(table, indices)`                                                                                                                                                  |
-| Properties                      | `table`, an `AbstractIndexValue`, and `indices`, an `int`, an `Index` or a `GatheredIndex` for each axis of the shape of the table                                                                                                               |
-| Static type                     | The extent of the table, and the free indices of the `Index` entries, each with the extent of the axis, and of the `GatheredIndex` entries, in order, with each `Index` taken once                                                               |
-| Raises                          | `TypeError` for an entry that is neither exactly `int`, `Index` nor `GatheredIndex`, and `IndexError` if the number of entries differs from the number of axes, for an `int` entry out of range, or for a `GatheredIndex` entry whose extent differs from the extent of the axis |
+| `GatheredIndex(table, indices)` |                                                                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Free function                   | `gathered_index(table, indices)`                                                                                                   |
+| Properties                      | `table`, an `AbstractIndexValue`, and `indices`, an `int`, an `Index` or a `GatheredIndex` for each axis of the shape of the table |
+| Static type                     | The extent and the free indices below                                                                                              |
+| Raises                          | The errors below                                                                                                                   |
 
-The value is the entry of the table at the indices.
+The value of a `GatheredIndex` is the entry of the table at the indices.
 
-A `GatheredIndex` is an entry of [`Indexed`](#indexed), and covers one axis
-whose extent equals the extent of the `GatheredIndex`. The free indices of the
-`GatheredIndex` are free in the `Indexed`. A `GatheredIndex` is also an entry
-of a `GatheredIndex`, with the same rule, so gathers nest, such as the
-vertices of the cell on the side of each facet, read through the cell on the
-side of the facet.
+Static type:
 
-Example, with a table `cells` of the shape `(4,)`, the extent 2 and the values
-`(0, 1, 1, 0)`, such as the cell of each of the four boundary edges of the
-square divided into two triangles, and an array `a` of value shape `(2,)` with
-one value for each triangle:
+- The extent is the extent of the table.
+- The free indices are the free indices of the `Index` entries, each with the
+  extent of the axis, and the free indices of the `GatheredIndex` entries, in
+  order. Each `Index` is taken once.
+
+Raises:
+
+- `TypeError` for an entry that is neither exactly `int`, `Index` nor
+  `GatheredIndex`.
+- `IndexError` if the number of entries differs from the number of axes.
+- `IndexError` for an `int` entry out of range.
+- `IndexError` for a `GatheredIndex` entry whose extent differs from the
+  extent of the axis.
+
+#### Where a `GatheredIndex` appears
+
+- A `GatheredIndex` is an entry of [`Indexed`](#indexed), and covers one axis
+  whose extent equals the extent of the `GatheredIndex`. The free indices of
+  the `GatheredIndex` are free in the `Indexed`.
+- A `GatheredIndex` is also an entry of a `GatheredIndex`, with the same rule,
+  so gathers nest. For example, the vertices of the cell on the side of each
+  facet are read through the cell on the side of the facet.
+
+#### Examples
+
+The examples use the following objects:
+
+- A table `cells` of the shape `(4,)`, the extent 2 and the values
+  `(0, 1, 1, 0)`, such as the cell of each of the four boundary edges of the
+  square divided into two triangles.
+- An array `a` of value shape `(2,)`, with one value for each triangle.
 
 ```python
 e = index("e")
@@ -863,10 +885,10 @@ b = component_tensor(a_e, (e,))
 total = index_sum(a_e, (e,))
 ```
 
-- `gathered_index(cells, (2,))` has no free index and the value 1, so
+- `gathered_index(cells, (2,))` has no free index and the value 1. So
   `a[gathered_index(cells, (2,))]` is `a[1]`.
-- With a table `cell_vertices` of the shape `(2, 3)` and the extent 4, the
-  vertices of each triangle, `gathered_index(cell_vertices, (g, w))` is the
+- Let `cell_vertices` be a table of the vertices of each triangle, of the shape
+  `(2, 3)` and the extent 4. `gathered_index(cell_vertices, (g, w))` is the
   vertex `w` of the triangle of edge `e`, with the free indices `e` and `w`.
 - For an array `c` of value shape `(3,)`, `c[g]` raises `IndexError`, because
   the extent 2 of `g` differs from the extent 3 of the axis.
@@ -2359,35 +2381,49 @@ Requires: [`RD`](#rd), [`DomainMap`](#domainmap),
 triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 A point is the image of a domain map. A point in a domain $Q$ is
-`domain_map(RD(0), x, Q)`, with $x$ a constant expression of value
-shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$. The
-core needs no node class and no free function for a point.
+`domain_map(RD(0), x, Q)`, with $x$ a constant expression of value shape
+`(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$. The core
+needs no node class and no free function for a point.
+
+#### Point evaluation
 
 The value of a 0-form $f$ of any value shape at a point $p$ is
-`integral(pull_back(f, p), RD(0))`, because the integral of a 0-form over
-`RD(0)` is the value at the single point (see [`Integral`](#integral)).
-`pull_back(f, p)` is an expression on `RD(0)`, and the integral has no support, so
+`integral(pull_back(f, p), RD(0))`. The reason is that the integral of a 0-form
+over `RD(0)` is the value at the single point (see [`Integral`](#integral)).
+`pull_back(f, p)` is an expression on `RD(0)`. The integral has no support, so
 the integral combines with any expression.
 
-A point in a coordinate domain `T` is given in the coordinates of `T`, and
+A point in a coordinate domain `T` is given in the coordinates of `T`.
 `expand_pull_backs` evaluates the pull-back of an expression on `T` by the
 point.
 
-A family of points $M$ = `domain_map(RD(0), q, D)` in a decomposed domain $D$
-with a topology $T$, with the free index $i$ of the family of the extent $m$,
-needs the cell of $D$ that contains each point and the position of each point
-in that cell. These are the side tables `(cells, positions)` of the topology
-of the points, with one cell of a reference cell type of dimension 0 for each
-point and the side `("inside", T, j)` (see [Sides of a
-topology](#sides-of-a-topology)). So a family of points in a mesh is a
-topology with a side, and the mesh library locates the cells and inverts the
-map of each cell, for example by Newton's method, outside the language, as
-the mesh library computes every side table. `pull_back(u, M)` for a function
-`u` on $D$ remains after `expand_pull_backs`, because the library of the
-space of `u` defines `u` on the cells only (see
-[`AbstractFunctionSpace`](#abstractfunctionspace)). A pass of the mesh library
-rewrites the pull-back as the [restriction](#restriction) to the topology of
-the points, with the index $i$ of the family in place of the cell index,
+#### A family of points in a decomposed domain
+
+Notation:
+
+- $D$ is a decomposed domain with a topology $T$.
+- $M$ = `domain_map(RD(0), q, D)` is a family of points in $D$, with the free
+  index $i$ of the family, of the extent $m$.
+- $j$ is the cell type of $T$ of the cells that contain the points, $K_j$ is
+  the reference cell of cell type $j$, and $k_j$ is the dimension of $K_j$.
+
+$M$ needs the cell of $D$ that contains each point, and the position of each
+point in that cell. These are the side tables `(cells, positions)` of the
+topology of the points (see [Sides of a topology](#sides-of-a-topology)). The
+topology of the points has one cell of a reference cell type of dimension 0
+for each point, and the side `("inside", T, j)`. A family of points in a mesh is
+therefore a topology with a side.
+
+The mesh library locates the cells and inverts the map of each cell outside
+the language, for example by Newton's method, as the mesh library computes
+every side table.
+
+`pull_back(u, M)` for a function `u` on $D$ remains after `expand_pull_backs`.
+The reason is that the library of the space of `u` defines `u` on the cells
+only (see [`AbstractFunctionSpace`](#abstractfunctionspace)). A pass of the
+mesh library rewrites the pull-back as the [restriction](#restriction) to the
+topology of the points, with the index $i$ of the family in place of the cell
+index:
 
 ```python
 g = gathered_index(cells, (i,))
@@ -2395,18 +2431,23 @@ R = domain_map(RD(0), component_tensor(positions[i, 0, k], (k,)), K_j)
 pull_back(pull_back(u, gathered_cell_domain(D, j, g)), R)
 ```
 
-with `cells` of the shape `(m,)` and the extent `T.num_cells[j]`, and
-`positions` of the value shape `(m, 1, k_j)`. The result has the free index
-$i$, and the pull-back of `u` by a gathered cell domain is in the contract of
-the space. The maps below `u` may be a chain, such as a family of maps from a
-decomposed domain, pulled back by a cell of that domain and then by a family
-of points of the reference cell, and the pass reads the chain as one family
-with all of its free indices (see [Example: a 1D network in a 3D
-mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh)). A family whose points
-lie in cells of several types is not yet covered, because the family would
-need one piece for each cell type.
+Here `cells` has the shape `(m,)` and the extent `T.num_cells[j]`, and
+`positions` has the value shape `(m, 1, k_j)`. The result has the free index
+$i$. The pull-back of `u` by a gathered cell domain is in the contract of the
+space.
 
-Examples, with `T`, `X`, `psi` and `K` of the affinely mapped triangle, and
+The maps below `u` may be a chain. An example of a chain is a family of maps
+from a decomposed domain, pulled back by a cell of that domain and then by a
+family of points of the reference cell. The pass reads the chain as one family
+with all of its free indices (see [Example: a 1D network in a 3D
+mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh)).
+
+A family whose points lie in cells of several types is not yet covered,
+because the family would need one piece for each cell type.
+
+#### Examples
+
+The examples use `T`, `X`, `psi` and `K` of the affinely mapped triangle, and
 `f = X[0] * X[1]`:
 
 ```python
@@ -2424,15 +2465,14 @@ fc = integral(pull_back(f, c), RD(0))
 C = domain_map(RD(0), pull_back(psi, c), RD(2))
 ```
 
-- With a second point
-  `d = domain_map(RD(0), tensor((third, Integer(2) / Integer(3))), T)`,
-  `integral(pull_back(f, c), RD(0)) + integral(pull_back(f, d), RD(0))` is the action of
-  a sum of two Dirac measures on $f$.
+- Let `d = domain_map(RD(0), tensor((third, Integer(2) / Integer(3))), T)` be
+  a second point. `integral(pull_back(f, c), RD(0)) + integral(pull_back(f, d), RD(0))`
+  is the action of a sum of two Dirac measures on $f$.
 - `domain_map(RD(0), tensor((third, third)), RD(2))` is the point
   $(1/3, 1/3)$ in the plane. With that point as `q`, `pull_back(f, q)` raises
   `ValueError`, because `q` lies in `RD(2)`, not in `T`.
-- `domain_map(RD(0), X, T)` raises `ValueError`, because `X` has the
-  support `T`, not `RD(0)`.
+- `domain_map(RD(0), X, T)` raises `ValueError`, because `X` has the support
+  `T`, not `RD(0)`.
 
 Worked examples for this chapter in EXAMPLES.md: [a paraboloid](EXAMPLES.md#example-a-paraboloid), [an affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle), [orientation of an edge and of a triangle](EXAMPLES.md#example-orientation-of-an-edge-and-of-a-triangle), [integrating over an edge](EXAMPLES.md#example-integrating-over-an-edge), [integrating over the boundary of a triangle](EXAMPLES.md#example-integrating-over-the-boundary-of-a-triangle), [quadrature](EXAMPLES.md#example-quadrature), [integrating over a cut cell](EXAMPLES.md#example-integrating-over-a-cut-cell), [the centroid of a triangle](EXAMPLES.md#example-the-centroid-of-a-triangle).
 
@@ -3013,12 +3053,21 @@ Requires: [`Integral`](#integral),
 See also: [Expanding integrals](#expanding-integrals).
 
 `Integral(f, D)` for a decomposed domain $D$ of dimension $k$ integrates a
-0-form against the density that the pieces induce, and a $k$-form with the
-orientation of the pieces. $f$ has the support $D$, the support
-`D.ambient_domain` or no support. The integral is the sum over the pieces $j$
-of the integrals over the domains of piece $j$, and
-[`expand_integrals`](#expanding-integrals) rewrites `Integral(f, D)` as that
-sum:
+0-form against the density that the pieces induce, and integrates a $k$-form
+with the orientation of the pieces. $f$ has the support $D$, the support
+`D.ambient_domain` or no support.
+
+Notation, for the piece $j$ of $D$:
+
+- $P_j$ is the parameter domain and $\psi_j$ is the parameterisation.
+- `indices_j` are the free indices of piece $j$.
+- $n$ is the dimension of the ambient coordinate domain.
+
+#### Expansion into pieces
+
+The integral is the sum over the pieces $j$ of the integrals over the domains
+of piece $j$. [`expand_integrals`](#expanding-integrals) rewrites
+`Integral(f, D)` as that sum:
 
 ```python
 # A 0-form f, with the density rho_j of piece j.
@@ -3028,40 +3077,55 @@ index_sum(integral(pull_back(f, cell_domain(D, j)) * rho_j * vol_j, P_j), indice
 index_sum(integral(pull_back(f, cell_domain(D, j)), P_j), indices_j)
 ```
 
-with $P_j$ the parameter domain and `indices_j` the free indices of piece $j$,
-and no `IndexSum` for a piece with no free indices. `vol_j` is
-`volume_form(P_j)` for a coordinate domain $P_j$. For a decomposed domain
-$P_j$, the inner integral is again the integral of a 0-form against a density,
-so `vol_j` is absent and `expand_integrals` rewrites the inner integral in
-turn. With the Jacobian matrix
-$J_j$ = `components(exterior_derivative(psi_j, P_j), P_j)` of value shape
-`(n, k)`, the density is $\rho_j = \sqrt{\det(J_j^T J_j)}$, the length, the
-area or the volume of the image of a small region of $P_j$, written as
-`square_root` of the Leibniz formula for the determinant of the $k \times k$
-matrix $J_j^T J_j$, a fixed composition for each $k$. For $k = 0$, the empty
-determinant is `Integer(1)`, so the integral over a set of points is the sum of
-the values.
+- A piece with no free indices has no `IndexSum`.
+- For a coordinate domain $P_j$, `vol_j` is `volume_form(P_j)`.
+- For a decomposed domain $P_j$, `vol_j` is absent. The inner integral is
+  again the integral of a 0-form against a density, and `expand_integrals`
+  rewrites the inner integral in turn.
 
-The density needs no orientation, so the cells of a mesh may be oriented in any
-way, and an integral of a positive 0-form is positive. The integral of a
-$k$-form, such as for Stokes' theorem, uses the orientation of the pieces (see
-[Concept: orientation of a domain](#concept-orientation-of-a-domain)).
+#### The density
+
+The Jacobian matrix of piece $j$ is
+$J_j$ = `components(exterior_derivative(psi_j, P_j), P_j)`, of value shape
+`(n, k)`. The density is $\rho_j = \sqrt{\det(J_j^T J_j)}$, the length, the
+area or the volume of the image of a small region of $P_j$.
+
+- The density is written as `square_root` of the Leibniz formula for the
+  determinant of the $k \times k$ matrix $J_j^T J_j$, a fixed composition for
+  each $k$.
+- For $k = 0$, the empty determinant is `Integer(1)`, so the integral over a
+  set of points is the sum of the values.
+
+The density needs no orientation. The cells of a mesh may therefore be
+oriented in any way, and an integral of a positive 0-form is positive. The
+integral of a $k$-form, such as for Stokes' theorem, uses the orientation of
+the pieces (see [Concept: orientation of a
+domain](#concept-orientation-of-a-domain)).
+
+#### Integrands on the ambient domain
 
 An $f$ with the support `D.ambient_domain` is pulled back by piece $j$ itself
-in place of `cell_domain(D, j)`, so $D$ may be a set of points or of curves in
-a mesh. A free index of $f$ that is also a free index of piece $j$ takes the
-value of the member, so `d[i]` pairs a datum with each point of a family with
-the index `i`.
+in place of `cell_domain(D, j)`. $D$ may therefore be a set of points or of
+curves in a mesh. A free index of $f$ that is also a free index of piece $j$
+takes the value of the member. So `d[i]` pairs a datum with each point of a
+family with the index `i`.
 
-Examples, with `D` of the [`DecomposedDomain`](#decomposeddomain) example, a
-function `u` on `D`, and the decomposed domain `B` of the boundary facets of
-`D`, with the side `"inside"`:
+#### Examples
+
+The examples use the following objects:
+
+- `D` of the [`DecomposedDomain`](#decomposeddomain) example.
+- A function `u` on `D`.
+- The decomposed domain `B` of the boundary facets of `D`, with the side
+  `"inside"`.
+
+Examples:
 
 - `integral(Integer(1), D)` is the area 1 of the square, the sum of two
   integrals over `K`.
 - `integral(u, D)` is the legacy UFL `u * dx`.
-- `integral(Integer(1), B)` is the perimeter 4, and
-  `integral(restriction(u, B, "inside"), B)` is the legacy UFL `u * ds`.
+- `integral(Integer(1), B)` is the perimeter 4.
+- `integral(restriction(u, B, "inside"), B)` is the legacy UFL `u * ds`.
 - `integral(restriction(du, B, "inside"), B)` integrates the 1-form
   $\mathrm{d}u$ along the boundary facets, with the orientation of each facet.
 
