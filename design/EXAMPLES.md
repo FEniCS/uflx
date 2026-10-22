@@ -1179,9 +1179,6 @@ Requires: [The tour](DESIGN.md#the-tour),
 [`Integral` over a decomposed
 domain](LANGUAGE.md#integral-over-a-decomposed-domain).
 
-See also: [Appendix: Correspondence with legacy
-UFL](LANGUAGE.md#appendix-correspondence-with-legacy-ufl).
-
 The Poisson problem of the tour, written as classic FEniCS writes it:
 `inner(grad(u), grad(v)) * dx`. The layer is a module `uflx.legacy`, which
 does not exist, of a page of free functions and two plain Python classes over

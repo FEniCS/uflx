@@ -15,7 +15,6 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 LANGUAGE = HERE / "LANGUAGE.md"
-EXAMPLES = HERE / "EXAMPLES.md"
 
 # Classes of a language extension are not part of the core appendices.
 EXCLUDED_CHAPTERS = {"Extending the core"}
@@ -48,15 +47,6 @@ class FreeFunction:
     returns: str
 
 
-@dataclass
-class LegacyNote:
-    """A Legacy UFL subsection and the section it belongs to."""
-
-    title: str
-    link: str
-    text: str
-
-
 def slugify(heading: str) -> str:
     """Return the GitHub anchor of a heading."""
     text = re.sub(r"[`*]", "", heading).strip().lower()
@@ -76,7 +66,7 @@ def code_names(text: str) -> list[str]:
 
 
 class Document:
-    """The headings, tables and Legacy UFL notes of one Markdown file."""
+    """The headings and tables of one Markdown file."""
 
     def __init__(self, path: Path):
         """Parse the file at path."""
@@ -84,28 +74,15 @@ class Document:
         self.lines = path.read_text().split("\n")
         self.classes: list[ClassEntry] = []
         self.functions: list[FreeFunction] = []
-        self.legacy: list[LegacyNote] = []
         self.tables: dict[str, list[list[list[str]]]] = {}
         self._parse()
 
     def _parse(self) -> None:
         chapter = ""
-        section = ""
         anchor = ""
         used: dict[str, int] = {}
         in_code = False
-        legacy: tuple[str, str] | None = None
-        legacy_text: list[str] = []
         prose: list[str] = []
-        link_prefix = "" if self.path == LANGUAGE else f"{self.path.name}"
-
-        def flush_legacy() -> None:
-            if legacy is not None:
-                for paragraph in "\n".join(legacy_text).strip().split("\n\n"):
-                    text = " ".join(paragraph.split())
-                    # The chapter list of worked examples may follow the last note.
-                    if not text.startswith("Worked examples for this chapter"):
-                        self.legacy.append(LegacyNote(legacy[0], legacy[1], text))
 
         i = 0
         while i < len(self.lines):
@@ -119,25 +96,14 @@ class Document:
                 n = used.get(slug, 0)
                 used[slug] = n + 1
                 slug = slug if n == 0 else f"{slug}-{n}"
-                if title == "Legacy UFL":
-                    flush_legacy()
-                    legacy = (section, f"{link_prefix}#{slugify(section)}")
-                    legacy_text = []
-                else:
-                    if level <= 3:
-                        flush_legacy()
-                        legacy = None
-                    if level == 2:
-                        chapter = title
-                    if level in (2, 3):
-                        section = title
-                        prose = []
-                    if level <= 4:
-                        anchor = slug
+                if level == 2:
+                    chapter = title
+                if level in (2, 3):
+                    prose = []
+                if level <= 4:
+                    anchor = slug
                 i += 1
                 continue
-            if legacy is not None:
-                legacy_text.append(line.strip())
             is_table = (
                 not in_code
                 and line.startswith("|")
@@ -158,7 +124,6 @@ class Document:
             if not in_code:
                 prose.append(line)
             i += 1
-        flush_legacy()
 
     def _table(self, header, rows, chapter, anchor, lead) -> None:
         if header == FREE_FUNCTION_HEADER:
@@ -252,11 +217,6 @@ def free_functions(functions: list[FreeFunction]) -> str:
     return table(header, rows)
 
 
-def legacy_ufl(notes: list[LegacyNote]) -> str:
-    """Render the Legacy UFL notes as one bullet each."""
-    return "\n".join(f"- **[{n.title}]({n.link}).** {n.text}" for n in notes) + "\n"
-
-
 def opening_parents(entry: ClassEntry) -> list[str] | None:
     """Return the parents that the opening sentence of a section names."""
     m = re.search(
@@ -315,10 +275,9 @@ def is_expression(lang: Document, name: str) -> bool:
     return False
 
 
-def render(lang: Document, examples: Document) -> dict[str, str]:
+def render(lang: Document) -> dict[str, str]:
     """Return the text of each generated region."""
     return {
-        "legacy-ufl": legacy_ufl(lang.legacy + examples.legacy),
         "class-hierarchy": class_hierarchy(lang.classes),
         "free-functions": free_functions(lang.functions),
     }
@@ -342,9 +301,8 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="fail instead of rewriting")
     args = parser.parse_args()
     lang = Document(LANGUAGE)
-    examples = Document(EXAMPLES)
     text = LANGUAGE.read_text()
-    new = fill(text, render(lang, examples))
+    new = fill(text, render(lang))
     problems = checks(lang)
     for p in problems:
         print(f"warning: {p}", file=sys.stderr)

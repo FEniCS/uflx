@@ -23,9 +23,7 @@ leaves open. A statement in the present tense, such as "the degree is a
 `tuple`", is a rule of the language. "Not yet covered" marks a decided gap, a
 part of the language that the authors intend to specify later. "Open" marks a
 question that the authors have not decided. A "Legacy UFL" subsection relates
-a section to legacy UFL and is not a rule. The [legacy UFL
-appendix](#appendix-correspondence-with-legacy-ufl) collects the subsections. An "Implementation note" is advice to an
-implementation and is not a rule.
+a section to legacy UFL and is not a rule.
 
 ## Contents
 
@@ -126,7 +124,6 @@ implementation and is not a rule.
   - [New operations](#new-operations)
   - [New subclasses](#new-subclasses)
   - [New transformations](#new-transformations)
-- [Appendix: Correspondence with legacy UFL](#appendix-correspondence-with-legacy-ufl)
 - [Appendix: Class hierarchy](#appendix-class-hierarchy)
 - [Appendix: Free functions](#appendix-free-functions)
 - [Appendix: Static type table](#appendix-static-type-table)
@@ -3805,30 +3802,6 @@ and one rule for each leaf class that the transformation rewrites. For example,
 the [Gateaux derivative](#gateaux-derivative) rewrites the functions that the
 derivative is taken with respect to, so the Gateaux derivative needs a rule for
 the leaf classes of those functions.
-
-## Appendix: Correspondence with legacy UFL
-
-The "Legacy UFL" subsections of the sections, in order.
-
-<!-- generated: legacy-ufl, run design/appendices.py to update -->
-- **[Basic principles](#basic-principles).** TSFC lowers a UFL form to GEM, which repeats much of the algebra of UFL, partly because UFL simplifies during construction. The UFLx core does not simplify during construction, so a form compiler may be able to use a lowered UFLx form directly, adding only leaves for tables and kernel inputs. This has not been confirmed with the TSFC or FFCx developers.
-- **[`AbstractTopology`](#abstracttopology).** In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and the measure `dx` hides the sum over the cells. In UFLx, the topology, the parameterisations of the pieces of a decomposed domain and the `IndexSum` over `cell_index(T, j)` are separate.
-- **[Sides of a topology](#sides-of-a-topology).** The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
-- **[`DecomposedDomain`](#decomposeddomain).** In legacy UFL, a `Mesh` is a decomposed domain, and `SpatialCoordinate(mesh)` is `coordinate(D)`.
-- **[Restriction](#restriction).** The legacy UFL restriction `f('+')` is `restriction(f, E, "+")` on the decomposed domain $E$ of the interior facets, whose sides are named `'+'` and `'-'`.
-- **[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).** `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the decomposed domain of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
-- **[`AbstractFunctionSpace`](#abstractfunctionspace).** The legacy UFL `Real` space is a space of constants, and the legacy UFL `Constant` is constant data.
-- **[`AbstractFunctionSpace`](#abstractfunctionspace).** In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, the pull-back states the meaning of a function on a cell, the library states the representation, and the space holds a decomposed domain, the legacy mesh.
-- **[`Function`](#function).** The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functions. A test function and a trial function are the functions that a form states as the arguments at the positions 0 and 1.
-- **[`DualSpace`](#dualspace).** The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the canonical map is a form, so the spaces keep distinct argument spaces.
-- **[`Form`](#form).** In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
-- **[`Action`](#action).** Legacy UFL operations are actions and rebindings. The action on the last argument of a bilinear form is `action(f, 1, w)`. The adjoint of `form(e, (conjugate(v), u))` is `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in `v` and antilinear in `u`. The Gateaux derivative with respect to a function adds an argument (see [Gateaux derivative](#gateaux-derivative)).
-- **[Extending the core](#extending-the-core).** In legacy UFL, properties are stored on the node classes, and the set of properties is fixed. Every new property touches every node class, so features such as complex numbers and dual spaces were patched in across the node classes.
-- **[Example: an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral).** The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal and the facet domain are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
-- **[Example: a fluid and a solid](EXAMPLES.md#example-a-fluid-and-a-solid).** The legacy UFL `dx(1)`, `ds(3)` and `ds((3, 4))` are integrals over the decomposed domains of marked topologies, one topology for each marker value. A DOLFINx submesh is the decomposed domain of a marked topology, and its entity map is the side table into the parent.
-- **[Example: the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator).** Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Components` gives the gradient in every dimension.
-- **[Example: a classic FEniCS layer for the Poisson problem](EXAMPLES.md#example-a-classic-fenics-layer-for-the-poisson-problem).** The legacy spelling `inner(grad(u), grad(v)) * dx` is a module `uflx.legacy` of free functions over the core, whose forms are ordinary core graphs.
-<!-- end generated: legacy-ufl -->
 
 ## Appendix: Class hierarchy
 
