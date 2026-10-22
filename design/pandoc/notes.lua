@@ -97,7 +97,7 @@ local function dropdown_title()
   if not titles then
     titles = {}
     for line in io.lines(PANDOC_STATE.input_files[1]) do
-      local title = line:match("^```+{dropdown}%s*(.*)$")
+      local title = line:match("^```+{dropdown}%s*(.*)$") or line:match("^~~~+{dropdown}%s*(.*)$")
       if title then
         titles[#titles + 1] = title
       end
@@ -115,11 +115,14 @@ function CodeBlock(el)
   if el.classes[1] == "{dropdown}" then
     local title = dropdown_title()
     local blocks = pandoc.read(el.text, "gfm+tex_math_dollars+pipe_tables").blocks:walk(inner)
+    local label = pandoc.read(title, "gfm").blocks[1]
+    label = label and label.content:walk(inner) or pandoc.Inlines({})
     if blocks[1] and blocks[1].t == "Para" then
-      blocks[1].content:insert(1, pandoc.Strong(title .. "."))
+      label:insert(pandoc.Str("."))
+      blocks[1].content:insert(1, pandoc.Strong(label))
       blocks[1].content:insert(2, pandoc.Space())
     else
-      blocks:insert(1, pandoc.Para({ pandoc.Strong(title) }))
+      blocks:insert(1, pandoc.Para({ pandoc.Strong(label) }))
     end
     return blocks
   end

@@ -256,8 +256,8 @@ $1/2$ of the unit triangle.
 
 Requires: [Concept: orientation of a domain](LANGUAGE.md#concept-orientation-of-a-domain),
 [Concept: integral over a domain](LANGUAGE.md#concept-integral-over-a-domain),
-[`Components`](LANGUAGE.md#components), [An affinely mapped
-triangle](#an-affinely-mapped-triangle).
+[Jacobian determinant](LANGUAGE.md#jacobian-determinant), [An affinely
+mapped triangle](#an-affinely-mapped-triangle).
 
 The examples use `T`, `X`, `one`, `S`, `t` and `e` of the
 [`PullBack`](LANGUAGE.md#pullback) example, and `K` of the
@@ -289,12 +289,8 @@ orientation of `RD(2)`:
 # The pull-back of the volume form of RD(2), det J dX_0 ^ dX_1, a 2-form on T.
 w = pull_back(volume_form(RD(2)), K)
 
-# The 2-form as the antisymmetric matrix [[0, det J], [-det J, 0]] of value shape (2, 2).
-W = components(components(w, T), T)
-
-# Entry [0, 1] follows the order of dX_0 ^ dX_1, so the entry is det J and not -det J.
 # A later pass evaluates det J to 5.
-det_J = W[0, 1]
+det_J = jacobian_determinant(K)
 
 # The sign of det J, 1 here.
 s = det_J / absolute(det_J)
@@ -305,6 +301,11 @@ integral(s * w, T)
 
 Swapping $v_1$ and $v_2$ gives $\det J = -5$ and $s = -1$. The integral of `w`
 alone is then $-5/2$, and the integral of `s * w` is still $5/2$.
+
+Entry `[0, 1]` of `components(components(w, T), T)` is also $\det J$, but is a
+different expression from `jacobian_determinant(K)`. The example uses
+`jacobian_determinant(K)`, the one expression of the core for $\det J$ (see
+[Jacobian determinant](LANGUAGE.md#jacobian-determinant)).
 
 ### Integrating over an edge
 

@@ -62,6 +62,11 @@ design/build-pdf.sh                      # every PDF
 design/build-pdf.sh LANGUAGE.md
 ```
 
+Asides in the notes, such as the "Legacy UFL" notes, are MyST dropdowns,
+```` ```{dropdown} Title ```` closed by ```` ``` ````. Use `~~~` fences when the title
+contains backticks. The site shows a dropdown collapsed and the PDF prints it
+open.
+
 The class hierarchy and free functions appendices of `design/LANGUAGE.md`
 are generated from the class tables. Edit the sections, then regenerate (the PDF build runs `--check`):
 

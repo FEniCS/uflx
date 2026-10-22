@@ -429,11 +429,7 @@ the public name of the free function, qualified by the package name, such as
 example, `transpose(A)` of the [transpose
 example](EXAMPLES.md#transpose-and-matrix-product) uses
 `Index(("library.transpose", A, 0))` and `Index(("library.transpose", A, 1))`.
-An index whose label contains `A` has an
-edge to `A`. Every node that uses an `Index` has an edge to the `Index`. So an index
-whose label contains `A` cannot occur inside `A`, because `A` would then
-contain `A`, and the graph is acyclic. Hence
-a derived index is fresh with respect to the operands, and the free function
+A derived index is fresh with respect to the operands, so the free function
 does not inspect the operands to find a fresh index. A global counter is not
 allowed, because a counter makes construction depend on global state.
 
@@ -444,14 +440,22 @@ identifier of the pass, the arguments of the rule and a number. For example,
 [Passes](#passes) follows the same rule.
 
 The edges of an index to the objects in the label of the index identify the
-index and are not operands. A pass that derives a property from the value of
-an expression, such as the free indices or the support, reads the edges of
-each node that are expressions, and an `Index` is not an expression, so such a
-pass never meets the label of an index. A pass that replaces an object
-reconstructs every index whose label contains the object (see
-[Passes](#passes)), so the label of a derived index always names the current
-operands, and the derived index stays fresh with respect to the current
-operands by the argument above.
+index and are not operands.
+
+```{dropdown} Why a derived index is fresh
+An index whose label contains `A` has an edge to `A`, and every node that uses
+an `Index` has an edge to the `Index`. So an index whose label contains `A`
+cannot occur inside `A`, because `A` would then contain `A`, and the graph is
+acyclic.
+
+A pass that derives a property from the value of an expression, such as the
+free indices or the support, reads the edges of each node that are
+expressions, and an `Index` is not an expression, so such a pass never meets
+the label of an index. A pass that replaces an object reconstructs every index
+whose label contains the object (see [Passes](#passes)), so the label of a
+derived index always names the current operands, and the derived index stays
+fresh with respect to the current operands by the same argument.
+```
 
 ### `EllipsisIndex`
 
@@ -513,11 +517,12 @@ Example:
   an expression `weights` of value shape `(r,)` raises `ValueError` in
   `weights[i] * points[i, 0]`, because the index `i` has two extents.
 
-> Open: ragged indexing. An axis whose length depends on another index, such
-> as the quadrature points of each cut cell, cannot be written. A dependent
-> extent, an `AbstractExtent` whose label contains the other index, would cover
-> the case. An index value read from a table is a
-> [`GatheredIndex`](#gatheredindex).
+```{dropdown} Open: ragged indexing
+An axis whose length depends on another index, such as the quadrature points
+of each cut cell, cannot be written. A dependent extent, an `AbstractExtent`
+whose label contains the other index, would cover the case. An index value
+read from a table is a [`GatheredIndex`](#gatheredindex).
+```
 
 ### `AbstractIndexValue`
 
@@ -1120,9 +1125,11 @@ Requires: [`AbstractExpression`](#abstractexpression), [`Power`](#power),
 | Static type     | Value shape `()`                    |
 | Raises          | `ValueError` if a requirement fails |
 
+~~~{dropdown} Why `SquareRoot` is a node class
 `SquareRoot` is not the composition `power(f, Integer(1) / Integer(2))`,
 because IEEE 754 requires a correctly rounded square root and not a correctly
 rounded power, so the result of `power` depends on the math library.
+~~~
 
 ### `Tensor`
 
@@ -1344,9 +1351,8 @@ $A^+$ is the inverse matrix $A^{-1}$. If $A$ has rank less than $k$,
 
 A pass chooses how to evaluate `Inverse`, in closed form for a small matrix or
 by a factorisation. The core writes the determinant as the Leibniz formula,
-such as in the density of [`Integral` over a decomposed
-domain](#integral-over-a-decomposed-domain), so the core has no node class for
-the determinant.
+such as in [Jacobian determinant](#jacobian-determinant), so the core has no
+node class for the determinant.
 
 Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
 
@@ -1384,6 +1390,14 @@ has no free function for a matrix product, so `@` is not an overload.
 An operator overload calls the free function with the operands unchanged, and
 the constructor validates (see [Numbers in expressions](#numbers-in-expressions)).
 `AbstractExpression` defines no reflected overloads, such as `__radd__`.
+
+An overload applies one free function to the operands, so the graph follows
+the grouping and the precedence of Python, and construction never regroups
+(see [No simplification during
+construction](#no-simplification-during-construction)). For example,
+`a + b + c` is `Sum(Sum(a, b), c)` and `a + (b + c)` is `Sum(a, Sum(b, c))`,
+and the two are not equal. `a ** b ** c` is `power(a, power(b, c))`, and
+`-a ** b` is `negate(power(a, b))`.
 
 `__getitem__` is the one exception. Python passes `f[i]` to `__getitem__` as the
 single entry `i`, and passes `f[i, j]` as the `tuple` `(i, j)`. `__getitem__`
@@ -1854,10 +1868,54 @@ E = domain_map(S, pull_back(psi, e), RD(2))
 - `pull_back(f, domain_map(S, tensor((one - t, t)), RD(2)))`
   raises `ValueError`, because that domain lies in `RD(2)`, not in `T`.
 
+### Jacobian determinant
+
+Requires: [`DomainMap`](#domainmap), [`ExteriorDerivative`](#exteriorderivative),
+[`Components`](#components), [`Indexed`](#indexed), [Negation and
+subtraction](#negation-and-subtraction), [Extents](#extents).
+
+See also: [Concept: orientation of a domain](#concept-orientation-of-a-domain),
+[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
+
+The free function `jacobian_determinant(D)` is the determinant $\det J$ of the
+Jacobian matrix $J$ of a domain $D$ = `DomainMap(P, psi, Q)` with $k = n$.
+
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `jacobian_determinant(D)` | | `D: DomainMap` | The Leibniz formula for $\det J$ |
+
+`jacobian_determinant(D)` requires $k = n$ and an `int` extent $n$, and raises
+`ValueError` if a requirement fails.
+
+With $J$ = `components(exterior_derivative(psi, P), P)`, of value shape
+`(n, n)`, the Leibniz formula is
+
+$$
+\det J = \sum_\sigma \operatorname{sgn}(\sigma) \prod_{i=0}^{n-1} J_{i, \sigma(i)},
+$$
+
+with $\sigma$ over the permutations of $(0, \dots, n - 1)$. The product for
+$\sigma$ is `J[0, σ(0)] * ... * J[n - 1, σ(n - 1)]`, nested to the left. The
+products are joined in the lexicographic order of $\sigma$, nested to the
+left, with `+` for an even $\sigma$ and `-` for an odd $\sigma$. For example,
+for $n = 2$, `jacobian_determinant(D)` is
+`J[0, 0] * J[1, 1] - J[0, 1] * J[1, 0]`. For $n = 1$,
+`jacobian_determinant(D)` is `J[0, 0]`, and for $n = 0$,
+`jacobian_determinant(D)` is `Integer(1)`.
+
+The core writes $\det J$ only as `jacobian_determinant(D)`, such as in the
+sign of [Concept: integral over a domain](#concept-integral-over-a-domain) and
+in the density for $k = n$ of [`Integral` over a decomposed
+domain](#integral-over-a-decomposed-domain). Every use of $\det J$ for one
+$D$ is therefore one expression, and a pass that computes the geometry of a
+cell once computes $\det J$ once. A library that needs $\det J$, such as for
+a contravariant Piola map, uses `jacobian_determinant(D)`.
+
 ### Concept: orientation of a domain
 
 Requires: [`DomainMap`](#domainmap),
-[Volume form](#volume-form), [`PullBack`](#pullback).
+[Volume form](#volume-form), [`PullBack`](#pullback), [Jacobian
+determinant](#jacobian-determinant).
 
 An orientation is a choice of direction, such as which way an edge runs or
 which side of a surface is up. A coordinate domain $P$ is oriented by the order of
@@ -1880,10 +1938,11 @@ $$
 $$
 
 with $Y$ the coordinates of $Q$ and $X$ the coordinates of $P$. The two
-orientations agree where $\det J > 0$, and differ where $\det J < 0$. The core
-has no node class for the determinant, because $\det J$ is the coefficient of
-`pull_back(volume_form(Q), D)`.
+orientations agree where $\det J > 0$, and differ where $\det J < 0$. $\det J$
+is `jacobian_determinant(D)` (see [Jacobian
+determinant](#jacobian-determinant)).
 
+```{dropdown} Domains of lower dimension
 If $k < n$, such as for a surface in $R^3$, $Q$ gives $D$ no orientation. Each
 piece of a decomposed domain of dimension $k < n$ takes the orientation of the
 parameter domain of the piece, and the core does not relate the orientations
@@ -1894,6 +1953,7 @@ field, such as the scalar curl of a 1-form on a surface. The mesh library
 provides a consistent orientation where one is needed, such as an expression
 with the sign $+1$ or $-1$ for each cell, and the core needs nothing more (see
 [The flux through a surface](EXAMPLES.md#the-flux-through-a-surface)).
+```
 
 An integral of a 0-form uses a density (see [`Integral` over a decomposed
 domain](#integral-over-a-decomposed-domain)), and a flux through a facet uses a
@@ -1919,7 +1979,8 @@ changes the sign of the integral.
 
 An integral that must not depend on the orientation, such as the legacy UFL
 integral `f * dx` over a cell whose orientation is arbitrary, multiplies by
-the sign $s = \det J / |\det J|$ for $k = n$. Then
+the sign $s = \det J / |\det J|$ for $k = n$, which is
+`jacobian_determinant(D) / absolute(jacobian_determinant(D))`. Then
 $\int_P s \, \psi^* (f \, \mathrm{d}Y_0 \wedge \dots \wedge \mathrm{d}Y_{n-1})
 = \int_P (f \circ \psi) \, |\det J| \, \mathrm{d}X$.
 
@@ -2605,7 +2666,8 @@ The legacy UFL restriction `f('+')` is `restriction(f, E, "+")` on the decompose
 Requires: [`Integral`](#integral),
 [Concept: orientation of a domain](#concept-orientation-of-a-domain),
 [Concept: integral over a domain](#concept-integral-over-a-domain),
-[`DecomposedDomain`](#decomposeddomain).
+[`DecomposedDomain`](#decomposeddomain), [Jacobian
+determinant](#jacobian-determinant).
 
 See also: [Expanding integrals](#expanding-integrals).
 
@@ -2647,9 +2709,12 @@ $J_j$ = `components(exterior_derivative(psi_j, P_j), P_j)`, of value shape
 `(n, k)`. The density is $\rho_j = \sqrt{\det(J_j^T J_j)}$, the length, the
 area or the volume of the image of a small region of $P_j$.
 
-- The density is written as `square_root` of the Leibniz formula for the
-  determinant of the $k \times k$ matrix $J_j^T J_j$, a fixed composition for
-  each $k$.
+- For $k = n$, the density is
+  `absolute(jacobian_determinant(cell_domain(D, j)))` (see [Jacobian
+  determinant](#jacobian-determinant)).
+- For $k < n$, the density is `square_root` of the Leibniz formula for the
+  determinant of the $k \times k$ matrix $J_j^T J_j$, in the order of
+  [Jacobian determinant](#jacobian-determinant).
 - For $k = 0$, the empty determinant is `Integer(1)`, so the integral over a
   set of points is the sum of the values.
 
@@ -2864,6 +2929,7 @@ ambient coordinate domain:
 | Discontinuous densities           | `(k,)`     | `()`        | $L^2$ Piola                      |
 | Regge                             | `(1, 1)`   | `()`        | double covariant                 |
 
+```{dropdown} Raviart–Thomas on a surface
 The two rows of Raviart–Thomas differ on a domain of dimension $k < n$, such as
 a surface in $R^3$:
 
@@ -2877,6 +2943,7 @@ a surface in $R^3$:
   the reference cell, $J$ is the Jacobian matrix of the cell, and
   $\rho = \sqrt{\det(J^T J)}$ is the density of [`Integral` over a decomposed
   domain](#integral-over-a-decomposed-domain).
+```
 
 #### Mixed and Sobolev spaces
 
@@ -3281,13 +3348,17 @@ the action replaces $\psi^* u$ in $\psi^* f$ by $\psi^* g$.
 
 Each core transformation rewrites only the evaluated class, so the six run
 separately or together. Evaluation runs the six together until no rule
-applies. Evaluation terminates for the following reasons:
+applies.
+
+```{dropdown} Termination
+Evaluation terminates for the following reasons:
 
 - An `Integral` over a decomposed domain is replaced by `Integral`s over the
   parameter domains of the pieces, which nest less deeply.
 - A `PullBack` moves inside an `ExteriorDerivative`, and never the reverse.
 - An action removes an `Action`.
 - A reduction removes an `Indexed` and a `ComponentTensor`.
+```
 
 A downstream lazy node class may join evaluation if the rules of the class
 satisfy the following:
@@ -3440,6 +3511,7 @@ chain rule for the node classes of the degree `()`, with these rules:
 | `Coordinate(P)`, `Normal`, `Function` or a downstream terminal              | Remains                                                                                                            |
 | `Components`, or a `PullBack` of an expression with a support               | Remains                                                                                                            |
 
+```{dropdown} Notes on the rules
 `Components` remains because the exterior derivative and the interior product
 do not commute. A `PullBack` with a support remains because moving the
 exterior derivative inside the pull-back would reverse a rule of
@@ -3456,6 +3528,7 @@ $I - A A^+$ is zero and the rule is $-A^{-1} \, \mathrm{d}A \, A^{-1}$, but
 the rule does not drop the term, because the core never simplifies.
 `Absolute` is not complex differentiable, and for a real $a$ the rule is the
 chain rule.
+```
 
 ### Expanding components
 
@@ -3763,6 +3836,7 @@ chapter that extend the classes in the Extends column.
 |                             | [`integral(f, P)`](#integral)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                        | `Integral`                                                                                   |
 | Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractDomain`, `psi: AbstractExpression`, `Q: AbstractDomain`                                 | `DomainMap`                                                                                  |
 |                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap`                                                  | `PullBack`                                                                                   |
+|                             | [`jacobian_determinant(D)`](#jacobian-determinant)                       |                               | `D: DomainMap`                                                                                      | The Leibniz formula for $\det J$                                                             |
 | Topology                    | [`cell_index(T, j)`](#abstracttopology)                                  |                               | `T: AbstractTopology`, `j: int`                                                                     | `Index`                                                                                      |
 | Reference cells             | [`affine_map(F, points)`](#affine-maps)                                  |                               | `F: AbstractReferenceCell`, `points: AbstractExpression`                                            | The affine map of the vertices                                                               |
 | Decomposed domains          | [`decomposed_domain(pieces)`](#decomposeddomain)                         |                               | `pieces: tuple[DomainMap, ...]`                                                                     | `DecomposedDomain`                                                                           |
