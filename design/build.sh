@@ -3,6 +3,7 @@
 #
 # Usage: design/build.sh [html|pdf|all] [NOTE.md ...]
 # Output goes to design/build/. With no notes given, every note is built.
+# README.md is the landing page, index.html, and has no PDF.
 
 set -euo pipefail
 
@@ -14,7 +15,7 @@ shift || true
 if [[ $# -gt 0 ]]; then
   notes=("$@")
 else
-  notes=(LANGUAGE.md DESIGN.md DESIGN_CHOICES.md EXAMPLES.md)
+  notes=(README.md LANGUAGE.md DESIGN.md DESIGN_CHOICES.md EXAMPLES.md FINAL_TODOS.md)
 fi
 
 # The generated appendices must match the sections before a build.
@@ -28,12 +29,17 @@ build_html() {
   cp "$here/pandoc/style.css" "$out/style.css"
   for note in "${notes[@]}"; do
     local name="${note%.md}"
+    local page=(--toc --toc-depth=3)
+    if [[ "$note" == README.md ]]; then
+      name=index
+      page=(--metadata landing=true)
+    fi
     pandoc "$here/$note" \
       --from "$reader" \
       --to html5 \
       --standalone \
       --shift-heading-level-by=-1 \
-      --toc --toc-depth=3 \
+      "${page[@]}" \
       --mathjax \
       --css style.css \
       --metadata link-ext=html \
@@ -46,6 +52,7 @@ build_html() {
 build_pdf() {
   mkdir -p "$out"
   for note in "${notes[@]}"; do
+    [[ "$note" == README.md ]] && continue
     local name="${note%.md}"
     pandoc "$here/$note" \
       --from "$reader" \

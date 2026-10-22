@@ -51,7 +51,8 @@ cd doc && make html
 ```
 
 Build the design notes in `design/` to HTML and PDF with pandoc (output in
-`design/build/`, PDF needs xelatex):
+`design/build/`, PDF needs xelatex). `design/README.md` is the landing page and
+builds to `index.html`:
 
 ```
 design/build.sh            # html

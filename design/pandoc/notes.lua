@@ -1,6 +1,7 @@
 -- Adapt the design notes for HTML and PDF output.
 local ext = "html"
 local note = ""
+local landing = false
 
 function Meta(meta)
   if meta["link-ext"] then
@@ -9,6 +10,7 @@ function Meta(meta)
   if meta["note"] then
     note = pandoc.utils.stringify(meta["note"])
   end
+  landing = meta["landing"] ~= nil
 end
 
 function Link(el)
@@ -95,6 +97,25 @@ function Code(el)
   return out
 end
 
+-- The landing page shows each note as a card with a link to the PDF.
+function BulletList(el)
+  if not landing then
+    return nil
+  end
+  for _, item in ipairs(el.content) do
+    local target
+    pandoc.walk_block(pandoc.Div(item), {
+      Link = function(link)
+        target = target or link.target:match("^(.*)%.html$")
+      end,
+    })
+    if target then
+      item[#item + 1] = pandoc.Para({ pandoc.Link("PDF", target .. ".pdf", "", { class = "pdf" }) })
+    end
+  end
+  return pandoc.Div(el, { class = "cards" })
+end
+
 -- Blocks without a language skip fancyvrb, which does the line breaking.
 function CodeBlock(el)
   if ext == "pdf" and #el.classes == 0 then
@@ -103,4 +124,4 @@ function CodeBlock(el)
   end
 end
 
-return { { Meta = Meta }, { Link = Link, Table = Table, Code = Code, CodeBlock = CodeBlock } }
+return { { Meta = Meta }, { Link = Link, Table = Table, Code = Code, CodeBlock = CodeBlock, BulletList = BulletList } }

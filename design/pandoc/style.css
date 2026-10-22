@@ -47,3 +47,8 @@ th, td { border: 1px solid var(--border); padding: 0.4em 0.7em; vertical-align: 
 th { background: var(--code-bg); text-align: left; }
 blockquote { margin: 1em 0; padding: 0.2em 1em; color: var(--muted); border-left: 4px solid var(--border); }
 header#title-block-header .title { border: none; }
+.cards ul { list-style: none; padding: 0; display: grid; gap: 0.75rem; }
+.cards li { border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem 1.1rem; background: var(--code-bg); }
+.cards li p { margin: 0; }
+.cards li strong a { text-decoration: none; }
+.cards li a.pdf { display: inline-block; margin-top: 0.5rem; font-size: 0.85em; color: var(--muted); }
