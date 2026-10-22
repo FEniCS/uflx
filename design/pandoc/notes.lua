@@ -29,21 +29,27 @@ function Link(el)
 end
 
 -- Wide tables need column widths, or LaTeX will not wrap the cells.
+-- Each column gets room for its longest word, and the rest by content.
+local LINE = 100
+
 function Table(tbl)
   if ext ~= "pdf" then
     return nil
   end
   local n = #tbl.colspecs
-  local longest = {}
+  local longest, word = {}, {}
   for i = 1, n do
-    longest[i] = 18
+    longest[i], word[i] = 4, 4
   end
   local function measure(rows)
     for _, row in ipairs(rows) do
       for i, cell in ipairs(row.cells) do
         if i <= n then
-          local len = #pandoc.utils.stringify(cell.contents)
-          longest[i] = math.max(longest[i], math.min(len, 80))
+          local text = pandoc.utils.stringify(cell.contents)
+          longest[i] = math.max(longest[i], math.min(#text, 80))
+          for w in text:gmatch("%S+") do
+            word[i] = math.max(word[i], math.min(#w + 2, 40))
+          end
         end
       end
     end
@@ -52,15 +58,24 @@ function Table(tbl)
   for _, body in ipairs(tbl.bodies) do
     measure(body.body)
   end
-  local total = 0
+  local total, base, extra = 0, 0, 0
   for i = 1, n do
     total = total + longest[i]
+    base = base + word[i]
+    extra = extra + (longest[i] - math.min(word[i], longest[i]))
   end
   if total < 90 then
     return nil
   end
+  local spare = math.max(LINE - base, 0)
+  local widths, sum = {}, 0
   for i = 1, n do
-    tbl.colspecs[i] = { tbl.colspecs[i][1], longest[i] / total }
+    local grow = extra > 0 and (longest[i] - math.min(word[i], longest[i])) / extra or 0
+    widths[i] = word[i] + spare * grow
+    sum = sum + widths[i]
+  end
+  for i = 1, n do
+    tbl.colspecs[i] = { tbl.colspecs[i][1], widths[i] / sum }
   end
   return tbl
 end

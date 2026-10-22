@@ -12,3 +12,6 @@
     }{\end{tcolorbox}}%
   \fi
 }
+% Wide reference tables fit better one size down.
+\usepackage{etoolbox}
+\AtBeginEnvironment{longtable}{\footnotesize}

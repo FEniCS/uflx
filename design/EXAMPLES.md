@@ -719,6 +719,10 @@ facet from each side.
   $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
   is a difference at one point.
 
+#### Legacy UFL
+
+The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal and the facet domain are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
+
 ### Example: a Bank-Weiser error estimator
 
 Requires: [Example: an interior facet
@@ -997,6 +1001,10 @@ the solid cell `cells_solid[e]`. The kernel of `coupling` is an expression on
 solid cell and of `L` on the facet, and the assembler packs the two cells
 through the two side tables, the entity maps of the two submeshes.
 
+#### Legacy UFL
+
+The legacy UFL `dx(1)`, `ds(3)` and `ds((3, 4))` are integrals over the decomposed domains of marked topologies, one topology for each marker value. A DOLFINx submesh is the decomposed domain of a marked topology, and its entity map is the side table into the parent.
+
 ### Example: a 1D network in a 3D mesh
 
 Requires: [`DecomposedDomain`](LANGUAGE.md#decomposeddomain),
@@ -1198,6 +1206,10 @@ L = form(integral(f * v, M), (v,))
   `components(exterior_derivative(grad_u, M), M)` is the tangential
   derivative $H$ of the surface gradient, which is not symmetric in general.
   The covariant Hessian of `u` is $P H P$.
+
+#### Legacy UFL
+
+Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Components` gives the gradient in every dimension.
 
 ### Example: the flux through a surface
 
@@ -1555,3 +1567,7 @@ Not in the module: `derivative`, which is the Gateaux derivative, not yet
 covered, and `u('+')`, which calls a core `Function`, so a module writes a
 free function for it. Boundary conditions, assembly and solving are outside
 legacy UFL too.
+
+#### Legacy UFL
+
+The legacy spelling `inner(grad(u), grad(v)) * dx` is a module `uflx.legacy` of free functions over the core. The argument numbers of `TestFunction` and `TrialFunction` are labels of the module, `extract_arguments` is a walk of the construction arguments, and a measure has the four slots of the legacy `Measure`, finds the domain in the integrand or holds the mesh, and binds the arguments, with `ds`, `dx(1)` and `ds(1)` restricting the integrand from the side `"inside"` by a walk that is the legacy `apply_restrictions`. `FacetNormal` is a placeholder function that the walk replaces by `normal(D, E, "inside")`. The measure binds `conjugate(v)` at position 0 and `inner` conjugates its second operand, so the sesquilinear convention of complex-mode legacy UFL is the module's.

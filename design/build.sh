@@ -17,6 +17,9 @@ else
   notes=(LANGUAGE.md DESIGN.md DESIGN_CHOICES.md EXAMPLES.md)
 fi
 
+# The generated appendices must match the sections before a build.
+python3 "$here/appendices.py" --check
+
 # GitHub identifiers keep the anchors the notes already link to.
 reader="gfm+tex_math_dollars+pipe_tables"
 

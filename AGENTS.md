@@ -59,6 +59,14 @@ design/build.sh pdf
 design/build.sh all LANGUAGE.md
 ```
 
+The class hierarchy, free functions, properties and legacy UFL appendices of
+`design/LANGUAGE.md` are generated from the class tables and "Legacy UFL"
+subsections. Edit the sections, then regenerate (the build runs `--check`):
+
+```
+python3 design/appendices.py
+```
+
 ## Architecture
 
 Expression trees (the symbolic core) are not plain Python object graphs — they are
