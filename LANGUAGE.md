@@ -2205,7 +2205,7 @@ with $P$ the parameter domain and $Q$ the ambient domain of $D$.
 | `PullBack(f, D)` |                                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
 | Free function    | `pull_back(f, D)`                                                                                          |
-| Properties       | `expression` $f$, and `domain` $D$, a `DomainMap` or a [`SideMap`](#restriction)                 |
+| Properties       | `expression` $f$, and `domain` $D$, a `DomainMap` or a [`SideMap`](#sidemap)                 |
 | Requires         | A [valid pair](#valid-pair) $(f, Q)$, and an equal extent for an `Index` free in both $f$ and $D$          |
 | Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
 | Raises           | `TypeError` for $D$, and `ValueError` if another requirement fails                                         |
@@ -2837,76 +2837,106 @@ Requires: [`DecomposedDomain`](#decomposeddomain),
 
 See also: [`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
 
-The restriction of an expression on a decomposed domain $D$ to the cells of a
-topology $S$ with sides, from the side $s$, is the pull-back along the
-inclusion of each cell of $S$ into the cell on the side $s$. The side tables of
-$S$ give the cell, through a [`GatheredIndex`](#gatheredindex) entry, and the
-positions of the vertices of the inclusion, so the restriction is a pull-back
-and needs no node class of its own.
+The restriction of an expression $f$ on a decomposed domain $D$ to the cells
+of a topology $S$ with sides, from the side $s$, is the pull-back of $f$ along
+the inclusion of each cell of $S$ into the cell on the side $s$. The side
+tables of $S$ give the cell on the side, through a
+[`GatheredIndex`](#gatheredindex) entry, and the positions of the vertices of
+the inclusion. The restriction is therefore a pull-back and needs no node
+class of its own.
 
-For the group $i$ of $S$ with the side `(s, T, j)`, with $T$ the topology of $D$,
-the side tables `(cells, positions)`, the cell type $F$ of group $i$ and
-`e = cell_index(S, i)`, two families of domain maps with the free index `e`
-make the inclusion:
+| Free function          | Returns                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| `restriction(f, E, s)` | `pull_back(f, side_map(D, E, s))`, with $D$ the support of $f$, or $f$ if $f$ has no support     |
+| `side_domain(D, S)`    | The decomposed domain of the cells of $S$, with the geometry of the first side of each group     |
 
-- The cell on the side, $B_i$, is
-  `gathered_cell_domain(D, j, gathered_index(cells, (e,)))`, the cell of type
-  $j$ of $T$ on the side of each cell $e$ of $S$ (see
+Notation, for the group $i$ of $S$ with the side `(s, T, j)`:
+
+- $T$ is the topology of $D$, and $K_j$ is the reference cell of cell type $j$
+  of $T$.
+- `(cells, positions)` are the side tables of the side $s$ of group $i$.
+- $F_i$ is the cell type of group $i$.
+- `e = cell_index(S, i)` is the free index of the cells of group $i$.
+- $Q$ is the ambient domain of $D$.
+
+#### The inclusion
+
+Two families of domain maps with the free index `e` make the inclusion of the
+cells of group $i$:
+
+- $B_i$, the cell on the side, is
+  `gathered_cell_domain(D, j, gathered_index(cells, (e,)))`. $B_i$ is the cell
+  of type $j$ of $T$ on the side of each cell $e$ of $S$ (see
   [`DecomposedDomain`](#decomposeddomain)).
-- The inclusion into the cell, $A_i$, is
-  `domain_map(F, affine_map(F, points), K_j)`, with
-  `points = component_tensor(positions[e, v, k], (v, k))`, the position in
-  $K_j$ of each vertex $v$ of the cell $e$, with derived indices $v$ and $k$.
-  $F$ must be a reference cell. $A_i$ sends each vertex of the cell $e$ to its
-  position in the cell on the side. For a vertex, $A_i$ is the constant point,
-  for the cell itself with the vertices in order, $A_i$ is the identity map,
-  and for a piece of the cell, $A_i$ is the affine map onto the piece.
+- $A_i$, the inclusion into the cell on the side, is
+  `domain_map(F_i, affine_map(F_i, points), K_j)`. Here
+  `points = component_tensor(positions[e, v, k], (v, k))`, with the derived
+  indices $v$ and $k$, is the position in $K_j$ of each vertex $v$ of the cell
+  $e$. $F_i$ must be a reference cell. $A_i$ sends each vertex of the cell $e$
+  to the position of that vertex in the cell on the side:
+  - For a vertex, $A_i$ is the constant point.
+  - For the cell itself with the vertices in order, $A_i$ is the identity map.
+  - For a piece of the cell, $A_i$ is the affine map onto the piece.
 
 The restriction of $f$ to group $i$ from the side $s$ is
-`pull_back(pull_back(f, B_i), A_i)`, an expression on $F$ with the free index
-`e`. Each side uses the vertex numbering of the cell $e$, so the restrictions
-from two sides are expressions on the same $F$, with the same coordinates, and
-the difference is the jump. A cell of $S$ with more than two sides, such as an
-edge where three triangles meet, has no jump, and a form uses the restriction
-from each side.
+`pull_back(pull_back(f, B_i), A_i)`, an expression on $F_i$ with the free index
+`e`.
 
-A concrete subclass of `Base` for the lazy map of the cells of a decomposed
-domain $E$ of the cells of $S$ into $D$ through the side $s$, the second
-operand of the pull-back that restricts.
+Each side uses the vertex numbering of the cell $e$. The restrictions from two
+sides are therefore expressions on the same $F_i$, with the same coordinates,
+and the difference of the two restrictions is the jump. A cell of $S$ with more
+than two sides, such as an edge where three triangles meet, has no jump, and a
+form uses the restriction from each side.
+
+#### `SideMap`
+
+`SideMap` is a concrete subclass of `Base`. A `SideMap` is the lazy map of the
+cells of $E$ into $D$ through the side $s$, where $E$ is a decomposed domain of
+the cells of $S$. A `SideMap` is the second operand of the pull-back that
+restricts.
 
 | `SideMap(D, E, s)` |                                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
 | Free function      | `side_map(D, E, s)`                                                                                     |
 | Properties         | `ambient_domain` $D$, `parameter_domain` $E$, a decomposed domain with the topology $S$, and `side` $s$ |
-| Requires           | $D$ has a topology, every cell type of $S$ is an `AbstractReferenceCell`, and every group of $S$ has a side named $s$ with the topology of $D$ |
+| Requires           | Conditions 1 to 3 below                                                                                 |
 | Raises             | `ValueError` if a requirement fails                                                                     |
 
+1. $D$ has a topology.
+2. Every cell type of $S$ is an `AbstractReferenceCell`.
+3. Every group of $S$ has a side named $s$ with the topology of $D$.
+
 `pull_back(f, SideMap(D, E, s))` is an expression with the support $E$, the
-restriction of $f$ to all the groups at once. The pull-back of that
-expression by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)` (see
+restriction of $f$ to all the groups at once. The pull-back of that expression
+by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)` (see
 [Expanding pull-backs](#expanding-pull-backs)).
 
-The free function `side_domain(D, S)` returns the decomposed domain of $S$ with
-the geometry of the first side of each group, with piece $i$
-`domain_map(F_i, pull_back(pull_back(coordinate(D), B_i), A_i), Q)`
-for the first side, with $F_i$ the cell type of group $i$, which must be an
-`AbstractReferenceCell`, and $Q$ the ambient domain of $D$. $A_i$ and $B_i$
-are fixed compositions, so `side_domain` is a free function. The topology of
-the result is $S$. The core does not check that the other sides have the same
-geometry. The free function `restriction(f, E, s)` returns
-`pull_back(f, side_map(D, E, s))` with $D$ the support of $f$, or $f$ if $f$
-has no support.
+#### `side_domain`
 
-The pull-back gives the trace of each degree. The restriction of a 0-form is
-the value on the cell of $S$, and the restriction of the 1-form $\mathrm{d}u$
-keeps only the derivatives along the cell of $S$. To keep the whole array of
-$\mathrm{d}u$, as for a normal derivative, restrict `components(du, D)`, whose
-axes are in the frame of the ambient coordinate domain from every side. The
-outward normal of the cell on a side is [`normal(D, E, s)`](#normal).
+Piece $i$ of `side_domain(D, S)` is
+`domain_map(F_i, pull_back(pull_back(coordinate(D), B_i), A_i), Q)`, with
+$B_i$ and $A_i$ of the first side of group $i$. $F_i$ must be an
+`AbstractReferenceCell`. The topology of the result is $S$. The core does not
+check that the other sides have the same geometry. $A_i$ and $B_i$ are fixed
+compositions, so `side_domain` is a free function.
 
-Example, with `D` and `square` of the [`DecomposedDomain`](#decomposeddomain)
-example, `I = ReferenceSimplex(1)`, a function `u` on `D`, and the diagonal of
-`square`:
+#### Traces and normals
+
+The pull-back gives the trace of each degree:
+
+- The restriction of a 0-form is the value on the cell of $S$.
+- The restriction of the 1-form $\mathrm{d}u$ keeps only the derivatives along
+  the cell of $S$. To keep the whole array of $\mathrm{d}u$, as for a normal
+  derivative, restrict `components(du, D)`. The axes of `components(du, D)`
+  are in the frame of the ambient coordinate domain from every side.
+
+The outward normal of the cell on a side is [`normal(D, E, s)`](#normal).
+
+#### Example
+
+The example uses `D` and `square` of the
+[`DecomposedDomain`](#decomposeddomain) example, `I = ReferenceSimplex(1)`, a
+function `u` on `D`, and the diagonal of `square`:
 
 ```python
 diagonal = StaticTopology(
@@ -2916,23 +2946,24 @@ E = side_domain(D, diagonal)
 jump = restriction(u, E, "+") - restriction(u, E, "-")
 ```
 
-- The side tables from `"+"` are the cells `(0,)` and the positions
-  `(((1, 0), (0, 1)),)`, those of the local vertices 1 and 2 of `K`, and from
-  `"-"` the cells `(1,)` and the positions `(((0, 0), (0, 1)),)`, those of the
-  local vertices 0 and 2, so $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$. The
-  coordinates of `E` are $(1 - t, t)$.
-- If `pull_back(u, cell_domain(D, 0))` is
-  `a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]`, the two restrictions pulled
+- From `"+"`, the side tables are the cells `(0,)` and the positions
+  `(((1, 0), (0, 1)),)`, those of the local vertices 1 and 2 of `K`. From
+  `"-"`, the side tables are the cells `(1,)` and the positions
+  `(((0, 0), (0, 1)),)`, those of the local vertices 0 and 2. So
+  $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$. The coordinates of `E` are
+  $(1 - t, t)$.
+- Let `pull_back(u, cell_domain(D, 0))` be
+  `a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]`. The two restrictions pulled
   back to the diagonal are $a_{0,0} + a_{0,1}(1 - t) + a_{0,2} t$ and
-  $a_{1,0} + a_{1,2} t$, equal for all $t$ if `u` is continuous at the
-  vertices 1 and 2.
+  $a_{1,0} + a_{1,2} t$. The two are equal for all $t$ if `u` is continuous at
+  the vertices 1 and 2.
 - With the diagonal listed as `(2, 1)`, the positions from `"+"` are
-  `(((0, 1), (1, 0)),)`, $A_+(t) = (t, 1 - t)$, and the restriction of
-  $\mathrm{d}x_0$ from `"+"` changes sign, from $-\mathrm{d}t$ to
+  `(((0, 1), (1, 0)),)` and $A_+(t) = (t, 1 - t)$. The restriction of
+  $\mathrm{d}x_0$ from `"+"` then changes sign, from $-\mathrm{d}t$ to
   $\mathrm{d}t$.
 - On the topology of the vertices of `square`, with the cell type
   `ReferenceSimplex(0)`, vertex 3 is seen from cell 1 at the position
-  `(1, 0)`, local vertex 1, so `u` restricts to $a_{1,0} + a_{1,1}$ there.
+  `(1, 0)`, local vertex 1. So `u` restricts to $a_{1,0} + a_{1,1}$ there.
 - For the facets `S` of a triangle and quadrilateral mesh, with the three
   groups of [Sides of a topology](#sides-of-a-topology), the same two lines
   with `E = side_domain(D, S)` give one jump for all three groups.
@@ -3010,7 +3041,7 @@ cell on a side, on the cells of a topology with sides.
 | `Normal(D, E, s)` |                                                                                                       |
 | ----------------- | ----------------------------------------------------------------------------------------------------- |
 | Free function     | `normal(D, E, s)`                                                                                     |
-| Properties        | `ambient_domain` $D$, `parameter_domain` $E$ and `side` $s$, as for [`SideMap`](#restriction)         |
+| Properties        | `ambient_domain` $D$, `parameter_domain` $E$ and `side` $s$, as for [`SideMap`](#sidemap)         |
 | Requires          | The requirements of `SideMap(D, E, s)`, and $E$ of the dimension $k - 1$ for the dimension $k$ of $D$ |
 | Static type       | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the support $E$, real      |
 | Raises            | `ValueError` if a requirement fails                                                                   |
