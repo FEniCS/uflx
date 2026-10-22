@@ -92,8 +92,8 @@ as separate kinds, each with its own algebra.
   ratio of two integrals is a scalar, the centroid of a cell is a vector of
   such ratios, a point value is an integral over `RD(0)`, and a quadrature
   rule is an index sum of weighted point integrals. None of these needs a
-  node of its own (`Integral`, Points and point evaluation, Example:
-  quadrature).
+  node of its own (`Integral`, Points and point evaluation, and the quadrature
+  example).
 - A form is an expression whose argument spaces are not `()`. Forms add,
   scale and subtract by the ordinary operators, and a functional is any
   expression with the argument spaces `()`. A form whose expression is a
@@ -464,8 +464,8 @@ here so that a reader knows which choices are load-bearing.
 - Finite elements: how a function is represented on a cell, including the
   Piola maps, is the library's choice behind the pull-back by a cell
   (`AbstractFunctionSpace`).
-- Quadrature: a pass with the rule as an argument, not a node (Example:
-  quadrature).
+- Quadrature: a pass with the rule as an argument, not a node (the quadrature
+  example).
 - Elementary functions beyond `SquareRoot`, conditionals, and `min` and
   `max`: language extensions (Elementary functions).
 - The Gateaux derivative: planned as a core transformation, with only its

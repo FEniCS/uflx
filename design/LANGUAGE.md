@@ -194,7 +194,7 @@ Requires: [The base object `Base`](#the-base-object-base).
 
 See also: [`AbstractExpression`](#abstractexpression),
 [`DomainMap`](#domainmap), [`Coordinate`](#coordinate),
-[Example: transpose and matrix product](EXAMPLES.md#example-transpose-and-matrix-product).
+[Transpose and matrix product](EXAMPLES.md#transpose-and-matrix-product).
 
 A property reads and a free function builds. Data that an object stores, or
 derives from the class and the construction arguments of the object, is a
@@ -266,7 +266,7 @@ and the user of the core chooses which passes run and in what order.
 Requires: [The base object `Base`](#the-base-object-base), [Properties and free
 functions](#properties-and-free-functions), [Passes](#passes).
 
-See also: [Example: transpose and matrix product](EXAMPLES.md#example-transpose-and-matrix-product),
+See also: [Transpose and matrix product](EXAMPLES.md#transpose-and-matrix-product),
 [`Indexed`](#indexed), [New questions](#new-questions).
 
 Three kinds of code produce objects:
@@ -371,7 +371,7 @@ A concrete subclass of `AbstractCoordinateDomain` for the whole of $R^n$.
 | Properties | `dimension`, an `int` $n \ge 0$                                 |
 | Raises     | `TypeError` if $n$ is not an `int`, and `ValueError` if $n < 0$ |
 
-Worked examples for this chapter in EXAMPLES.md: [the unit simplex](EXAMPLES.md#example-the-unit-simplex).
+Worked examples for this chapter in EXAMPLES.md: [the unit simplex](EXAMPLES.md#the-unit-simplex).
 
 ## Expressions and static type
 
@@ -395,8 +395,8 @@ shape `()` is a scalar.
 Requires: [The base object `Base`](#the-base-object-base), [Properties and free
 functions](#properties-and-free-functions).
 
-See also: [`Indexed`](#indexed), [Example: transpose and matrix
-product](EXAMPLES.md#example-transpose-and-matrix-product).
+See also: [`Indexed`](#indexed), [Transpose and matrix
+product](EXAMPLES.md#transpose-and-matrix-product).
 
 > LLM generated content.
 
@@ -426,8 +426,8 @@ operands. The label of a derived index is the identifier of the free function,
 followed by the arguments of the free function and a number. The identifier is
 the public name of the free function, qualified by the package name, such as
 `"uflx.cell_index"` for the core or `"library.transpose"` for a library. For
-example, `transpose(A)` of [Example: transpose and matrix
-product](EXAMPLES.md#example-transpose-and-matrix-product) uses
+example, `transpose(A)` of the [transpose
+example](EXAMPLES.md#transpose-and-matrix-product) uses
 `Index(("library.transpose", A, 0))` and `Index(("library.transpose", A, 1))`.
 An index whose label contains `A` has an
 edge to `A`. Every node that uses an `Index` has an edge to the `Index`. So an index
@@ -483,8 +483,8 @@ notation, an `EllipsisIndex` behaves as an `Index`.
 Requires: [The base object `Base`](#the-base-object-base).
 
 See also: [Free indices](#free-indices), [`Indexed`](#indexed),
-[Example: quadrature](EXAMPLES.md#example-quadrature), [Example: integrating over a cut
-cell](EXAMPLES.md#example-integrating-over-a-cut-cell).
+[Quadrature](EXAMPLES.md#quadrature), [Integrating over a cut
+cell](EXAMPLES.md#integrating-over-a-cut-cell).
 
 An extent is the length of an axis of a value shape, or the extent of a free
 index. An extent is an `int` $n \ge 0$ or an `AbstractExtent`.
@@ -493,7 +493,7 @@ An abstract subclass of the base object `AbstractExtent` for an extent whose
 value is not known during construction. An `AbstractExtent` is not an
 expression. A concrete `AbstractExtent` is a subclass outside the core, such as
 `RuntimeExtent` in the
-[cut cell example](EXAMPLES.md#example-integrating-over-a-cut-cell).
+[cut cell example](EXAMPLES.md#integrating-over-a-cut-cell).
 
 | `AbstractExtent` |                                      |
 | ---------------- | ------------------------------------ |
@@ -546,7 +546,7 @@ Example:
 
 - With an `AbstractIndexValue` `l` of the shape `()` and the extent 3, and the
   table `starts` of value shape `(3, 2)` of the
-  [boundary example](EXAMPLES.md#example-integrating-over-the-boundary-of-a-triangle),
+  [boundary example](EXAMPLES.md#integrating-over-the-boundary-of-a-triangle),
   `starts[gathered_index(l, ()), k]` is the start of edge `l`, with the free
   index `k`. With an `AbstractIndexValue` with the extent 4, the same
   expression raises `IndexError`.
@@ -731,7 +731,7 @@ Requires: [Properties and free functions](#properties-and-free-functions),
 [Scalar type](#scalar-type), [Support](#support), [Degree](#degree),
 [`AbstractDomain`](#abstractdomain).
 
-See also: [Example: transpose and matrix product](EXAMPLES.md#example-transpose-and-matrix-product), [Volume
+See also: [Transpose and matrix product](EXAMPLES.md#transpose-and-matrix-product), [Volume
 form](#volume-form), [`ExteriorDerivative`](#exteriorderivative),
 [`Division`](#division), [Elementary functions (very
 incomplete)](#elementary-functions-very-incomplete),
@@ -764,8 +764,8 @@ A free function is part of the core only if a definition or a rule of the
 core uses the free function, such as `volume_form` in [`Integral` over a
 decomposed domain](#integral-over-a-decomposed-domain) and `cell_domain` in
 [Restriction](#restriction). Every other free function belongs to a library,
-such as `transpose` (see [Example: transpose and matrix
-product](EXAMPLES.md#example-transpose-and-matrix-product)) and the operations of
+such as `transpose` (see [Transpose and matrix
+product](EXAMPLES.md#transpose-and-matrix-product)) and the operations of
 [Tensor algebra with `EllipsisIndex`](#tensor-algebra-with-ellipsisindex). The
 operator overloads of the core are those of the free functions of the core,
 so `A + B` on tensors is not an overload (see
@@ -1318,8 +1318,8 @@ because the extents of `r` differ.
 
 Requires: [`AbstractExpression`](#abstractexpression), [Degree](#degree),
 [`Division`](#division), [Elementary
-functions](#elementary-functions-very-incomplete), [Example: transpose and matrix
-product](EXAMPLES.md#example-transpose-and-matrix-product).
+functions](#elementary-functions-very-incomplete), [Transpose and matrix
+product](EXAMPLES.md#transpose-and-matrix-product).
 
 See also: [Expanding pull-backs](#expanding-pull-backs), [Applying
 derivatives](#applying-derivatives).
@@ -1352,7 +1352,7 @@ Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
 
 - With the Jacobian matrix
   `J = tensor((tensor((two, one)), tensor((one, three))))` of the [affinely
-  mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle), `inverse(J)` has
+  mapped triangle](EXAMPLES.md#an-affinely-mapped-triangle), `inverse(J)` has
   value shape `(2, 2)`, and a later pass evaluates `inverse(J)` to
   $\frac{1}{5} \begin{pmatrix} 3 & -1 \\ -1 & 2 \end{pmatrix}$.
 - With the Jacobian matrix `Je = tensor((tensor((one,)), tensor((one,))))` of
@@ -1369,8 +1369,8 @@ Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
 Requires: [`AbstractExpression`](#abstractexpression), [`Sum`](#sum),
 [`Product`](#product), [`Division`](#division), [`Power`](#power), [Negation and
 subtraction](#negation-and-subtraction), [`Absolute`](#absolute),
-[`Indexed`](#indexed), [Example: transpose and matrix
-product](EXAMPLES.md#example-transpose-and-matrix-product).
+[`Indexed`](#indexed), [Transpose and matrix
+product](EXAMPLES.md#transpose-and-matrix-product).
 
 See also: [Numbers in expressions](#numbers-in-expressions), [Appendix: Free
 functions](#appendix-free-functions).
@@ -1414,7 +1414,7 @@ Examples, with `X = coordinate(RD(2))`:
 - `X[0]**2`, `2 * X[0]`, `1 - X[0]`, `0.5 * X[0]`, `2 + X[0]` and
   `tensor((1, 2))` raise `TypeError`.
 
-Worked examples for this chapter in EXAMPLES.md: [transpose and matrix product](EXAMPLES.md#example-transpose-and-matrix-product).
+Worked examples for this chapter in EXAMPLES.md: [transpose and matrix product](EXAMPLES.md#transpose-and-matrix-product).
 
 ## Calculus on a domain
 
@@ -1628,8 +1628,8 @@ compositions. The examples use the examples of
 Requires: [`Coordinate`](#coordinate), [`ExteriorDerivative`](#exteriorderivative),
 [`Product`](#product), [Literals](#literals).
 
-See also: [`Integral`](#integral), [Example: an affinely mapped
-triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
+See also: [`Integral`](#integral), [An affinely mapped
+triangle](EXAMPLES.md#an-affinely-mapped-triangle).
 
 The free function `volume_form(P)` is the coordinate volume form of an
 `AbstractCoordinateDomain` $P$ of dimension $n$,
@@ -1657,8 +1657,8 @@ area $1/2$ of `T`.
 Requires: [Valid pair](#valid-pair), [Volume form](#volume-form),
 [Support](#support), [Degree](#degree).
 
-See also: [Example: an affinely mapped
-triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
+See also: [An affinely mapped
+triangle](EXAMPLES.md#an-affinely-mapped-triangle).
 
 A concrete subclass of `AbstractExpression` for the integral of a differential
 form $f$ over a domain $P$ of dimension $k$. A basic integral needs no
@@ -1718,7 +1718,7 @@ Requires: [`AbstractDomain`](#abstractdomain),
 [Scalar type](#scalar-type), [Degree](#degree).
 
 See also: [`PullBack`](#pullback), [`DecomposedDomain`](#decomposeddomain),
-[Example: an affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
+[An affinely mapped triangle](EXAMPLES.md#an-affinely-mapped-triangle).
 
 A concrete subclass of `Base` for a map $\psi$ from a parameter domain $P$
 into an ambient domain $Q$, with the image $D = \psi(P)$. The sections below
@@ -1775,8 +1775,8 @@ Examples:
 Requires: [`DomainMap`](#domainmap), [Valid pair](#valid-pair),
 [Support](#support),
 [Free indices](#free-indices), [Degree](#degree),
-[`ExteriorDerivative`](#exteriorderivative), [Example: an
-affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
+[`ExteriorDerivative`](#exteriorderivative), [An
+affinely mapped triangle](EXAMPLES.md#an-affinely-mapped-triangle).
 
 A concrete subclass of `AbstractExpression` for the pull-back $\psi^* f$ of a
 differential form $f$ on $Q$ by the parameterisation $\psi$ of a domain $D$,
@@ -1893,7 +1893,7 @@ term that turns a $k$-form into a 0-form or a $(k - 1)$-form into a vector
 field, such as the scalar curl of a 1-form on a surface. The mesh library
 provides a consistent orientation where one is needed, such as an expression
 with the sign $+1$ or $-1$ for each cell, and the core needs nothing more (see
-[Example: the flux through a surface](EXAMPLES.md#example-the-flux-through-a-surface)).
+[The flux through a surface](EXAMPLES.md#the-flux-through-a-surface)).
 
 An integral of a 0-form uses a density (see [`Integral` over a decomposed
 domain](#integral-over-a-decomposed-domain)), and a flux through a facet uses a
@@ -1926,8 +1926,8 @@ $\int_P s \, \psi^* (f \, \mathrm{d}Y_0 \wedge \dots \wedge \mathrm{d}Y_{n-1})
 ### Points and point evaluation
 
 Requires: [`RD`](#rd), [`DomainMap`](#domainmap),
-[`PullBack`](#pullback), [`Integral`](#integral), [Example: an affinely mapped
-triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
+[`PullBack`](#pullback), [`Integral`](#integral), [An affinely mapped
+triangle](EXAMPLES.md#an-affinely-mapped-triangle).
 
 A point is the image of a domain map. A point in a domain $Q$ is
 `domain_map(RD(0), x, Q)`, with $x$ a constant expression of value shape
@@ -1982,8 +1982,8 @@ space.
 The maps below `u` may be a chain. An example of a chain is a family of maps
 from a decomposed domain, pulled back by a cell of that domain and then by a
 family of points of the reference cell. The pass reads the chain as one family
-with all of its free indices (see [Example: a 1D network in a 3D
-mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh)).
+with all of its free indices (see [A 1D network in a 3D
+mesh](EXAMPLES.md#a-1d-network-in-a-3d-mesh)).
 
 A family whose points lie in cells of several types is not yet covered,
 because the family would need one piece for each cell type.
@@ -2008,7 +2008,7 @@ fc = integral(pull_back(f, c), RD(0))
   a second point. `integral(pull_back(f, c), RD(0)) + integral(pull_back(f, d), RD(0))`
   is the action of a sum of two Dirac measures on $f$.
 
-Worked examples for this chapter in EXAMPLES.md: [an affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle), [orientation of an edge and of a triangle](EXAMPLES.md#example-orientation-of-an-edge-and-of-a-triangle), [integrating over an edge](EXAMPLES.md#example-integrating-over-an-edge), [integrating over the boundary of a triangle](EXAMPLES.md#example-integrating-over-the-boundary-of-a-triangle), [quadrature](EXAMPLES.md#example-quadrature), [integrating over a cut cell](EXAMPLES.md#example-integrating-over-a-cut-cell), [the centroid of a triangle](EXAMPLES.md#example-the-centroid-of-a-triangle).
+Worked examples for this chapter in EXAMPLES.md: [an affinely mapped triangle](EXAMPLES.md#an-affinely-mapped-triangle), [orientation of an edge and of a triangle](EXAMPLES.md#orientation-of-an-edge-and-of-a-triangle), [integrating over an edge](EXAMPLES.md#integrating-over-an-edge), [integrating over the boundary of a triangle](EXAMPLES.md#integrating-over-the-boundary-of-a-triangle), [quadrature](EXAMPLES.md#quadrature), [integrating over a cut cell](EXAMPLES.md#integrating-over-a-cut-cell), [the centroid of a triangle](EXAMPLES.md#the-centroid-of-a-triangle).
 
 ## Topology
 
@@ -2196,8 +2196,8 @@ entity meets several cells:
   mesh.
 - For a line through the cells of a 3D mesh, the cells of $S$ are the segments
   of the line inside one cell each. Each segment is seen from the cell of the
-  line and from the cell of the mesh (see [Example: a 1D network in a 3D
-  mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh)).
+  line and from the cell of the mesh (see [A 1D network in a 3D
+  mesh](EXAMPLES.md#a-1d-network-in-a-3d-mesh)).
 
 The concrete mesh computes which parts of an entity meet which cells, outside
 the language, as the concrete mesh locates the cell that contains a point (see
@@ -2243,7 +2243,7 @@ cells as cell types, such as `ReferenceSimplex(1)` in place of `I` (see
 
 The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
 
-Worked examples for this chapter in EXAMPLES.md: [the simplex as a cell type](EXAMPLES.md#example-the-simplex-as-a-cell-type), [a static topology](EXAMPLES.md#example-a-static-topology).
+Worked examples for this chapter in EXAMPLES.md: [the simplex as a cell type](EXAMPLES.md#the-simplex-as-a-cell-type), [a static topology](EXAMPLES.md#a-static-topology).
 
 ## Reference cells
 
@@ -2253,8 +2253,8 @@ Requires: [`AbstractCoordinateDomain`](#abstractcoordinatedomain), [`RD`](#rd),
 [`Tensor`](#tensor), [`DomainMap`](#domainmap),
 [`Inverse`](#inverse), [`AbstractCellType`](#abstractcelltype).
 
-See also: [`AbstractTopology`](#abstracttopology), [Example: integrating over
-the boundary of a triangle](EXAMPLES.md#example-integrating-over-the-boundary-of-a-triangle).
+See also: [`AbstractTopology`](#abstracttopology), [Integrating over
+the boundary of a triangle](EXAMPLES.md#integrating-over-the-boundary-of-a-triangle).
 
 An abstract subclass of `AbstractCoordinateDomain` and of `AbstractCellType`
 for a reference cell `AbstractReferenceCell`, a cell type whose vertices have
@@ -2264,7 +2264,7 @@ coordinates.
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                 | `AbstractCoordinateDomain`, `AbstractCellType` |
 | Provides                | `vertices`, a constant expression with no support and value shape `(m, n)`, with row $v$ the coordinates of vertex $v$, for dimension $n$ and $m$ vertices |
-| Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](EXAMPLES.md#example-the-unit-simplex-as-a-reference-cell)                                                   |
+| Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](EXAMPLES.md#the-unit-simplex-as-a-reference-cell)                                                   |
 
 #### Affine maps
 
@@ -2312,7 +2312,7 @@ not check that the image is a sub-entity of $K$.
 - The unit interval has the vertices $(0)$ and $(1)$. The sub-entity with the
   vertex number $(1)$ and the reference point as $F$ is the end point.
 
-Worked examples for this chapter in EXAMPLES.md: [the unit simplex as a reference cell](EXAMPLES.md#example-the-unit-simplex-as-a-reference-cell).
+Worked examples for this chapter in EXAMPLES.md: [the unit simplex as a reference cell](EXAMPLES.md#the-unit-simplex-as-a-reference-cell).
 
 ## Decomposed domains
 
@@ -2412,7 +2412,7 @@ The examples use the following objects:
 - `K = ReferenceSimplex(2)`.
 - The topology
   `square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())` of the
-  [static topology example](EXAMPLES.md#example-a-static-topology), on
+  [static topology example](EXAMPLES.md#a-static-topology), on
   reference cells.
 - An array `y` of value shape `(4, 2)` with the positions $(0, 0)$, $(1, 0)$,
   $(0, 1)$ and $(1, 1)$ of the vertices.
@@ -2774,7 +2774,7 @@ jump = restriction(grad_u, E, "+") - restriction(grad_u, E, "-")
 penalty = integral(index_sum(jump[i] * n_E[i], (i,)) ** Integer(2), E)
 ```
 
-Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral), [a Bank-Weiser error estimator](EXAMPLES.md#example-a-bank-weiser-error-estimator), [a fluid and a solid](EXAMPLES.md#example-a-fluid-and-a-solid), [a 1D network in a 3D mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh).
+Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EXAMPLES.md#an-interior-facet-integral), [a Bank-Weiser error estimator](EXAMPLES.md#a-bank-weiser-error-estimator), [a fluid and a solid](EXAMPLES.md#a-fluid-and-a-solid), [a 1D network in a 3D mesh](EXAMPLES.md#a-1d-network-in-a-3d-mesh).
 
 ## Function spaces
 
@@ -3216,7 +3216,7 @@ The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples, and
 
 Legacy UFL operations are actions and rebindings. The action on the last argument of a bilinear form is `action(f, 1, w)`. The adjoint of `form(e, (conjugate(v), u))` is `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in `v` and antilinear in `u`. The Gateaux derivative with respect to a function adds an argument (see [Gateaux derivative](#gateaux-derivative)).
 
-Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES.md#example-the-flux-through-a-surface), [a classic FEniCS layer for the Poisson problem](EXAMPLES.md#example-a-classic-fenics-layer-for-the-poisson-problem).
+Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator](EXAMPLES.md#the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES.md#the-flux-through-a-surface), [a classic FEniCS layer for the Poisson problem](EXAMPLES.md#a-classic-fenics-layer-for-the-poisson-problem).
 
 ## Core transformations
 
@@ -3361,8 +3361,7 @@ integrand stays on the domain of the integral.
   the degree and the argument spaces of $c$, and the missing free indices with
   the extents of the family (see [`Zero`](#zero)).
 
-For example, take the family of three quadrature points `xs` of [Example:
-quadrature](EXAMPLES.md#example-quadrature).
+For example, take the family of three quadrature points `xs` of the [quadrature example](EXAMPLES.md#quadrature).
 `pull_back(Integer(1), xs)` is rewritten as
 `Integer(1) + Zero((), ((i, 3),), (), ())`, and
 `index_sum(integral(pull_back(Integer(1), xs), RD(0)), (i,))` counts the
@@ -3384,8 +3383,8 @@ the cell on the side of a facet. The outer pull-back applies to the expression
 the library gives, such as the pull-back to the facet of a basis function on
 the reference cell. That outer pull-back remains in turn, for the library to
 evaluate at the points of the facet (see [Restriction](#restriction) and
-[Example: an interior facet
-integral](EXAMPLES.md#example-an-interior-facet-integral)).
+[An interior facet
+integral](EXAMPLES.md#an-interior-facet-integral)).
 
 #### The rule for `Components`
 
@@ -3582,8 +3581,8 @@ In legacy UFL, properties are stored on the node classes, and the set of propert
 ### Language extensions
 
 Requires: [Leaves and subclassing](#leaves-and-subclassing), [Passes](#passes),
-[Core transformations](#core-transformations), [Example: transpose and matrix
-product](EXAMPLES.md#example-transpose-and-matrix-product).
+[Core transformations](#core-transformations), [Transpose and matrix
+product](EXAMPLES.md#transpose-and-matrix-product).
 
 A language extension adds node classes that are not leaves, in a package
 outside the core. A node class of a language extension subclasses
@@ -3664,8 +3663,8 @@ extent. An operation that an `EllipsisIndex` expresses, such as
 
 Requires: [Leaves and subclassing](#leaves-and-subclassing), [New
 operations](#new-operations), [Language extensions](#language-extensions),
-[`Coordinate`](#coordinate), [Example: an affinely mapped
-triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
+[`Coordinate`](#coordinate), [An affinely mapped
+triangle](EXAMPLES.md#an-affinely-mapped-triangle).
 
 Every abstract class is a contract. The contract states what a subclass
 provides, so that every core transformation handles the subclass through the
@@ -3673,7 +3672,7 @@ abstract class alone. A downstream library may subclass an abstract class by
 fulfilling the contract, without changing the core. A contract is part of the
 class, never a global registry. For example, a downstream subclass of
 `AbstractCoordinateDomain`, such as
-[`UnitSimplex`](EXAMPLES.md#example-the-unit-simplex), provides the dimension, and every
+[`UnitSimplex`](EXAMPLES.md#the-unit-simplex), provides the dimension, and every
 core transformation handles the coordinate function of the subclass through
 `Coordinate`.
 

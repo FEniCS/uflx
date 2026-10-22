@@ -7,7 +7,7 @@ needs none of this to follow the rules.
 
 ## Reference library
 
-### Example: the unit simplex
+### The unit simplex
 
 Requires: [`AbstractCoordinateDomain`](LANGUAGE.md#abstractcoordinatedomain).
 
@@ -36,7 +36,7 @@ class UnitSimplex(AbstractCoordinateDomain):
 `UnitSimplex(1)` is the unit interval $[0, 1]$. `UnitSimplex(2)` is the unit
 triangle with vertices $(0, 0)$, $(1, 0)$ and $(0, 1)$.
 
-### Example: the simplex as a cell type
+### The simplex as a cell type
 
 > LLM generated content.
 
@@ -65,12 +65,12 @@ class Simplex(AbstractCellType):
         return self._n + 1
 ```
 
-### Example: a static topology
+### A static topology
 
 > LLM generated content.
 
 Requires: [`AbstractTopology`](LANGUAGE.md#abstracttopology),
-[Example: the simplex as a cell type](#example-the-simplex-as-a-cell-type),
+[The simplex as a cell type](#the-simplex-as-a-cell-type),
 [Sides of a topology](LANGUAGE.md#sides-of-a-topology).
 
 `StaticTopology(cell_types, cells, sides)` is a topology whose cells are known
@@ -150,12 +150,12 @@ and `(1,)`.
 coordinates. The positions of the vertices come from the
 [coordinates of a decomposed domain](LANGUAGE.md#decomposeddomain).
 
-### Example: the unit simplex as a reference cell
+### The unit simplex as a reference cell
 
 > LLM generated content.
 
-Requires: [Example: the unit simplex](#example-the-unit-simplex),
-[Example: the simplex as a cell type](#example-the-simplex-as-a-cell-type),
+Requires: [The unit simplex](#the-unit-simplex),
+[The simplex as a cell type](#the-simplex-as-a-cell-type),
 [Literals](LANGUAGE.md#literals), [`Tensor`](LANGUAGE.md#tensor), [Reference cell](LANGUAGE.md#reference-cell).
 
 `ReferenceSimplex(n)` is the cell type `Simplex(n)` as a reference cell, the
@@ -187,7 +187,7 @@ expression on one is not an expression on the other. Likewise,
 
 ## Examples
 
-### Example: transpose and matrix product
+### Transpose and matrix product
 
 Requires: [`Index`](LANGUAGE.md#index), [`Indexed`](LANGUAGE.md#indexed), [`ComponentTensor` and
 `IndexSum`](LANGUAGE.md#componenttensor-and-indexsum), [`Product`](LANGUAGE.md#product).
@@ -216,9 +216,9 @@ Examples, with a matrix `A` of value shape `(2, 2)`:
 - `transpose(A)` is not equal to `component_tensor(A[i, j], (j, i))` for user
   indices `i` and `j`, because the index labels differ.
 
-### Example: an affinely mapped triangle
+### An affinely mapped triangle
 
-Requires: [Example: the unit simplex](#example-the-unit-simplex),
+Requires: [The unit simplex](#the-unit-simplex),
 [`Coordinate`](LANGUAGE.md#coordinate), [`Tensor`](LANGUAGE.md#tensor), [`Components`](LANGUAGE.md#components),
 [`DomainMap`](LANGUAGE.md#domainmap).
 
@@ -252,16 +252,16 @@ $$J = \begin{pmatrix} 2 & 1 \\ 1 & 3 \end{pmatrix},$$
 so $\det J = 5$, and the area of the physical triangle is $5$ times the area
 $1/2$ of the unit triangle.
 
-### Example: orientation of an edge and of a triangle
+### Orientation of an edge and of a triangle
 
 Requires: [Concept: orientation of a domain](LANGUAGE.md#concept-orientation-of-a-domain),
 [Concept: integral over a domain](LANGUAGE.md#concept-integral-over-a-domain),
-[`Components`](LANGUAGE.md#components), [Example: an affinely mapped
-triangle](#example-an-affinely-mapped-triangle).
+[`Components`](LANGUAGE.md#components), [An affinely mapped
+triangle](#an-affinely-mapped-triangle).
 
 The examples use `T`, `X`, `one`, `S`, `t` and `e` of the
 [`PullBack`](LANGUAGE.md#pullback) example, and `K` of the
-[affinely mapped triangle example](#example-an-affinely-mapped-triangle).
+[affinely mapped triangle example](#an-affinely-mapped-triangle).
 
 The edge `e`, with $\psi(t) = (1 - t, t)$, runs from vertex 1 to vertex 2 of
 the unit triangle. The edge with $\psi(t) = (t, 1 - t)$ is the same set with
@@ -306,7 +306,7 @@ integral(s * w, T)
 Swapping $v_1$ and $v_2$ gives $\det J = -5$ and $s = -1$. The integral of `w`
 alone is then $-5/2$, and the integral of `s * w` is still $5/2$.
 
-### Example: integrating over an edge
+### Integrating over an edge
 
 Requires: [`PullBack`](LANGUAGE.md#pullback), [`Integral`](LANGUAGE.md#integral),
 [`Components`](LANGUAGE.md#components), [Elementary functions (very
@@ -315,7 +315,7 @@ incomplete)](LANGUAGE.md#elementary-functions-very-incomplete).
 The integral over the edge `e` of the [`PullBack`](LANGUAGE.md#pullback) example is the
 integral over `S` of the pull-back by `e`. The examples use `T`, `X`, `one`,
 `S`, `t`, `e` and `dx` of that example, and `x`, `y` and `dy` of the
-[orientation example](#example-orientation-of-an-edge-and-of-a-triangle).
+[orientation example](#orientation-of-an-edge-and-of-a-triangle).
 
 The flux of a vector field $u$ through the edge is the integral of the 1-form
 $u_0 \, \mathrm{d}y - u_1 \, \mathrm{d}x$, which needs no metric. For
@@ -354,15 +354,15 @@ integral(ds, S)
 integral(pull_back(x * y, e) * ds, S)
 ```
 
-### Example: integrating over the boundary of a triangle
+### Integrating over the boundary of a triangle
 
 Requires: [`DomainMap`](LANGUAGE.md#domainmap),
 [`ComponentTensor` and `IndexSum`](LANGUAGE.md#componenttensor-and-indexsum),
-[Example: integrating over an edge](#example-integrating-over-an-edge).
+[Integrating over an edge](#integrating-over-an-edge).
 
 The three edges of `T` are one family of domains, with a free index. The
 example uses the names of
-[Example: integrating over an edge](#example-integrating-over-an-edge).
+[Integrating over an edge](#integrating-over-an-edge).
 
 ```python
 zero = Integer(0)
@@ -388,7 +388,7 @@ for each `i` is the integral over one edge.
 The orientation of each edge comes from the order of `starts` and `ends`. Every
 domain of a family has the same parameter domain, here `S`.
 
-### Example: quadrature
+### Quadrature
 
 Requires: [Points and point evaluation](LANGUAGE.md#points-and-point-evaluation),
 [`DomainMap`](LANGUAGE.md#domainmap), [`PullBack`](LANGUAGE.md#pullback),
@@ -455,14 +455,14 @@ tables.
 With `points` and `weights` given by leaves of a
 [language extension](LANGUAGE.md#language-extensions), of value shapes `(q, 2)` and
 `(q,)` for an `AbstractExtent` `q`, the same expression is runtime quadrature
-(see [Example: integrating over a cut
-cell](#example-integrating-over-a-cut-cell)).
+(see [Integrating over a cut
+cell](#integrating-over-a-cut-cell)).
 The number of points is known only at assembly, and the loop bound `q` is an
 input of the kernel.
 
-### Example: integrating over a cut cell
+### Integrating over a cut cell
 
-Requires: [Example: quadrature](#example-quadrature), [Extents](LANGUAGE.md#extents).
+Requires: [Quadrature](#quadrature), [Extents](LANGUAGE.md#extents).
 
 In CutFEM, a level set $\phi$ cuts a cell, and an integral covers only the
 part of the cell where $\phi < 0$. The solver computes a quadrature rule for
@@ -496,12 +496,12 @@ a = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
 For all the cells of a topology, see the open item on ragged indexing in
 [Extents](LANGUAGE.md#extents).
 
-### Example: the centroid of a triangle
+### The centroid of a triangle
 
 > LLM came up with this example.
 
-Requires: [Example: an affinely mapped
-triangle](#example-an-affinely-mapped-triangle), [`PullBack`](LANGUAGE.md#pullback),
+Requires: [An affinely mapped
+triangle](#an-affinely-mapped-triangle), [`PullBack`](LANGUAGE.md#pullback),
 [`Integral`](LANGUAGE.md#integral), [`Division`](LANGUAGE.md#division),
 [`ComponentTensor` and `IndexSum`](LANGUAGE.md#componenttensor-and-indexsum),
 [Points and point evaluation](LANGUAGE.md#points-and-point-evaluation).
@@ -527,7 +527,7 @@ centroid `c` of `T` of [Points and point
 evaluation](LANGUAGE.md#points-and-point-evaluation). The two expressions are not
 equal, and a later pass evaluates both to $(2, 4/3)$.
 
-### Example: an interior facet integral
+### An interior facet integral
 
 Requires: [Sides of a topology](LANGUAGE.md#sides-of-a-topology),
 [Restriction](LANGUAGE.md#restriction), [`Integral` over a decomposed
@@ -540,8 +540,7 @@ triangles. The example uses `D`, `square`, `K`, `X`, `y` and `cell_vertices`
 of the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, `I = ReferenceSimplex(1)`
 and the `diagonal` topology of the [Restriction](LANGUAGE.md#restriction) example, a
 space `V` on `D` of the degree `()` and the value shape `()`, and functions
-`u` and `v` in `V`. `runtime_array` is the language extension of [Example:
-integrating over a cut cell](#example-integrating-over-a-cut-cell).
+`u` and `v` in `V`. `runtime_array` is the language extension of the [cut cell example](#integrating-over-a-cut-cell).
 
 ```python
 # The interior facets, seen from the sides "+" and "-", with the free index e.
@@ -650,10 +649,10 @@ facet from each side.
 
 The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal and the facet domain are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
 
-### Example: a Bank-Weiser error estimator
+### A Bank-Weiser error estimator
 
-Requires: [Example: an interior facet
-integral](#example-an-interior-facet-integral), [Restriction](LANGUAGE.md#restriction),
+Requires: [An interior facet
+integral](#an-interior-facet-integral), [Restriction](LANGUAGE.md#restriction),
 [`Normal`](LANGUAGE.md#normal), [`Form`](LANGUAGE.md#form), [Kernels](DESIGN.md#kernels).
 
 The local problems of the Bank-Weiser estimator for the Poisson problem, as
@@ -677,7 +676,7 @@ assembler may form them cell by cell without a global array.
 
 The example uses `D`, `square`, `K`, `I` and the interior facet domain `E`
 with the sides `"+"` and `"-"` of the [interior facet
-example](#example-an-interior-facet-integral), the boundary facet domain `B`
+example](#an-interior-facet-integral), the boundary facet domain `B`
 with the side `"inside"`, a Lagrange space `V` of polynomial degree 1 on `D`,
 a space `F` on `D` for the data, and the Bank-Weiser space `W` on `D`, a
 discontinuous space whose pull-back by each cell is the space of quadratic
@@ -737,7 +736,7 @@ r = form(r_cell + r_facets + r_boundary, (v,))
   choice stays behind the pull-back and is invisible to the form.
 
 The core transformations rewrite `a` and `r` as in the [interior facet
-example](#example-an-interior-facet-integral). After the passes `a` is one
+example](#an-interior-facet-integral). After the passes `a` is one
 `IndexSum` over the cells, `r_cell` and `r_boundary` are an `IndexSum` over
 the cells and over the boundary facets, and `r_facets` is an `IndexSum` over
 the interior facets of an expression on `I` that reads `u_h` on the two cells
@@ -769,10 +768,10 @@ with the two kernels of the global form in place of hand-written code.
   domain](LANGUAGE.md#integral-over-a-decomposed-domain), an expression with
   no support and the cell index free: one value for each cell.
 
-### Example: a fluid and a solid
+### A fluid and a solid
 
-Requires: [Example: an interior facet
-integral](#example-an-interior-facet-integral), [Sides of a
+Requires: [An interior facet
+integral](#an-interior-facet-integral), [Sides of a
 topology](LANGUAGE.md#sides-of-a-topology), [Restriction](LANGUAGE.md#restriction),
 [`Form`](LANGUAGE.md#form), [Kernels](DESIGN.md#kernels).
 
@@ -783,9 +782,9 @@ square of the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example is the
 whole, triangle `(0, 1, 2)` is the fluid, triangle `(1, 3, 2)` is the solid,
 and the diagonal is the interface, the smallest mesh with every part of the
 problem. The example uses `D`, `square`, `K` and
-`I` of the [interior facet example](#example-an-interior-facet-integral), and
-`runtime_array` of [Example: integrating over a cut
-cell](#example-integrating-over-a-cut-cell).
+`I` of the [interior facet example](#an-interior-facet-integral), and
+`runtime_array` of the [cut cell
+example](#integrating-over-a-cut-cell).
 
 A marked set of entities is a topology with sides, and a marker value is the
 identity of the topology. A submesh is the decomposed domain of such a
@@ -825,7 +824,7 @@ side tables as arrays of the solver, from the cell markers, the facet markers
 and the entity maps of the submeshes. The domains, the spaces and the forms
 below are written in the same way for two triangles and for a million cells,
 and a solver mesh with several cell types adds a group to each topology, as
-in the [interior facet example](#example-an-interior-facet-integral).
+in the [interior facet example](#an-interior-facet-integral).
 
 The problem is Stokes flow in the fluid and linear elasticity in the solid,
 coupled by a multiplier on the interface that equates the fluid velocity to
@@ -908,7 +907,7 @@ l = form(traction + integral(index_sum(mu[i] * d_old_G[i], (i,)) / dt, G), ((v, 
   each cell, is a fixed composition that a later version may add.
 
 The core transformations rewrite `a` as in the [interior facet
-example](#example-an-interior-facet-integral). `expand_integrals` gives one
+example](#an-interior-facet-integral). `expand_integrals` gives one
 `IndexSum` for each of `F`, `S` and `G`, over the cell index of its topology.
 On `G`, with `e = cell_index(interface, 0)`, the restriction `u_G` lowers to
 the pull-back of `u` by the fluid cell `cells_fluid[e]` and then by the
@@ -922,19 +921,19 @@ through the two side tables, the entity maps of the two submeshes.
 
 The legacy UFL `dx(1)`, `ds(3)` and `ds((3, 4))` are integrals over the decomposed domains of marked topologies, one topology for each marker value. A DOLFINx submesh is the decomposed domain of a marked topology, and its entity map is the side table into the parent.
 
-### Example: a 1D network in a 3D mesh
+### A 1D network in a 3D mesh
 
 Requires: [`DecomposedDomain`](LANGUAGE.md#decomposeddomain),
 [Sides of a topology](LANGUAGE.md#sides-of-a-topology),
-[Restriction](LANGUAGE.md#restriction), [Example: a fluid and a
-solid](#example-a-fluid-and-a-solid), [Points and point
+[Restriction](LANGUAGE.md#restriction), [A fluid and a
+solid](#a-fluid-and-a-solid), [Points and point
 evaluation](LANGUAGE.md#points-and-point-evaluation), [`Form`](LANGUAGE.md#form).
 
 A network of vessels, a mesh of segments in $R^3$, coupled to the tissue
 around it, a mesh of tetrahedra, with the pressure of each in a space on its
 own mesh. The network is conforming: each segment is an edge of a
 tetrahedron. The topology of the segments then has a side into the tissue,
-as the interface of [Example: a fluid and a solid](#example-a-fluid-and-a-solid)
+as the interface of the [fluid and solid example](#a-fluid-and-a-solid)
 has a side into each part, and the restriction of the tissue pressure to the
 network is a pull-back by that side.
 
@@ -944,8 +943,8 @@ built as in the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, the
 topology `T1` of the segments with the cell type `I` and the side
 `(("tissue", T3, 0),)`, spaces of a library `V3` on `D3` and `V1` on `D1` of
 the degree `()` and the value shape `()`, and `runtime_extent` and
-`runtime_array` of [Example: integrating over a cut
-cell](#example-integrating-over-a-cut-cell):
+`runtime_array` of the [cut cell
+example](#integrating-over-a-cut-cell):
 
 ```python
 # The tissue, of dimension 3, and the network, of dimension 1, both in RD(3).
@@ -993,8 +992,8 @@ a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
   `a` are tuples of functions on the two meshes.
 - The positions take one of twelve values, an edge of `K3` in one of two
   orientations. A library may write the table as a gather from the twelve by
-  a `RuntimeIndex` of [Example: integrating over a cut
-  cell](#example-integrating-over-a-cut-cell), as `StaticTopology` computes
+  a `RuntimeIndex` of the [cut cell
+  example](#integrating-over-a-cut-cell), as `StaticTopology` computes
   the positions from vertex numbers, and a form compiler may then tabulate
   the basis of `V3` on each edge of `K3` once and select by the index, as a
   legacy facet kernel selects by the local facet number.
@@ -1008,7 +1007,7 @@ a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
   a cut cell.
 
 The core transformations rewrite `a` as in the [interior facet
-example](#example-an-interior-facet-integral). `expand_integrals` gives one
+example](#an-interior-facet-integral). `expand_integrals` gives one
 `IndexSum` for `tissue`, over `cell_index(T3, 0)`, and one for `vessel` and
 one for `coupling`, over `cell_index(T1, 0)`. On `coupling`,
 `expand_pull_backs` lowers the two restrictions to pull-backs by one
@@ -1056,8 +1055,7 @@ coupling_avg = integral(beta * (p1 - p3_avg) * (q1 - q3_avg), D1)
   equal to `p3_1` for a conforming network.
 - The pull-back of `p3` by `ring` remains after `expand_pull_backs`, and the
   pass of [Points and point evaluation](LANGUAGE.md#points-and-point-evaluation)
-  lowers it after a quadrature pass on `I` as in [Example:
-  quadrature](#example-quadrature). The maps below `p3` are then `ring`,
+  lowers it after a quadrature pass on `I` as in the [quadrature example](#quadrature). The maps below `p3` are then `ring`,
   `cell_domain(D1, 0)` and the quadrature points, a chain with the free
   indices of the segment, the quadrature point and the ring point, which the
   pass reads as one family of points. The side tables of that family hold
@@ -1066,7 +1064,7 @@ coupling_avg = integral(beta * (p1 - p3_avg) * (q1 - q3_avg), D1)
   cells rather than one cell. A kernel allows that, because [the interface of
   a kernel](DESIGN.md#the-interface-of-a-kernel) follows from the expression.
 
-### Example: the Laplace-Beltrami operator
+### The Laplace-Beltrami operator
 
 Requires: [The tour](DESIGN.md#the-tour),
 [`Components`](LANGUAGE.md#components), [`Integral` over a decomposed
@@ -1122,16 +1120,16 @@ L = form(integral(f * v, M), (v,))
 
 Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Components` gives the gradient in every dimension.
 
-### Example: the flux through a surface
+### The flux through a surface
 
-Requires: [Example: the Laplace-Beltrami
-operator](#example-the-laplace-beltrami-operator), [Concept: orientation of a
+Requires: [The Laplace-Beltrami
+operator](#the-laplace-beltrami-operator), [Concept: orientation of a
 domain](LANGUAGE.md#concept-orientation-of-a-domain), [`Integral` over a decomposed
 domain](LANGUAGE.md#integral-over-a-decomposed-domain).
 
 The flux of a vector field through a surface is the integral of a 2-form, so
 the flux needs an orientation of the surface. With `M`, `T` and `c` of the
-[Laplace-Beltrami example](#example-the-laplace-beltrami-operator), where `M` is
+[Laplace-Beltrami example](#the-laplace-beltrami-operator), where `M` is
 a closed surface such as a triangulated sphere:
 
 ```python
@@ -1170,7 +1168,7 @@ area = integral(Integer(1), M)
 - A surface with no consistent orientation, such as a Möbius strip, has no
   signs `o`. The area of the surface is defined, and the flux is not.
 
-### Example: a classic FEniCS layer for the Poisson problem
+### A classic FEniCS layer for the Poisson problem
 
 Requires: [The tour](DESIGN.md#the-tour),
 [The base object `Base`](LANGUAGE.md#the-base-object-base),
@@ -1365,12 +1363,12 @@ With the module, a Poisson problem with a conductivity, a source on a marked
 subdomain, a second source from a flux field and a Neumann condition from the
 same field on a marked part of the boundary reads as a classic FEniCS demo.
 `D` is the mesh of the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain)
-example and `boundary` the topology of its boundary facets of [Example: a
-static topology](#example-a-static-topology). `lower` and `left` are marker
+example and `boundary` the topology of its boundary facets of the [static
+topology example](#a-static-topology). `lower` and `left` are marker
 data that a mesh library supplies: the topology of the lower triangle and the
 topology of the left edge, each with a side `"inside"` into the mesh, built as
-`fluid_cells` and `inlet` of [Example: a fluid and a
-solid](#example-a-fluid-and-a-solid) are. A user script of the module sees
+`fluid_cells` and `inlet` of the [fluid and solid
+example](#a-fluid-and-a-solid) are. A user script of the module sees
 none of the topologies, as a legacy script sees only a `MeshFunction`.
 
 ```python
@@ -1446,8 +1444,8 @@ L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
   of the integrand. A `dS` would be a
   measure over the interior facets with a side for each restriction, the
   legacy `u('+')` would be `restriction(u, E, "+")`, and `avg` and `jump`
-  would be arithmetic, as in [Example: an interior facet
-  integral](#example-an-interior-facet-integral).
+  would be arithmetic, as in the [interior facet
+  example](#an-interior-facet-integral).
 - The legacy `FacetNormal` belongs to the mesh and is resolved per integral.
   `n` is a placeholder function of the module in a space of fields on the
   mesh, known by its label, so that `inner(q, n)` is an expression on the
@@ -1458,7 +1456,7 @@ L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
   `grad` reads the mesh from the coefficient, and `grad(w)[i, j]` is the
   derivative of `w[i]` along `x[j]`, as in legacy UFL, so `div` is the trace
   and `curl` reads off the antisymmetric part. On the surface mesh of
-  [Example: the Laplace-Beltrami operator](#example-the-laplace-beltrami-operator)
+  the [Laplace-Beltrami example](#the-laplace-beltrami-operator)
   the same `grad` is the surface gradient. The legacy `grad` of a `Constant`
   is the zero of the shape of the mesh. `kappa` has no support, so `grad(kappa)`
   raises in the module; a module that wants the legacy behaviour gives
