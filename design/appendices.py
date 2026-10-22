@@ -20,7 +20,6 @@ EXAMPLES = HERE / "EXAMPLES.md"
 # Classes of a language extension are not part of the core appendices.
 EXCLUDED_CHAPTERS = {"Extending the core"}
 FREE_FUNCTION_HEADER = ["Free function", "Overload", "Takes", "Returns"]
-TREE_COLUMN = 42
 
 
 @dataclass
@@ -74,16 +73,6 @@ def split_row(line: str) -> list[str]:
 def code_names(text: str) -> list[str]:
     """Return the class names in backticks, with or without arguments."""
     return re.findall(r"`([A-Z]\w*)(?:\([^`]*\))?`", text)
-
-
-SYMBOLS = {r"\otimes": "⊗", r"\psi": "ψ"}
-
-
-def plain(text: str) -> str:
-    """Strip Markdown and math markers for the plain-text tree."""
-    for command, symbol in SYMBOLS.items():
-        text = text.replace(command, symbol)
-    return re.sub(r"[`$\\]", "", text)
 
 
 class Document:
@@ -210,58 +199,31 @@ class Document:
                 )
 
 
-def summary_of(entry: ClassEntry) -> str:
-    """Return the summary of one class, from a shared or a split row."""
-    summary = entry.rows.get("Summary", "")
-    parts = re.findall(r"`(\w+)`: ([^;]+)", summary)
-    if parts:
-        return dict(parts).get(entry.name, "").strip()
-    return summary
-
-
 def core(classes: list[ClassEntry]) -> list[ClassEntry]:
     """Return the classes of the core, without those of language extensions."""
     return [c for c in classes if c.chapter not in EXCLUDED_CHAPTERS]
 
 
 def class_hierarchy(classes: list[ClassEntry]) -> str:
-    """Render the class hierarchy, one tree per chapter."""
-    out = []
-    chapters = []
+    """Render the class hierarchy as a table of parents and subclasses, by chapter."""
+    anchors = {c.name: c.anchor for c in classes}
+
+    def link(name: str) -> str:
+        return f"[`{name}`](#{anchors[name]})" if name in anchors else f"`{name}`"
+
+    rows = []
+    previous = None
     for c in core(classes):
-        if c.extends and c.chapter not in chapters:
-            chapters.append(c.chapter)
-    for chapter in chapters:
-        members = [c for c in core(classes) if c.chapter == chapter and c.extends]
-        names = {c.name for c in members}
-        out.append(f"# {chapter}")
-        roots: list[tuple[str, list[ClassEntry]]] = []
-        for c in members:
-            if len(c.extends) == 1 and c.extends[0] in names:
-                continue
-            key = ", ".join(c.extends)
-            for root, group in roots:
-                if root == key:
-                    group.append(c)
-                    break
-            else:
-                roots.append((key, [c]))
-
-        def walk(group: list[ClassEntry], prefix: str) -> None:
-            for k, c in enumerate(group):
-                last = k == len(group) - 1
-                label = f"{prefix}{'└── ' if last else '├── '}{c.name}"
-                summary = plain(summary_of(c))
-                line = f"{label.ljust(TREE_COLUMN)}{summary}" if summary else label
-                out.append(line.rstrip())
-                children = [m for m in members if m.extends == [c.name]]
-                walk(children, prefix + ("    " if last else "│   "))
-
-        for root, group in roots:
-            out.append(root)
-            walk(group, "")
-        out.append("")
-    return "```\n" + "\n".join(out).rstrip() + "\n```\n"
+        if not c.extends:
+            continue
+        parents = ", ".join(link(name) for name in c.extends)
+        if rows and rows[-1][3] == c.chapter and rows[-1][1] == parents:
+            rows[-1][2] += ", " + link(c.name)
+            continue
+        group = c.chapter if c.chapter != previous else ""
+        previous = c.chapter
+        rows.append([group, parents, link(c.name), c.chapter])
+    return table(["Group", "Extends", "Classes"], [r[:3] for r in rows])
 
 
 def table(header: list[str], rows: list[list[str]]) -> str:
