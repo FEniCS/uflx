@@ -70,8 +70,8 @@ a node because the lowering should happen in a pass, not at construction.
 
 Almost every object a user builds is an `AbstractExpression`: literals,
 arithmetic, tensors, the coordinate function, the exterior derivative,
-components, pull-backs, the normal, functions, integrals, forms and actions,
-and the interpolant of the interpolation extension. The exceptions are the
+components, pull-backs, the normal, functions, integrals, forms and actions.
+The exceptions are the
 static data an expression refers to and never computes with: domains, domain
 maps, side maps, topologies, cell types, function spaces, indices, extents
 and index tables. Those are base objects with properties, not values.
@@ -99,9 +99,7 @@ as separate kinds, each with its own algebra.
 - A form is an expression whose argument spaces are not `()`. Forms add,
   scale and subtract by the ordinary operators, and a functional is any
   expression with the argument spaces `()`. A form whose expression is a
-  field rather than an integral is a linear operator, which is how
-  interpolation and its adjoint are written without new classes (`Form`,
-  The interpolation extension).
+  field rather than an integral is a linear operator (`Form`).
 - A pass has one rule per node class and nothing else. Because a form and an
   action are nodes like any other, a pull-back moves into a form's expression
   past its bound arguments, and the same six transformations serve

@@ -122,7 +122,6 @@ implementation and is not a rule.
   - [Gateaux derivative](#gateaux-derivative)
 - [Extending the core](#extending-the-core)
   - [Language extensions](#language-extensions)
-  - [The interpolation extension](#the-interpolation-extension)
   - [New questions](#new-questions)
   - [New operations](#new-operations)
   - [New subclasses](#new-subclasses)
@@ -3201,11 +3200,6 @@ in `Q` of the [`Form`](#form) examples.
   `form(conjugate(action(l, 0, w)), (conjugate(l),))` has the argument spaces
   `(conjugate_space(dual(V)),)`, the static type of a function in
   `dual(dual(V))`. The form evaluates every antilinear form on `V` at `w`.
-- Let `W` be a space and `l` a function in `dual(W)`, with the [interpolation
-  extension](#the-interpolation-extension).
-  `form(action(l, 0, interpolate(v, W)), (conjugate(v),))` is the adjoint of
-  the interpolation from `V` to `W` applied to `l`. The form has the argument
-  spaces `(conjugate_space(V),)`, the static type of a function in `dual(V)`.
 
 #### Legacy UFL
 
@@ -3254,9 +3248,7 @@ blocks. The block of a member of each argument is the form of the expression
 with the other members replaced by `Zero`.
 
 The expression may have any value shape and support. A form whose expression
-is a field is a linear operator, such as the interpolation operator
-`form(interpolate(u, W), (u,))` of the [interpolation
-extension](#the-interpolation-extension). The support is that of the expression, so
+is a field is a linear operator. The support is that of the expression, so
 a form of integrals has no support, although the arguments have one. A
 substitution renames a bound argument to avoid capture, as for indices (see
 [Passes](#passes)).
@@ -3685,8 +3677,7 @@ The core supports five kinds of extension:
 - [New operations](#new-operations), such as the trace or the divergence.
 - [New transformations](#new-transformations), such as the Gateaux
   derivative.
-- [Language extensions](#language-extensions), such as external operators or
-  [interpolation](#the-interpolation-extension).
+- [Language extensions](#language-extensions), such as external operators.
 
 A property that the rules of the core depend on is part of the core, not an
 extension. For example, the scalar type is part of the core, because
@@ -3732,86 +3723,6 @@ class of a language extension whose lowering is the composition. For example,
 a `Transpose` node class lowers to `component_tensor(A[k, l], (l, k))`. The
 rule for `expand_pull_backs` moves the pull-back inside `Transpose`, because
 the transpose is pointwise, so `Transpose` survives the pull-back.
-
-### The interpolation extension
-
-Requires: [Language extensions](#language-extensions),
-[`AbstractFunctionSpace`](#abstractfunctionspace), [`DualSpace`](#dualspace),
-[`Form`](#form), [`Action`](#action).
-
-The interpolation extension ships with UFLx and adds the node class
-`Interpolate` for the interpolant of an expression in a space.
-
-| `Interpolate(f, V)` |                                                                                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Extends             | `AbstractExpression` |
-| Free function       | `interpolate(f, V)`                                                                                                                  |
-| Takes               | `f: AbstractExpression`, `V: AbstractFunctionSpace` |
-| Properties          | `expression` $f$ and `space` $V$, an `AbstractFunctionSpace` with the argument spaces `()`                                           |
-| Requires            | $f$ with the value shape and the degree of $V$, no free indices, the support `V.domain` or no support, and a real $f$ for a real $V$ |
-| Static type         | That of a function in $V$, with the argument spaces of $f$                                                                           |
-| Raises              | `ValueError` if a requirement fails                                                                                                  |
-| Lowering            | None                                                                                                                                 |
-
-`interpolate(f, V)` is the function in $V$ with the degrees of freedom of $f$.
-The library of $V$ defines the interpolant, as the library defines the
-pull-back of a function in $V$.
-
-#### Rules for the core transformations
-
-| Core transformation | Rule for `Interpolate(f, V)`                                                                                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `expand_pull_backs` | The pull-back by `cell_domain(V.domain, j)` is the composition that the library of $V$ gives from the pull-back of $f$ by the cell, such as values at points or moments as `Integral`s |
-| `apply_derivatives` | The node remains under the exterior derivative                                                                                                                                         |
-| `expand_components` | The node remains under `Components`                                                                                                                                                    |
-| `apply_actions`     | `interpolate` of the action of $f$                                                                                                                                                     |
-
-- The interpolant of a derivative differs from the derivative of the
-  interpolant, except for some pairs of spaces. The exterior derivative
-  therefore remains on the node, as on a function.
-- `Interpolate` is linear in $f$. The node therefore passes on the argument
-  spaces of $f$, and an action moves into $f$.
-
-#### The interpolation operator and the adjoint
-
-The interpolation operator from a space $U$ to $V$ is the form
-`form(interpolate(u, V), (u,))`, with a function `u` in $U$. The value of the
-form is a field.
-
-The adjoint of the operator takes a function `l` in `dual(V)` to the form
-`form(action(l, 0, interpolate(u, V)), (conjugate(u),))`. The form is
-antilinear in `u`, with the static type of a function in `dual(U)`. Binding
-`l` as well gives the form of the interpolation matrix. The action on `l`
-remains, and the library of `l` evaluates the pairing, the transpose of the
-interpolation.
-
-Interpolation between the spaces of two domains needs the cell of one domain
-that contains a point of the other. That interpolation is left to a later
-version of the extension.
-
-#### Examples
-
-The examples use the following objects:
-
-- The decomposed domain `D`.
-- The Lagrange spaces `V` and `V2` of polynomial degrees 1 and 2 on `D`.
-- A Nédélec space `W` on `D` of the degree `(1,)`.
-- A function `u` in `V` and a function `l` in `dual(V2)`.
-
-Examples:
-
-- `interpolate(exterior_derivative(u, D), W)` is the interpolant of
-  $\mathrm{d}u$ in `W`.
-- `interpolate(u, W)` raises `ValueError`, because the degree of `u` is `()`
-  and the degree of `W` is `(1,)`.
-- `form(interpolate(u, V2), (u,))` is the prolongation from `V` to `V2`.
-- `form(action(l, 0, interpolate(u, V2)), (conjugate(u),))` is the restriction
-  of `l` to a linear form on `V`, the transpose of the prolongation, as in
-  multigrid.
-
-#### Legacy UFL
-
-In legacy UFL, `Interpolate(f, V)` is a `BaseFormOperator`, as an external operator is, and the adjoint interpolation takes a `Coargument`. In DOLFINx, interpolation happens outside UFL.
 
 ### New questions
 
@@ -3913,7 +3824,6 @@ The "Legacy UFL" subsections of the sections, in order.
 - **[`Form`](#form).** In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
 - **[`Action`](#action).** Legacy UFL operations are actions and rebindings. The action on the last argument of a bilinear form is `action(f, 1, w)`. The adjoint of `form(e, (conjugate(v), u))` is `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in `v` and antilinear in `u`. The Gateaux derivative with respect to a function adds an argument (see [Gateaux derivative](#gateaux-derivative)).
 - **[Extending the core](#extending-the-core).** In legacy UFL, properties are stored on the node classes, and the set of properties is fixed. Every new property touches every node class, so features such as complex numbers and dual spaces were patched in across the node classes.
-- **[The interpolation extension](#the-interpolation-extension).** In legacy UFL, `Interpolate(f, V)` is a `BaseFormOperator`, as an external operator is, and the adjoint interpolation takes a `Coargument`. In DOLFINx, interpolation happens outside UFL.
 - **[Example: an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral).** The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal and the facet domain are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
 - **[Example: a fluid and a solid](EXAMPLES.md#example-a-fluid-and-a-solid).** The legacy UFL `dx(1)`, `ds(3)` and `ds((3, 4))` are integrals over the decomposed domains of marked topologies, one topology for each marker value. A DOLFINx submesh is the decomposed domain of a marked topology, and its entity map is the side table into the parent.
 - **[Example: the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator).** Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Components` gives the gradient in every dimension.
