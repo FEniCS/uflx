@@ -1,0 +1,29 @@
+version: 1
+project:
+  title: UFLx design notes
+  authors:
+    - name: Jack S. Hale
+    - name: Matthew Scroggs
+    - name: Michal Habera
+  github: https://github.com/FEniCS/uflx
+  toc:
+    - file: README.md
+    - file: DESIGN.md
+    - file: LANGUAGE.md
+    - file: EXAMPLES.md
+    - file: DESIGN_CHOICES.md
+    - file: FINAL_TODOS.md
+  error_rules:
+    - rule: reference-target-explicit
+      severity: ignore
+  exclude:
+    - build/**
+  exports:
+    - format: pdf
+      template: plain_latex
+      articles: [LANGUAGE.md]
+      output: _build/exports/LANGUAGE.pdf
+site:
+  template: book-theme
+  options:
+    logo_text: UFLx design notes
