@@ -88,12 +88,47 @@ function Code(el)
   return out
 end
 
+-- The reader keeps only the first word of a fence, so the dropdown titles
+-- come from the source, in order.
+local titles = nil
+local dropdowns = 0
+
+local function dropdown_title()
+  if not titles then
+    titles = {}
+    for line in io.lines(PANDOC_STATE.input_files[1]) do
+      local title = line:match("^```+{dropdown}%s*(.*)$")
+      if title then
+        titles[#titles + 1] = title
+      end
+    end
+  end
+  dropdowns = dropdowns + 1
+  return titles[dropdowns] or ""
+end
+
+local inner = {}
+
+-- A MyST dropdown is printed open, with the title in bold.
 -- Blocks without a language skip fancyvrb, which does the line breaking.
 function CodeBlock(el)
+  if el.classes[1] == "{dropdown}" then
+    local title = dropdown_title()
+    local blocks = pandoc.read(el.text, "gfm+tex_math_dollars+pipe_tables").blocks:walk(inner)
+    if blocks[1] and blocks[1].t == "Para" then
+      blocks[1].content:insert(1, pandoc.Strong(title .. "."))
+      blocks[1].content:insert(2, pandoc.Space())
+    else
+      blocks:insert(1, pandoc.Para({ pandoc.Strong(title) }))
+    end
+    return blocks
+  end
   if #el.classes == 0 then
     el.classes = { "default" }
     return el
   end
 end
 
-return { { Meta = Meta }, { Link = Link, Table = Table, Code = Code, CodeBlock = CodeBlock } }
+inner = { Link = Link, Table = Table, Code = Code, CodeBlock = CodeBlock }
+
+return { { Meta = Meta }, inner }

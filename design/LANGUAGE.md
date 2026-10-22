@@ -20,8 +20,8 @@ unless the note states a reason not to, and "may" for a choice that the note
 leaves open. A statement in the present tense, such as "the degree is a
 `tuple`", is a rule of the language. "Not yet covered" marks a decided gap, a
 part of the language that the authors intend to specify later. "Open" marks a
-question that the authors have not decided. A "Legacy UFL" subsection relates
-a section to legacy UFL and is not a rule.
+question that the authors have not decided. A "Legacy UFL" dropdown relates a
+section to legacy UFL and is not a rule.
 
 ## Scope
 
@@ -77,9 +77,9 @@ provides the concrete data behind each leaf node.
   reference cell, such as a unit simplex, as in each cell term of a legacy UFL
   `dx` integral.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 TSFC lowers a UFL form to GEM, which repeats much of the algebra of UFL, partly because UFL simplifies during construction. The UFLx core does not simplify during construction, so a form compiler may be able to use a lowered UFLx form directly, adding only leaves for tables and kernel inputs. This has not been confirmed with the TSFC or FFCx developers.
+```
 
 ## Rules of the language
 
@@ -2092,9 +2092,9 @@ Examples:
 - A mesh of a solver with triangles and quadrilaterals has two cell types, and
   two `AbstractExtent`s as the numbers of cells.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and the measure `dx` hides the sum over the cells. In UFLx, the topology, the parameterisations of the pieces of a decomposed domain and the `IndexSum` over `cell_index(T, j)` are separate.
+```
 
 ### Sides of a topology
 
@@ -2239,9 +2239,9 @@ cells as cell types, such as `ReferenceSimplex(1)` in place of `I` (see
   boundary facets has the cell types `(K, Q)`, with the quadrilateral cell type
   `Q`, and the sides `((("inside", U3, 0),), (("inside", U3, 0),))`.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
+```
 
 Worked examples for this chapter in EXAMPLES.md: [the simplex as a cell type](EXAMPLES.md#the-simplex-as-a-cell-type), [a static topology](EXAMPLES.md#a-static-topology).
 
@@ -2456,9 +2456,9 @@ u_tri = pull_back(u, cell_domain(D, 0))
 u_quad = pull_back(u, cell_domain(D, 1))
 ```
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 In legacy UFL, a `Mesh` is a decomposed domain, and `SpatialCoordinate(mesh)` is `coordinate(D)`.
+```
 
 ### Restriction
 
@@ -2596,9 +2596,9 @@ jump = restriction(u, E, "+") - restriction(u, E, "-")
   groups of [Sides of a topology](#sides-of-a-topology), the same two lines
   with `E = side_domain(D, S)` give one jump for all three groups.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 The legacy UFL restriction `f('+')` is `restriction(f, E, "+")` on the decomposed domain $E$ of the interior facets, whose sides are named `'+'` and `'-'`.
+```
 
 ### `Integral` over a decomposed domain
 
@@ -2682,9 +2682,9 @@ Examples:
 - `integral(restriction(du, B, "inside"), B)` integrates the 1-form
   $\mathrm{d}u$ along the boundary facets, with the orientation of each facet.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the decomposed domain of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
+```
 
 ### `Normal`
 
@@ -2900,11 +2900,11 @@ The examples use a decomposed domain `D` of `ReferenceSimplex(2)` cells in
 - The discontinuous Lagrange space of polynomial degree 0 on `D`, as densities,
   has the degree `(2,)`.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 The legacy UFL `Real` space is a space of constants, and the legacy UFL `Constant` is constant data.
 
 In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, the pull-back states the meaning of a function on a cell, the library states the representation, and the space holds a decomposed domain, the legacy mesh.
+```
 
 ### `Function`
 
@@ -2943,9 +2943,9 @@ Examples, with a decomposed domain `D` and a space `V` on `D` of the degree
 - `u = function(V, "u")` has the support `D`, the degree `()` and the value
   shape `()`, and `function(V, "u") == u` is `True`.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functions. A test function and a trial function are the functions that a form states as the arguments at the positions 0 and 1.
+```
 
 ## Variational forms
 
@@ -3092,9 +3092,9 @@ in `Q` of the [`Form`](#form) examples.
   `(conjugate_space(dual(V)),)`, the static type of a function in
   `dual(dual(V))`. The form evaluates every antilinear form on `V` at `w`.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the canonical map is a form, so the spaces keep distinct argument spaces.
+```
 
 ### `Form`
 
@@ -3175,9 +3175,9 @@ one entry at a time. The expression of the `Form` must be linear or zero in
 `v` for an entry `v`, and antilinear or zero in `v` for an entry
 `conjugate(v)`.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
+```
 
 ### `Action`
 
@@ -3222,9 +3222,9 @@ The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples, and
   [`Form`](#form) examples. `action(form(e, ((v, q), (u, p))), 1, (w, r))` is
   a linear form in `(v, q)`, the residual at `(w, r)`.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 Legacy UFL operations are actions and rebindings. The action on the last argument of a bilinear form is `action(f, 1, w)`. The adjoint of `form(e, (conjugate(v), u))` is `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in `v` and antilinear in `u`. The Gateaux derivative with respect to a function adds an argument (see [Gateaux derivative](#gateaux-derivative)).
+```
 
 Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator](EXAMPLES.md#the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES.md#the-flux-through-a-surface), [a classic FEniCS layer for the Poisson problem](EXAMPLES.md#a-classic-fenics-layer-for-the-poisson-problem).
 
@@ -3584,9 +3584,9 @@ extension. For example, the scalar type is part of the core, because
 `Absolute` is real for a complex operand. Adding such a property changes the
 core.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 In legacy UFL, properties are stored on the node classes, and the set of properties is fixed. Every new property touches every node class, so features such as complex numbers and dual spaces were patched in across the node classes.
+```
 
 ### Language extensions
 

@@ -645,9 +645,9 @@ facet from each side.
   $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
   is a difference at one point.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal and the facet domain are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
+```
 
 ### A Bank-Weiser error estimator
 
@@ -917,9 +917,9 @@ the solid cell `cells_solid[e]`. The kernel of `coupling` is an expression on
 solid cell and of `L` on the facet, and the assembler packs the two cells
 through the two side tables, the entity maps of the two submeshes.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 The legacy UFL `dx(1)`, `ds(3)` and `ds((3, 4))` are integrals over the decomposed domains of marked topologies, one topology for each marker value. A DOLFINx submesh is the decomposed domain of a marked topology, and its entity map is the side table into the parent.
+```
 
 ### A 1D network in a 3D mesh
 
@@ -1116,9 +1116,9 @@ L = form(integral(f * v, M), (v,))
   derivative $H$ of the surface gradient, which is not symmetric in general.
   The covariant Hessian of `u` is $P H P$.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Components` gives the gradient in every dimension.
+```
 
 ### The flux through a surface
 
@@ -1469,6 +1469,7 @@ covered, and `u('+')`, which calls a core `Function`, so a module writes a
 free function for it. Boundary conditions, assembly and solving are outside
 legacy UFL too.
 
-#### Legacy UFL
-
+```{dropdown} Legacy UFL
 The legacy spelling `inner(grad(u), grad(v)) * dx` is a module `uflx.legacy` of free functions over the core, whose forms are ordinary core graphs.
+```
+
