@@ -661,9 +661,13 @@ in Bulle et al. On each cell, with `u_h` the Galerkin solution, the local
 problem seeks `e` in a space of quadratic functions with zero vertex values
 such that
 
-$$\int_K \nabla e \cdot \nabla v = \int_K (f + \Delta u_h) v
-- \frac{1}{2} \int_{\partial K \cap \Omega} n_K \cdot (\nabla u_h|_K - \nabla u_h|_{K'}) \, v
-+ \int_{\partial K \cap \Gamma_N} (g - \partial_n u_h) \, v,$$
+$$
+\begin{aligned}
+\int_K \nabla e \cdot \nabla v ={} & \int_K (f + \Delta u_h) \, v \\
+& - \frac{1}{2} \int_{\partial K \cap \Omega} n_K \cdot (\nabla u_h|_K - \nabla u_h|_{K'}) \, v \\
+& + \int_{\partial K \cap \Gamma_N} (g - \partial_n u_h) \, v,
+\end{aligned}
+$$
 
 and the estimator on the cell is the energy norm of `e`. The facet terms need
 the solution on every cell attached to `K`. The example writes the local
