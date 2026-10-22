@@ -8,8 +8,8 @@ UFLx is an experimental, minimal reimplementation of UFL (Unified Form Language)
 symbolic language embedded in Python for writing finite-element variational forms
 (e.g. `inner(grad(v), grad(u)) * dx`). It does not own meshes, boundary markers,
 coefficient values, or assembly — those belong to a surrounding solver environment
-(e.g. DOLFIN/DOLFINx). See [DESIGN.md](DESIGN.md) for the argument behind the language, [LANGUAGE.md](LANGUAGE.md)
-for the full language spec and [DESIGN_CHOICES.md](DESIGN_CHOICES.md) for naming/API
+(e.g. DOLFIN/DOLFINx). See [design/DESIGN.md](design/DESIGN.md) for the argument behind the language, [design/LANGUAGE.md](design/LANGUAGE.md)
+for the full language spec and [design/DESIGN_CHOICES.md](design/DESIGN_CHOICES.md) for naming/API
 conventions — read all three before adding to the object model.
 
 ## Commands
@@ -94,11 +94,11 @@ consumers, e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` exte
   `Form` is a sum/combination of integrals whose integrand must be scalar with no
   free indices.
 
-LANGUAGE.md specifies six core transformations on top of this object model
+design/LANGUAGE.md specifies six core transformations on top of this object model
 (expanding integrals, pull-backs and components, applying derivatives and actions,
 and reducing component tensors), all lazy graph rewrites rather than eager
 evaluation. The Gateaux derivative is planned but not yet specified (see the
-"Gateaux derivative" section of LANGUAGE.md).
+"Gateaux derivative" section of design/LANGUAGE.md).
 
 ## Python style
 
@@ -143,7 +143,7 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
   than replacing existing authors when making a substantive change to a file that has
   one.
 
-## Conventions (see DESIGN_CHOICES.md)
+## Conventions (see design/DESIGN_CHOICES.md)
 
 - Module files are named as the plural of what they contain (e.g. `domains.py`)
   precisely so the module (`uflx.domains`) and a same-named factory function
