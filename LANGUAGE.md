@@ -1957,45 +1957,60 @@ the ambient coordinate domain of a domain $P$, of dimension $n$.
 | Raises             | `ValueError` if a requirement fails                                                                    |
 | Evaluated by       | [`expand_components`](#expanding-components)                                                           |
 
+#### The frame
+
 For a domain $P$ of dimension $k$, the frame is the coordinate frame of the
 ambient coordinate domain of $P$, of dimension $n$. A coordinate domain has
-$k = n$. For $k = n$, that frame is a frame of $P$. For $k < n$, such as a
-decomposed domain that is a surface in $R^3$, the
-coordinate vector fields $\partial_j$ of the ambient coordinate domain are not
-tangent to $P$, and $\partial_j$ in the definition below is the orthogonal
-projection of $\partial_j$ onto the tangent space of $P$, with the Euclidean
-metric of the ambient coordinate domain. The array is then the array of the
-extension of $f$ that is zero on the normal space of $P$, such as the surface
-gradient of a function on $P$.
+$k = n$.
 
-With $\partial_j$ the coordinate vector fields of $P$, dual to the coordinate
-1-forms $\mathrm{d}X_j$, the entry $j$ of the new axis is the interior product
-of $\partial_j$ with the first slot of $f$,
+- For $k = n$, that frame is a frame of $P$.
+- For $k < n$, such as a decomposed domain that is a surface in $R^3$, the
+  coordinate vector fields $\partial_j$ of the ambient coordinate domain are
+  not tangent to $P$. $\partial_j$ in the definition below is then the
+  orthogonal projection of $\partial_j$ onto the tangent space of $P$, with the
+  Euclidean metric of the ambient coordinate domain. The array is then the
+  array of the extension of $f$ that is zero on the normal space of $P$, such
+  as the surface gradient of a function on $P$.
+
+#### Definition
+
+Let $\partial_j$ be the coordinate vector fields of $P$, dual to the coordinate
+1-forms $\mathrm{d}X_j$. The entry $j$ of the new axis is the interior product
+of $\partial_j$ with the first slot of $f$:
 
 $$
-\mathrm{Components}(f, P)_j(v_2, \dots, v_k) = f(\partial_j, v_2, \dots, v_k).
+\mathrm{Components}(f, P)_j(v_2, \dots, v_l) = f(\partial_j, v_2, \dots, v_l).
 $$
 
-If the first slot of $f$ has the degree $k > 1$, the first slot of the result has the
-degree $k - 1$. If the first slot of $f$ has the degree 1, the result does not
-have that slot. For example, the degree `(1,)` gives `()`, the degree `(2,)`
-gives `(1,)`, and the degree `(1, 1)` gives `(1,)`.
+The degree of the result follows from the degree $l$ of the first slot of $f$:
+
+- If $l > 1$, the first slot of the result has the degree $l - 1$.
+- If $l = 1$, the result does not have that slot.
+
+For example, the degree `(1,)` gives `()`, the degree `(2,)` gives `(1,)`, and
+the degree `(1, 1)` gives `(1,)`.
 
 The reverse direction is a fixed composition,
 `index_sum(v[i] * dX[i], (i,))` for a vector `v` of value shape `(n,)`.
 
+#### Pull-backs of `Components`
+
 The components depend on the coordinates of $P$. So a pull-back does not
 commute with `Components`. `PullBack(Components(f, Q), D)` is the array of the
-components of $f$ on $Q$, evaluated at $\psi(p)$. If $P$ has the dimension of
-$Q$, `expand_pull_backs` moves the pull-back inside `Components` with the
-inverse of the Jacobian matrix (see
-[Expanding pull-backs](#expanding-pull-backs)). Otherwise
-`PullBack(Components(f, Q), D)` remains until `expand_components` evaluates the
-`Components` (see [Expanding components](#expanding-components)).
+components of $f$ on $Q$, evaluated at $\psi(p)$.
+
+- If $P$ has the dimension of $Q$, `expand_pull_backs` moves the pull-back
+  inside `Components` with the inverse of the Jacobian matrix (see
+  [Expanding pull-backs](#expanding-pull-backs)).
+- Otherwise `PullBack(Components(f, Q), D)` remains until `expand_components`
+  evaluates the `Components` (see [Expanding
+  components](#expanding-components)).
+
+#### Examples
 
 With `Components`, the arrays of standard differential calculus are fixed
-compositions. With the examples of [`ExteriorDerivative`](#exteriorderivative)
-on `RD(3)`, and `f = x * y * z`:
+compositions. The examples use the examples of
+[`ExteriorDerivative`](#exteriorderivative) on `RD(3)`, and `f = x * y * z`:
 
 | Expression                              | Value shape | Degree | Meaning                                                      |
 | --------------------------------------- | ----------- | ------ | ------------------------------------------------------------ |
@@ -2010,9 +2025,9 @@ on `RD(3)`, and `f = x * y * z`:
   `components(exterior_derivative(D.parameterisation, P), P)` is the Jacobian
   matrix of value shape `(m, n)`, with $m$ the dimension of the ambient
   coordinate domain of $D$.
-- For a decomposed domain `M` of dimension 2 in `RD(3)` and a function `u` on
-  `M`, `components(exterior_derivative(u, M), M)` is the surface gradient of
-  `u`, with value shape `(3,)`, and
+- Let `M` be a decomposed domain of dimension 2 in `RD(3)`, and `u` a function
+  on `M`. `components(exterior_derivative(u, M), M)` is the surface gradient
+  of `u`, with value shape `(3,)`.
   `components(exterior_derivative(coordinate(M), M), M)` is the orthogonal
   projection onto the tangent plane of `M`, with value shape `(3, 3)`.
 
@@ -2647,7 +2662,7 @@ The sides may have different topologies, such as a mesh and a submesh, or two
 meshes that meet. The topology of a side may itself have sides, so the cells
 of $S$ may be facets of facets.
 
-#### Pieces
+#### Cells that are pieces
 
 A cell of $S$ that is a piece of the cell on a side covers the cases where one
 entity meets several cells:
@@ -2794,73 +2809,109 @@ See also: [Sides of a topology](#sides-of-a-topology),
 A concrete subclass of [`AbstractDomain`](#abstractdomain) for a domain that
 is the union of the images of pieces, each a family of domain maps.
 
-| `DecomposedDomain(pieces)` |                                                                                                                                                           |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Free function              | `decomposed_domain(pieces)`                                                                                                                               |
-| Properties                 | `pieces`, a non-empty `tuple` of [`DomainMap`](#domainmap)s with the same ambient domain $Q$ and the same dimension $k$               |
-| Derived                    | `ambient_domain` $Q$, `dimension` $k$, and `topology`, $T$ if the free indices of piece $j$ are `(cell_index(T, j),)` for every $j$, and otherwise `None` |
-| Raises                     | `TypeError` for a piece that is not a `DomainMap`, and `ValueError` if another requirement fails                                                |
+| `DecomposedDomain(pieces)` |                                                                                                                         |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Free function              | `decomposed_domain(pieces)`                                                                                             |
+| Properties                 | `pieces`, a non-empty `tuple` of [`DomainMap`](#domainmap)s with the same ambient domain $Q$ and the same dimension $k$ |
+| Derived                    | `ambient_domain` $Q$, `dimension` $k$, and `topology`, below                                                            |
+| Raises                     | `TypeError` for a piece that is not a `DomainMap`, and `ValueError` if another requirement fails                        |
+
+`topology` is $T$ if the free indices of piece $j$ are `(cell_index(T, j),)`
+for every $j$, and otherwise `None`.
+
+Notation, for the piece $j$ of $D$:
+
+- $P_j$ is the parameter domain and $\psi_j$ is the parameterisation.
+- For a mesh with the topology $T$, $K_j$ is the reference cell of cell type
+  $j$, and $x_j$ are the coordinates of the cells of type $j$.
+
+#### Pieces
 
 A piece with free indices is a family, one domain for each value of the free
-indices, and $D$ is the union of all the domains of all the pieces. A mesh has
-one piece for each cell type $j$, `domain_map(K_j, x_j, Q)`, with the
-reference cell $K_j$ and the coordinates $x_j$ of the cells, with the free
-index `cell_index(T, j)`. Then the topology of $D$ is $T$. A piece with an
-ordinary `Index`, such as a cloud of points, gives no topology, and a single
-`DomainMap` with no free indices is a decomposed domain of one
-piece. The core does not check that the domains meet only in sets of measure
-zero.
+indices. $D$ is the union of all the domains of all the pieces.
+
+- A mesh has one piece for each cell type $j$, `domain_map(K_j, x_j, Q)`, with
+  the free index `cell_index(T, j)`. Then the topology of $D$ is $T$.
+- A piece with an ordinary `Index`, such as a cloud of points, gives no
+  topology.
+- A single `DomainMap` with no free indices is a decomposed domain of one
+  piece.
+
+The core does not check that the domains meet only in sets of measure zero.
+
+#### A decomposed domain is a domain
 
 A decomposed domain $D$ is a domain, not a coordinate domain. The points of $D$
-are named by the coordinates of the ambient coordinate domain of $D$, and $D$
-may have a lower dimension than the ambient coordinate domain, such as a
-surface in $R^3$. Two decomposed domains are the same only if the two
-decomposed domains are equal as base objects, so expressions on two decomposed
-domains have different supports and do not combine (see [Support](#support)).
+are named by the coordinates of the ambient coordinate domain of $D$. $D$ may
+have a lower dimension than the ambient coordinate domain, such as a surface
+in $R^3$.
 
-The parameter domain of a piece may itself be a decomposed domain, so
-decomposed domains nest. An expression on $D$ pulled back by such a piece is an
-expression on the parameter domain of the piece, defined through the pieces of
-the parameter domain in turn. The ambient domain $Q$ may also be a decomposed
-domain, such as a mesh in which a family of points lies.
+Two decomposed domains are the same only if the two decomposed domains are
+equal as base objects. Expressions on two decomposed domains therefore have
+different supports and do not combine (see [Support](#support)).
+
+#### Nesting
+
+- The parameter domain of a piece may itself be a decomposed domain, so
+  decomposed domains nest. An expression on $D$ pulled back by such a piece is
+  an expression on the parameter domain of the piece, defined through the
+  pieces of the parameter domain in turn.
+- The ambient domain $Q$ may also be a decomposed domain, such as a mesh in
+  which a family of points lies.
+
+#### `cell_domain`
 
 The free function `cell_domain(D, j)` returns piece $j$ with the ambient domain
 $D$, `domain_map(P_j, psi_j, D)`, with the free indices of piece $j$.
+
 An expression $f$ with the support $D$ is defined through the pieces.
 `pull_back(f, cell_domain(D, j))` is an expression on $P_j$, the value of $f$
-on each domain of piece $j$. The pull-back of `coordinate(D)` is $\psi_j$, and
-the pull-back of a function in a space on $D$ is evaluated by the library of
-the space (see [`PullBack`](#pullback)).
+on each domain of piece $j$.
 
-The free function `gathered_cell_domain(D, j, g)`, for a decomposed domain $D$
-with a topology $T$, returns the domains of piece $j$ selected by a
-[`GatheredIndex`](#gatheredindex) $g$ of the extent `T.num_cells[j]`. With
-$c$ = `cell_index(T, j)`, the one free index of piece $j$, the result is
-`domain_map(P_j, chi, D)` with
+- The pull-back of `coordinate(D)` is $\psi_j$.
+- The pull-back of a function in a space on $D$ is evaluated by the library of
+  the space (see [`PullBack`](#pullback)).
+
+#### `gathered_cell_domain`
+
+The free function `gathered_cell_domain(D, j, g)` applies to a decomposed
+domain $D$ with a topology $T$. The function returns the domains of piece $j$
+selected by a [`GatheredIndex`](#gatheredindex) $g$ of the extent
+`T.num_cells[j]`. With $c$ = `cell_index(T, j)`, the one free index of piece
+$j$, the result is `domain_map(P_j, chi, D)` with
 
 ```python
 chi = component_tensor(component_tensor(psi_j[k], (c, k))[g, k], (k,))
 ```
 
 and $k$ the derived index `Index(("uflx.gathered_cell_domain", D, j, g, 0))`.
-The inner `ComponentTensor` binds $c$ and is the array of the maps of all the
-cells of type $j$, and the `Indexed` entry $g$ selects the map of the cell
-$g$, so `chi` has the free indices of $g$. The free function reads only the
-free indices of piece $j$, which are static. The library of a function in a
-space on $D$ evaluates the pull-back by `gathered_cell_domain(D, j, g)` as the
-pull-back by `cell_domain(D, j)` on the cell $g$ (see
-[`AbstractFunctionSpace`](#abstractfunctionspace)).
+
+- The inner `ComponentTensor` binds $c$ and is the array of the maps of all the
+  cells of type $j$.
+- The `Indexed` entry $g$ selects the map of the cell $g$, so `chi` has the
+  free indices of $g$.
+
+The free function reads only the free indices of piece $j$, which are static.
+The library of a function in a space on $D$ evaluates the pull-back by
+`gathered_cell_domain(D, j, g)` as the pull-back by `cell_domain(D, j)` on the
+cell $g$ (see [`AbstractFunctionSpace`](#abstractfunctionspace)).
 
 [Restriction](#restriction) moves an expression on $D$ to the cells of a
 topology with sides, through `gathered_cell_domain`.
 
-Example, with `K = ReferenceSimplex(2)`, the topology
-`square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())` of the
-[static topology example](EXAMPLES.md#example-a-static-topology) on reference cells, an
-array `y` of value shape `(4, 2)` with the positions $(0, 0)$, $(1, 0)$,
-$(0, 1)$ and $(1, 1)$ of the vertices, and a table `cell_vertices` of the shape
-`(2, 3)`, the extent 4 and the values `((0, 1, 2), (1, 3, 2))`, the vertices of
-each triangle:
+#### Examples
+
+The examples use the following objects:
+
+- `K = ReferenceSimplex(2)`.
+- The topology
+  `square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())` of the
+  [static topology example](EXAMPLES.md#example-a-static-topology), on
+  reference cells.
+- An array `y` of value shape `(4, 2)` with the positions $(0, 0)$, $(1, 0)$,
+  $(0, 1)$ and $(1, 1)$ of the vertices.
+- A table `cell_vertices` of the shape `(2, 3)`, the extent 4 and the values
+  `((0, 1, 2), (1, 3, 2))`, the vertices of each triangle.
 
 ```python
 X = coordinate(K)
@@ -2882,17 +2933,17 @@ D = decomposed_domain((domain_map(K, x, RD(2)),))
 - `D.topology` is `square`, because `x` has the free index `c`.
   `cell_domain(D, 0)` is the family of the two triangles, with the free index
   `c`.
-- `pull_back(coordinate(D), cell_domain(D, 0))` is `x`, which a later pass
-  evaluates on triangle 1 to $(1 - X_1, X_0 + X_1)$.
+- `pull_back(coordinate(D), cell_domain(D, 0))` is `x`. A later pass evaluates
+  `x` on triangle 1 to $(1 - X_1, X_0 + X_1)$.
 - With `x` of value shape `(3,)` and `RD(3)`, the decomposed domain is a
   surface of dimension 2 in `RD(3)`. `components(du, D)` has value shape
-  `(3,)` and is the surface gradient of `u`, the array of $\mathrm{d}u$ in the
-  frame of `RD(3)` projected onto the tangent plane of each cell (see
-  [`Components`](#components)).
+  `(3,)` and is the surface gradient of `u`. The surface gradient is the array
+  of $\mathrm{d}u$ in the frame of `RD(3)`, projected onto the tangent plane of
+  each cell (see [`Components`](#components)).
 
 For a topology `M` of triangles and quadrilaterals, with the cell types
-`(Kt, Kq)`, $D$ has one piece for each cell type, and a function `u` on `D` is
-one expression, pulled back through each cell type:
+`(Kt, Kq)`, $D$ has one piece for each cell type. A function `u` on `D` is one
+expression, pulled back through each cell type:
 
 ```python
 D = decomposed_domain(
@@ -3226,39 +3277,49 @@ Requires: [`DecomposedDomain`](#decomposeddomain), [`GatheredIndex`](#gatheredin
 > not a rule of the core.
 
 After `expand_integrals` and `reduce_component_tensors`, an integral over a
-decomposed domain is an `IndexSum` over the cell index of each group, of an
-expression on a reference cell that reads arrays through gathered indices with
-the cell index. A form compiler splits the integral there:
+decomposed domain is an `IndexSum` over the cell index of each group. The
+summand is an expression on a reference cell that reads arrays through
+gathered indices with the cell index. A form compiler splits the integral
+there:
 
 - The `IndexSum` over the cell index is the loop of an assembler over the
   cells, or over the cells of a topology with sides.
-- A gathered index with the cell index, such as of a map from the local to the
-  global degrees of freedom, of the coordinates or of the side tables, is the
-  data of one cell, which the assembler packs and gives to a kernel.
+- A gathered index with the cell index is the data of one cell, which the
+  assembler packs and gives to a kernel. Examples are the gathered indices of a
+  map from the local to the global degrees of freedom, of the coordinates and
+  of the side tables.
 - The rest, an expression on a reference cell without the cell index, is the
   kernel.
 
+#### The interface of a kernel
+
 The inputs of a kernel are the leaves that remain after the split, each with
-the gathered index that reads the leaf, such as the coefficients of a function
-through a map of degrees of freedom on one side, or a runtime extent. So the
-interface of a kernel follows from the expression, and a form compiler may
-describe the interface beyond a fixed convention, such as for two sides of
-different cell types.
+the gathered index that reads the leaf. Examples are the coefficients of a
+function through a map of degrees of freedom on one side, and a runtime
+extent. The interface of a kernel therefore follows from the expression. A
+form compiler may describe the interface beyond a fixed convention, such as
+for two sides of different cell types.
 
 The assembler adds the result of a kernel into a global array through the same
 tables. That addition is outside the language. A whole-array compiler may
 instead keep the integral whole, as a batched gather, one kernel for all the
 cells and a scatter-add.
 
+#### Kernels independent of the mesh
+
 A kernel depends on no particular mesh. Before compiling a kernel, a pass
-replaces the topologies, the tables, the arrays and the extents of a mesh by
-placeholders numbered in the order of appearance, renames the arguments of
-each form by position, and renames the bound indices of each `ComponentTensor`
-and `IndexSum` by the position of the binder and of the index, so one compiled
-kernel serves every mesh with the same cell types and spaces, and every naming
-of the arguments and of the indices. Equality is structural (rule 7), so
-without the renaming two kernels that differ only in the names of indices
-would compile twice.
+does the following:
+
+- The pass replaces the topologies, the tables, the arrays and the extents of a
+  mesh by placeholders, numbered in the order of appearance.
+- The pass renames the arguments of each form by position.
+- The pass renames the bound indices of each `ComponentTensor` and `IndexSum`
+  by the position of the binder and of the index.
+
+One compiled kernel then serves every mesh with the same cell types and
+spaces, and every naming of the arguments and of the indices. Equality is
+structural (rule 7). Without the renaming, two kernels that differ only in the
+names of indices would compile twice.
 
 Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral), [a Bank-Weiser error estimator](EXAMPLES.md#example-a-bank-weiser-error-estimator), [a fluid and a solid](EXAMPLES.md#example-a-fluid-and-a-solid), [a 1D network in a 3D mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh).
 
@@ -3748,15 +3809,15 @@ Requires: [Core transformations](#core-transformations), [`PullBack`](#pullback)
 [`Components`](#components), [`Inverse`](#inverse).
 
 For a domain $D$ with the parameterisation $\psi$, the parameter domain $P$
-and the ambient domain $Q$, $\psi^*$ commutes with every node class
-of the core, with these rules:
+and the ambient domain $Q$, $\psi^*$ commutes with every node class of the
+core, with these rules:
 
 | Operand                                                                   | Rewrite of $\psi^*$ applied to the operand                                           |
 | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| An expression $c$ with no support                                         | $c$ if every free index of $D$ is free in $c$, and otherwise $c$ `+ Zero(...)` with the free indices of $D$ that are not free in $c$ |
+| An expression $c$ with no support                                         | $c$, or $c$ `+ Zero(...)` (see [Expressions with no support](#expressions-with-no-support)) |
 | `Coordinate(Q)`                                                           | $\psi$                                                                               |
 | `ExteriorDerivative(f, Q)`                                                | $\mathrm{d}(\psi^* f)$, with the exterior derivative on $P$                          |
-| `PullBack(g, D2)`, for a `DomainMap` `D2`                       | Remains, so pull-backs nest                                                          |
+| `PullBack(g, D2)`, for a `DomainMap` `D2`                                 | Remains, so pull-backs nest                                                          |
 | `PullBack(f, SideMap(D2, E, s))`, for `cell_domain(E, i)`                 | `pull_back(pull_back(f, B_i), A_i)` (see [Restriction](#restriction))                |
 | `Normal(D2, E, s)`, for `cell_domain(E, i)`                               | $K^T \hat m / \lvert K^T \hat m \rvert$ (see [`Normal`](#normal))                      |
 | `PullBack(f, SideMap(D2, E, s))` or `Normal(D2, E, s)`, for any other $D$ | Remains                                                                              |
@@ -3764,48 +3825,75 @@ of the core, with these rules:
 | `Components(f, Q)`, $P$ of lower dimension than $Q$                       | Remains                                                                              |
 | `Function` or a downstream terminal                                       | Remains, for the library of the terminal                                             |
 
+#### Expressions with no support
+
 The rule for an expression with no support comes before every other rule and
-before commuting, whatever the class of the expression, so a pull-back never
-moves inside an `Integral`. The integral has no support, and
-the integrand stays on the domain of the integral. `PullBack(c, D)` has the
-free indices of the family $D$, and $c$ may not, so the rule adds the `Zero`
-with the value shape, the degree and the argument spaces of $c$ and the
-missing free indices with the extents of the family (see [`Zero`](#zero)), a
-constant with the free indices of the family. For example, with the family of
-three quadrature points `xs` of [Example: quadrature](EXAMPLES.md#example-quadrature),
+before commuting, whatever the class of the expression. A pull-back therefore
+never moves inside an `Integral`. The integral has no support, and the
+integrand stays on the domain of the integral.
+
+`PullBack(c, D)` has the free indices of the family $D$, and $c$ may not.
+
+- If every free index of $D$ is free in $c$, the rewrite is $c$.
+- Otherwise the rewrite is $c$ `+ Zero(...)`. The `Zero` has the value shape,
+  the degree and the argument spaces of $c$, and the missing free indices with
+  the extents of the family (see [`Zero`](#zero)). The `Zero` is a constant
+  with the free indices of the family.
+
+For example, take the family of three quadrature points `xs` of [Example:
+quadrature](EXAMPLES.md#example-quadrature).
 `pull_back(Integer(1), xs)` is rewritten as
 `Integer(1) + Zero((), ((i, 3),), (), ())`, and
 `index_sum(integral(pull_back(Integer(1), xs), RD(0)), (i,))` counts the
 points.
 
-The pass rewrites inner nodes first, so a `PullBack(g, D2)` that the outer
-pull-back meets is one that remains, with $g$ a terminal, a `Components` of
-lower dimension or a restriction by a `SideMap` (see the rows above). The
-outer pull-back then remains outside the inner one, so pull-backs nest. The
-library of a terminal evaluates the inner pull-back, such as a function on
-the cell on the side of a facet, and the outer pull-back applies to the
-expression the library gives, such as the pull-back to the facet of a basis
-function on the reference cell, which remains in turn for the library to
+#### Nested pull-backs
+
+The pass rewrites inner nodes first. A `PullBack(g, D2)` that the outer
+pull-back meets is therefore one that remains, with $g$ one of the following
+(see the rows above):
+
+- a terminal,
+- a `Components` of lower dimension,
+- a restriction by a `SideMap`.
+
+The outer pull-back then remains outside the inner one, so pull-backs nest.
+The library of a terminal evaluates the inner pull-back, such as a function on
+the cell on the side of a facet. The outer pull-back applies to the expression
+the library gives, such as the pull-back to the facet of a basis function on
+the reference cell. That outer pull-back remains in turn, for the library to
 evaluate at the points of the facet (see [Restriction](#restriction) and
 [Example: an interior facet
-integral](EXAMPLES.md#example-an-interior-facet-integral)). Composing the two maps into
-`domain_map(P, pull_back(D2.parameterisation, D), D2.ambient_domain)` would
-lose the cell that the inner map names, and for a $g$ that is not a terminal
-both pull-backs commute to the terminals anyway, so nothing is gained by
-composing.
+integral](EXAMPLES.md#example-an-interior-facet-integral)).
 
-In the rule for `Components`, $J$ is
-`components(exterior_derivative(D.parameterisation, P), P)`, of value shape
-`(n, k)` with $k$ the dimension of $P$ and $n$ the dimension of the frame of
-`Components(f, Q)`, and $K$ is `inverse(J)`, the pseudo-inverse for $k < n$
-(see [`Inverse`](#inverse)). The vector fields $\sum_i K_{ij} \, \partial_i$ on $P$
-push forward to the orthogonal projections of the $\partial_j$ of the frame
-onto the tangent space of $D$, which are the $\partial_j$ themselves for
-$k = n$. For a decomposed $Q$ of dimension $k < n$, `Components(f, Q)` is
-defined with those projections (see [`Components`](#components)), so the rule
-holds for $f$ on $Q$. If $P$ has lower dimension than $Q$, the same
-composition gives the components of the part of $f$ tangent to $D$, not the
-components of $f$, so the pull-back remains.
+Composing the two maps into
+`domain_map(P, pull_back(D2.parameterisation, D), D2.ambient_domain)` would
+gain nothing:
+
+- The composition would lose the cell that the inner map names.
+- For a $g$ that is not a terminal, both pull-backs commute to the terminals
+  anyway.
+
+#### The rule for `Components`
+
+In the rule for `Components`:
+
+- $J$ is `components(exterior_derivative(D.parameterisation, P), P)`, of value
+  shape `(n, k)`, with $k$ the dimension of $P$ and $n$ the dimension of the
+  frame of `Components(f, Q)`.
+- $K$ is `inverse(J)`, the pseudo-inverse for $k < n$ (see
+  [`Inverse`](#inverse)).
+
+The vector fields $\sum_i K_{ij} \, \partial_i$ on $P$ push forward to the
+orthogonal projections of the $\partial_j$ of the frame onto the tangent space
+of $D$. For $k = n$, the projections are the $\partial_j$ themselves. For a
+decomposed $Q$ of dimension $k < n$, `Components(f, Q)` is defined with those
+projections (see [`Components`](#components)), so the rule holds for $f$ on
+$Q$.
+
+If $P$ has lower dimension than $Q$, the same composition gives the components
+of the part of $f$ tangent to $D$, not the components of $f$. The pull-back
+therefore remains.
 
 ### Applying derivatives
 
