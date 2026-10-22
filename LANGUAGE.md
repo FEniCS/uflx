@@ -2756,41 +2756,52 @@ coordinates.
 | Provides                | `vertices`, a constant expression with no support and value shape `(m, n)`, with row $v$ the coordinates of vertex $v$, for dimension $n$ and $m$ vertices |
 | Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](EXAMPLES.md#example-the-unit-simplex-as-a-reference-cell)                                                   |
 
-The free function `affine_map(F, points)` returns the affine map on a reference
-cell $F$ of dimension $k$ with $m_F$ vertices that sends vertex $v$ of $F$ to
-row $v$ of `points` for $v \le k$, with `points` of value shape `(m_F, m)`.
-Only the first $k + 1$ rows enter the map, and the other rows are the images
-of the other vertices when the image is affine, such as the facet of a
-reference cell. With the vertices $V_v$ of $F$, the matrix $E$ with the
-columns $V_{d+1} - V_0$, and the rows $p_v$ of `points`, the map is
+#### `affine_map`
+
+Notation, for `affine_map(F, points)`:
+
+- $F$ is a reference cell of dimension $k$ with $m_F$ vertices, and $V_v$ are
+  the vertices of $F$.
+- `points` has value shape `(m_F, m)`, and $p_v$ are the rows of `points`.
+- $E$ is the matrix with the columns $V_{d+1} - V_0$.
+
+The free function `affine_map(F, points)` returns the affine map on $F$ that
+sends vertex $v$ of $F$ to row $v$ of `points` for $v \le k$:
 
 $$
-X \mapsto p_0 + \sum_{d < k} (p_{d+1} - p_0) \, \big(E^{-1} (X - V_0)\big)_d,
+X \mapsto p_0 + \sum_{d < k} (p_{d+1} - p_0) \, \big(E^{-1} (X - V_0)\big)_d.
 $$
 
-an expression on $F$ with value shape `(m,)`, a fixed composition for each $k$
-with [`Inverse`](#inverse). For $k = 0$ the map is the constant $p_0$. The first
-$k + 1$ vertices of $F$ must not lie in a hyperplane of $F$.
+- The map is an expression on $F$ with value shape `(m,)`, a fixed composition
+  for each $k$ with [`Inverse`](#inverse).
+- For $k = 0$ the map is the constant $p_0$.
+- Only the first $k + 1$ rows enter the map. The other rows are the images of
+  the other vertices when the image is affine, such as the facet of a
+  reference cell.
+- The first $k + 1$ vertices of $F$ must not lie in a hyperplane of $F$.
 
-A sub-entity of $K$ with the vertex numbers $(w_0, w_1, \dots)$ and the
-reference cell $F$ is `domain_map(F, affine_map(F, points), K)`, with
-row $v$ of `points` the coordinates `K.vertices[w_v, k]` of the vertex $w_v$ of
-$K$, stacked with `component_tensor` over the vertex and the coordinate
-indices. The core does not check that the image is a sub-entity of $K$.
+#### Sub-entities
+
+Let a sub-entity of $K$ have the vertex numbers $(w_0, w_1, \dots)$ and the
+reference cell $F$. The sub-entity is
+`domain_map(F, affine_map(F, points), K)`. Row $v$ of `points` is the
+coordinates `K.vertices[w_v, k]` of the vertex $w_v$ of $K$, stacked with
+`component_tensor` over the vertex and the coordinate indices. The core does
+not check that the image is a sub-entity of $K$.
 
 > A downstream library such as Basix provides the vertex numbers of the
 > facets, so a facet is an ordinary `DomainMap` in the form, and an
 > integral over a facet is the integral of a pull-back, as in the [boundary
 > example](EXAMPLES.md#example-integrating-over-the-boundary-of-a-triangle).
 
-Examples:
+#### Examples
 
 - The unit triangle has the vertices $(0, 0)$, $(1, 0)$ and $(0, 1)$. The
   sub-entity with the vertex numbers $(1, 2)$ and the unit interval as $F$ is
   the hypotenuse, with $\psi(t) = (1 - t, t)$, as in the
   [`DomainMap`](#domainmap) examples.
-- The unit interval has the vertices $(0)$ and $(1)$, and the sub-entity with
-  the vertex number $(1)$ and the reference point as $F$ is the end point.
+- The unit interval has the vertices $(0)$ and $(1)$. The sub-entity with the
+  vertex number $(1)$ and the reference point as $F$ is the end point.
 - The reference point has the single vertex $()$, the point of $R^0$.
 
 Worked examples for this chapter in EXAMPLES.md: [the unit simplex as a reference cell](EXAMPLES.md#example-the-unit-simplex-as-a-reference-cell).
@@ -3347,45 +3358,69 @@ A space with the domain `None` has functions that do not depend on a domain.
 
 The dual space of $V$ is [`dual(V)`](#dualspace), a space of the core.
 
+#### Functions in a space
+
 A function in $V$ is an expression with the support $D$ and with the degree,
-the value shape and the scalar type of $V$. For a decomposed domain $D$, the
-function is defined through the cells of $D$ (see
-[`DecomposedDomain`](#decomposeddomain)), and the concrete subclass defines the
-pull-back of a function in $V$ by `cell_domain(D, j)` for every cell type $j$
-of $D$, such as with one finite element for each cell type, and evaluates the
-pull-back by `gathered_cell_domain(D, j, g)` as the same function on the cell
-$g$ (see [`DecomposedDomain`](#decomposeddomain)). The pull-back of a function
-by any other domain map into $D$, such as a family of points, is rewritten
-through these two (see [Points and point
-evaluation](#points-and-point-evaluation)). For a coordinate
-domain $D$, such as a reference cell, a function in $V$ is a terminal on $D$
-that the concrete subclass evaluates. The core does not
-represent the polynomials, the degrees of freedom or the basis of $V$, which
-belong to the concrete subclass. Two spaces are the same space only if the two
-spaces are equal as base objects, so a concrete `AbstractFunctionSpace` stores
-the arguments that identify the space, such as the finite element.
+the value shape and the scalar type of $V$.
+
+For a decomposed domain $D$, the function is defined through the cells of $D$
+(see [`DecomposedDomain`](#decomposeddomain)). The concrete subclass does the
+following:
+
+- The concrete subclass defines the pull-back of a function in $V$ by
+  `cell_domain(D, j)` for every cell type $j$ of $D$, such as with one finite
+  element for each cell type.
+- The concrete subclass evaluates the pull-back by
+  `gathered_cell_domain(D, j, g)` as the same function on the cell $g$ (see
+  [`DecomposedDomain`](#decomposeddomain)).
+
+The pull-back of a function by any other domain map into $D$, such as a family
+of points, is rewritten through these two (see [Points and point
+evaluation](#points-and-point-evaluation)).
+
+For a coordinate domain $D$, such as a reference cell, a function in $V$ is a
+terminal on $D$ that the concrete subclass evaluates.
+
+The core does not represent the polynomials, the degrees of freedom or the
+basis of $V$, which belong to the concrete subclass. Two spaces are the same
+space only if the two spaces are equal as base objects. A concrete
+`AbstractFunctionSpace` therefore stores the arguments that identify the
+space, such as the finite element.
+
+#### Spaces of constants
 
 A space with the domain `None` and the argument spaces `()` is a space of
 constants. A function in the space is an expression with no support and the
 degree `()`, a single array with the value shape and the scalar type of $V$.
-The degree is `()`, because an
-expression with no support and a non-empty degree is a `Zero` (see
-[Expressions as differential forms](#expressions-as-differential-forms)), and
-a constant $k$-form is a constant array times the coordinate $k$-forms of a
-domain. The integrals of a form decide the cells on which a constant acts. A
-space of constants is needed for a constant unknown, such as a Lagrange
+
+The degree is `()` for two reasons:
+
+- An expression with no support and a non-empty degree is a `Zero` (see
+  [Expressions as differential forms](#expressions-as-differential-forms)).
+- A constant $k$-form is a constant array times the coordinate $k$-forms of a
+  domain.
+
+The integrals of a form decide the cells on which a constant acts.
+
+A space of constants is needed for a constant unknown, such as a Lagrange
 multiplier, because an argument comes from a space. Constant data needs no
-space, because an expression with no support, such as a literal or an array
-that a kernel receives, is already a constant.
+space. An expression with no support, such as a literal or an array that a
+kernel receives, is already a constant.
+
+#### Representation on the reference cell
 
 The pull-back by a cell fixes what a function in $V$ is on the cell. The
 pull-back transforms each slot and keeps the frame of each axis of the value
-shape (see [`PullBack`](#pullback)). The library of $V$ fixes how the function is
-represented on the reference cell. For a space of differential forms, the
-natural representation is the pull-back itself, and the legacy UFL map is the
-pull-back of the slots. For a space of vector fields, the library chooses the
-representation, and the legacy UFL map is the choice of the library. With $k$
-the dimension of $D$ and $n$ the dimension of the ambient coordinate domain:
+shape (see [`PullBack`](#pullback)). The library of $V$ fixes how the function
+is represented on the reference cell.
+
+- For a space of differential forms, the natural representation is the
+  pull-back itself, and the legacy UFL map is the pull-back of the slots.
+- For a space of vector fields, the library chooses the representation, and
+  the legacy UFL map is the choice of the library.
+
+In the table, $k$ is the dimension of $D$ and $n$ is the dimension of the
+ambient coordinate domain:
 
 | Space                             | Degree     | Value shape | Legacy UFL map                   |
 | --------------------------------- | ---------- | ----------- | -------------------------------- |
@@ -3398,25 +3433,32 @@ the dimension of $D$ and $n$ the dimension of the ambient coordinate domain:
 | Regge                             | `(1, 1)`   | `()`        | double covariant                 |
 
 The two rows of Raviart–Thomas differ on a domain of dimension $k < n$, such as
-a surface in $R^3$. The space of $(k - 1)$-forms has the divergence
-$\mathrm{d}u$, a $k$-form, and an integral of $\mathrm{d}u$ needs an
-orientation of the domain (see [Concept: orientation of a
-domain](#concept-orientation-of-a-domain)). The space of vector fields has the
-divergence `index_sum(components(exterior_derivative(u, D), D)[i, i], (i,))`, a
-0-form, and needs no orientation. The library represents a function in the
-space of vector fields on a cell as $J \hat u / \rho$, with $\hat u$ a
-function on the reference cell, $J$ the Jacobian matrix of the cell and
-$\rho = \sqrt{\det(J^T J)}$ the density of
-[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
+a surface in $R^3$:
+
+- The space of $(k - 1)$-forms has the divergence $\mathrm{d}u$, a $k$-form.
+  An integral of $\mathrm{d}u$ needs an orientation of the domain (see
+  [Concept: orientation of a domain](#concept-orientation-of-a-domain)).
+- The space of vector fields has the divergence
+  `index_sum(components(exterior_derivative(u, D), D)[i, i], (i,))`, a 0-form,
+  and needs no orientation. The library represents a function in the space of
+  vector fields on a cell as $J \hat u / \rho$. Here $\hat u$ is a function on
+  the reference cell, $J$ is the Jacobian matrix of the cell, and
+  $\rho = \sqrt{\det(J^T J)}$ is the density of [`Integral` over a decomposed
+  domain](#integral-over-a-decomposed-domain).
+
+#### Mixed and Sobolev spaces
 
 A mixed problem needs no mixed space, because an argument of a [form](#form)
-may be a `tuple` of functions in several spaces. The Sobolev space of $V$ is not
-yet covered. The Sobolev space is expected to be stated through the
-[restrictions](#restriction) of the functions of $V$ to the facets of the
-topology of $D$ from the two sides of each facet.
+may be a `tuple` of functions in several spaces.
 
-Examples, with a decomposed domain `D` of `ReferenceSimplex(2)` cells in
-`RD(2)`, so $k = n = 2$:
+The Sobolev space of $V$ is not yet covered. The Sobolev space is expected to
+be stated through the [restrictions](#restriction) of the functions of $V$ to
+the facets of the topology of $D$, from the two sides of each facet.
+
+#### Examples
+
+The examples use a decomposed domain `D` of `ReferenceSimplex(2)` cells in
+`RD(2)`, so $k = n = 2$.
 
 - The Lagrange space of polynomial degree 1 on `D` has the degree `()` and the
   value shape `()`.
@@ -3548,57 +3590,79 @@ See also: [`Action`](#action).
 A concrete subclass of `AbstractFunctionSpace` for the space of antilinear
 forms on a space or on the product of spaces.
 
-| `DualSpace(S)` |                                                                                                                                                               |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Free function  | `dual(S)`                                                                                                                                                     |
-| Properties     | `space` $S$, an `AbstractFunctionSpace`, or a `tuple` of at least two spaces                                                                                  |
-| Provides       | The domain `None`, the degree `()`, the value shape `()`, the argument spaces `(S',)` with $S'$ the conjugate of $S$ as in [`Conjugate`](#conjugate), member by member for a `tuple` $S$, and the scalar type of $S$, complex if any space of a `tuple` is complex |
-| Raises         | `TypeError` for an $S$ that is not a space or a `tuple` of spaces, and `ValueError` for a `tuple` of fewer than two spaces                                    |
+| `DualSpace(S)` |                                                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Free function  | `dual(S)`                                                                                                                  |
+| Properties     | `space` $S$, an `AbstractFunctionSpace`, or a `tuple` of at least two spaces                                               |
+| Provides       | The static type below                                                                                                      |
+| Raises         | `TypeError` for an $S$ that is not a space or a `tuple` of spaces, and `ValueError` for a `tuple` of fewer than two spaces |
+
+`dual(S)` provides:
+
+- The domain `None`, the degree `()` and the value shape `()`.
+- The argument spaces `(S',)`, with $S'$ the conjugate of $S$ as in
+  [`Conjugate`](#conjugate), member by member for a `tuple` $S$.
+- The scalar type of $S$, complex if any space of a `tuple` is complex.
+
+#### Antilinear forms
 
 A function in `dual(S)` is an antilinear form on $S$, a linear form on
-`conjugate_space(S)` (see [`ConjugateSpace`](#conjugatespace)), as a form is in
-an argument bound as `conjugate(v)`, such as the argument $v$ of
-$\int u \bar v$. So a residual bound as `(conjugate(v),)` and an assembled
-load have the same argument spaces, and the difference of the two is a form.
-For a real scalar type, antilinear and linear coincide, and the argument
-spaces are `(S,)`. The space of linear forms on a complex $S$ is
-`dual(conjugate_space(S))`, with the argument spaces `(S,)`, so the core fixes
-no convention on the argument in which a form is antilinear. A fixed function
-in `dual(S)` is a known
-antilinear form, such as a load, and a function bound by a [form](#form) is a
-variable antilinear form. The pairing of a function `l` in `dual(S)` with a
-function `w` in $S$ is `action(l, 0, w)`, antilinear in `w`, and the library
-that provides the values of `l` evaluates the pairing.
+`conjugate_space(S)` (see [`ConjugateSpace`](#conjugatespace)). A form is
+antilinear in the same way in an argument bound as `conjugate(v)`, such as the
+argument $v$ of $\int u \bar v$. A residual bound as `(conjugate(v),)` and an
+assembled load therefore have the same argument spaces, and the difference of
+the two is a form.
 
-For a `tuple` $S$, a function in `dual(S)` is one antilinear form on the product
-of the spaces, such as the load of a mixed problem, although no single
-function is in the product.
+- For a real scalar type, antilinear and linear coincide, and the argument
+  spaces are `(S,)`.
+- The space of linear forms on a complex $S$ is `dual(conjugate_space(S))`,
+  with the argument spaces `(S,)`. The core therefore fixes no convention on
+  the argument in which a form is antilinear.
+
+A fixed function in `dual(S)` is a known antilinear form, such as a load. A
+function bound by a [form](#form) is a variable antilinear form.
+
+The pairing of a function `l` in `dual(S)` with a function `w` in $S$ is
+`action(l, 0, w)`, antilinear in `w`. The library that provides the values of
+`l` evaluates the pairing.
+
+#### The dual of a product
+
+For a `tuple` $S$, a function in `dual(S)` is one antilinear form on the
+product of the spaces, such as the load of a mixed problem. No single function
+is in the product.
+
+#### The double dual
 
 `dual(dual(V))` is the space of antilinear forms on `dual(V)`, with the
 argument spaces `(conjugate_space(dual(V)),)`. `dual(dual(V))` is not `V`,
-because `V` has the argument spaces `()`. The canonical map takes a function
-`w` in `V` to `form(conjugate(action(l, 0, w)), (conjugate(l),))`, with a
-function `l` in `dual(V)`, linear in `w` and antilinear in `l`, and a library
-may store both with the same values.
+because `V` has the argument spaces `()`.
 
-Examples, with the spaces `V` and `Q` and the functions `v` in `V` and `q` in
-`Q` of the [`Form`](#form) examples:
+The canonical map takes a function `w` in `V` to
+`form(conjugate(action(l, 0, w)), (conjugate(l),))`, with a function `l` in
+`dual(V)`. The image is linear in `w` and antilinear in `l`. A library may
+store `w` and the image with the same values.
+
+#### Examples
+
+The examples use the spaces `V` and `Q` and the functions `v` in `V` and `q`
+in `Q` of the [`Form`](#form) examples.
 
 - `l = function(dual(V), "l")` has the argument spaces
-  `(conjugate_space(V),)`, and `action(l, 0, v)` is the pairing
+  `(conjugate_space(V),)`. `action(l, 0, v)` is the pairing
   $\langle l, v \rangle$.
 - `m = function(dual((V, Q)), "m")` has the argument spaces
-  `((conjugate_space(V), conjugate_space(Q)),)`, and `action(m, 0, (v, q))` is
-  the pairing of `m` with `(v, q)`.
-- With a function `w` in `V` and a function `l` in `dual(V)`,
+  `((conjugate_space(V), conjugate_space(Q)),)`. `action(m, 0, (v, q))` is the
+  pairing of `m` with `(v, q)`.
+- Let `w` be a function in `V` and `l` a function in `dual(V)`.
   `form(conjugate(action(l, 0, w)), (conjugate(l),))` has the argument spaces
   `(conjugate_space(dual(V)),)`, the static type of a function in
-  `dual(dual(V))`, and evaluates every antilinear form on `V` at `w`.
-- With the [interpolation extension](#the-interpolation-extension), a space `W` and
-  a function `l` in `dual(W)`,
+  `dual(dual(V))`. The form evaluates every antilinear form on `V` at `w`.
+- Let `W` be a space and `l` a function in `dual(W)`, with the [interpolation
+  extension](#the-interpolation-extension).
   `form(action(l, 0, interpolate(v, W)), (conjugate(v),))` is the adjoint of
-  the interpolation from `V` to `W` applied to `l`, with the argument spaces
-  `(conjugate_space(V),)`, the static type of a function in `dual(V)`.
+  the interpolation from `V` to `W` applied to `l`. The form has the argument
+  spaces `(conjugate_space(V),)`, the static type of a function in `dual(V)`.
 
 ### `Form`
 
@@ -3676,17 +3740,25 @@ Requires: [`Form`](#form).
 A concrete subclass of `AbstractExpression` for the action of a form, an
 expression given to one argument of the form.
 
-| `Action(f, position, g)` |                                                                                                                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Free function            | `action(f, position, g)`                                                                                                                                                                          |
-| Properties               | `form`, an expression with more than `position` argument spaces, `position`, an `int`, and `argument`, the expression $g$, or a `tuple` of expressions                                            |
-| Requires                 | $g$ has the static type of a function in $V$, where the argument space at `position` is $V$ or `ConjugateSpace(V)`, with the support of that function or no support, or for a `tuple` of spaces, a `tuple` with one such member per space |
-| Static type              | That of $f$, with the argument spaces of $f$ without the entry at `position`.                                                                                                                     |
-| Raises               | `ValueError` if a requirement fails                                                                                                                                                   |
-| Evaluated by         | [`apply_actions`](#applying-actions)                                                                                                                                                  |
+| `Action(f, position, g)` |                                                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Free function            | `action(f, position, g)`                                                                                                                               |
+| Properties               | `form`, an expression with more than `position` argument spaces, `position`, an `int`, and `argument`, the expression $g$, or a `tuple` of expressions |
+| Requires                 | The conditions below                                                                                                                                   |
+| Static type              | That of $f$, with the argument spaces of $f$ without the entry at `position`.                                                                          |
+| Raises                   | `ValueError` if a requirement fails                                                                                                                    |
+| Evaluated by             | [`apply_actions`](#applying-actions)                                                                                                                   |
 
-`Action` is lazy, and an action on a leaf, such as a function in a dual
-space, remains for the library of the leaf.
+Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
+
+- For a space $V$, $g$ has the static type of a function in $V$, with the
+  support of that function or no support.
+- For a `tuple` of spaces, $g$ is a `tuple` with one such member per space.
+
+`Action` is lazy. An action on a leaf, such as a function in a dual space,
+remains for the library of the leaf.
+
+#### Legacy UFL operations
 
 Legacy UFL operations are actions and rebindings:
 
@@ -3697,19 +3769,21 @@ Legacy UFL operations are actions and rebindings:
 - The Gateaux derivative with respect to a function adds an argument (see
   [Gateaux derivative](#gateaux-derivative)).
 
-Examples, with `a`, `u`, `v` and `w` of the [`Form`](#form) examples and
-`l = function(dual(V), "l")`:
+#### Examples
 
-- `action(form(a, (v, u)), 1, w)` is a linear form in `v`, which a pass
-  evaluates to `form(b, (v,))`, with `b` the expression `a` with `u` replaced
+The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples, and
+`l = function(dual(V), "l")`.
+
+- `action(form(a, (v, u)), 1, w)` is a linear form in `v`. A pass evaluates
+  the action to `form(b, (v,))`, with `b` the expression `a` with `u` replaced
   by `w`.
 - `action(action(form(a, (v, u)), 1, w), 0, w)` is a functional.
 - `action(l, 0, w)` is the pairing of `l` with `w`, with no support.
 - `action(form(a, (v, u)) + 2 * form(a, (v, u)), 1, w)` moves into both
   operands of the sum, and into the form of the product.
-- With the Stokes form of the [`Form`](#form) examples and fixed functions
-  `w` in `V` and `r` in `Q`, `action(form(e, ((v, q), (u, p))), 1, (w, r))`
-  is a linear form in `(v, q)`, the residual at `(w, r)`.
+- Let `w` in `V` and `r` in `Q` be fixed functions, with the Stokes form of the
+  [`Form`](#form) examples. `action(form(e, ((v, q), (u, p))), 1, (w, r))` is
+  a linear form in `(v, q)`, the residual at `(w, r)`.
 
 Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES.md#example-the-flux-through-a-surface), [a classic FEniCS layer for the Poisson problem](EXAMPLES.md#example-a-classic-fenics-layer-for-the-poisson-problem).
 
@@ -3736,48 +3810,71 @@ every node class for each of the four.
 | [`apply_actions(f)`](#applying-actions)                     | `Action`             | Moves into the operand that carries the argument            |
 | [`reduce_component_tensors(f)`](#reducing-component-tensors) | `Indexed`            | One rule, for a `ComponentTensor` operand, and otherwise remains |
 
-The linear node classes are `Sum`, `Tensor`, `Indexed`, `ComponentTensor` and
-`IndexSum`, linear in every operand, and `Division`, linear in the first
-operand. An evaluated node that is linear moves into the operands of a linear
-node class in which the node is linear.
+The linear node classes are the following:
 
-A rule rewrites a node of the evaluated class to a mathematically equal
-expression of node classes of the core, and never simplifies. The rewritten
-expression has the free indices of the node, with the same extents, possibly
-in another order, and the argument spaces of the node. The rule dispatches on
-the class of the operand and moves the evaluated node towards the leaves. The
-pass rewrites inner nodes first, until no rule applies. A node without a rule
-is rebuilt on the rewritten edges, and the evaluated node remains on the
+- `Sum`, `Tensor`, `Indexed`, `ComponentTensor` and `IndexSum`, linear in
+  every operand.
+- `Division`, linear in the first operand.
+
+An evaluated node that is linear moves into the operands of a linear node
+class in which the node is linear.
+
+A rule obeys the following:
+
+- A rule rewrites a node of the evaluated class to a mathematically equal
+  expression of node classes of the core, and never simplifies.
+- The rewritten expression has the free indices of the node, with the same
+  extents, possibly in another order, and the argument spaces of the node.
+- The rule dispatches on the class of the operand and moves the evaluated node
+  towards the leaves.
+
+The pass rewrites inner nodes first, until no rule applies. A node without a
+rule is rebuilt on the rewritten edges, and the evaluated node remains on the
 rebuilt node.
 
-In a `Form`, an evaluated node moves only into the expression, and in an
-`Action` only into the form $f$, because the arguments and $g$ are bound, not
-on the support. For example,
-$\psi^* \mathrm{action}(f, s, g) = \mathrm{action}(\psi^* f, s, g)$,
-because the action replaces $\psi^* u$ in $\psi^* f$ by $\psi^* g$.
+In a `Form`, an evaluated node moves only into the expression. In an `Action`,
+an evaluated node moves only into the form $f$. The reason is that the
+arguments and $g$ are bound, not on the support. For example,
+$\psi^* \mathrm{action}(f, s, g) = \mathrm{action}(\psi^* f, s, g)$, because
+the action replaces $\psi^* u$ in $\psi^* f$ by $\psi^* g$.
 
 Each core transformation rewrites only the evaluated class, so the six run
 separately or together. Evaluation runs the six together until no rule
-applies. An `Integral` over a decomposed domain is replaced by `Integral`s
-over the parameter domains of the pieces, which nest less deeply, a `PullBack`
-moves inside an `ExteriorDerivative`, and never the reverse, an action removes
-an `Action`, and a reduction removes an `Indexed` and a `ComponentTensor`, so
-evaluation terminates. A
-downstream lazy node class may join evaluation if the rules of the class
-rewrite only that class, move the node towards the leaves, and never reverse a
-core rule, as moving an `ExteriorDerivative` inside a `PullBack` would.
+applies. Evaluation terminates for the following reasons:
 
-A terminal is a `Coordinate`, a [`Function`](#function), a [`Normal`](#normal),
-or an expression with a support whose class is a leaf class of a downstream
-library (see [Leaves and subclassing](#leaves-and-subclassing)). After
-evaluation,
-every `PullBack`, `ExteriorDerivative`, `Components` and `Action` applies to an
-expression that contains a downstream terminal, except the coordinate frame
-$\mathrm{d}X$ and the components of $\mathrm{d}X$ on a decomposed domain of
-lower dimension than the ambient coordinate domain. An expression without a
-downstream terminal evaluates
-to a sum of products and tensor products of 0-forms and the coordinate 1-forms
-$\mathrm{d}X_i$, inside any `Form`.
+- An `Integral` over a decomposed domain is replaced by `Integral`s over the
+  parameter domains of the pieces, which nest less deeply.
+- A `PullBack` moves inside an `ExteriorDerivative`, and never the reverse.
+- An action removes an `Action`.
+- A reduction removes an `Indexed` and a `ComponentTensor`.
+
+A downstream lazy node class may join evaluation if the rules of the class
+satisfy the following:
+
+- The rules rewrite only that class.
+- The rules move the node towards the leaves.
+- The rules never reverse a core rule, as moving an `ExteriorDerivative`
+  inside a `PullBack` would.
+
+A terminal is one of the following:
+
+- a `Coordinate`,
+- a [`Function`](#function),
+- a [`Normal`](#normal),
+- an expression with a support whose class is a leaf class of a downstream
+  library (see [Leaves and subclassing](#leaves-and-subclassing)).
+
+After evaluation, every `PullBack`, `ExteriorDerivative`, `Components` and
+`Action` applies to an expression that contains a downstream terminal, with
+two exceptions:
+
+- the coordinate frame $\mathrm{d}X$,
+- the components of $\mathrm{d}X$ on a decomposed domain of lower dimension
+  than the ambient coordinate domain.
+
+An expression without a downstream terminal evaluates to a sum of products and
+tensor products of 0-forms and the coordinate 1-forms $\mathrm{d}X_i$, inside
+any `Form`.
 
 ### Expanding integrals
 
@@ -4130,11 +4227,12 @@ The interpolation extension ships with UFLx and adds the node class
 | Lowering            | None                                                                                                                                 |
 
 `interpolate(f, V)` is the function in $V$ with the degrees of freedom of $f$.
-The core does not represent the degrees of freedom of $V$, so the library of
-$V$ defines the interpolant, as the library defines the pull-back of a
+The core does not represent the degrees of freedom of $V$. The library of $V$
+therefore defines the interpolant, as the library defines the pull-back of a
 function in $V$. The interpolant is a composition of the core only after a
-pull-back by a cell, so the node class has no lowering. The rules for the core
-transformations are:
+pull-back by a cell, so the node class has no lowering.
+
+#### Rules for the core transformations
 
 | Core transformation | Rule for `Interpolate(f, V)`                                                                                                                                                           |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -4143,37 +4241,52 @@ transformations are:
 | `expand_components` | The node remains under `Components`                                                                                                                                                    |
 | `apply_actions`     | `interpolate` of the action of $f$                                                                                                                                                     |
 
-The interpolant of a derivative differs from the derivative of the
-interpolant, except for some pairs of spaces, so the exterior derivative
-remains on the node, as on a function. `Interpolate` is linear in $f$, so the
-node passes on the argument spaces of $f$, and an action moves into $f$.
+- The interpolant of a derivative differs from the derivative of the
+  interpolant, except for some pairs of spaces. The exterior derivative
+  therefore remains on the node, as on a function.
+- `Interpolate` is linear in $f$. The node therefore passes on the argument
+  spaces of $f$, and an action moves into $f$.
+
+#### The interpolation operator and the adjoint
 
 The interpolation operator from a space $U$ to $V$ is the form
-`form(interpolate(u, V), (u,))`, with a function `u` in $U$, a form whose
-value is a field. The adjoint of the operator takes a function `l` in
-`dual(V)` to the form `form(action(l, 0, interpolate(u, V)), (conjugate(u),))`,
+`form(interpolate(u, V), (u,))`, with a function `u` in $U$. The value of the
+form is a field.
+
+The adjoint of the operator takes a function `l` in `dual(V)` to the form
+`form(action(l, 0, interpolate(u, V)), (conjugate(u),))`. The form is
 antilinear in `u`, with the static type of a function in `dual(U)`. Binding
 `l` as well gives the form of the interpolation matrix. The action on `l`
 remains, and the library of `l` evaluates the pairing, the transpose of the
-interpolation. So the extension needs no class for the adjoint, because the
-core provides [dual spaces](#dualspace), forms and actions.
+interpolation.
+
+The extension therefore needs no class for the adjoint, because the core
+provides [dual spaces](#dualspace), forms and actions.
 
 Interpolation between the spaces of two domains needs the cell of one domain
-that contains a point of the other, and is left to a later version of the
-extension.
+that contains a point of the other. That interpolation is left to a later
+version of the extension.
 
-Examples, with the decomposed domain `D`, the Lagrange spaces `V` and `V2` of
-polynomial degrees 1 and 2 on `D`, a Nédélec space `W` on `D` of the degree
-`(1,)`, a function `u` in `V` and a function `l` in `dual(V2)`:
+#### Examples
+
+The examples use the following objects:
+
+- The decomposed domain `D`.
+- The Lagrange spaces `V` and `V2` of polynomial degrees 1 and 2 on `D`.
+- A Nédélec space `W` on `D` of the degree `(1,)`.
+- A function `u` in `V` and a function `l` in `dual(V2)`.
+
+Examples:
 
 - `interpolate(u * u, V)` has the static type of a function in `V`.
 - `interpolate(exterior_derivative(u, D), W)` is the interpolant of
   $\mathrm{d}u$ in `W`.
 - `interpolate(u, W)` raises `ValueError`, because the degree of `u` is `()`
   and the degree of `W` is `(1,)`.
-- `form(interpolate(u, V2), (u,))` is the prolongation from `V` to `V2`, and
-  `form(action(l, 0, interpolate(u, V2)), (conjugate(u),))` is the restriction of `l` to
-  a linear form on `V`, the transpose of the prolongation, as in multigrid.
+- `form(interpolate(u, V2), (u,))` is the prolongation from `V` to `V2`.
+- `form(action(l, 0, interpolate(u, V2)), (conjugate(u),))` is the restriction
+  of `l` to a linear form on `V`, the transpose of the prolongation, as in
+  multigrid.
 
 ### New questions
 
