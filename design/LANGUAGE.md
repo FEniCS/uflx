@@ -14,17 +14,6 @@ concepts of differential geometry in more detail.
 This document is written for users and developers who know domain-specific
 languages for variational forms, such as UFL and ngsolve.
 
-## AI usage statement
-
-This document has been co-created with Claude Opus 5.5. Claude Opus 5.5 has
-presumably been trained on a large corpus of material on modern differential
-geometry, algorithms and functional programming, and on the source code of
-Firedrake, DOLFINx, UFL, FFCx, TSFC, GEM and many other packages. That said,
-Claude Code was instructed not to read any of those materials or source code
-directly. In the judgement of the authors, the quality of the document and of
-the resulting design is substantially higher than the authors could have
-reached without an LLM. Sections generated entirely by the LLM are marked.
-
 ## Conventions
 
 The note uses "must" for a rule that an implementation or a library has to
@@ -45,7 +34,6 @@ implementation and is not a rule.
 - [Scope](#scope)
   - [What UFLx is and isn't](#what-uflx-is-and-isnt)
   - [Basic principles](#basic-principles)
-  - [A tour: the Poisson problem](#a-tour-the-poisson-problem)
 - [Rules of the language](#rules-of-the-language)
   - [The base object `Base`](#the-base-object-base)
   - [Leaves and subclassing](#leaves-and-subclassing)
@@ -114,7 +102,6 @@ implementation and is not a rule.
   - [Restriction](#restriction)
   - [`Integral` over a decomposed domain](#integral-over-a-decomposed-domain)
   - [`Normal`](#normal)
-  - [Concept: kernels](#concept-kernels)
 - [Function spaces](#function-spaces)
   - [`AbstractFunctionSpace`](#abstractfunctionspace)
   - [`Function`](#function)
@@ -143,7 +130,6 @@ implementation and is not a rule.
 - [Appendix: Correspondence with legacy UFL](#appendix-correspondence-with-legacy-ufl)
 - [Appendix: Class hierarchy](#appendix-class-hierarchy)
 - [Appendix: Free functions](#appendix-free-functions)
-- [Appendix: Properties](#appendix-properties)
 - [Appendix: Static type table](#appendix-static-type-table)
 - [Appendix: Pass table](#appendix-pass-table)
 
@@ -173,8 +159,7 @@ algorithmic transformation.
 
 A UFLx program is ordinary Python code that constructs symbolic objects and
 connects them through a graph. The result is usually a variational form, such
-as a bilinear form, a linear form or a functional. Python code illustrates the
-examples. A full implementation is out of scope.
+as a bilinear form, a linear form or a functional.
 
 UFLx does not handle concrete data or numerical algorithms, such as meshes,
 boundary markers, values of coefficients or assembly procedures. Those belong
@@ -189,9 +174,7 @@ provides the concrete data behind each leaf node.
 - The core must not add definitions, properties or terminology outside
   differential geometry and functional analysis.
 - The core values strictness and expressivity over brevity. Higher-level APIs
-  can add brevity later. LLMs have lowered the cost of writing code against a
-  precise low-level API, so the end library could be more concise than in the
-  past.
+  can add brevity later.
 - The mathematical fields state variational problems uniformly across
   geometric dimensions. Special cases for particular dimensions do not exist
   in the mathematics, so they should not exist in the core.
@@ -207,151 +190,6 @@ provides the concrete data behind each leaf node.
 #### Legacy UFL
 
 TSFC lowers a UFL form to GEM, which repeats much of the algebra of UFL, partly because UFL simplifies during construction. The UFLx core does not simplify during construction, so a form compiler may be able to use a lowered UFLx form directly, adding only leaves for tables and kernel inputs. This has not been confirmed with the TSFC or FFCx developers.
-
-### A tour: the Poisson problem
-
-The bilinear form $\int_\Omega \nabla u \cdot \nabla v \,\mathrm{d}x$ and the
-linear form $\int_\Omega f v \,\mathrm{d}x$, on a square divided into two
-triangles, touch most chapters of the core. Each step links to the section
-that defines it.
-
-```python
-# Topology: two triangles, and the mesh as a decomposed domain.
-K = ReferenceSimplex(2)
-T = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
-
-# The index of the cells of type 0 of T, the only cell type, K.
-c = cell_index(T, 0)
-
-# The affine map x of each triangle, gathered from the vertex positions y
-# through the table cell_vertices. The index c of x gives D the topology T.
-X = coordinate(K)
-k, w = index("k"), index("w")
-p = component_tensor(y[gathered_index(cell_vertices, (c, w)), k], (c, w, k))
-x = component_tensor(
-    p[c, 0, k] + (p[c, 1, k] - p[c, 0, k]) * X[0] + (p[c, 2, k] - p[c, 0, k]) * X[1],
-    (k,),
-)
-D = decomposed_domain((domain_map(K, x, RD(2)),))
-
-# Functions in a space of a library, such as Lagrange of polynomial degree 1.
-u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
-
-# The integrands on D, with the gradient in the frame of RD(2).
-i = index("i")
-grad_u = components(exterior_derivative(u, D), D)
-grad_v = components(exterior_derivative(v, D), D)
-a_D = index_sum(grad_u[i] * grad_v[i], (i,))
-L_D = f * v
-
-# The forms bind the arguments.
-a = form(integral(a_D, D), (v, u))
-L = form(integral(L_D, D), (v,))
-```
-
-- **Topology and geometry.** `T` is a [static
-  topology](EXAMPLES.md#example-a-static-topology) with the single cell type `K`, and `c`
-  the index of the cells of type 0, the cells of type `K`. `y` and
-  `cell_vertices` are runtime data of the mesh, an array of the vertex
-  positions and an [`AbstractIndexValue`](#abstractindexvalue) table, read
-  through a [gathered index](#gatheredindex). `D` is the mesh, a [decomposed
-  domain](#decomposeddomain) of one family of triangles, and `D.topology` is
-  `T`, read from the index `c` of `x`.
-- **Functions.** `V` is an [`AbstractFunctionSpace`](#abstractfunctionspace) of
-  a library on `D`, with the degree `()` and the value shape `()`. `u`, `v` and
-  `f` are [functions](#function). None is a test or trial function by itself.
-- **Calculus.** The gradient is the [exterior
-  derivative](#exteriorderivative), a 1-form, turned into an array by
-  [`Components`](#components). `i` is an [index](#index), and
-  [`IndexSum`](#componenttensor-and-indexsum) contracts.
-- **Integration.** [`integral(f, D)`](#integral-over-a-decomposed-domain) of
-  a 0-form is the [`Integral`](#integral) over the mesh `D`, which
-  [`expand_integrals`](#expanding-integrals) lowers to the sum over the cell
-  index `c` of `Integral`s over the reference triangle `K`, each of the
-  [pull-back](#pullback) to `K` times the density $\lvert \det J \rvert$ of the
-  cell.
-- **Forms.** [`form`](#form) binds `v` as the argument at position 0 and `u`
-  at position 1. The tour is in real arithmetic. For a complex `V`, the
-  integrands take `conjugate(v)` and the forms bind `conjugate(v)`, so that the
-  forms are sesquilinear (see [`Form`](#form)). `f` stays
-  fixed. `a` and `L` are expressions with the [argument
-  spaces](#argument-spaces) `(V, V)` and `(V,)`.
-
-Nothing is evaluated during construction. The [core
-transformations](#core-transformations) then rewrite the graph:
-`expand_integrals` splits each integral over `D` into the sum over the cells,
-and `apply_derivatives` and `expand_pull_backs` move the derivatives and the
-pull-backs to the leaves, and turn the components on `D` into the inverse
-Jacobian times the components on `K`. `pull_back(u, cell_domain(D, 0))`
-remains, because the library of `V` gives `u` on each cell. A form compiler
-then splits the graph at the cell index (see [Concept: kernels](#concept-kernels)).
-The `IndexSum` over `c` becomes the loop of the assembler, the gathers of the
-vertex positions become the packing of the kernel inputs, and the rest is the
-kernel.
-
-The classic FEniCS spelling of the same forms, `inner(grad(u), grad(v)) * dx`,
-is a thin module over the core (see [Example: a classic FEniCS layer for the
-Poisson problem](EXAMPLES.md#example-a-classic-fenics-layer-for-the-poisson-problem)).
-
-On a mesh of triangles and quadrilaterals, only the domain changes. The
-topology has two cell types, and the domain one piece for each:
-
-```python
-Kt, Kq = ReferenceSimplex(2), ReferenceQuadrilateral()
-M = ...  # a topology with the cell types (Kt, Kq)
-
-# The affine maps of the triangles, with the free index cell_index(M, 0), and
-# the bilinear maps of the quadrilaterals, with cell_index(M, 1).
-x_tri, x_quad = ..., ...
-
-D = decomposed_domain(
-    (domain_map(Kt, x_tri, RD(2)), domain_map(Kq, x_quad, RD(2)))
-)
-```
-
-`V`, `u`, `v`, `f`, the integrands and the forms are unchanged. `u` is one
-function on `D`, and the library of `V` gives `u` on each cell of each type.
-Each integral over `D` is now a sum of two terms, one `IndexSum` over the
-triangles on `Kt` and one over the quadrilaterals on `Kq`, and a form compiler
-makes a kernel for each. `ReferenceQuadrilateral` stands for a reference cell of a
-library.
-
-Point values use the same `integral`. A set of points in the mesh is a
-decomposed domain of dimension 0, one family of points with an ordinary index:
-
-```python
-# m sensor points in D, with the coordinates q, the measured values d and the
-# loads g, runtime arrays of the language extension of the cut cell example.
-m = runtime_extent("m")
-q = runtime_array("q", (m, 2))
-d = runtime_array("d", (m,))
-g = runtime_array("g", (m,))
-j = index("j")
-
-# The position of point j in RD(2), with no support and the free index j.
-q_j = component_tensor(q[j, k], (k,))
-
-# The family of points, each a copy of RD(0) placed in D at q_j.
-points = domain_map(RD(0), q_j, D)
-
-# The points as a domain, one piece with the ordinary index j.
-S = decomposed_domain((points,))
-
-# A load g[j] at each point, the legacy UFL PointSource, as a linear form.
-L_point = form(integral(g[j] * v, S), (v,))
-
-# The misfit to the measurements, a functional for data assimilation.
-misfit = integral((u - d[j]) ** Integer(2), S)
-```
-
-`runtime_extent` and `runtime_array` are not in the core (see [Example:
-integrating over a cut cell](EXAMPLES.md#example-integrating-over-a-cut-cell)). The
-integral of a 0-form over a point is the value at the point, so `misfit`
-is $\sum_j (u(q_j) - d_j)^2$. The index `j` of `d[j]` and `g[j]` is the index
-of the family, so each datum pairs with its point. `S` has no topology, because
-`j` is not a cell index. A pass of the mesh library rewrites the pull-backs of
-`u` and `v` by the points through the cell that contains each point (see
-[Points and point evaluation](#points-and-point-evaluation)).
 
 ## Rules of the language
 
@@ -433,13 +271,6 @@ and equal construction arguments.
 Because objects are immutable, an object need only be validated once, at
 construction. Every object that exists is therefore valid.
 
-An object cannot be changed. To obtain a modified object, construct a new
-object and reconstruct every object that depends on the original object, up to
-the root of the graph.
-
-This design implies that construction arguments should be small and cheap to
-hash and compare, and that the graph implementation must be fast.
-
 ### Leaves and subclassing
 
 Requires: [The base object `Base`](#the-base-object-base).
@@ -483,9 +314,6 @@ property of the object, such as `value_shape` of an expression or
 operation that constructs objects is a pure free function, such as
 `coordinate(P)` or `volume_form(P)`. A class method, where
 needed, immediately calls a free function.
-
-Free functions are not objects in the graph. A free function builds or returns
-objects in the graph. Operator overloads call the free functions.
 
 A constructor takes the construction arguments by position only, in order, and
 raises `TypeError` for an argument by name. So an object has one `tuple` of
@@ -569,8 +397,7 @@ units.
 
 ## Domains
 
-We begin with differential geometry because the function spaces and operators
-of UFLx are defined on a domain. The function spaces and operators require the
+The function spaces and operators of UFLx are defined on a domain and need the
 topological structure of the domain, which is the dimension, boundary,
 orientation and decomposition into cells of the domain. The core needs no
 metric beyond the Euclidean metric of the ambient coordinate domain, which
@@ -637,7 +464,6 @@ pull-back.
 
 Examples:
 
-- The unit simplex in $R^n$ and $R^n$ itself are coordinate domains.
 - A face of codimension 1 of the unit simplex in $R^n$ is *not* a coordinate
   domain, because the face has empty interior in $R^n$. The face is the image
   of the unit simplex in $R^{n-1}$ under a map, so the face is the image of a
@@ -650,8 +476,6 @@ Examples:
 
 Requires: [`AbstractCoordinateDomain`](#abstractcoordinatedomain).
 
-See also: [Example: a paraboloid](EXAMPLES.md#example-a-paraboloid).
-
 A concrete subclass of `AbstractCoordinateDomain` for the whole of $R^n$.
 
 | `RD(n)`    |                                                                 |
@@ -660,10 +484,6 @@ A concrete subclass of `AbstractCoordinateDomain` for the whole of $R^n$.
 | Summary    | $R^n$ |
 | Properties | `dimension`, an `int` $n \ge 0$                                 |
 | Raises     | `TypeError` if $n$ is not an `int`, and `ValueError` if $n < 0$ |
-
-Example:
-
-- `RD(2)` is the parameter domain of the paraboloid example below.
 
 Worked examples for this chapter in EXAMPLES.md: [the unit simplex](EXAMPLES.md#example-the-unit-simplex).
 
@@ -774,10 +594,6 @@ cover, so an `EllipsisIndex` may cover no axis. The extent of an `EllipsisIndex`
 `tuple` of the extents of the covered axes. In every other rule of index
 notation, an `EllipsisIndex` behaves as an `Index`.
 
-#### Legacy UFL
-
-This numpy-like concept does not appear to be in legacy UFL.
-
 ### Extents
 
 Requires: [The base object `Base`](#the-base-object-base).
@@ -803,9 +619,8 @@ expression. A concrete `AbstractExtent` is a subclass outside the core, such as
 
 An `AbstractExtent` has no arithmetic and no ordering, so the rules of the
 core, which compare extents by equality, accept an `AbstractExtent` unchanged.
-Two `AbstractExtent`s are the same extent only if the two `AbstractExtent`s are
-equal as base objects, so a concrete `AbstractExtent` stores the arguments that
-identify the extent, such as a label.
+A concrete `AbstractExtent` stores the arguments that identify the extent, such
+as a label.
 
 Example:
 
@@ -853,10 +668,6 @@ Example:
   `starts[gathered_index(l, ()), k]` is the start of edge `l`, with the free
   index `k`. With an `AbstractIndexValue` with the extent 4, the same
   expression raises `IndexError`.
-
-#### Legacy UFL
-
-GEM, the intermediate language of TSFC, appears to have `VariableIndex` for the same purpose.
 
 ### `GatheredIndex`
 
@@ -928,8 +739,6 @@ b = component_tensor(a_e, (e,))
 total = index_sum(a_e, (e,))
 ```
 
-- `gathered_index(cells, (2,))` has no free index and the value 1. So
-  `a[gathered_index(cells, (2,))]` is `a[1]`.
 - Let `cell_vertices` be a table of the vertices of each triangle, of the shape
   `(2, 3)` and the extent 4. `gathered_index(cell_vertices, (g, w))` is the
   vertex `w` of the triangle of edge `e`, with the free indices `e` and `w`.
@@ -952,13 +761,6 @@ Unless a node class states otherwise, the free indices of a node are the free
 indices of the edges of the node that are expressions, in edge order, with each
 `Index` taken once at the first occurrence. An `Index` that occurs in two edges
 must have the same extent in both edges, or construction raises `ValueError`.
-
-The following node classes state otherwise:
-
-- `Indexed`: see [`Indexed`](#indexed).
-- `ComponentTensor` and `IndexSum`: see
-  [`ComponentTensor` and `IndexSum`](#componenttensor-and-indexsum).
-- `PullBack`: see [`PullBack`](#pullback).
 
 Summation is never implicit. `a[i] * b[i]` has the free index `i` and denotes
 the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], (i,))`.
@@ -1009,9 +811,7 @@ degree as part of the contract of the class (see
 The degree of every node class of the core is in the
 [static type table](#appendix-static-type-table). If the
 degree of an edge breaks the rule of the node, construction raises
-`ValueError`. A rule that requires the degree `()` of an edge is a deliberate
-statement, such as for `SquareRoot`, because the square root of a differential
-form is not defined.
+`ValueError`.
 
 Examples of the degree, on $R^3$ with the coordinate function $X$, the
 coordinates $x, y, z$ and a scalar function $f$:
@@ -1021,7 +821,6 @@ coordinates $x, y, z$ and a scalar function $f$:
 | The scalar $f$, or the literal `Integer(1)`                                | `()`        | `()`     |
 | The coordinate function `X`                                                | `(3,)`      | `()`     |
 | The 1-form $\mathrm{d}f$                                                   | `()`        | `(1,)`   |
-| The 1-form $\mathrm{d}x$                                                   | `()`        | `(1,)`   |
 | The 2-form $\mathrm{d}x \wedge \mathrm{d}y$                                | `()`        | `(2,)`   |
 | The volume form $\mathrm{d}x \wedge \mathrm{d}y \wedge \mathrm{d}z$        | `()`        | `(3,)`   |
 | The vector-valued 1-form $\mathrm{d}X$, with one 1-form for each component | `(3,)`      | `(1,)`   |
@@ -1094,9 +893,6 @@ so `A + B` on tensors is not an overload (see
 A free function that builds a fixed composition is a definition, not a
 simplification. The free function does not read the structure of the
 operands, so the free function never removes structure that the user built.
-An `EllipsisIndex` makes most tensor algebra one fixed composition for every
-value shape (see [`EllipsisIndex`](#tensor-algebra-with-ellipsisindex)), so a
-free function rarely needs to read a value shape.
 
 A node class is part of the core only if a definition or a rule of the core
 needs the node class, or if the node class is an operation of the scalar
@@ -1137,7 +933,7 @@ indices](#free-indices), [Scalar type](#scalar-type), [Support](#support),
 See also: [`Division`](#division).
 
 A literal is a number written down in an expression, such as
-`Integer(2) * u`. The value of a literal is part of the expression itself. Every literal has value shape
+`Integer(2) * u`. Every literal has value shape
 `()`, no free indices, no support and the degree `()`.
 
 The literals are concrete subclasses of `AbstractExpression`:
@@ -1388,10 +1184,7 @@ on the coefficients of a differential form.
 | Raises         | `ValueError` if a requirement fails                                                         |
 
 A sesquilinear variational form, such as the $L^2$ inner product
-$\int u \bar{v}$, needs `Conjugate`. A form that is linear in an argument is
-antilinear in the argument after conjugation, so `Conjugate` conjugates each
-argument space, with `conjugate_space(V)` for $V$ and $V$ for
-`ConjugateSpace(V)`.
+$\int u \bar{v}$, needs `Conjugate`.
 
 ### `TensorProduct`
 
@@ -1443,9 +1236,6 @@ induces on $P$, the pull-back of the Euclidean metric.
 Requires: [`AbstractExpression`](#abstractexpression), [`Power`](#power),
 [`Division`](#division), [Literals](#literals).
 
-> The UFLx core is likely to contain few elementary functions. A language
-> extension, such as `uflx.elementary`, will implement the rest later.
-
 `SquareRoot` is the only elementary function so far, a concrete subclass of
 `AbstractExpression` for the square root of a scalar.
 
@@ -1493,16 +1283,12 @@ an extent 0 has no entries, so the array is the `Zero` of that value shape.
 
 Examples, with `zero, one, two = Integer(0), Integer(1), Integer(2)`:
 
-- `tensor((one, two))` has value shape `(2,)` and no support.
 - With the 1-forms $\mathrm{d}x$ and $\mathrm{d}y$ on `RD(2)`,
   `tensor((dx, dy))` has value shape `(2,)` and the degree `(1,)`, and is the
   vector-valued 1-form $\mathrm{d}X$.
-- `tensor((tensor((one, zero)), tensor((zero, one))))` has value shape
-  `(2, 2)` and no support.
 - With `r0 = Float(0.0)` and `r1 = Float(1.0)`,
   `tensor((tensor((r1, r0)), tensor((r0, r1))))` has `Float` entries, so the
   matrix is not equal to `tensor((tensor((one, zero)), tensor((zero, one))))`.
-- `tensor((tensor((one, two)),))` has value shape `(1, 2)`.
 - `tensor((one, tensor((one, two))))` raises `ValueError`, because the value
   shapes of the entries differ.
 - `tensor((one, dx))` raises `ValueError`, because the degrees of the entries
@@ -1515,8 +1301,7 @@ Requires: [`AbstractExpression`](#abstractexpression), [`Index`](#index),
 [`AbstractIndexValue`](#abstractindexvalue), [Free indices](#free-indices),
 [Support](#support), [Degree](#degree).
 
-See also: [`Coordinate`](#coordinate), [`ExteriorDerivative`](#exteriorderivative),
-[Example: a paraboloid](EXAMPLES.md#example-a-paraboloid).
+See also: [`Coordinate`](#coordinate), [`ExteriorDerivative`](#exteriorderivative).
 
 > LLM generated content.
 
@@ -1571,22 +1356,14 @@ Construction of `Indexed` raises:
 | `IndexError` | A `GatheredIndex` entry whose extent differs from the extent of the axis.                                   |
 | `ValueError` | An index with two extents, in two entries or in an entry and the expression.                                |
 
-A negative index is rejected rather than converted, so the stored indices are
-always the indices that the user wrote.
-
 Examples:
 
-- For the coordinate function $X$ of `RD(3)`, `X[2]` has value shape `()`.
 - For a matrix `A` of value shape `(2, 2)`, `A[1, 0]` has value shape `()`,
   and `A[1]` raises `IndexError`.
-- `X[-1]` and `X[True]` raise errors.
 - `tensor((Integer(1) - X[0], X[0]))` has value shape `(2,)` and the support
   `RD(2)`.
-- `tensor((tensor((X[0], X[1])),))` has value shape `(1, 2)`.
 - For the vector-valued 1-form `dX = tensor((dx, dy))` on `RD(2)`, `dX[0]` is
   the 1-form $\mathrm{d}x$, with value shape `()` and the degree `(1,)`.
-- In the paraboloid example, the height `X[0]**Integer(2) + X[1]**Integer(2)`
-  is an expression on `RD(2)` with value shape `()`.
 
 ### `ComponentTensor` and `IndexSum`
 
@@ -1632,8 +1409,6 @@ contraction in one node, not in a chain of nested nodes.
 Examples, with `i, j = index("i"), index("j")`, two vectors `a` and `b` of value
 shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
 
-- `A[i, j]` has value shape `()` and the free indices `((i, 2), (j, 2))`.
-- `a[i] * b[i]` has value shape `()` and the free indices `((i, 3),)`.
 - `index_sum(a[i] * b[i], (i,))` is the inner product of `a` and `b`, with no
   free indices.
 - `index_sum(A[i, j] * A[i, j], (i, j))` is the sum of the squares of the
@@ -1644,13 +1419,9 @@ shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
   `(1,)`, `index_sum(a[i] * dX[i], (i,))` is the 1-form
   $a_0 \mathrm{d}x + a_1 \mathrm{d}y + a_2 \mathrm{d}z$, with the degree
   `(1,)`.
-- `A[i, i]` is the diagonal entry, with the free indices `((i, 2),)`.
-  `index_sum(A[i, i], (i,))` is the trace of `A`, and
+- `index_sum(A[i, i], (i,))` is the trace of `A`, and
   `component_tensor(A[i, i], (i,))` is the diagonal of `A`, for every extent of
   `A`, including an `AbstractExtent`.
-
-> Implementation note: `opt_einsum` can plan a contraction path for a given
-> contraction, but assumes dense operators.
 
 ### Tensor algebra with `EllipsisIndex`
 
@@ -1704,19 +1475,11 @@ of rank $k$, the left inverse of $A$ with $A^+ A$ the identity. For $k = n$,
 $A^+$ is the inverse matrix $A^{-1}$. If $A$ has rank less than $k$,
 `Inverse(A)` is undefined. Construction does not check the rank of $A$.
 
-`Inverse` is a node class and not a composition (see [Node class or free
-function](#node-class-or-free-function)). For $k = n$ the adjugate divided by
-the determinant, and for $k < n$
-`matrix_product(inverse(matrix_product(transpose(A), A)), transpose(A))`, are
-compositions for one $k$ each, and no one composition covers every $k \le n$,
-whereas one node class gives one rule for every dimension, such as the rule
-for `Components` in [Expanding pull-backs](#expanding-pull-backs). A pass
-chooses how to evaluate `Inverse`, in closed form for a small matrix or by a
-factorisation. The determinant of a $k \times k$ matrix is an exact
-polynomial, the Leibniz formula, so the core writes the determinant as that
-composition, such as in the density of [`Integral` over a decomposed
-domain](#integral-over-a-decomposed-domain), and has no node class for the
-determinant.
+A pass chooses how to evaluate `Inverse`, in closed form for a small matrix or
+by a factorisation. The core writes the determinant as the Leibniz formula,
+such as in the density of [`Integral` over a decomposed
+domain](#integral-over-a-decomposed-domain), so the core has no node class for
+the determinant.
 
 Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
 
@@ -1729,8 +1492,6 @@ Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
   value shape `(2, 1)`, of the edge from $(0, 0)$ to $(1, 1)$, `inverse(Je)`
   has value shape `(1, 2)`, and a later pass evaluates `inverse(Je)` to
   $\begin{pmatrix} 1/2 & 1/2 \end{pmatrix}$.
-- `inverse(tensor((one, two)))` raises `ValueError`, because the value shape
-  `(2,)` is not the value shape of a matrix.
 - `inverse(transpose(Je))` with value shape `(1, 2)` raises `ValueError`,
   because $k > n$.
 - With the coordinate coframe `dX` of `RD(2)`, `inverse(tensor((dX, dX)))`
@@ -1750,8 +1511,7 @@ functions](#appendix-free-functions).
 Every overload in the [table of free functions](#appendix-free-functions) is
 a method of `AbstractExpression` (see
 [`AbstractExpression`](#abstractexpression)). No other class defines
-arithmetic or indexing overloads. An overload outside the standard
-mathematical meaning of the operator should be considered with care. The core
+arithmetic or indexing overloads. The core
 has no free function for a matrix product, so `@` is not an overload.
 
 An operator overload calls the free function with the operands unchanged, and
@@ -1763,119 +1523,9 @@ single entry `i`, and passes `f[i, j]` as the `tuple` `(i, j)`. `__getitem__`
 converts a single entry into a `tuple` of one entry and calls `indexed`. The
 conversion exists because of Python indexing syntax.
 
-This base class is sketched in pseudo-code according to the principles above.
-Later classes are not sketched in detail, because `AbstractExpression` is the
-only class with overloads.
-
-```
-class AbstractExpression(Base, ABC):
-    """Abstract base class for expressions."""
-    @property
-    @abstractmethod
-    def value_shape(self) -> tuple[int | AbstractExtent, ...]:
-        """The value shape of the expression."""
-
-    @property
-    @abstractmethod
-    def free_indices(
-        self,
-    ) -> tuple[
-        tuple[
-            Index | EllipsisIndex,
-            int | AbstractExtent | tuple[int | AbstractExtent, ...],
-        ],
-        ...,
-    ]:
-        """The free indices and extents, in order of first occurrence."""
-
-    @property
-    @abstractmethod
-    def scalar_type(self) -> Literal["real", "complex"]:
-        """The scalar type of the expression."""
-
-    @property
-    @abstractmethod
-    def support(self) -> AbstractDomain | None:
-        """The support of the expression, or None for an expression with no support."""
-
-    @property
-    @abstractmethod
-    def degree(self) -> tuple[int, ...]:
-        """The differential form degree of each slot, with every entry at least 1."""
-
-    @property
-    @abstractmethod
-    def argument_spaces(
-        self,
-    ) -> tuple[AbstractFunctionSpace | tuple[AbstractFunctionSpace, ...], ...]:
-        """The space of each argument of a form, or () for an expression that is not a form."""
-
-    # Operator overloading must be in the class.
-    def __add__(self, other: AbstractExpression) -> AbstractExpression:
-        """Add."""
-        return add(self, other)
-
-    def __sub__(self, other: AbstractExpression) -> AbstractExpression:
-        """Subtract."""
-        # Calls the free function subtract.
-        ...
-
-    def __mul__(self, other: AbstractExpression) -> AbstractExpression:
-        """Multiply."""
-        # Calls the free function multiply.
-        ...
-
-    def __truediv__(self, other: AbstractExpression) -> AbstractExpression:
-        """Divide."""
-        # Calls the free function divide.
-        ...
-
-    def __neg__(self) -> AbstractExpression:
-        """Negate."""
-        # Calls the free function negate.
-        ...
-
-    def __abs__(self) -> AbstractExpression:
-        """Absolute value."""
-        # Calls the free function absolute.
-        ...
-
-    def __pow__(self, exponent: AbstractExpression) -> AbstractExpression:
-        """Raise to a power."""
-        # Calls the free function power.
-        ...
-
-    def __getitem__(self, indices: object) -> AbstractExpression:
-        """Index."""
-        # Converts a single entry into a tuple of one entry, then calls indexed.
-        ...
-
-    def __iter__(self) -> NoReturn:
-        """Raise TypeError, because expressions are not iterable."""
-        # Without __iter__, Python iterates through __getitem__.
-        ...
-
-# A free function
-def add(first: AbstractExpression, second: AbstractExpression) -> Sum:
-    """Add two scalar differential forms of the same degree.
-
-    Args:
-        first: The first summand.
-        second: The second summand.
-
-    Returns:
-        The sum of the two expressions, with the summands in the given order.
-
-    Raises:
-        TypeError: From the constructor of Sum, if a summand is not an
-            expression.
-        ValueError: From the constructor of Sum, if a summand does not have
-            value shape (), if an index has two extents, if the summands
-            have different supports, or if the degrees differ.
-    """
-    # The constructor of Sum validates.
-    return Sum(first, second)
-```
+`AbstractExpression` defines `__iter__` to raise `TypeError`, because
+expressions are not iterable and Python otherwise iterates through
+`__getitem__`.
 
 ### Numbers in expressions
 
@@ -1892,13 +1542,10 @@ explicitly.
 
 Examples, with `X = coordinate(RD(2))`:
 
-- `X[0]**Integer(2)`, `Integer(2) * X[0]` and `Integer(1) - X[0]` are
-  accepted.
-- `X[0]**2`, `2 * X[0]`, `1 - X[0]` and `0.5 * X[0]` raise `TypeError`.
-- `tensor((1, 2))` raises `TypeError`. `tensor((Integer(1), Integer(2)))` is
-  accepted.
-- `2 + X[0]` raises `TypeError`, because `AbstractExpression` defines no
-  reflected overloads.
+- `X[0]**Integer(2)`, `Integer(2) * X[0]`, `Integer(1) - X[0]` and
+  `tensor((Integer(1), Integer(2)))` are accepted.
+- `X[0]**2`, `2 * X[0]`, `1 - X[0]`, `0.5 * X[0]`, `2 + X[0]` and
+  `tensor((1, 2))` raise `TypeError`.
 
 Worked examples for this chapter in EXAMPLES.md: [transpose and matrix product](EXAMPLES.md#example-transpose-and-matrix-product).
 
@@ -1957,8 +1604,6 @@ $f$ with no support is a constant on $P$.
 Requires: [Valid pair](#valid-pair), [`Coordinate`](#coordinate),
 [Degree](#degree), [`Product`](#product), [`Indexed`](#indexed).
 
-See also: [Applying derivatives](#applying-derivatives).
-
 A concrete subclass of `AbstractExpression` for the exterior derivative
 $\mathrm{d}\omega$ of a differential form $\omega$ on a domain $P$.
 
@@ -2004,8 +1649,7 @@ dx, dy, dz = d(x), d(y), d(z)
 dX = d(X)
 ```
 
-A pass that applies the rules of `apply_derivatives` gives the familiar
-results of vector calculus:
+After `apply_derivatives`:
 
 | Expression                                   | Degree | After a pass                                                               |
 | -------------------------------------------- | ------ | -------------------------------------------------------------------------- |
@@ -2014,11 +1658,6 @@ results of vector calculus:
 | `d(x * dy * dz + y * dz * dx + z * dx * dy)` | `(3,)` | $3 \, \mathrm{d}x \wedge \mathrm{d}y \wedge \mathrm{d}z$, the divergence 3 |
 | `d(d(x * y * z))`                            | `(2,)` | The zero 2-form, because the curl of a gradient is zero                    |
 | `d(d(-y * dx + x * dy))`                     | `(3,)` | The zero 3-form, because the divergence of a curl is zero                  |
-| `d(Integer(1))`                              | `(1,)` | The zero 1-form, because a constant has no gradient                        |
-
-The second row is the reason that half the integral of
-$-y \, \mathrm{d}x + x \, \mathrm{d}y$ around a closed curve in the plane is
-the enclosed area, by Stokes' theorem.
 
 - `d(dx * dy * dz)` has the degree `(4,)` and is the zero form, because
   `RD(3)` has dimension 3.
@@ -2033,8 +1672,7 @@ Requires: [Valid pair](#valid-pair), [`ExteriorDerivative`](#exteriorderivative)
 [Degree](#degree), [`ComponentTensor` and
 `IndexSum`](#componenttensor-and-indexsum).
 
-See also: [`PullBack`](#pullback), [Expanding components](#expanding-components),
-[`DomainMap`](#domainmap).
+See also: [`PullBack`](#pullback), [`DomainMap`](#domainmap).
 
 A concrete subclass of `AbstractExpression` that turns the first slot of a
 differential form into an axis of the value shape, with the coordinate frame of
@@ -2156,9 +1794,7 @@ Requires: [Valid pair](#valid-pair), [Volume form](#volume-form),
 [Support](#support), [Degree](#degree).
 
 See also: [Example: an affinely mapped
-triangle](EXAMPLES.md#example-an-affinely-mapped-triangle), [`Integral` over a decomposed
-domain](#integral-over-a-decomposed-domain), [Expanding
-integrals](#expanding-integrals).
+triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 
 A concrete subclass of `AbstractExpression` for the integral of a differential
 form $f$ over a domain $P$ of dimension $k$. A basic integral needs no
@@ -2238,8 +1874,7 @@ expression.
 | Derived                          | `free_indices`, the free indices of $\psi$ |
 | Raises                           | `TypeError` for $P$ or $Q$, and `ValueError` if another requirement fails                                                                                                                                   |
 
-$\psi$ maps each point of $P$ to a point of $Q$, and the image $\psi(P)$ is
-$D$. The coordinates of the ambient coordinate domain of $Q$ name the points of
+The coordinates of the ambient coordinate domain of $Q$ name the points of
 $D$. The 'topological dimension' of $D$ is $k$,
 `D.parameter_domain.dimension`, and the 'geometric dimension' is $n$, the
 dimension of the ambient coordinate domain of $Q$. Construction does not check
@@ -2259,15 +1894,12 @@ each value of the free indices. For example, with an array `x` of value shape
 family of $m$ points in `RD(n)`. A family of domains writes a set of points
 once, such as the points of a quadrature rule.
 
-$Q$ is usually `RD(n)`. A domain in a smaller $Q$, such as an edge of the unit
-triangle in the unit triangle, or a cell of a decomposed domain in the
-decomposed domain, pulls back an expression on $Q$ (see
-[`PullBack`](#pullback)).
+$Q$ is usually `RD(n)`. $Q$ may be smaller, such as the unit triangle for an
+edge of the unit triangle, or a decomposed domain for a cell of the decomposed
+domain (see [`PullBack`](#pullback)).
 
 Examples:
 
-- A sphere in $R^3$ has geometric dimension 3, topological dimension 2 and the
-  ambient coordinate domain `RD(3)`.
 - The hypotenuse of the unit triangle is the image of a domain map with $k = 1$
   and $n = 2$. $P$ is the unit interval in $R^1$, and
   $\psi(X) = (1 - X_0, X_0)$. $Q$ is `RD(2)` for the hypotenuse in the plane,
@@ -2283,8 +1915,6 @@ Requires: [`DomainMap`](#domainmap), [Valid pair](#valid-pair),
 [Free indices](#free-indices), [Degree](#degree),
 [`ExteriorDerivative`](#exteriorderivative), [Example: an
 affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
-
-See also: [Expanding pull-backs](#expanding-pull-backs).
 
 A concrete subclass of `AbstractExpression` for the pull-back $\psi^* f$ of a
 differential form $f$ on $Q$ by the parameterisation $\psi$ of a domain $D$,
@@ -2303,7 +1933,7 @@ with $P$ the parameter domain and $Q$ the ambient domain of $D$.
 | Evaluated by     | [`expand_pull_backs`](#expanding-pull-backs)                                                               |
 
 The second operand is a domain, not an expression, because a domain states
-$Q$. The pull-back by a `SideMap` is a [restriction](#restriction).
+$Q$.
 
 For a 0-form $f$, the pull-back is the composition $f \circ \psi$, the
 expression on $P$ with the value $f(\psi(p))$ at each point $p$ of $P$. For a
@@ -2317,8 +1947,7 @@ so `PullBack` accepts any degree, including a double form such as a metric.
 The axes of the value shape are not transformed. An axis of an expression on
 $Q$ is an array in the coordinate frame of $Q$, so the pull-back keeps the
 frame of $Q$. A slot with a degree greater
-than the dimension of $P$ gives the zero form, so a 2-form pulled back to a
-curve, and a 1-form pulled back to a point, are zero.
+than the dimension of $P$ gives the zero form.
 
 A `PullBack` of a downstream terminal or of a
 [`Function`](#function) remains, and the library of the terminal evaluates the
@@ -2356,16 +1985,11 @@ dxe = pull_back(dx, e)
 E = domain_map(S, pull_back(psi, e), RD(2))
 ```
 
-- A later pass evaluates `fe` to $(1 - t) t$ and the parameterisation of `E`
-  to $(3 - t, 1 + 2 t)$.
-- A later pass evaluates `dxe` to $\mathrm{d}(1 - t) = -\mathrm{d}t$, because
-  $X_0 = 1 - t$ on the edge.
+- A later pass evaluates `fe` to $(1 - t) t$, `dxe` to
+  $\mathrm{d}(1 - t) = -\mathrm{d}t$, and the parameterisation of `E` to
+  $(3 - t, 1 + 2 t)$.
 - `pull_back(dx * exterior_derivative(X[1], T), e)` has the degree `(2,)` and
   is the zero form, because the edge has dimension 1.
-- The Jacobian matrix of the parameterisation of `E` is
-  $\begin{pmatrix} 2 & 1 \\ 1 & 3 \end{pmatrix} \begin{pmatrix} -1 \\ 1
-  \end{pmatrix} = \begin{pmatrix} -1 \\ 2 \end{pmatrix}$, so the edge of `K`
-  has the length $\sqrt{5}$.
 - `pull_back(f, domain_map(S, tensor((one - t, t)), RD(2)))`
   raises `ValueError`, because that domain lies in `RD(2)`, not in `T`.
 
@@ -2410,14 +2034,10 @@ provides a consistent orientation where one is needed, such as an expression
 with the sign $+1$ or $-1$ for each cell, and the core needs nothing more (see
 [Example: the flux through a surface](EXAMPLES.md#example-the-flux-through-a-surface)).
 
-An integral of a 0-form uses a density and needs no orientation (see
-[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain)). A
-flux of a vector field through a facet needs a side and a density, but no
-orientation. The side $s$ says which cell the facet is seen from, and
-[`normal(D, E, s)`](#normal) points out of that cell, whatever the orientation
-of the facet. So the flux
-`integral(index_sum(restriction(u, E, s)[i] * normal(D, E, s)[i], (i,)), E)`
-of a function `u` of value shape `(n,)` needs no orientation of $D$ or $E$.
+An integral of a 0-form uses a density (see [`Integral` over a decomposed
+domain](#integral-over-a-decomposed-domain)), and a flux through a facet uses a
+side and [`normal(D, E, s)`](#normal), which points out of the cell on the
+side. Neither needs an orientation.
 
 ### Concept: integral over a domain
 
@@ -2456,14 +2076,8 @@ needs no node class and no free function for a point.
 #### Point evaluation
 
 The value of a 0-form $f$ of any value shape at a point $p$ is
-`integral(pull_back(f, p), RD(0))`. The reason is that the integral of a 0-form
-over `RD(0)` is the value at the single point (see [`Integral`](#integral)).
-`pull_back(f, p)` is an expression on `RD(0)`. The integral has no support, so
-the integral combines with any expression.
-
-A point in a coordinate domain `T` is given in the coordinates of `T`.
-`expand_pull_backs` evaluates the pull-back of an expression on `T` by the
-point.
+`integral(pull_back(f, p), RD(0))` (see [`Integral`](#integral)). The integral
+has no support, so the integral combines with any expression.
 
 #### A family of points in a decomposed domain
 
@@ -2515,7 +2129,7 @@ because the family would need one piece for each cell type.
 
 #### Examples
 
-The examples use `T`, `X`, `psi` and `K` of the affinely mapped triangle, and
+The examples use `T` and `X` of the affinely mapped triangle, and
 `f = X[0] * X[1]`:
 
 ```python
@@ -2527,22 +2141,13 @@ c = domain_map(RD(0), tensor((third, third)), T)
 # Integral: the value of f at the centroid, with no support and value shape ().
 # A later pass evaluates the integral to 1/9.
 fc = integral(pull_back(f, c), RD(0))
-
-# DomainMap: the centroid of K, as a point in RD(2). A later pass
-# evaluates pull_back(psi, c) to (2, 4/3).
-C = domain_map(RD(0), pull_back(psi, c), RD(2))
 ```
 
 - Let `d = domain_map(RD(0), tensor((third, Integer(2) / Integer(3))), T)` be
   a second point. `integral(pull_back(f, c), RD(0)) + integral(pull_back(f, d), RD(0))`
   is the action of a sum of two Dirac measures on $f$.
-- `domain_map(RD(0), tensor((third, third)), RD(2))` is the point
-  $(1/3, 1/3)$ in the plane. With that point as `q`, `pull_back(f, q)` raises
-  `ValueError`, because `q` lies in `RD(2)`, not in `T`.
-- `domain_map(RD(0), X, T)` raises `ValueError`, because `X` has the support
-  `T`, not `RD(0)`.
 
-Worked examples for this chapter in EXAMPLES.md: [a paraboloid](EXAMPLES.md#example-a-paraboloid), [an affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle), [orientation of an edge and of a triangle](EXAMPLES.md#example-orientation-of-an-edge-and-of-a-triangle), [integrating over an edge](EXAMPLES.md#example-integrating-over-an-edge), [integrating over the boundary of a triangle](EXAMPLES.md#example-integrating-over-the-boundary-of-a-triangle), [quadrature](EXAMPLES.md#example-quadrature), [integrating over a cut cell](EXAMPLES.md#example-integrating-over-a-cut-cell), [the centroid of a triangle](EXAMPLES.md#example-the-centroid-of-a-triangle).
+Worked examples for this chapter in EXAMPLES.md: [an affinely mapped triangle](EXAMPLES.md#example-an-affinely-mapped-triangle), [orientation of an edge and of a triangle](EXAMPLES.md#example-orientation-of-an-edge-and-of-a-triangle), [integrating over an edge](EXAMPLES.md#example-integrating-over-an-edge), [integrating over the boundary of a triangle](EXAMPLES.md#example-integrating-over-the-boundary-of-a-triangle), [quadrature](EXAMPLES.md#example-quadrature), [integrating over a cut cell](EXAMPLES.md#example-integrating-over-a-cut-cell), [the centroid of a triangle](EXAMPLES.md#example-the-centroid-of-a-triangle).
 
 ## Topology
 
@@ -2570,8 +2175,8 @@ library such as Basix decides which sets of vertices are sub-entities (see
 [Sides of a topology](#sides-of-a-topology)).
 
 A topology of polygons, as for the virtual element method, has a cell type for
-each number of vertices. A cell type whose number of vertices is known only at
-run time is not yet covered.
+each number of vertices. A number of vertices known only at run time is not yet
+covered.
 
 ### `AbstractTopology`
 
@@ -2602,8 +2207,7 @@ of given cell types, without coordinates.
   have the same cell type (see [Sides of a topology](#sides-of-a-topology)).
 - `num_cells` is a `tuple` with the number of cells of each type, an `int`,
   such as for a macro element, or an `AbstractExtent`, such as for the mesh of
-  a solver. For the mesh of a solver, the solver loops over the cells, and a
-  kernel computes the terms of one cell.
+  a solver.
 - `sides` is `()`, or the sides of [Sides of a topology](#sides-of-a-topology).
 
 Two topologies are the same topology only if the two topologies are equal as
@@ -2613,9 +2217,7 @@ identify the topology, such as a label.
 The free function `cell_index(T, j)` returns the derived index
 `Index(("uflx.cell_index", T, j, 0))` for the cells of type $j$, numbered from
 0. The index has the extent `T.num_cells[j]`. The index differs between types
-and between topologies, even if the numbers of cells are equal. Restriction
-and the integral over a topology use the index, so user code rarely needs the
-index.
+and between topologies, even if the numbers of cells are equal.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -2626,8 +2228,6 @@ index `cell_index(T, j)` has one value for each cell of type $j$.
 
 Examples:
 
-- A square divided into two triangles has the cell types `(K,)`, for the
-  triangle cell type `K`, and the numbers of cells `(2,)`.
 - The Alfeld split of a triangle, a macro element, has the numbers of cells
   `(3,)`.
 - A mesh of a solver with triangles and quadrilaterals has two cell types, and
@@ -2641,8 +2241,6 @@ In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and 
 
 Requires: [`AbstractCellType`](#abstractcelltype),
 [`AbstractTopology`](#abstracttopology).
-
-See also: [Restriction](#restriction).
 
 A topology $S$ whose cells are sub-entities of cells of other topologies has
 sides. A cell of $S$ is seen from one cell of another topology on each side,
@@ -2669,9 +2267,8 @@ Notation, for the group $i$ of $S$ with a side `(name, T, j)`:
 
 #### The image of a cell on a side
 
-Each cell of type $i$ of $S$ is seen from one cell of type $j$ of $T$ on each
-side. The cell of $S$ is the image of cell type $i$ of $S$ under the affine map
-through the positions of the vertices of the cell of $S$ in $K_j$ (see
+On each side, a cell of type $i$ of $S$ is the image of cell type $i$ of $S$
+under the affine map through the positions of the vertices of the cell of $S$ in $K_j$ (see
 [Restriction](#restriction)). The image is one of the following:
 
 - A sub-entity of the cell on the side. The sub-entity is the cell itself, with
@@ -2766,11 +2363,6 @@ cells as cell types, such as `ReferenceSimplex(1)` in place of `I` (see
 - A topology of the corners of the boundary has the cell types `(P,)` and the
   sides `((("+", B, 0), ("-", B, 0)),)`, since each corner is seen from two
   facets of `B`.
-- A topology of the triangles of a marked subdomain of `T` has the cell types
-  `(K,)` and the sides `((("inside", T, 0),),)`.
-- A topology of the vertices of `T`, such as for point loads, has the cell
-  types `(P,)` and the sides `((("inside", T, 0),),)`, with one triangle chosen
-  for each vertex.
 - Let `M` be a submesh of the boundary facets of `T`, with the cell types
   `(I,)`. A topology of the facets has the sides
   `((("mesh", T, 0), ("submesh", M, 0)),)`, and each facet is a cell of `M`.
@@ -2783,8 +2375,7 @@ cells as cell types, such as `ReferenceSimplex(1)` in place of `I` (see
   `((("+", M, 0), ("-", M, 0)), (("+", M, 0), ("-", M, 1)), (("+", M, 1), ("-", M, 1)))`.
   The three groups are the facets between two triangles, between a triangle
   and a quadrilateral, and between two quadrilaterals. An integral over the
-  topology has one term for each group. A form compiler may generate one
-  kernel for each group or one kernel for all of them.
+  topology has one term for each group.
 - For a topology `U3` of prisms with the cell types `(W,)`, a topology of the
   boundary facets has the cell types `(K, Q)`, with the quadrilateral cell type
   `Q`, and the sides `((("inside", U3, 0),), (("inside", U3, 0),))`.
@@ -2803,7 +2394,8 @@ Requires: [`AbstractCoordinateDomain`](#abstractcoordinatedomain), [`RD`](#rd),
 [`Tensor`](#tensor), [`DomainMap`](#domainmap),
 [`Inverse`](#inverse), [`AbstractCellType`](#abstractcelltype).
 
-See also: [`AbstractTopology`](#abstracttopology).
+See also: [`AbstractTopology`](#abstracttopology), [Example: integrating over
+the boundary of a triangle](EXAMPLES.md#example-integrating-over-the-boundary-of-a-triangle).
 
 An abstract subclass of `AbstractCoordinateDomain` and of `AbstractCellType`
 for a reference cell `AbstractReferenceCell`, a cell type whose vertices have
@@ -2853,11 +2445,6 @@ coordinates `K.vertices[w_v, k]` of the vertex $w_v$ of $K$, stacked with
 `component_tensor` over the vertex and the coordinate indices. The core does
 not check that the image is a sub-entity of $K$.
 
-> A downstream library such as Basix provides the vertex numbers of the
-> facets, so a facet is an ordinary `DomainMap` in the form, and an
-> integral over a facet is the integral of a pull-back, as in the [boundary
-> example](EXAMPLES.md#example-integrating-over-the-boundary-of-a-triangle).
-
 #### Examples
 
 - The unit triangle has the vertices $(0, 0)$, $(1, 0)$ and $(0, 1)$. The
@@ -2866,7 +2453,6 @@ not check that the image is a sub-entity of $K$.
   [`DomainMap`](#domainmap) examples.
 - The unit interval has the vertices $(0)$ and $(1)$. The sub-entity with the
   vertex number $(1)$ and the reference point as $F$ is the end point.
-- The reference point has the single vertex $()$, the point of $R^0$.
 
 Worked examples for this chapter in EXAMPLES.md: [the unit simplex as a reference cell](EXAMPLES.md#example-the-unit-simplex-as-a-reference-cell).
 
@@ -2906,7 +2492,8 @@ Notation, for the piece $j$ of $D$:
 #### Pieces
 
 A piece with free indices is a family, one domain for each value of the free
-indices. $D$ is the union of all the domains of all the pieces.
+indices. $D$ is the union of all the domains of all the pieces. $D$ may have a
+lower dimension than the ambient coordinate domain, such as a surface in $R^3$.
 
 - A mesh has one piece for each cell type $j$, `domain_map(K_j, x_j, Q)`, with
   the free index `cell_index(T, j)`. Then the topology of $D$ is $T$.
@@ -2916,13 +2503,6 @@ indices. $D$ is the union of all the domains of all the pieces.
   piece.
 
 The core does not check that the domains meet only in sets of measure zero.
-
-#### A decomposed domain is a domain
-
-A decomposed domain $D$ is a domain, not a coordinate domain. The points of $D$
-are named by the coordinates of the ambient coordinate domain of $D$. $D$ may
-have a lower dimension than the ambient coordinate domain, such as a surface
-in $R^3$.
 
 #### Nesting
 
@@ -2944,11 +2524,7 @@ $D$, `domain_map(P_j, psi_j, D)`, with the free indices of piece $j$.
 
 An expression $f$ with the support $D$ is defined through the pieces.
 `pull_back(f, cell_domain(D, j))` is an expression on $P_j$, the value of $f$
-on each domain of piece $j$.
-
-- The pull-back of `coordinate(D)` is $\psi_j$.
-- The pull-back of a function in a space on $D$ is evaluated by the library of
-  the space (see [`PullBack`](#pullback)).
+on each domain of piece $j$. The pull-back of `coordinate(D)` is $\psi_j$.
 
 #### `gathered_cell_domain`
 
@@ -2968,12 +2544,6 @@ chi = component_tensor(component_tensor(psi_j[k], (c, k))[g, k], (k,))
 
 and $k$ the derived index `Index(("uflx.gathered_cell_domain", D, j, g, 0))`.
 
-- The inner `ComponentTensor` binds $c$ and is the array of the maps of all the
-  cells of type $j$.
-- The `Indexed` entry $g$ selects the map of the cell $g$, so `chi` has the
-  free indices of $g$.
-
-The free function reads only the free indices of piece $j$, which are static.
 The library of a function in a space on $D$ evaluates the pull-back by
 `gathered_cell_domain(D, j, g)` as the pull-back by `cell_domain(D, j)` on the
 cell $g$ (see [`AbstractFunctionSpace`](#abstractfunctionspace)).
@@ -3046,8 +2616,7 @@ of a topology $S$ with sides, from the side $s$, is the pull-back of $f$ along
 the inclusion of each cell of $S$ into the cell on the side $s$. The side
 tables of $S$ give the cell on the side, through a
 [`GatheredIndex`](#gatheredindex) entry, and the positions of the vertices of
-the inclusion. The restriction is therefore a pull-back and needs no node
-class of its own.
+the inclusion.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -3124,8 +2693,7 @@ Piece $i$ of `side_domain(D, S)` is
 `domain_map(F_i, pull_back(pull_back(coordinate(D), B_i), A_i), Q)`, with
 $B_i$ and $A_i$ of the first side of group $i$. $F_i$ must be an
 `AbstractReferenceCell`. The topology of the result is $S$. The core does not
-check that the other sides have the same geometry. $A_i$ and $B_i$ are fixed
-compositions, so `side_domain` is a free function.
+check that the other sides have the same geometry.
 
 #### Traces and normals
 
@@ -3168,9 +2736,6 @@ jump = restriction(u, E, "+") - restriction(u, E, "-")
   `(((0, 1), (1, 0)),)` and $A_+(t) = (t, 1 - t)$. The restriction of
   $\mathrm{d}x_0$ from `"+"` then changes sign, from $-\mathrm{d}t$ to
   $\mathrm{d}t$.
-- On the topology of the vertices of `square`, with the cell type
-  `ReferenceSimplex(0)`, vertex 3 is seen from cell 1 at the position
-  `(1, 0)`, local vertex 1. So `u` restricts to $a_{1,0} + a_{1,1}$ there.
 - For the facets `S` of a triangle and quadrilateral mesh, with the three
   groups of [Sides of a topology](#sides-of-a-topology), the same two lines
   with `E = side_domain(D, S)` give one jump for all three groups.
@@ -3232,8 +2797,8 @@ area or the volume of the image of a small region of $P_j$.
 - For $k = 0$, the empty determinant is `Integer(1)`, so the integral over a
   set of points is the sum of the values.
 
-The density needs no orientation. The cells of a mesh may therefore be
-oriented in any way, and an integral of a positive 0-form is positive.
+The density needs no orientation, so an integral of a positive 0-form is
+positive.
 
 #### Integrands on the ambient domain
 
@@ -3284,8 +2849,6 @@ cell on a side, on the cells of a topology with sides.
 | Static type       | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the support $E$, real      |
 | Raises            | `ValueError` if a requirement fails                                                                   |
 | Evaluated by      | [`expand_pull_backs`](#expanding-pull-backs)                                                          |
-
-`Normal(D, E, s)` is a terminal of the geometry, as `Coordinate` is.
 
 Notation, for the piece $i$ of $E$:
 
@@ -3356,59 +2919,6 @@ jump = restriction(grad_u, E, "+") - restriction(grad_u, E, "-")
 penalty = integral(index_sum(jump[i] * n_E[i], (i,)) ** Integer(2), E)
 ```
 
-### Concept: kernels
-
-Requires: [`DecomposedDomain`](#decomposeddomain), [`GatheredIndex`](#gatheredindex),
-[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
-
-> This section describes how a downstream library is expected to use the core,
-> not a rule of the core.
-
-After `expand_integrals` and `reduce_component_tensors`, an integral over a
-decomposed domain is an `IndexSum` over the cell index of each group. The
-summand is an expression on a reference cell that reads arrays through
-gathered indices with the cell index. A form compiler splits the integral
-there:
-
-- The `IndexSum` over the cell index is the loop of an assembler over the
-  cells, or over the cells of a topology with sides.
-- A gathered index with the cell index is the data of one cell, which the
-  assembler packs and gives to a kernel. Examples are the gathered indices of a
-  map from the local to the global degrees of freedom, of the coordinates and
-  of the side tables.
-- The rest, an expression on a reference cell without the cell index, is the
-  kernel.
-
-#### The interface of a kernel
-
-The inputs of a kernel are the leaves that remain after the split, each with
-the gathered index that reads the leaf. Examples are the coefficients of a
-function through a map of degrees of freedom on one side, and a runtime
-extent. The interface of a kernel therefore follows from the expression. A
-form compiler may describe the interface beyond a fixed convention, such as
-for two sides of different cell types.
-
-The assembler adds the result of a kernel into a global array through the same
-tables. That addition is outside the language. A whole-array compiler may
-instead keep the integral whole, as a batched gather, one kernel for all the
-cells and a scatter-add.
-
-#### Kernels independent of the mesh
-
-A kernel depends on no particular mesh. Before compiling a kernel, a pass
-does the following:
-
-- The pass replaces the topologies, the tables, the arrays and the extents of a
-  mesh by placeholders, numbered in the order of appearance.
-- The pass renames the arguments of each form by position.
-- The pass renames the bound indices of each `ComponentTensor` and `IndexSum`
-  by the position of the binder and of the index.
-
-One compiled kernel then serves every mesh with the same cell types and
-spaces, and every naming of the arguments and of the indices. Equality is
-structural (rule 7). Without the renaming, two kernels that differ only in the
-names of indices would compile twice.
-
 Worked examples for this chapter in EXAMPLES.md: [an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral), [a Bank-Weiser error estimator](EXAMPLES.md#example-a-bank-weiser-error-estimator), [a fluid and a solid](EXAMPLES.md#example-a-fluid-and-a-solid), [a 1D network in a 3D mesh](EXAMPLES.md#example-a-1d-network-in-a-3d-mesh).
 
 ## Function spaces
@@ -3421,8 +2931,6 @@ argument of a variational form.
 Requires: [`AbstractDomain`](#abstractdomain), [Degree](#degree),
 [Scalar type](#scalar-type).
 
-See also: [`PullBack`](#pullback).
-
 An abstract subclass of the base object `AbstractFunctionSpace` for a space of
 functions on a domain.
 
@@ -3434,8 +2942,6 @@ functions on a domain.
 | Defined by              | A subclass outside the core, such as a subclass for the finite element spaces of Basix, and [`DualSpace`](#dualspace) in the core                           |
 
 A space with the domain `None` has functions that do not depend on a domain.
-
-The dual space of $V$ is [`dual(V)`](#dualspace), a space of the core.
 
 #### Functions in a space
 
@@ -3471,13 +2977,6 @@ space, such as the finite element.
 A space with the domain `None` and the argument spaces `()` is a space of
 constants. A function in the space is an expression with no support and the
 degree `()`, a single array with the value shape and the scalar type of $V$.
-
-The degree is `()` for two reasons:
-
-- An expression with no support and a non-empty degree is a `Zero` (see
-  [Expressions as differential forms](#expressions-as-differential-forms)).
-- A constant $k$-form is a constant array times the coordinate $k$-forms of a
-  domain.
 
 The integrals of a form decide the cells on which a constant acts.
 
@@ -3590,9 +3089,6 @@ Examples, with a decomposed domain `D` and a space `V` on `D` of the degree
 
 - `u = function(V, "u")` has the support `D`, the degree `()` and the value
   shape `()`, and `function(V, "u") == u` is `True`.
-- `exterior_derivative(u, D)` is the 1-form $\mathrm{d}u$ on `D`.
-- With the decomposed domain `E` of the interior facets of `D`,
-  `restriction(u, E, "+")` is `u` from the side `"+"`.
 
 #### Legacy UFL
 
@@ -3616,7 +3112,7 @@ space of each argument of a form, in order of position, and `()` for an
 expression that is not a form. The space of an argument is an
 `AbstractFunctionSpace` for an argument of one function, or a `tuple` of at
 least two spaces for an argument of a `tuple` of functions, the product of the
-spaces. So each argument has one representation. The arity is the number of
+spaces. The arity is the number of
 argument spaces. A functional has the arity 0, a linear form the arity 1 and a
 bilinear form the arity 2, whatever the number of functions in each argument.
 
@@ -3636,8 +3132,7 @@ The argument spaces are static, as the value shape and the degree are, so a
 form with a wrong arity is rejected during construction, and a load that is
 antilinear in `v` and a form that is linear in `v` do not add. The arity and
 the degree are independent. The degree counts the slots of a differential
-form, and the arity counts the arguments that a form binds. The word slot is
-used only for differential forms.
+form, and the arity counts the arguments that a form binds.
 
 ### `ConjugateSpace`
 
@@ -3664,9 +3159,7 @@ $\bar V$ of a complex space $V$.
 $\bar V$ has the functions of $V$ with the conjugate scalar multiplication, so
 a function in $\bar V$ is the conjugate of a function in $V$, and a linear
 form on $\bar V$ is an antilinear form on $V$. The core uses $\bar V$ only as
-an argument space, to record that a form is antilinear in an argument. For a
-real $V$, linear and antilinear coincide, so `conjugate_space(V)` is $V$
-itself, and the free function reads only the scalar type of $V$. The conjugate
+an argument space, to record that a form is antilinear in an argument. The conjugate
 of an argument space is `conjugate_space(V)` for a space $V$ and $V$ for
 `ConjugateSpace(V)`, so conjugating twice gives the space back (see
 [`Conjugate`](#conjugate)).
@@ -3707,14 +3200,9 @@ argument $v$ of $\int u \bar v$. A residual bound as `(conjugate(v),)` and an
 assembled load therefore have the same argument spaces, and the difference of
 the two is a form.
 
-- For a real scalar type, antilinear and linear coincide, and the argument
-  spaces are `(S,)`.
-- The space of linear forms on a complex $S$ is `dual(conjugate_space(S))`,
-  with the argument spaces `(S,)`. The core therefore fixes no convention on
-  the argument in which a form is antilinear.
-
-A fixed function in `dual(S)` is a known antilinear form, such as a load. A
-function bound by a [form](#form) is a variable antilinear form.
+The space of linear forms on a complex $S$ is `dual(conjugate_space(S))`,
+with the argument spaces `(S,)`. The core therefore fixes no convention on the
+argument in which a form is antilinear.
 
 The pairing of a function `l` in `dual(S)` with a function `w` in $S$ is
 `action(l, 0, w)`, antilinear in `w`. The library that provides the values of
@@ -4029,8 +3517,7 @@ integrand stays on the domain of the integral.
 - If every free index of $D$ is free in $c$, the rewrite is $c$.
 - Otherwise the rewrite is $c$ `+ Zero(...)`. The `Zero` has the value shape,
   the degree and the argument spaces of $c$, and the missing free indices with
-  the extents of the family (see [`Zero`](#zero)). The `Zero` is a constant
-  with the free indices of the family.
+  the extents of the family (see [`Zero`](#zero)).
 
 For example, take the family of three quadrature points `xs` of [Example:
 quadrature](EXAMPLES.md#example-quadrature).
@@ -4057,14 +3544,6 @@ the reference cell. That outer pull-back remains in turn, for the library to
 evaluate at the points of the facet (see [Restriction](#restriction) and
 [Example: an interior facet
 integral](EXAMPLES.md#example-an-interior-facet-integral)).
-
-Composing the two maps into
-`domain_map(P, pull_back(D2.parameterisation, D), D2.ambient_domain)` would
-gain nothing:
-
-- The composition would lose the cell that the inner map names.
-- For a $g$ that is not a terminal, both pull-backs commute to the terminals
-  anyway.
 
 #### The rule for `Components`
 
@@ -4125,9 +3604,7 @@ $\mathrm{d}A^T$, and $I$ is the identity matrix of value shape `(n, n)`, the
 $I - A A^+$ is zero and the rule is $-A^{-1} \, \mathrm{d}A \, A^{-1}$, but
 the rule does not drop the term, because the core never simplifies.
 `Absolute` is not complex differentiable, and for a real $a$ the rule is the
-chain rule. The
-rule for `Conjugate` holds because the exterior derivative is real. The
-exterior derivative of `Coordinate(P)` is the coordinate frame $\mathrm{d}X$.
+chain rule.
 
 ### Expanding components
 
@@ -4157,8 +3634,7 @@ The components of the exterior derivative of any other expression remain, such
 as the gradient `components(exterior_derivative(u, P), P)` of a function `u`.
 
 The components of `dX` are the identity matrix, the `Tensor` of `Integer(1)`
-and `Integer(0)` entries, or `Zero((0, 0), (), (), ())` for $n = 0$. The rule
-for `Conjugate` holds because $\partial_j$ is real.
+and `Integer(0)` entries, or `Zero((0, 0), (), (), ())` for $n = 0$.
 
 ### Applying actions
 
@@ -4212,10 +3688,8 @@ The rewrite is the identity `component_tensor(e, (i,))[j]` $= e[i := j]$, so
 the rewrite never changes the value, and the result has the free indices of
 the `Indexed`. For example, `component_tensor(points[i, k], (k,))[0]` is
 rewritten as `points[i, 0]`, and with `p` of the
-[tour](#a-tour-the-poisson-problem), `p[c, 0, k]` is rewritten as
-`y[gathered_index(cell_vertices, (c, 0)), k]`. After the reduction, the arrays
-that a kernel reads through gathered indices are visible without a binder
-(see [Concept: kernels](#concept-kernels)).
+[`DecomposedDomain`](#decomposeddomain) examples, `p[c, 0, k]` is rewritten as
+`y[gathered_index(cell_vertices, (c, 0)), k]`.
 
 ### Gateaux derivative
 
@@ -4236,9 +3710,6 @@ cell are not yet decided.
 ## Extending the core
 
 Requires: [Passes](#passes), [Scalar type](#scalar-type), [`Absolute`](#absolute).
-
-Extensibility is a requirement of the core. Downstream libraries must be able
-to extend UFLx without changing the core.
 
 The core has a small, fixed set of node classes and an open set of passes. A
 downstream library extends UFLx mainly by adding passes, not by adding
@@ -4291,10 +3762,6 @@ a node class without a lowering, every pass without a rule raises
 `TypeError`. A rule must agree with the lowering followed by the rules for the
 lowered expression, up to mathematical equality.
 
-The UFLx core is likely to ship with its own language extensions, such as a
-UFL compatibility layer and a simpler layer based on the classical differential
-geometry of most engineering and physics syllabuses.
-
 For example, a language extension for local external operators adds a node
 class for an operation known only by name, such as `exp`, a material law or a
 neural network. The rule for `apply_derivatives` differentiates the node class.
@@ -4329,10 +3796,8 @@ The interpolation extension ships with UFLx and adds the node class
 | Lowering            | None                                                                                                                                 |
 
 `interpolate(f, V)` is the function in $V$ with the degrees of freedom of $f$.
-The core does not represent the degrees of freedom of $V$. The library of $V$
-therefore defines the interpolant, as the library defines the pull-back of a
-function in $V$. The interpolant is a composition of the core only after a
-pull-back by a cell, so the node class has no lowering.
+The library of $V$ defines the interpolant, as the library defines the
+pull-back of a function in $V$.
 
 #### Rules for the core transformations
 
@@ -4362,9 +3827,6 @@ antilinear in `u`, with the static type of a function in `dual(U)`. Binding
 remains, and the library of `l` evaluates the pairing, the transpose of the
 interpolation.
 
-The extension therefore needs no class for the adjoint, because the core
-provides [dual spaces](#dualspace), forms and actions.
-
 Interpolation between the spaces of two domains needs the cell of one domain
 that contains a point of the other. That interpolation is left to a later
 version of the extension.
@@ -4380,7 +3842,6 @@ The examples use the following objects:
 
 Examples:
 
-- `interpolate(u * u, V)` has the static type of a function in `V`.
 - `interpolate(exterior_derivative(u, D), W)` is the interpolant of
   $\mathrm{d}u$ in `W`.
 - `interpolate(u, W)` raises `ValueError`, because the degree of `u` is `()`
@@ -4420,9 +3881,6 @@ et al.:
    by metres, so the gradient is dimensionless.
    `X[0] + X[0] * X[1]` is an error of the units library.
 3. Calls `units` on an expression whenever the library needs the check.
-
-The core never knows about units. Objects of the core are immutable and are
-compared by content, so the leaves are reliable keys of the table.
 
 ### New operations
 
@@ -4479,17 +3937,12 @@ the [Gateaux derivative](#gateaux-derivative) rewrites the functions that the
 derivative is taken with respect to, so the Gateaux derivative needs a rule for
 the leaf classes of those functions.
 
-There should be helpers to check whether a transformation covers all classes
-of the core.
-
 ## Appendix: Correspondence with legacy UFL
 
 The "Legacy UFL" subsections of the sections, in order.
 
 <!-- generated: legacy-ufl, run design/appendices.py to update -->
 - **[Basic principles](#basic-principles).** TSFC lowers a UFL form to GEM, which repeats much of the algebra of UFL, partly because UFL simplifies during construction. The UFLx core does not simplify during construction, so a form compiler may be able to use a lowered UFLx form directly, adding only leaves for tables and kernel inputs. This has not been confirmed with the TSFC or FFCx developers.
-- **[`EllipsisIndex`](#ellipsisindex).** This numpy-like concept does not appear to be in legacy UFL.
-- **[`AbstractIndexValue`](#abstractindexvalue).** GEM, the intermediate language of TSFC, appears to have `VariableIndex` for the same purpose.
 - **[`AbstractTopology`](#abstracttopology).** In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and the measure `dx` hides the sum over the cells. In UFLx, the topology, the parameterisations of the pieces of a decomposed domain and the `IndexSum` over `cell_index(T, j)` are separate.
 - **[Sides of a topology](#sides-of-a-topology).** The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
 - **[`DecomposedDomain`](#decomposeddomain).** In legacy UFL, a `Mesh` is a decomposed domain, and `SpatialCoordinate(mesh)` is `coordinate(D)`.
@@ -4506,7 +3959,7 @@ The "Legacy UFL" subsections of the sections, in order.
 - **[Example: an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral).** The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal and the facet domain are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
 - **[Example: a fluid and a solid](EXAMPLES.md#example-a-fluid-and-a-solid).** The legacy UFL `dx(1)`, `ds(3)` and `ds((3, 4))` are integrals over the decomposed domains of marked topologies, one topology for each marker value. A DOLFINx submesh is the decomposed domain of a marked topology, and its entity map is the side table into the parent.
 - **[Example: the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator).** Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Components` gives the gradient in every dimension.
-- **[Example: a classic FEniCS layer for the Poisson problem](EXAMPLES.md#example-a-classic-fenics-layer-for-the-poisson-problem).** The legacy spelling `inner(grad(u), grad(v)) * dx` is a module `uflx.legacy` of free functions over the core. The argument numbers of `TestFunction` and `TrialFunction` are labels of the module, `extract_arguments` is a walk of the construction arguments, and a measure has the four slots of the legacy `Measure`, finds the domain in the integrand or holds the mesh, and binds the arguments, with `ds`, `dx(1)` and `ds(1)` restricting the integrand from the side `"inside"` by a walk that is the legacy `apply_restrictions`. `FacetNormal` is a placeholder function that the walk replaces by `normal(D, E, "inside")`. The measure binds `conjugate(v)` at position 0 and `inner` conjugates its second operand, so the sesquilinear convention of complex-mode legacy UFL is the module's.
+- **[Example: a classic FEniCS layer for the Poisson problem](EXAMPLES.md#example-a-classic-fenics-layer-for-the-poisson-problem).** The legacy spelling `inner(grad(u), grad(v)) * dx` is a module `uflx.legacy` of free functions over the core, whose forms are ordinary core graphs.
 <!-- end generated: legacy-ufl -->
 
 ## Appendix: Class hierarchy
@@ -4643,69 +4096,12 @@ AbstractExpression
 |                             | [`action(f, position, g)`](#action)                                      |                               | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]` | `Action`                                                                                     |
 <!-- end generated: free-functions -->
 
-The value-shape and other constraints on the arguments are stated in the section
-of each free function. A free function and an operator overload accept only the
+A free function and an operator overload accept only the
 types in the "Takes" column.
 
 A free function whose "Returns" column names only a node class `C` returns
 `C(...)` of the arguments. Any other free function returns the composition in
-the "Returns" column. The sections of the node classes do not repeat this
-rule.
-
-## Appendix: Properties
-
-The "Provides" column lists the abstract properties of an abstract class. Each
-concrete class implements an abstract property by the rules in the section of
-the concrete class. A derived property of a class has the value that the
-section of the class gives.
-
-<!-- generated: properties, run design/appendices.py to update -->
-| Class                      | Stored                                                     | Derived                                                             | Provides                                                                             |
-| -------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `Base`                     | `construction_arguments`                                   |                                                                     |                                                                                      |
-| `AbstractDomain`           |                                                            |                                                                     | `dimension`, `ambient_domain`                                                        |
-| `AbstractCoordinateDomain` |                                                            | `ambient_domain`                                                    | `dimension`                                                                          |
-| `RD`                       | `dimension`                                                |                                                                     |                                                                                      |
-| `AbstractExpression`       |                                                            |                                                                     | `value_shape`, `free_indices`, `scalar_type`, `support`, `degree`, `argument_spaces` |
-| `Index`                    | `label`                                                    |                                                                     |                                                                                      |
-| `EllipsisIndex`            | `label`                                                    |                                                                     |                                                                                      |
-| `AbstractIndexValue`       |                                                            |                                                                     | `extent`, `shape`                                                                    |
-| `GatheredIndex`            | `table`, `indices`                                         | `extent`, `free_indices`                                            |                                                                                      |
-| `Integer`                  | `value`                                                    |                                                                     |                                                                                      |
-| `Float`                    | `value`                                                    |                                                                     |                                                                                      |
-| `Zero`                     | `value_shape`, `free_indices`, `degree`, `argument_spaces` |                                                                     |                                                                                      |
-| `Sum`                      | `first`, `second`                                          |                                                                     |                                                                                      |
-| `Product`                  | `first`, `second`                                          |                                                                     |                                                                                      |
-| `Power`                    | `first`, `second`                                          |                                                                     |                                                                                      |
-| `Division`                 | `first`, `second`                                          |                                                                     |                                                                                      |
-| `Absolute`                 | `operand`                                                  |                                                                     |                                                                                      |
-| `Conjugate`                | `operand`                                                  |                                                                     |                                                                                      |
-| `TensorProduct`            | `first`, `second`                                          |                                                                     |                                                                                      |
-| `SquareRoot`               | `operand`                                                  |                                                                     |                                                                                      |
-| `Tensor`                   | `entries`                                                  |                                                                     |                                                                                      |
-| `Indexed`                  | `expression`, `indices`                                    |                                                                     |                                                                                      |
-| `ComponentTensor`          | `expression`, `indices`                                    |                                                                     |                                                                                      |
-| `IndexSum`                 | `expression`, `indices`                                    |                                                                     |                                                                                      |
-| `Inverse`                  | `operand`                                                  |                                                                     |                                                                                      |
-| `Coordinate`               | `domain`                                                   |                                                                     |                                                                                      |
-| `ExteriorDerivative`       | `expression`, `domain`                                     |                                                                     |                                                                                      |
-| `Components`               | `expression`, `domain`                                     |                                                                     |                                                                                      |
-| `Integral`                 | `expression`, `domain`                                     |                                                                     |                                                                                      |
-| `DomainMap`                | `parameter_domain`, `parameterisation`, `ambient_domain`   | `free_indices`                                                      |                                                                                      |
-| `PullBack`                 | `expression`, `domain`                                     |                                                                     |                                                                                      |
-| `AbstractCellType`         |                                                            |                                                                     | `dimension`, `num_vertices`                                                          |
-| `AbstractTopology`         |                                                            | `dimension`                                                         | `cell_types`, `num_cells`, `sides`                                                   |
-| `AbstractReferenceCell`    |                                                            |                                                                     | `vertices`                                                                           |
-| `DecomposedDomain`         | `pieces`                                                   | `ambient_domain`, `dimension`, `topology`                           |                                                                                      |
-| `SideMap`                  | `ambient_domain`, `parameter_domain`, `side`               | `free_indices`                                                      |                                                                                      |
-| `Normal`                   | `ambient_domain`, `parameter_domain`, `side`               |                                                                     |                                                                                      |
-| `AbstractFunctionSpace`    |                                                            |                                                                     | `domain`, `degree`, `value_shape`, `scalar_type`, `argument_spaces`                  |
-| `Function`                 | `space`, `label`                                           |                                                                     |                                                                                      |
-| `ConjugateSpace`           | `space`                                                    | `domain`, `degree`, `value_shape`, `scalar_type`, `argument_spaces` |                                                                                      |
-| `DualSpace`                | `space`                                                    | `domain`, `degree`, `value_shape`, `scalar_type`, `argument_spaces` |                                                                                      |
-| `Form`                     | `expression`, `arguments`                                  |                                                                     |                                                                                      |
-| `Action`                   | `form`, `position`, `argument`                             |                                                                     |                                                                                      |
-<!-- end generated: properties -->
+the "Returns" column.
 
 ## Appendix: Static type table
 

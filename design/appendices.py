@@ -20,7 +20,6 @@ EXAMPLES = HERE / "EXAMPLES.md"
 # Classes of a language extension are not part of the core appendices.
 EXCLUDED_CHAPTERS = {"Extending the core"}
 FREE_FUNCTION_HEADER = ["Free function", "Overload", "Takes", "Returns"]
-PYTHON_TYPES = {"int", "float", "str", "tuple", "bool", "None"}
 TREE_COLUMN = 42
 
 
@@ -75,12 +74,6 @@ def split_row(line: str) -> list[str]:
 def code_names(text: str) -> list[str]:
     """Return the class names in backticks, with or without arguments."""
     return re.findall(r"`([A-Z]\w*)(?:\([^`]*\))?`", text)
-
-
-def property_names(text: str) -> list[str]:
-    """Return the property names that start the items of a property row."""
-    names = re.findall(r"(?:^|, |and )`([a-z_][a-z_0-9]*)`", text)
-    return [n for n in names if n not in PYTHON_TYPES]
 
 
 SYMBOLS = {r"\otimes": "⊗", r"\psi": "ψ"}
@@ -297,20 +290,6 @@ def free_functions(functions: list[FreeFunction]) -> str:
     return table(header, rows)
 
 
-def properties(classes: list[ClassEntry]) -> str:
-    """Render the stored, derived and abstract properties of each class."""
-    rows = []
-    for c in core(classes):
-        stored = property_names(c.rows.get("Properties", ""))
-        derived = property_names(c.rows.get("Derived", ""))
-        provides = property_names(c.rows.get("Provides", ""))
-        if not (stored or derived or provides):
-            continue
-        cells = [", ".join(f"`{n}`" for n in names) for names in (stored, derived, provides)]
-        rows.append([f"`{c.name}`", *cells])
-    return table(["Class", "Stored", "Derived", "Provides"], rows)
-
-
 def legacy_ufl(notes: list[LegacyNote]) -> str:
     """Render the Legacy UFL notes as one bullet each."""
     return "\n".join(f"- **[{n.title}]({n.link}).** {n.text}" for n in notes) + "\n"
@@ -380,7 +359,6 @@ def render(lang: Document, examples: Document) -> dict[str, str]:
         "legacy-ufl": legacy_ufl(lang.legacy + examples.legacy),
         "class-hierarchy": class_hierarchy(lang.classes),
         "free-functions": free_functions(lang.functions),
-        "properties": properties(lang.classes),
     }
 
 

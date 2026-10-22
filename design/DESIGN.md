@@ -9,6 +9,18 @@ what is deliberately left out. Read this note first, then use LANGUAGE.md as a
 reference. Every heading below names the sections of LANGUAGE.md that carry
 the rules.
 
+## AI usage statement
+
+The design notes in this directory have been co-created with Claude Opus
+5.5. Claude Opus 5.5 has presumably been trained on a large corpus of material on modern differential
+geometry, algorithms and functional programming, and on the source code of
+Firedrake, DOLFINx, UFL, FFCx, TSFC, GEM and many other packages. That said,
+Claude Code was instructed not to read any of those materials or source code
+directly. In the judgement of the authors, the quality of the notes and of
+the resulting design is substantially higher than the authors could have
+reached without an LLM. Sections of LANGUAGE.md generated entirely by the
+LLM are marked.
+
 ## In one sentence
 
 > UFLx is a typed symbolic language for writing variational forms.
@@ -23,10 +35,10 @@ in the graph.
 
 | If you want to                               | Read in LANGUAGE.md                                   |
 | -------------------------------------------- | ----------------------------------------------------- |
-| See a whole problem written in the language  | A tour: the Poisson problem                           |
+| See a whole problem written in the language  | [The tour](#the-tour) in this note                    |
 | Know what an object may and may not do       | Rules of the language                                 |
 | Look up one node class                       | The section named after the class, and the appendices |
-| Follow a form from the user to a kernel      | Core transformations, Concept: kernels                |
+| Follow a form from the user to a kernel      | Core transformations, then [Kernels](#kernels) here   |
 | Add something without changing the core      | Extending the core                                    |
 | See the core exercised on small problems     | EXAMPLES.md                                           |
 
@@ -174,7 +186,7 @@ until assembly enters it (`Index`, Extents, `GatheredIndex`, `DomainMap`).
   integral over a mesh is an index sum over the cell index of an expression
   that reads cell data through gathers with that index. The sum is the
   assembler's loop, the gathers are the packed inputs, and what is left is
-  the kernel (Concept: kernels). The same split at a facet index gives a
+  the kernel (see [Kernels](#kernels)). The same split at a facet index gives a
   facet kernel, and at a point index a point evaluation.
 
 The price is that the tour builds the affine map of a cell by hand, from
@@ -301,17 +313,24 @@ The result is the shape of a kernel without a kernel interface being
 designed. The index sum over the cell index is the assembler's loop. The
 gathered indices through the cell index, such as the vertex positions and the
 side tables, are the data the assembler packs. The rest is the kernel, and
-the inputs of the kernel are the leaves that remain (Concept: kernels).
+the inputs of the kernel are the leaves that remain (see [Kernels](#kernels)).
 
 ## The tour
 
-The Poisson problem on a mesh of two triangles, from LANGUAGE.md:
+The Poisson problem on a mesh of two triangles. `y` and `cell_vertices` are
+runtime data of the mesh, the vertex positions and the table of the vertices
+of each triangle, and `V` is a space of a library on `D`:
 
 ```python
+# Topology: two triangles, and the mesh as a decomposed domain.
 K = ReferenceSimplex(2)
 T = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+
+# The index of the cells of type 0 of T, the only cell type, K.
 c = cell_index(T, 0)
 
+# The affine map x of each triangle, gathered from the vertex positions y
+# through the table cell_vertices. The index c of x gives D the topology T.
 X = coordinate(K)
 k, w = index("k"), index("w")
 p = component_tensor(y[gathered_index(cell_vertices, (c, w)), k], (c, w, k))
@@ -321,13 +340,19 @@ x = component_tensor(
 )
 D = decomposed_domain((domain_map(K, x, RD(2)),))
 
+# Functions in a space of a library, such as Lagrange of polynomial degree 1.
 u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
 
+# The integrands on D, with the gradient in the frame of RD(2).
 i = index("i")
 grad_u = components(exterior_derivative(u, D), D)
 grad_v = components(exterior_derivative(v, D), D)
-a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))
-L = form(integral(f * v, D), (v,))
+a_D = index_sum(grad_u[i] * grad_v[i], (i,))
+L_D = f * v
+
+# The forms bind the arguments.
+a = form(integral(a_D, D), (v, u))
+L = form(integral(L_D, D), (v,))
 ```
 
 Every idea above is visible. The mesh is a family of affine maps from the
@@ -339,6 +364,56 @@ expression like `f` itself, so `a` and `L` are expressions too (idea 2), and
 the passes turn the integral into a sum over cells of integrals over the
 reference triangle (idea 8). On a mesh of triangles and quadrilaterals, only
 `D` changes.
+
+## Kernels
+
+How a downstream library is expected to use the core, not a rule of the core.
+
+After `expand_integrals` and `reduce_component_tensors`, an integral over a
+decomposed domain is an `IndexSum` over the cell index of each group. The
+summand is an expression on a reference cell that reads arrays through
+gathered indices with the cell index. A form compiler splits the integral
+there:
+
+- The `IndexSum` over the cell index is the loop of an assembler over the
+  cells, or over the cells of a topology with sides.
+- A gathered index with the cell index is the data of one cell, which the
+  assembler packs and gives to a kernel. Examples are the gathered indices of a
+  map from the local to the global degrees of freedom, of the coordinates and
+  of the side tables.
+- The rest, an expression on a reference cell without the cell index, is the
+  kernel.
+
+### The interface of a kernel
+
+The inputs of a kernel are the leaves that remain after the split, each with
+the gathered index that reads the leaf. Examples are the coefficients of a
+function through a map of degrees of freedom on one side, and a runtime
+extent. The interface of a kernel therefore follows from the expression. A
+form compiler may describe the interface beyond a fixed convention, such as
+for two sides of different cell types.
+
+The assembler adds the result of a kernel into a global array through the same
+tables. That addition is outside the language. A whole-array compiler may
+instead keep the integral whole, as a batched gather, one kernel for all the
+cells and a scatter-add.
+
+### Kernels independent of the mesh
+
+A kernel depends on no particular mesh. Before compiling a kernel, a pass
+does the following:
+
+- The pass replaces the topologies, the tables, the arrays and the extents of a
+  mesh by placeholders, numbered in the order of appearance.
+- The pass renames the arguments of each form by position.
+- The pass renames the bound indices of each `ComponentTensor` and `IndexSum`
+  by the position of the binder and of the index.
+
+One compiled kernel then serves every mesh with the same cell types and
+spaces, and every naming of the arguments and of the indices. Equality is
+structural ([rule 7](LANGUAGE.md#the-base-object-base)). Without the
+renaming, two kernels that differ only in the names of indices would compile
+twice.
 
 ## The decisions that shape everything
 
