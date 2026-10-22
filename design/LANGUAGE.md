@@ -3121,9 +3121,8 @@ as in $\int u \bar v$ (see [`ConjugateSpace`](#conjugatespace)). For a real
 space, the two entries give the same argument space.
 For a `tuple` entry, the expression is linear in the members jointly, so a term
 may depend on one member only. Construction does not check the linearity, and
-a pass may check the linearity by the conjugations on the path from each
-occurrence of the function to the root. Every
-other function in the expression is fixed, so one function may be an argument
+a pass may check the linearity (see [Checking linearity](#checking-linearity)).
+Every other function in the expression is fixed, so one function may be an argument
 of one form and fixed in another. The scope of a bound function is lexical, as
 the scope of an index is (see [`ComponentTensor` and
 `IndexSum`](#componenttensor-and-indexsum)): an occurrence of a function refers
@@ -3163,7 +3162,16 @@ expression `a` linear in `u` and `v`:
   $\nabla u : \nabla v$, $-p \, \mathrm{div}\, v$ and $-q \, \mathrm{div}\, u$,
   `form(e, ((v, q), (u, p)))` is a bilinear form with the argument spaces
   `((V, Q), (V, Q))`. `form(e, (v, q, u, p))` states a wrong form of arity
-  4, because no term of `e` is linear in all four functions.
+  4, because no term of `e` is linear in all four functions. Construction
+  accepts the form, and a linearity check rejects the form.
+
+#### Checking linearity
+
+A linearity check is a pass that asks a new question of a form (see [New
+questions](#new-questions)). For each entry of each `Form`, the pass gives
+every node one of five classes: zero, constant, linear, antilinear or
+nonlinear in the entry. The pass accepts the `Form` if the expression is linear
+or zero in every entry.
 
 #### Legacy UFL
 
