@@ -1,0 +1,14 @@
+\usepackage{fvextra}
+\fvset{breaklines=true,breakanywhere=true}
+\usepackage[most]{tcolorbox}
+% Frame code blocks so long examples stand apart from the prose.
+% Pandoc defines Shaded after the header and only for notes with code.
+\AtBeginDocument{%
+  \ifdefined\Shaded
+    \renewenvironment{Shaded}{%
+      \begin{tcolorbox}[breakable, enhanced, colback=black!3, colframe=black!25,
+        boxrule=0.4pt, arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt,
+        before skip=8pt, after skip=8pt]%
+    }{\end{tcolorbox}}%
+  \fi
+}
