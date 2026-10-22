@@ -98,7 +98,6 @@ implementation and is not a rule.
   - [Volume form](#volume-form)
   - [`Integral`](#integral)
 - [Maps between domains](#maps-between-domains)
-  - [Domains and parameterisations](#domains-and-parameterisations)
   - [`DomainMap`](#domainmap)
   - [`PullBack`](#pullback)
   - [Concept: orientation of a domain](#concept-orientation-of-a-domain)
@@ -713,9 +712,7 @@ An `Index` has no extent of its own, and takes the extent of the axis that the
 `Index` indexes.
 
 The user names user indices. Two free occurrences of one `Index` in one scope
-are the same index, so `a[i] * b[i]` is the component-wise product (see [Free
-indices](#free-indices)), and `A[i, i]` is the diagonal entry (see
-[`Indexed`](#indexed)). An index that the user means to be new needs a new name.
+are the same index. An index that the user means to be new needs a new name.
 The scope of an index is given in [`ComponentTensor` and
 `IndexSum`](#componenttensor-and-indexsum).
 
@@ -1162,14 +1159,9 @@ The literals are concrete subclasses of `AbstractExpression`:
 | Extends           | `AbstractExpression` |
 | Summary           | literal              |
 
-Each literal constructor accepts only exact types. Construction raises
-`TypeError` for a value of another type, and `ValueError` for a `float` that is
-not finite, as in rule 1 of [the base object](#the-base-object-base):
-
-- `Integer(v)` takes an `int` $v$. A `bool` is rejected, although `bool` is a
-  subclass of `int`.
-- `Float(v)` takes a finite `float` $v$. `Float(-0.0) != Float(0.0)`.
-- `ImaginaryUnit()` takes no arguments and denotes $i$.
+Each literal constructor accepts only exact types, as in rule 1 of [the base
+object](#the-base-object-base). So `Integer(True)` raises `TypeError`, and
+`Float(-0.0) != Float(0.0)`. `ImaginaryUnit()` denotes $i$.
 
 A rational number is the `Division` of two `Integer`s, such as
 `Integer(1) / Integer(3)`. In floating-point arithmetic, the division of two
@@ -1652,8 +1644,6 @@ shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
   `(1,)`, `index_sum(a[i] * dX[i], (i,))` is the 1-form
   $a_0 \mathrm{d}x + a_1 \mathrm{d}y + a_2 \mathrm{d}z$, with the degree
   `(1,)`.
-- `a[i] + b[j]` has the free indices `((i, 3), (j, 3))`, the outer sum of `a`
-  and `b`.
 - `A[i, i]` is the diagonal entry, with the free indices `((i, 2),)`.
   `index_sum(A[i, i], (i,))` is the trace of `A`, and
   `component_tensor(A[i, i], (i,))` is the diagonal of `A`, for every extent of
@@ -1683,8 +1673,7 @@ and an ordinary index `k`:
 | `inner(A, B)`      | `index_sum(A[r] * conjugate(B[r]), (r,))`                      |
 
 `A[r] + B[r]` raises `ValueError` if the value shapes of `A` and `B` differ,
-because the extents of `r` differ. The overload `A + B` calls `add`, so
-`A + B` accepts only scalars (see [Arithmetic](#arithmetic)).
+because the extents of `r` differ.
 
 ### `Inverse`
 
@@ -1953,9 +1942,6 @@ Examples:
 
 - `coordinate(RD(3))` is `Coordinate(RD(3))`, with value shape `(3,)` and the
   support `RD(3)`.
-- `coordinate(RD(3)) == coordinate(RD(3))` is `True`, and
-  `coordinate(RD(2)) == coordinate(RD(3))` is `False`.
-- In the paraboloid example, `X = coordinate(RD(2))` has value shape `(2,)`.
 
 ### Valid pair
 
@@ -1988,8 +1974,6 @@ $\mathrm{d}\omega$ of a differential form $\omega$ on a domain $P$.
 | Raises                     | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails |
 | Evaluated by               | [`apply_derivatives`](#applying-derivatives)                        |
 
-An $f$ with no support is a constant on $P$.
-
 The exterior derivative acts on differential forms with at most one slot. If
 $f$ has the degree `()`, the exterior derivative has the degree `(1,)`. If $f$
 has the degree `(k,)`, the exterior derivative has the degree `(k + 1,)`. If
@@ -2000,10 +1984,8 @@ the dimension of $P$ gives the zero form, as for [`Product`](#product).
 The exterior derivative acts on each component of an array-valued differential
 form, so the axes of the value shape pass through unchanged.
 
-`ExteriorDerivative` is lazy, and
-[`apply_derivatives`](#applying-derivatives) evaluates the derivative. The
-exterior derivative of `Coordinate(P)` is the vector-valued 1-form
-$\mathrm{d}X$ and remains.
+The exterior derivative of `Coordinate(P)` is the vector-valued 1-form
+$\mathrm{d}X$ and remains after [`apply_derivatives`](#applying-derivatives).
 
 Examples on $R^3$:
 
@@ -2108,16 +2090,11 @@ The reverse direction is a fixed composition,
 
 #### Pull-backs of `Components`
 
-The components depend on the coordinates of $P$. So a pull-back does not
+The components depend on the coordinates of $P$, so a pull-back does not
 commute with `Components`. `PullBack(Components(f, Q), D)` is the array of the
-components of $f$ on $Q$, evaluated at $\psi(p)$.
-
-- If $P$ has the dimension of $Q$, `expand_pull_backs` moves the pull-back
-  inside `Components` with the inverse of the Jacobian matrix (see
-  [Expanding pull-backs](#expanding-pull-backs)).
-- Otherwise `PullBack(Components(f, Q), D)` remains until `expand_components`
-  evaluates the `Components` (see [Expanding
-  components](#expanding-components)).
+components of $f$ on $Q$, evaluated at $\psi(p)$. [The rule for
+`Components`](#the-rule-for-components) of `expand_pull_backs` evaluates the
+pull-back.
 
 #### Examples
 
@@ -2166,19 +2143,12 @@ $$
 With `dX = exterior_derivative(coordinate(P), P)`, `volume_form(P)` is
 `dX[0] * ... * dX[n - 1]`, nested to the left as Python evaluates `*`, so
 `volume_form(RD(3))` is `(dX[0] * dX[1]) * dX[2]`. The degree is `(n,)`. For $n = 0$,
-`volume_form(P)` is `Integer(1)`. The free function reads the dimension of
-$P$, so the free function is one fixed composition for each dimension. The
-volume form fixes the orientation of $P$ (see [`Integral`](#integral)). The
+`volume_form(P)` is `Integer(1)`. The volume form fixes the orientation of $P$ (see [`Integral`](#integral)). The
 volume form needs no metric. A Riemannian volume form is a density times
 `volume_form(P)`.
 
-Examples:
-
-- `volume_form(RD(3))` has the degree `(3,)` and is
-  $\mathrm{d}x \wedge \mathrm{d}y \wedge \mathrm{d}z$.
-- With `T = UnitSimplex(2)`, `integral(volume_form(T), T)` is the area $1/2$
-  of `T`.
-- `volume_form(RD(0))` is `Integer(1)`.
+For example, with `T = UnitSimplex(2)`, `integral(volume_form(T), T)` is the
+area $1/2$ of `T`.
 
 ### `Integral`
 
@@ -2225,18 +2195,9 @@ the pieces (see [`Integral` over a decomposed
 domain](#integral-over-a-decomposed-domain)). For $k = 0$, a 0-form is a top
 form, and the two readings agree.
 
-An array-valued differential form integrates component by component.
-`Integral` is lazy. `expand_integrals` rewrites an `Integral` over a
-decomposed domain as `Integral`s over the parameter domains of the pieces, and
-a later pass might evaluate an `Integral` over a coordinate domain, for example
-by quadrature.
-
-`Integral` keeps the integral over a decomposed domain as the user wrote the
-integral, so that a form compiler meets the domain of the integral and not the
-lowering (see [Node class or free function](#node-class-or-free-function)).
-
-An `Integral` is an expression, so integrals can be added, multiplied and
-used wherever an expression is accepted.
+An array-valued differential form integrates component by component. A later
+pass might evaluate an `Integral` over a coordinate domain, for example by
+quadrature.
 
 #### Examples
 
@@ -2251,36 +2212,9 @@ With `T = UnitSimplex(2)` and `X = coordinate(T)`:
 
 ## Maps between domains
 
-### Domains and parameterisations
-
-Requires: [`AbstractDomain`](#abstractdomain), [Node class or
-free function](#node-class-or-free-function).
-
-See also: [`DomainMap`](#domainmap),
-[`DecomposedDomain`](#decomposeddomain).
-
-A domain is an [`AbstractDomain`](#abstractdomain), a coordinate domain or a
-decomposed domain. The image $\psi(P)$ of a domain $P$ under a
-parameterisation $\psi$ into a domain $Q$ is recorded by a
-[`DomainMap`](#domainmap), which stores $P$, $\psi$ and
-$Q$. A `DomainMap` is not an `AbstractDomain` and is not the support
-of an expression. A `DomainMap` is the second operand of a
-[`PullBack`](#pullback), which moves an expression on $Q$ to $P$, and a piece
-of a [`DecomposedDomain`](#decomposeddomain), the union of the images of
-families of domain maps, such as the cells of a mesh. The domain whose points
-are the points of $\psi(P)$ is the decomposed domain of the one piece
-`domain_map(P, psi, Q)`.
-
-A particular kind of domain map, such as an affinely mapped triangle
-or a point, is a free function that returns a `DomainMap`, not a
-subclass. Every kind is a fixed composition of $P$, $\psi$ and $Q$, so every
-kind is a free function (see
-[Node class or free function](#node-class-or-free-function)).
-
 ### `DomainMap`
 
-Requires: [Domains and parameterisations](#domains-and-parameterisations),
-[`AbstractDomain`](#abstractdomain),
+Requires: [`AbstractDomain`](#abstractdomain),
 [`Coordinate`](#coordinate), [Support](#support), [Valid pair](#valid-pair), [Free indices](#free-indices),
 [Scalar type](#scalar-type), [Degree](#degree).
 
@@ -2289,7 +2223,9 @@ See also: [`PullBack`](#pullback), [`DecomposedDomain`](#decomposeddomain),
 
 A concrete subclass of `Base` for a map $\psi$ from a parameter domain $P$
 into an ambient domain $Q$, with the image $D = \psi(P)$. The sections below
-write $D$ for the domain map and for the image of the domain map.
+write $D$ for the domain map and for the image of the domain map. A
+`DomainMap` is not an `AbstractDomain` and is not the support of an
+expression.
 
 | `DomainMap(P, psi, Q)` |                                                                                                                                                                                                             |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2332,8 +2268,6 @@ Examples:
 
 - A sphere in $R^3$ has geometric dimension 3, topological dimension 2 and the
   ambient coordinate domain `RD(3)`.
-- With `T = UnitSimplex(2)`, `T` is already a domain, so an expression on the
-  unit triangle has the support `T` and needs no domain map.
 - The hypotenuse of the unit triangle is the image of a domain map with $k = 1$
   and $n = 2$. $P$ is the unit interval in $R^1$, and
   $\psi(X) = (1 - X_0, X_0)$. $Q$ is `RD(2)` for the hypotenuse in the plane,
@@ -2341,12 +2275,6 @@ Examples:
 - With `X = coordinate(RD(2))` and `h = X[0]**Integer(2) + X[1]**Integer(2)`,
   `domain_map(RD(2), tensor((X[0], X[1], h)), RD(3))` is the
   paraboloid, with $k = 2$ and $n = 3$.
-- A physical triangle in $R^2$ is the image of a domain map with $k = n = 2$. $P$
-  is the unit triangle, $\psi$ is the affine map from $P$ onto the physical
-  triangle, and $Q$ is `RD(2)`. See the affinely mapped triangle example.
-- A point $p$ in $R^2$ is the image of a domain map with $k = 0$ and $n = 2$. $P$
-  is `RD(0)`, $\psi$ is the constant `tensor((p0, p1))`, with no support, and $Q$
-  is `RD(2)`.
 
 ### `PullBack`
 
@@ -2392,8 +2320,7 @@ frame of $Q$. A slot with a degree greater
 than the dimension of $P$ gives the zero form, so a 2-form pulled back to a
 curve, and a 1-form pulled back to a point, are zero.
 
-`PullBack` is lazy, and [`expand_pull_backs`](#expanding-pull-backs)
-evaluates the pull-back. A `PullBack` of a downstream terminal or of a
+A `PullBack` of a downstream terminal or of a
 [`Function`](#function) remains, and the library of the terminal evaluates the
 terminal at $\psi(p)$ and transforms the slots. For a function, the library
 evaluates the pull-back by a cell domain or a gathered cell domain of the
@@ -2850,8 +2777,6 @@ cells as cell types, such as `ReferenceSimplex(1)` in place of `I` (see
 - A topology of the left boundary facets of a periodic `T` has the sides
   `((("left", T, 0), ("right", T, 0)),)`. From `"right"`, the position of each
   vertex is that of the vertex one period to the right.
-- For a surface mesh `U` of triangles in $R^3$, a topology of the edges where
-  three triangles meet has the sides `((("a", U, 0), ("b", U, 0), ("c", U, 0)),)`.
 - Let `M` be a topology of triangles and quadrilaterals with the cell types
   `(Kt, Kq)`. A topology of all the facets shared by two cells has three groups
   of the cell type `I`, with the cell types `(I, I, I)` and the sides
@@ -2863,15 +2788,6 @@ cells as cell types, such as `ReferenceSimplex(1)` in place of `I` (see
 - For a topology `U3` of prisms with the cell types `(W,)`, a topology of the
   boundary facets has the cell types `(K, Q)`, with the quadrilateral cell type
   `Q`, and the sides `((("inside", U3, 0),), (("inside", U3, 0),))`.
-- For a triangle mesh `T` with a hanging node, a topology of the half facets
-  has the cell types `(I,)` and the sides `((("small", T, 0), ("large", T, 0)),)`.
-  From `"small"`, the positions are two vertices of `K`. From `"large"`, the
-  positions are a vertex and an edge midpoint of `K`.
-- Let `T1` be a mesh of segments through a tetrahedral mesh `T3`. A topology of
-  the pieces of the segments that lie in one tetrahedron each has the cell
-  types `(I,)` and the sides `((("vessel", T1, 0), ("tissue", T3, 0)),)`. From
-  `"vessel"`, the positions are two parameters of the segment. From
-  `"tissue"`, the positions are two points of the tetrahedron.
 
 #### Legacy UFL
 
@@ -3008,10 +2924,6 @@ are named by the coordinates of the ambient coordinate domain of $D$. $D$ may
 have a lower dimension than the ambient coordinate domain, such as a surface
 in $R^3$.
 
-Two decomposed domains are the same only if the two decomposed domains are
-equal as base objects. Expressions on two decomposed domains therefore have
-different supports and do not combine (see [Support](#support)).
-
 #### Nesting
 
 - The parameter domain of a piece may itself be a decomposed domain, so
@@ -3066,9 +2978,6 @@ The library of a function in a space on $D$ evaluates the pull-back by
 `gathered_cell_domain(D, j, g)` as the pull-back by `cell_domain(D, j)` on the
 cell $g$ (see [`AbstractFunctionSpace`](#abstractfunctionspace)).
 
-[Restriction](#restriction) moves an expression on $D$ to the cells of a
-topology with sides, through `gathered_cell_domain`.
-
 #### Examples
 
 The examples use the following objects:
@@ -3105,11 +3014,6 @@ D = decomposed_domain((domain_map(K, x, RD(2)),))
   `c`.
 - `pull_back(coordinate(D), cell_domain(D, 0))` is `x`. A later pass evaluates
   `x` on triangle 1 to $(1 - X_1, X_0 + X_1)$.
-- With `x` of value shape `(3,)` and `RD(3)`, the decomposed domain is a
-  surface of dimension 2 in `RD(3)`. `components(du, D)` has value shape
-  `(3,)` and is the surface gradient of `u`. The surface gradient is the array
-  of $\mathrm{d}u$ in the frame of `RD(3)`, projected onto the tangent plane of
-  each cell (see [`Components`](#components)).
 
 For a topology `M` of triangles and quadrilaterals, with the cell types
 `(Kt, Kq)`, $D$ has one piece for each cell type. A function `u` on `D` is one
@@ -3192,8 +3096,7 @@ form uses the restriction from each side.
 
 `SideMap` is a concrete subclass of `Base`. A `SideMap` is the lazy map of the
 cells of $E$ into $D$ through the side $s$, where $E$ is a decomposed domain of
-the cells of $S$. A `SideMap` is the second operand of the pull-back that
-restricts.
+the cells of $S$.
 
 | `SideMap(D, E, s)` |                                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
@@ -3330,10 +3233,7 @@ area or the volume of the image of a small region of $P_j$.
   set of points is the sum of the values.
 
 The density needs no orientation. The cells of a mesh may therefore be
-oriented in any way, and an integral of a positive 0-form is positive. The
-integral of a $k$-form, such as for Stokes' theorem, uses the orientation of
-the pieces (see [Concept: orientation of a
-domain](#concept-orientation-of-a-domain)).
+oriented in any way, and an integral of a positive 0-form is positive.
 
 #### Integrands on the ambient domain
 
@@ -3356,9 +3256,8 @@ Examples:
 
 - `integral(Integer(1), D)` is the area 1 of the square, the sum of two
   integrals over `K`.
-- `integral(u, D)` is the legacy UFL `u * dx`.
 - `integral(Integer(1), B)` is the perimeter 4.
-- `integral(restriction(u, B, "inside"), B)` is the legacy UFL `u * ds`.
+- `integral(restriction(u, B, "inside"), B)` integrates `u` over the boundary.
 - `integral(restriction(du, B, "inside"), B)` integrates the 1-form
   $\mathrm{d}u$ along the boundary facets, with the orientation of each facet.
 
@@ -3680,10 +3579,7 @@ The label identifies the function, so two functions are the same only if the
 spaces and the labels are equal. A function in a [dual space](#dualspace) is an
 antilinear form, such as a known load.
 
-A `Function` is a terminal. The core does not represent the values of a
-function. The pull-back of a function by a cell of the domain is evaluated by
-the library of the space (see [`PullBack`](#pullback)), so a library chooses how
-a function is represented on a cell. The exterior derivative of a function
+The exterior derivative of a function
 remains after [applying derivatives](#applying-derivatives).
 
 A function is not an argument or a coefficient by itself. Whether a function is
@@ -3731,12 +3627,10 @@ table](#appendix-static-type-table) gives the rule of each node class. A leaf
 class states the argument spaces as part of the contract of the class, as the
 degree.
 
-The argument spaces record the linearity of the form in each argument. A form
-is linear in an argument with the space $V$, and antilinear in an argument
-with the space `conjugate_space(V)`, the complex conjugate space $\bar V$ of
-$V$ (see [`ConjugateSpace`](#conjugatespace)), because an antilinear form on
-$V$ is a linear form on $\bar V$. The form states the linearity when the form
-binds the argument (see [`Form`](#form)).
+A form is linear in an argument with the space $V$, and antilinear in an
+argument with the space `conjugate_space(V)` (see
+[`ConjugateSpace`](#conjugatespace)). The form states the linearity when the
+form binds the argument (see [`Form`](#form)).
 
 The argument spaces are static, as the value shape and the degree are, so a
 form with a wrong arity is rejected during construction, and a load that is
@@ -3886,7 +3780,7 @@ expression with some of its functions bound as arguments.
 | Static type                   | That of the expression, with the argument spaces the space $V$ of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
 | Raises                        | `TypeError` for an entry that is not a `Function`, a `Conjugate` of a `Function` or a `tuple` of these, and `ValueError` for a repeated function, a `tuple` of fewer than two members or an expression with argument spaces |
 
-A form binds the arguments, as a `ComponentTensor` binds indices. The position
+The position
 of an argument is the index of the entry in `arguments`. The entry states the
 linearity: for an entry `v`, the expression is linear in `v`, and for an entry
 `conjugate(v)`, the expression is linear in $\bar v$, so antilinear in `v`,
@@ -3972,17 +3866,6 @@ Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
 `Action` is lazy. An action on a leaf, such as a function in a dual space,
 remains for the library of the leaf.
 
-#### Legacy UFL operations
-
-Legacy UFL operations are actions and rebindings:
-
-- The action on the last argument of a bilinear form is `action(f, 1, w)`.
-- The adjoint of `form(e, (conjugate(v), u))` is
-  `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in
-  `v` and antilinear in `u`.
-- The Gateaux derivative with respect to a function adds an argument (see
-  [Gateaux derivative](#gateaux-derivative)).
-
 #### Examples
 
 The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples, and
@@ -3998,6 +3881,10 @@ The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples, and
 - Let `w` in `V` and `r` in `Q` be fixed functions, with the Stokes form of the
   [`Form`](#form) examples. `action(form(e, ((v, q), (u, p))), 1, (w, r))` is
   a linear form in `(v, q)`, the residual at `(w, r)`.
+
+#### Legacy UFL
+
+Legacy UFL operations are actions and rebindings. The action on the last argument of a bilinear form is `action(f, 1, w)`. The adjoint of `form(e, (conjugate(v), u))` is `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in `v` and antilinear in `u`. The Gateaux derivative with respect to a function adds an argument (see [Gateaux derivative](#gateaux-derivative)).
 
 Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator](EXAMPLES.md#example-the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES.md#example-the-flux-through-a-surface), [a classic FEniCS layer for the Poisson problem](EXAMPLES.md#example-a-classic-fenics-layer-for-the-poisson-problem).
 
@@ -4070,13 +3957,9 @@ satisfy the following:
 - The rules never reverse a core rule, as moving an `ExteriorDerivative`
   inside a `PullBack` would.
 
-A terminal is one of the following:
-
-- a `Coordinate`,
-- a [`Function`](#function),
-- a [`Normal`](#normal),
-- an expression with a support whose class is a leaf class of a downstream
-  library (see [Leaves and subclassing](#leaves-and-subclassing)).
+The terminals are `Coordinate`, `Function`, `Normal` and the leaf expressions
+with a support of downstream libraries (see [Leaves and
+subclassing](#leaves-and-subclassing)).
 
 After evaluation, every `PullBack`, `ExteriorDerivative`, `Components` and
 `Action` applies to an expression that contains a downstream terminal, with
@@ -4107,9 +3990,7 @@ domain](#integral-over-a-decomposed-domain), with these rules:
 
 The pull-back is by `cell_domain(D, j)` for $f$ with the support $D$, and by
 piece $j$ itself for $f$ with the support `D.ambient_domain`. An $f$ with no
-support takes either, with the same result. The rule does not dispatch on the
-class of $f$, so the pass needs no rule for the node classes, and the rule
-rewrites the `Integral` whatever the operand. The pass rewrites inner integrals
+support takes either, with the same result. The pass rewrites inner integrals
 first, so an `Integral` over a nested decomposed domain is rewritten from the
 inside out.
 
@@ -4367,15 +4248,15 @@ adds node classes.
 
 The core supports five kinds of extension:
 
-> LLM generated table.
-
-| Kind of extension                    | Examples                                                    | Section                                     |
-| ------------------------------------ | ----------------------------------------------------------- | ------------------------------------------- |
-| New questions asked of an expression | Physical units, polynomial degree, linearity checks         | [New questions](#new-questions)             |
-| New subclasses                       | Elements and functions from Basix, new coordinate domains   | [New subclasses](#new-subclasses)           |
-| New operations                       | Trace, divergence                                           | [New operations](#new-operations)           |
-| New transformations                  | Gateaux derivative                                          | [New transformations](#new-transformations) |
-| Language extensions                  | External operators, [interpolation](#the-interpolation-extension) | [Language extensions](#language-extensions) |
+- [New questions](#new-questions), such as physical units, polynomial degree
+  or linearity checks.
+- [New subclasses](#new-subclasses), such as the elements and functions of
+  Basix, or new coordinate domains.
+- [New operations](#new-operations), such as the trace or the divergence.
+- [New transformations](#new-transformations), such as the Gateaux
+  derivative.
+- [Language extensions](#language-extensions), such as external operators or
+  [interpolation](#the-interpolation-extension).
 
 A property that the rules of the core depend on is part of the core, not an
 extension. For example, the scalar type is part of the core, because
@@ -4543,13 +4424,6 @@ et al.:
 The core never knows about units. Objects of the core are immutable and are
 compared by content, so the leaves are reliable keys of the table.
 
-An error reported by `units` does not make an object invalid. An object is
-valid if the constructors of the core accept the object.
-
-The pass never guesses a rule. A `TypeError` from `units` means that the units
-library does not know a node class. An error of the units library means that the
-expression has inconsistent units.
-
 ### New operations
 
 Requires: [Node class or free function](#node-class-or-free-function), [`Tensor`
@@ -4568,12 +4442,6 @@ extent. An operation that an `EllipsisIndex` expresses, such as
 `scale(a, T)`, needs no value shape (see
 [`EllipsisIndex`](#tensor-algebra-with-ellipsisindex)).
 
-A library node class that a pass replaces by node classes of the core gives
-nothing that the free function does not give, unless a core transformation
-must keep the structure of the operation. Such an operation, and an operation
-that is not a composition of node classes of the core, needs a language
-extension.
-
 ### New subclasses
 
 Requires: [Leaves and subclassing](#leaves-and-subclassing), [New
@@ -4584,11 +4452,7 @@ triangle](EXAMPLES.md#example-an-affinely-mapped-triangle).
 Every abstract class is a contract. The contract states what a subclass
 provides, so that every core transformation handles the subclass through the
 abstract class alone. A downstream library may subclass an abstract class by
-fulfilling the contract, without changing the core. Only leaves are subclassed
-(see [Leaves and subclassing](#leaves-and-subclassing)). An operation built
-from other expressions is not a subclass but a free function (see
-[New operations](#new-operations)) or a node class of a language extension
-(see [Language extensions](#language-extensions)). A contract is part of the
+fulfilling the contract, without changing the core. A contract is part of the
 class, never a global registry. For example, a downstream subclass of
 `AbstractCoordinateDomain`, such as
 [`UnitSimplex`](EXAMPLES.md#example-the-unit-simplex), provides the dimension, and every
@@ -4613,9 +4477,7 @@ A new transformation is a pass with one rule for each node class of the core
 and one rule for each leaf class that the transformation rewrites. For example,
 the [Gateaux derivative](#gateaux-derivative) rewrites the functions that the
 derivative is taken with respect to, so the Gateaux derivative needs a rule for
-the leaf classes of those functions. A new transformation must produce only
-node classes of the core. A transformation that needs a new node class needs
-a language extension.
+the leaf classes of those functions.
 
 There should be helpers to check whether a transformation covers all classes
 of the core.
@@ -4638,6 +4500,7 @@ The "Legacy UFL" subsections of the sections, in order.
 - **[`Function`](#function).** The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functions. A test function and a trial function are the functions that a form states as the arguments at the positions 0 and 1.
 - **[`DualSpace`](#dualspace).** The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the canonical map is a form, so the spaces keep distinct argument spaces.
 - **[`Form`](#form).** In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
+- **[`Action`](#action).** Legacy UFL operations are actions and rebindings. The action on the last argument of a bilinear form is `action(f, 1, w)`. The adjoint of `form(e, (conjugate(v), u))` is `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in `v` and antilinear in `u`. The Gateaux derivative with respect to a function adds an argument (see [Gateaux derivative](#gateaux-derivative)).
 - **[Extending the core](#extending-the-core).** In legacy UFL, properties are stored on the node classes, and the set of properties is fixed. Every new property touches every node class, so features such as complex numbers and dual spaces were patched in across the node classes.
 - **[The interpolation extension](#the-interpolation-extension).** In legacy UFL, `Interpolate(f, V)` is a `BaseFormOperator`, as an external operator is, and the adjoint interpolation takes a `Coargument`. In DOLFINx, interpolation happens outside UFL.
 - **[Example: an interior facet integral](EXAMPLES.md#example-an-interior-facet-integral).** The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal and the facet domain are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
@@ -4650,8 +4513,6 @@ The "Legacy UFL" subsections of the sections, in order.
 
 Every object in the graph extends `Base`. The classes defined in this document
 form the following hierarchy.
-
-> LLM generated graphs.
 
 <!-- generated: class-hierarchy, run design/appendices.py to update -->
 ```
@@ -4738,8 +4599,6 @@ AbstractExpression
 
 ## Appendix: Free functions
 
-> LLM generated table.
-
 <!-- generated: free-functions, run design/appendices.py to update -->
 | Group                       | Free function                                                            | `AbstractExpression` overload | Takes                                                                                               | Returns                                                                                      |
 | --------------------------- | ------------------------------------------------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -4799,8 +4658,6 @@ The "Provides" column lists the abstract properties of an abstract class. Each
 concrete class implements an abstract property by the rules in the section of
 the concrete class. A derived property of a class has the value that the
 section of the class gives.
-
-> LLM generated table.
 
 <!-- generated: properties, run design/appendices.py to update -->
 | Class                      | Stored                                                     | Derived                                                             | Provides                                                                             |
@@ -4898,13 +4755,9 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 ## Appendix: Pass table
 
 What each core transformation does with each node class as the operand of the
-evaluated node. `expand_integrals` has no column, because the one rule of
-`expand_integrals` dispatches on the domain of the `Integral` and not on the
-operand (see [Expanding integrals](#expanding-integrals)), and
-`reduce_component_tensors` has no column, because the one rule of
-`reduce_component_tensors` applies to a `ComponentTensor` operand and every
-other operand remains (see [Reducing component
-tensors](#reducing-component-tensors)). "In" moves the evaluated node into the operands, by linearity
+evaluated node. `expand_integrals` and `reduce_component_tensors` have no column, because
+neither has a rule for each operand class (see [Core
+transformations](#core-transformations)). "In" moves the evaluated node into the operands, by linearity
 or commuting. "Chain" is the chain rule. "Rule" is a rule of the
 transformation. "Bound" moves the evaluated node into the expression or the
 form only, past the bound arguments. "Remains" keeps the
