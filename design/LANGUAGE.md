@@ -3,9 +3,9 @@
 This note describes the smallest core language behind UFLx. The note leaves
 out implementation details, compiler algorithms and broad redesign ideas.
 The library classes of the examples and further worked examples are in
-EXAMPLES.md. The note assumes knowledge of differential geometry and
-functional analysis, and explains some advanced concepts of differential
-geometry in more detail.
+[EXAMPLES.md](EXAMPLES.md). The note assumes knowledge of differential
+geometry and functional analysis, and explains some advanced concepts of
+differential geometry in more detail.
 
 This document is written for users and developers who know domain-specific
 languages for variational forms, such as UFL and ngsolve.
