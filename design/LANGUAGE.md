@@ -3481,27 +3481,6 @@ reads only node classes of the extension, so no rule of the core competes with
 the rules. The order of the pass of the library and `expand_pull_backs` is
 part of the extension, and is not yet decided.
 
-### A differential forms extension
-
-Requires: [Language extensions](#language-extensions), [A Piola
-extension](#a-piola-extension).
-
-> A sketch of an extension, not a rule of the core.
-
-Differential forms, the exterior derivative and the wedge product are a
-language extension with the pattern of the Piola extension. A $k$-form is an
-antisymmetric array of value shape `(n,) * k` in the frame of the ambient
-coordinate domain. `ExteriorDerivative(omega, P)` is a node class that lowers
-to the antisymmetrised gradient, and the wedge product is a free function of
-the extension, the antisymmetrised product. The core `PullBack` keeps the
-frame of the ambient domain, so the extension has a form pull-back of its
-own, which contracts each axis with `jacobian(D)`. The rule of
-`ExteriorDerivative` applies $\psi^* \mathrm{d}\omega = \mathrm{d} \psi^* \omega$
-with the form pull-back, so the identities of the exterior derivative hold
-structurally, as the divergence of the Piola extension does. The integral of
-a $k$-form with an orientation that the mesh library provides is not yet
-covered.
-
 ## Appendix: Class hierarchy
 
 Every object in the graph extends `Base`. Each row gives the classes of a
