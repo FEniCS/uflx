@@ -2968,7 +2968,7 @@ The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples, and
 Legacy UFL operations are actions and rebindings. The action on the last argument of a bilinear form is `action(f, 1, w)`. The adjoint of `form(e, (conjugate(v), u))` is `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in `v` and antilinear in `u`. The Gateaux derivative with respect to a function adds an argument (see [Gateaux derivative](#gateaux-derivative)).
 ```
 
-Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator](EXAMPLES.md#the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES.md#the-flux-through-a-surface), [a classic FEniCS layer for the Poisson problem](EXAMPLES.md#a-classic-fenics-layer-for-the-poisson-problem).
+Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator](EXAMPLES.md#the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES.md#the-flux-through-a-surface), [Helmholtz with a perfectly matched layer](EXAMPLES.md#helmholtz-with-a-perfectly-matched-layer), [mixed Poisson with Raviart-Thomas elements](EXAMPLES.md#mixed-poisson-with-raviart-thomas-elements), [dual-weighted residual error estimation](EXAMPLES.md#dual-weighted-residual-error-estimation), [a classic FEniCS layer for the Poisson problem](EXAMPLES.md#a-classic-fenics-layer-for-the-poisson-problem).
 
 ## Core transformations
 

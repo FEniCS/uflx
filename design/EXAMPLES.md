@@ -1274,6 +1274,166 @@ area = integral(Integer(1), M)
 - A surface with no consistent orientation, such as a Möbius strip, has no
   signs `o`. The area of the surface is defined, and the flux is not.
 
+### Helmholtz with a perfectly matched layer
+
+Requires: [Literals](LANGUAGE.md#literals), [`Conjugate`](LANGUAGE.md#conjugate),
+[`ConjugateSpace`](LANGUAGE.md#conjugatespace), [`Form`](LANGUAGE.md#form),
+[A classic FEniCS layer for the Poisson
+problem](#a-classic-fenics-layer-for-the-poisson-problem).
+
+The Helmholtz equation $-\Delta u - k_0^2 u = f$ on the square mesh `D` of
+the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, with a
+perfectly matched layer that absorbs outgoing waves. The layer stretches each
+coordinate into the complex plane by a factor $s_x = 1 + i \sigma_x / k_0$,
+and the stretched equation is
+$-\nabla \cdot (A \nabla u) - k_0^2 s_x s_y u = f$ with
+$A = \mathrm{diag}(s_y / s_x, s_x / s_y)$. `V` is a complex Lagrange space on
+`D`, `F` a real space on `D` for the data, and `C` a real space of
+constants. The solver sets `sigma_x` and `sigma_y` to zero outside the layer:
+
+```python
+k0 = function(C, "k0")
+sigma_x, sigma_y = function(F, "sigma_x"), function(F, "sigma_y")
+one, i_unit = Integer(1), ImaginaryUnit()
+s_x = one + i_unit * sigma_x / k0
+s_y = one + i_unit * sigma_y / k0
+
+u, v, f = function(V, "u"), function(V, "v"), function(F, "f")
+grad_u, grad_v = gradient(u, D), gradient(v, D)
+j = index("j")
+
+# The stretched Laplacian and the stretched mass, sesquilinear in u and v.
+A = tensor((s_y / s_x, s_x / s_y))
+stiffness = index_sum(A[j] * grad_u[j] * conjugate(grad_v[j]), (j,))
+mass = k0 * k0 * s_x * s_y * u * conjugate(v)
+a = form(integral(stiffness - mass, D), (conjugate(v), u))
+L = form(integral(f * conjugate(v), D), (conjugate(v),))
+```
+
+- `a` is antilinear in `v` and linear in `u`, which the entries state, so
+  the argument spaces are `(conjugate_space(V), V)`, and `L` has
+  `(conjugate_space(V),)`. `form(integral(stiffness - mass, D), (v, u))`
+  states a form that is linear in `v`, which construction accepts and a
+  linearity check rejects, because the expression conjugates `v`.
+- Every expression here is complex, because `ImaginaryUnit()` occurs in
+  `s_x`. With `s_x` and `s_y` replaced by `one`, the same lines are the
+  real Helmholtz forms when `V` is real, and the conjugates change nothing.
+- The layer is often derived as the pull-back of the Helmholtz equation by the
+  complex map $\tilde x = x + (i / k_0) \int \sigma_x$. A `DomainMap` is real,
+  so the pull-back is done once by hand and enters as the tensor `A` and the
+  factor $s_x s_y$, which is the form every code assembles.
+- The adjoint of `a` is `form(conjugate(stiffness - mass), (conjugate(u), v))`
+  (see [`Action`](LANGUAGE.md#action)). The first-order absorbing condition
+  $\int_{\partial D} i k_0 u \bar v$ is one more term, written with
+  restrictions to the boundary as in the [fluid and solid
+  example](#a-fluid-and-a-solid).
+
+### Mixed Poisson with Raviart-Thomas elements
+
+Requires: [Representation on the reference
+cell](LANGUAGE.md#representation-on-the-reference-cell),
+[`Form`](LANGUAGE.md#form), [Expanding pull-backs](LANGUAGE.md#expanding-pull-backs).
+
+See also: [A Piola extension](LANGUAGE.md#a-piola-extension).
+
+The mixed form of the Poisson problem seeks a flux $\sigma$ and a potential
+$u$ with $\sigma = \nabla u$ and $\mathrm{div}\, \sigma = -f$. `RT` is a
+Raviart-Thomas space on the square mesh `D` of the
+[`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, of value shape
+`(2,)`, and `DG` a discontinuous space of degree 0:
+
+```python
+sigma, tau = function(RT, "sigma"), function(RT, "tau")
+u, v, f = function(DG, "u"), function(DG, "v"), function(DG, "f")
+i = index("i")
+
+def divergence(w):
+    return index_sum(gradient(w, D)[i, i], (i,))
+
+e = index_sum(sigma[i] * tau[i], (i,)) + u * divergence(tau) + divergence(sigma) * v
+a = form(integral(e, D), ((tau, v), (sigma, u)))
+L = form(integral(-f * v, D), ((tau, v),))
+```
+
+- There is no mixed space. Each argument is a `tuple` of a function in `RT`
+  and a function in `DG`, so the argument spaces are `((RT, DG), (RT, DG))`
+  and `((RT, DG),)`. The block of `a` for `tau` and `u` is `a` with `v` and
+  `sigma` replaced by `Zero`, the term `u * divergence(tau)`. `L` depends on
+  `v` only, which a `tuple` argument allows.
+- The library of `RT` represents a function on the reference cell with the
+  contravariant Piola map, so `pull_back(sigma, cell_domain(D, 0))` is
+  $J \hat\sigma / \det J$ with $\hat\sigma$ the function on `K`, and the
+  library of `DG` uses the identity. The core sees only the compositions.
+- `expand_pull_backs` rewrites the pull-back of `gradient(sigma, D)` as
+  $K^T \nabla(J \hat\sigma / \det J)$, and `divergence` is its trace. On the
+  affine cells of `D`, `apply_derivatives` finds the derivatives of $J$ and
+  $\det J$ to be zero, and the trace reduces to
+  $\widehat{\mathrm{div}}\, \hat\sigma / \det J$. On a curved cell the extra
+  terms cancel only in value, which [A Piola
+  extension](LANGUAGE.md#a-piola-extension) makes structural.
+- A Nédélec space differs only in the map, $K^T \hat u$, with the curl in
+  place of the divergence as a free function.
+
+### Dual-weighted residual error estimation
+
+Requires: [`Form`](LANGUAGE.md#form), [`Action`](LANGUAGE.md#action),
+[`DualSpace`](LANGUAGE.md#dualspace), [A Bank-Weiser error
+estimator](#a-bank-weiser-error-estimator).
+
+The dual-weighted residual method estimates the error in a goal functional
+$J(u)$ by the residual of the Galerkin solution weighted by the solution $z$
+of the adjoint problem, $J(u) - J(u_h) = R(z) = R(z - z_h)$ for any $z_h$ in
+the trial space. The example takes an advection-diffusion problem on the
+square mesh `D`, with `V` a Lagrange space of degree 1, `W` a Lagrange space
+of degree 2 in which the adjoint solution is computed, `F` a space for the
+data and `B` a vector space for the advection field:
+
+```python
+u, v, u_h, z_h = function(V, "u"), function(V, "v"), function(V, "u_h"), function(V, "z_h")
+z = function(W, "z")
+f, psi, b = function(F, "f"), function(F, "psi"), function(B, "b")
+i = index("i")
+
+def a_expr(w, y):
+    grad_w, grad_y = gradient(w, D), gradient(y, D)
+    return index_sum(grad_w[i] * grad_y[i], (i,)) + index_sum(b[i] * grad_w[i], (i,)) * y
+
+# The primal problem, the goal, and the adjoint problem with the arguments swapped.
+a = form(integral(a_expr(u, v), D), (v, u))
+L = form(integral(f * v, D), (v,))
+goal = form(integral(psi * v, D), (v,))
+a_adjoint = form(integral(a_expr(u, v), D), (u, v))
+
+# The residual at u_h, a linear form, and the error in the goal.
+R = L - action(a, 1, u_h)
+eta = action(R, 0, z - z_h)
+
+# The same with the assembled load, a function in the dual space.
+l = function(dual_space(V), "l")
+R_h = l - action(a, 1, u_h)
+```
+
+- `a_adjoint` is `a` with the entries swapped, so the function at position 0
+  is `u` and the adjoint problem seeks `z` at position 1 with `goal` as the
+  load. For a complex `V` the adjoint also conjugates the expression (see
+  [`Action`](LANGUAGE.md#action)).
+- `R` has the argument spaces `(V,)`, because `action(a, 1, u_h)` removes the
+  entry at position 1 and the difference with `L` is a form. `eta` is a
+  functional, with the argument spaces `()` and no support, one number after
+  assembly.
+- The argument of an action needs only the static type of a function in `V`,
+  so `z` from the richer space `W` is accepted, and so is `z - z_h`. Galerkin
+  orthogonality gives `action(R, 0, z_h) == 0` in value, which is why the
+  interpolant is subtracted.
+- `R_h` is the residual as the solver holds it, with `l` the assembled load,
+  a function in `dual_space(V)`. `action(R_h, 0, w)` pairs it with any `w` of
+  the static type of `V`, and the library evaluates `action(l, 0, w)` as the
+  product of the load vector with the coefficients of `w`.
+- The cell-wise estimator integrates `R` by parts into the interior residual
+  and the facet jumps of the [Bank-Weiser example](#a-bank-weiser-error-estimator),
+  with `z - z_h` in place of `v`, so that each cell receives its own weighted
+  residual.
+
 ### A classic FEniCS layer for the Poisson problem
 
 Requires: [The base object `Base`](LANGUAGE.md#the-base-object-base),
