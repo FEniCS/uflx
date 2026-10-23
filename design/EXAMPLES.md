@@ -1201,6 +1201,24 @@ is $\sqrt{\det(J^T J + I - \Pi)}$ (see [Jacobian and
 density](LANGUAGE.md#jacobian-and-density)). The cells of `M` then contribute
 their own density $\sqrt{\det(J_c^T J_c)}$ as in the Laplace-Beltrami example.
 
+```{dropdown} Isogeometric analysis
+Isogeometric analysis by extraction, as in tIGAr, builds a mesh of the
+parametric knot spans, stores the NURBS map $F$ as a function in the spline
+space on that mesh, and inserts $\det DF$ and $DF^{-T}$ into every form by
+hand. Here the physical patch is `domain_map(parametric_mesh, F, RD(3))`, a
+multi-patch geometry is a decomposed domain with one piece per patch, and the
+passes insert the factors.
+```
+
+```{dropdown} Shells
+A shell code such as FEniCS-Shells defines the midsurface as a map $\phi_0$
+from a flat parametric mesh into $R^3$ and forms the fundamental forms from
+$\nabla \phi_0$ by hand. Here the midsurface is `domain_map(flat_mesh, phi_0, RD(3))`
+with $k = m = 2 < n = 3$, `jacobian(T)` is $\nabla \phi_0$, its Gram matrix
+$J^T J$ is the first fundamental form, and `density(T)` is
+$\sqrt{\det(J^T J)}$, the area element of the midsurface.
+```
+
 ### The flux through a surface
 
 Requires: [The Laplace-Beltrami
