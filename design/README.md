@@ -9,10 +9,8 @@ for variational forms, such as UFL.
 
 Readers may want to start with the **[Worked examples](EXAMPLES.md)**.
 
-- **[The design of the UFLx core](DESIGN.md).**
 - **[Core UFLx language definition](LANGUAGE.md).**
 - **[Worked examples](EXAMPLES.md)**.
-- **[Design choices](DESIGN_CHOICES.md).**
 
 ## Building
 

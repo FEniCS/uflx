@@ -12,7 +12,7 @@ out="$here/build"
 if [[ $# -gt 0 ]]; then
   notes=("$@")
 else
-  notes=(DESIGN.md LANGUAGE.md EXAMPLES.md DESIGN_CHOICES.md FINAL_TODOS.md)
+  notes=(LANGUAGE.md EXAMPLES.md)
 fi
 
 # The generated appendices must match the sections before a build.

@@ -1,8 +1,8 @@
 # Worked examples for the UFLx core
 
 These examples accompany [LANGUAGE.md](LANGUAGE.md) and use its names. The
-first part defines the library classes that the examples and the tour of
-DESIGN.md use; none of them is part of the core. A reader of LANGUAGE.md
+first part defines the library classes that the examples use; none of them
+is part of the core. A reader of LANGUAGE.md
 needs none of this to follow the rules.
 
 ## Reference library
@@ -635,7 +635,7 @@ The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot
 
 Requires: [An interior facet
 integral](#an-interior-facet-integral), [Restriction](LANGUAGE.md#restriction),
-[`Normal`](LANGUAGE.md#normal), [`Form`](LANGUAGE.md#form), [Kernels](DESIGN.md#kernels).
+[`Normal`](LANGUAGE.md#normal), [`Form`](LANGUAGE.md#form).
 
 The local problems of the Bank-Weiser estimator for the Poisson problem, as
 in Bulle et al. On each cell, with `u_h` the Galerkin solution, the local
@@ -722,7 +722,7 @@ example](#an-interior-facet-integral). After the passes `a` is one
 `IndexSum` over the cells, `r_cell` and `r_boundary` are an `IndexSum` over
 the cells and over the boundary facets, and `r_facets` is an `IndexSum` over
 the interior facets of an expression on `I` that reads `u_h` on the two cells
-through the side tables. The kernels (see [Kernels](DESIGN.md#kernels)) are:
+through the side tables. The kernels are:
 
 - the cell kernel of `a`, which returns the local matrix;
 - the cell kernel of `r_cell`, which returns the interior residual of the cell;
@@ -755,7 +755,7 @@ with the two kernels of the global form in place of hand-written code.
 Requires: [An interior facet
 integral](#an-interior-facet-integral), [Sides of a
 topology](LANGUAGE.md#sides-of-a-topology), [Restriction](LANGUAGE.md#restriction),
-[`Form`](LANGUAGE.md#form), [Kernels](DESIGN.md#kernels).
+[`Form`](LANGUAGE.md#form).
 
 A fluid and a solid that share an interface, with the fields of each part in
 spaces on that part only: the legacy UFL `dx(1)`, `dx(2)` and `ds(3)` with
@@ -875,8 +875,8 @@ l = form(traction + integral(index_sum(mu[i] * d_old_G[i], (i,)) / dt, G), ((v, 
 - Two groups of one topology differ in cell type or in sides, so a second
   marked set of inlet facets with the same side is a second topology, and the
   legacy `ds((3, 4))` is the sum of two integrals. The two kernels are one
-  kernel after the renaming of [Kernels independent of the
-  mesh](DESIGN.md#kernels-independent-of-the-mesh), because the two topologies become the same placeholder.
+  kernel after renaming, because the two topologies become the same
+  placeholder.
 - A material coefficient that differs between the fluid and the solid needs no
   submeshes when the fields live on `D`. With `c = cell_index(square, 0)`, an
   array `nu[c]` under `integral(..., D)` takes the value of the cell (see
@@ -1043,24 +1043,22 @@ coupling_avg = integral(beta * (p1 - p3_avg) * (q1 - q3_avg), D1)
   pass reads as one family of points. The side tables of that family hold
   the tetrahedron that contains each point and its position, and the kernel
   for a segment reads `V3` on one tetrahedron for each point, a list of
-  cells rather than one cell. A kernel allows that, because [the interface of
-  a kernel](DESIGN.md#the-interface-of-a-kernel) follows from the expression.
+  cells rather than one cell. A kernel allows that, because the interface of
+  a kernel follows from the expression.
 
 ### The Laplace-Beltrami operator
 
-Requires: [The tour](DESIGN.md#the-tour),
-[`Gradient`](LANGUAGE.md#gradient), [`Integral` over a decomposed
+Requires: [`Gradient`](LANGUAGE.md#gradient), [`Integral` over a decomposed
 domain](LANGUAGE.md#integral-over-a-decomposed-domain), [`Form`](LANGUAGE.md#form).
 
 See also: [Expanding pull-backs](LANGUAGE.md#expanding-pull-backs), [`Inverse`](LANGUAGE.md#inverse).
 
-The Poisson forms of the [tour](DESIGN.md#the-tour) on a surface in
-$R^3$ are the forms of the Laplace–Beltrami operator. Only the geometry
+The Poisson forms on a surface in $R^3$ are the forms of the Laplace–Beltrami operator. Only the geometry
 changes. The vertex positions `y` have value shape `(m, 3)`, and the ambient
 coordinate domain is `RD(3)`:
 
 ```python
-# A triangulated surface in RD(3), with K, T, c and p of the tour of DESIGN.md.
+# A triangulated surface in RD(3), with K, T, c and p of a triangle mesh.
 x = component_tensor(
     p[c, 0, k] + (p[c, 1, k] - p[c, 0, k]) * X[0] + (p[c, 2, k] - p[c, 0, k]) * X[1],
     (k,),
@@ -1156,19 +1154,18 @@ area = integral(Integer(1), M)
 
 ### A classic FEniCS layer for the Poisson problem
 
-Requires: [The tour](DESIGN.md#the-tour),
-[The base object `Base`](LANGUAGE.md#the-base-object-base),
+Requires: [The base object `Base`](LANGUAGE.md#the-base-object-base),
 [`Function`](LANGUAGE.md#function), [`Form`](LANGUAGE.md#form),
 [Restriction](LANGUAGE.md#restriction), [`Normal`](LANGUAGE.md#normal),
 [`Integral` over a decomposed
 domain](LANGUAGE.md#integral-over-a-decomposed-domain).
 
-The Poisson problem of the tour, written as classic FEniCS writes it:
+The Poisson problem, written as classic FEniCS writes it:
 `inner(grad(u), grad(v)) * dx`. The layer is a module `uflx.legacy`, which
 does not exist, of a page of free functions and two plain Python classes over
 the core. Nothing in the module subclasses a core class, so the forms that the
-module produces are ordinary core graphs, the same graphs as the tour builds
-by hand. The example shows what the core leaves to a layer: the argument
+module produces are ordinary core graphs, the same graphs as the core free
+functions build by hand. The example shows what the core leaves to a layer: the argument
 numbers of test and trial functions, measures that find or hold their domain,
 restrict the integrand and bind the arguments, a facet normal that belongs to
 the mesh, and `grad`, `div` and `curl` that read the domain from the function.
@@ -1386,7 +1383,7 @@ a = kappa * inner(grad(u), grad(v)) * dx
 L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
 ```
 
-- For a real `V`, `a` is the bilinear form `a` of the tour times `kappa`,
+- For a real `V`, `a` is the Poisson bilinear form times `kappa`,
   `form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))`, up to
   the labels of `u`, `v` and `i` and the conjugates, which change nothing in
   real arithmetic: `conjugate_space(V)` is `V`, so the argument spaces are

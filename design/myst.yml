@@ -8,11 +8,8 @@ project:
   github: https://github.com/FEniCS/uflx
   toc:
     - file: README.md
-    - file: DESIGN.md
     - file: LANGUAGE.md
     - file: EXAMPLES.md
-    - file: DESIGN_CHOICES.md
-    - file: FINAL_TODOS.md
   error_rules:
     - rule: reference-target-explicit
       severity: ignore
@@ -20,6 +17,9 @@ project:
     - build/**
     - OPEN_ISSUES.md
     - gaps.md
+    - DESIGN.md
+    - DESIGN_CHOICES.md
+    - FINAL_TODOS.md
 site:
   template: book-theme
   options:
