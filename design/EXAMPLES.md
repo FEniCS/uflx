@@ -1134,6 +1134,73 @@ L = form(integral(f * v, M), (v,))
 Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Gradient` gives the gradient in every dimension.
 ```
 
+### A deformed domain
+
+Requires: [`DecomposedDomain`](LANGUAGE.md#decomposeddomain),
+[`DomainMap`](LANGUAGE.md#domainmap), [Jacobian and
+density](LANGUAGE.md#jacobian-and-density), [`Gradient`](LANGUAGE.md#gradient),
+[`Form`](LANGUAGE.md#form), [The Laplace-Beltrami
+operator](#the-laplace-beltrami-operator).
+
+See also: [Expanding integrals](LANGUAGE.md#expanding-integrals), [Expanding
+pull-backs](LANGUAGE.md#expanding-pull-backs).
+
+Shape optimisation and updated Lagrangian mechanics write a form on the image
+of the mesh under a deformation, and assemble on the mesh. The deformation is
+a domain map with the mesh as parameter domain. With `D` the square mesh of
+the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain) examples, `W` a vector
+space of a library on `D`, and `V_s` a space of a library on the deformed
+mesh:
+
+```python
+k, i = index("k"), index("i")
+s = function(W, "s")
+phi = component_tensor(coordinate(D)[k] + s[k], (k,))
+
+# The deformed square, the image of the mesh under phi.
+D_s = decomposed_domain((domain_map(D, phi, RD(2)),))
+
+# The volume of the deformed square, a functional of s.
+volume = integral(Integer(1), D_s)
+
+# The Poisson stiffness form on the deformed square.
+u, v = function(V_s, "u"), function(V_s, "v")
+a = form(integral(index_sum(gradient(u, D_s)[i] * gradient(v, D_s)[i], (i,)), D_s), (v, u))
+```
+
+- `expand_integrals` rewrites `volume` as the integral over `D` of
+  `density(T)`, with `T = cell_domain(D_s, 0)`, and then over the cells of
+  `D`. `jacobian(T)` is `gradient(phi, D)`, which `apply_derivatives` rewrites
+  as $I + \nabla s$, so `density(T)` is $|\det(I + \nabla s)|$, the Jacobian
+  determinant of shape calculus.
+- `expand_pull_backs` rewrites the pull-back of `gradient(u, D_s)` by `T` as
+  $K^T \nabla(u \circ \phi)$ with $K$ = `inverse(jacobian(T))`, the
+  $(I + \nabla s)^{-T}$ of shape calculus. The library represents `V_s` on
+  `D`, so `u` has the degrees of freedom of a space on `D` and the geometry of
+  `D_s`.
+- The shape derivative of `volume` is the Gateaux derivative with respect to
+  `s` (see [Gateaux derivative](LANGUAGE.md#gateaux-derivative)).
+
+A surface deforms in the same way. With `M` the surface mesh of the
+[Laplace-Beltrami example](#the-laplace-beltrami-operator) and `w` a
+displacement in a vector space on `M`:
+
+```python
+w = function(W_M, "w")
+phi_M = component_tensor(coordinate(M)[k] + w[k], (k,))
+M_w = decomposed_domain((domain_map(M, phi_M, RD(3)),))
+
+# The area of the deformed surface.
+area = integral(Integer(1), M_w)
+```
+
+`M` has dimension 2 in `RD(3)`, so `jacobian(cell_domain(M_w, 0))` is
+$\Pi + \nabla_M w$, with $\Pi$ the projection onto the tangent plane and
+$\nabla_M w$ the surface gradient, a `(3, 3)` matrix of rank 2, and the density
+is $\sqrt{\det(J^T J + I - \Pi)}$ (see [Jacobian and
+density](LANGUAGE.md#jacobian-and-density)). The cells of `M` then contribute
+their own density $\sqrt{\det(J_c^T J_c)}$ as in the Laplace-Beltrami example.
+
 ### The flux through a surface
 
 Requires: [The Laplace-Beltrami
