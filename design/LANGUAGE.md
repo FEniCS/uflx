@@ -227,7 +227,7 @@ later, the user may need `(a + b)` evaluated before `c` is added.
 Requires: [The base object `Base`](#the-base-object-base).
 
 See also: [`Index`](#index), [`ComponentTensor` and
-`IndexSum`](#componenttensor-and-indexsum).
+`IndexSum`](#componenttensor-and-indexsum), [Derived indices](#derived-indices).
 
 A pass is a pure free function that walks a graph after construction of the
 graph. The result of a pass depends only on the arguments of the pass. A pass
@@ -389,98 +389,6 @@ expression. The value shape is
 a `tuple` of [extents](#extents), one for each axis. An expression with value
 shape `()` is a scalar.
 
-### `Index`
-
-Requires: [The base object `Base`](#the-base-object-base), [Properties and free
-functions](#properties-and-free-functions).
-
-See also: [`Indexed`](#indexed), [Transpose and matrix
-product](EXAMPLES.md#transpose-and-matrix-product).
-
-> LLM generated content.
-
-A concrete subclass of the base object for a free index. An `Index` is not an
-expression. Index notation writes tensor algebra as fixed compositions, so
-that operators such as `transpose` and `matrix_product` are free functions
-rather than node classes.
-
-| `Index(label)` |                                                                                                 |
-| -------------- | ----------------------------------------------------------------------------------------------- |
-| Extends        | `Base` |
-| Free function  | `index(label)`                                                                                  |
-| Takes          | `label: str \| tuple` |
-| Properties     | `label`, a `str` for a user index, or a `tuple` that contains graph objects for a derived index |
-| Raises         | `TypeError` if the label is neither a `str` nor a `tuple`                                       |
-
-An `Index` has no extent of its own, and takes the extent of the axis that the
-`Index` indexes.
-
-The user names user indices. Two free occurrences of one `Index` in one scope
-are the same index. An index that the user means to be new needs a new name.
-The scope of an index is given in [`ComponentTensor` and
-`IndexSum`](#componenttensor-and-indexsum).
-
-A free function that needs fresh indices derives the indices from the
-operands. The label of a derived index is the identifier of the free function,
-followed by the arguments of the free function and a number. The identifier is
-the public name of the free function, qualified by the package name, such as
-`"uflx.cell_index"` for the core or `"library.transpose"` for a library. For
-example, `transpose(A)` of the [transpose
-example](EXAMPLES.md#transpose-and-matrix-product) uses
-`Index(("library.transpose", A, 0))` and `Index(("library.transpose", A, 1))`.
-A derived index is fresh with respect to the operands, so the free function
-does not inspect the operands to find a fresh index. A global counter is not
-allowed, because a counter makes construction depend on global state.
-
-A pass that needs fresh indices derives the indices in the same way, with the
-identifier of the pass, the arguments of the rule and a number. For example,
-`apply_derivatives` writes the new axis of `Gradient(g, P)` with the index
-`Index(("uflx.apply_derivatives", g, P, 0))`. The renamed index of
-[Passes](#passes) follows the same rule.
-
-The edges of an index to the objects in the label of the index identify the
-index and are not operands.
-
-```{dropdown} Why a derived index is fresh
-An index whose label contains `A` has an edge to `A`, and every node that uses
-an `Index` has an edge to the `Index`. So an index whose label contains `A`
-cannot occur inside `A`, because `A` would then contain `A`, and the graph is
-acyclic.
-
-A pass that derives a property from the value of an expression, such as the
-free indices or the support, reads the edges of each node that are
-expressions, and an `Index` is not an expression, so such a pass never meets
-the label of an index. A pass that replaces an object reconstructs every index
-whose label contains the object (see [Passes](#passes)), so the label of a
-derived index always names the current operands, and the derived index stays
-fresh with respect to the current operands by the same argument.
-```
-
-### `EllipsisIndex`
-
-Requires: [`Index`](#index).
-
-See also: [`Indexed`](#indexed), [Tensor algebra with
-`EllipsisIndex`](#tensor-algebra-with-ellipsisindex).
-
-> LLM generated content.
-
-A concrete subclass of the base object for an index that covers any number of
-axes. An `EllipsisIndex` is not an expression.
-
-| `EllipsisIndex(label)` |                                                           |
-| ---------------------- | --------------------------------------------------------- |
-| Extends                | `Base` |
-| Free function          | `ellipsis_index(label)`                                   |
-| Takes                  | `label: str \| tuple` |
-| Properties             | `label`, with the rules of the label of an `Index`        |
-| Raises                 | `TypeError` if the label is neither a `str` nor a `tuple` |
-
-An `EllipsisIndex` covers every axis of an `Indexed` that the other entries do not
-cover, so an `EllipsisIndex` may cover no axis. The extent of an `EllipsisIndex` is the
-`tuple` of the extents of the covered axes. In every other rule of index
-notation, an `EllipsisIndex` behaves as an `Index`.
-
 ### Extents
 
 Requires: [The base object `Base`](#the-base-object-base).
@@ -523,129 +431,63 @@ whose label contains the other index, would cover the case. An index value
 read from a table is a [`GatheredIndex`](#gatheredindex).
 ```
 
-### `AbstractIndexValue`
+### `Index`
 
-Requires: [The base object `Base`](#the-base-object-base), [Extents](#extents).
+Requires: [The base object `Base`](#the-base-object-base), [Properties and free
+functions](#properties-and-free-functions), [Extents](#extents).
 
-See also: [`Indexed`](#indexed), [Sides of a topology](#sides-of-a-topology).
+See also: [Free indices](#free-indices), [Index notation](#index-notation),
+[`Indexed`](#indexed), [`ComponentTensor` and
+`IndexSum`](#componenttensor-and-indexsum), [Derived
+indices](#derived-indices).
 
-An abstract subclass of the base object `AbstractIndexValue` for an index whose
-value is fixed but not known during construction, such as the local number of
-the facet of a cell in a facet integral, which the solver gives for each facet.
-An `AbstractIndexValue` is not an expression and not a free index.
+> LLM generated content.
 
-| `AbstractIndexValue` |                                                        |
-| -------------------- | ------------------------------------------------------ |
-| Extends              | `Base` |
-| Provides             | `extent`, an extent, and `shape`, a `tuple` of extents |
-| Defined by           | A subclass outside the core                            |
+A concrete subclass of the base object for a free index. An `Index` is not an
+expression. An `Index` names an axis of a tensor, as `i` and `j` in `A[i, j]`
+(see [Index notation](#index-notation)).
 
-An `AbstractIndexValue` is a table of values, each an `int` $v$ with
-$0 \le v <$ `extent`, such as the cell on one side of each facet, which the
-mesh gives. An `AbstractIndexValue` with the shape `()` is one value. A table
-is read only through a [`GatheredIndex`](#gatheredindex), so one value is read
-as `gathered_index(v, ())`.
+| `Index(label)` |                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| Extends        | `Base` |
+| Free function  | `index(label)`                                                                                  |
+| Takes          | `label: str \| tuple` |
+| Properties     | `label`, a `str` for a user index, or a `tuple` that contains graph objects for a derived index |
+| Raises         | `TypeError` if the label is neither a `str` nor a `tuple`                                       |
 
-Example:
+An `Index` has no extent of its own. An `Index` takes the extent of the axis
+that the `Index` indexes.
 
-- With an `AbstractIndexValue` `l` of the shape `()` and the extent 3, and the
-  table `starts` of value shape `(3, 2)` of the
-  [boundary example](EXAMPLES.md#integrating-over-the-boundary-of-a-triangle),
-  `starts[gathered_index(l, ()), k]` is the start of edge `l`, with the free
-  index `k`. With an `AbstractIndexValue` with the extent 4, the same
-  expression raises `IndexError`.
+A user index has a `str` label, which the user chooses. Two free occurrences
+of one `Index` in one scope are the same index, so an index that the user
+means to be new needs a new name. The scope of an index is given in
+[`ComponentTensor` and `IndexSum`](#componenttensor-and-indexsum).
 
-### `GatheredIndex`
-
-Requires: [`AbstractIndexValue`](#abstractindexvalue), [`Index`](#index),
-[Extents](#extents).
-
-See also: [`Indexed`](#indexed), [Restriction](#restriction).
-
-A concrete subclass of the base object for an index value read from a table.
-A `GatheredIndex` is not an expression and not a free index.
-
-| `GatheredIndex(table, indices)` |                                                                                                                                    |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Extends                         | `Base` |
-| Free function                   | `gathered_index(table, indices)`                                                                                                   |
-| Takes                           | `table: AbstractIndexValue`, `indices: tuple` |
-| Properties                      | `table`, an `AbstractIndexValue`, and `indices`, an `int`, an `Index` or a `GatheredIndex` for each axis of the shape of the table |
-| Derived                         | `extent` and `free_indices`, below |
-| Raises                          | The errors below                                                                                                                   |
-
-The value of a `GatheredIndex` is the entry of the table at the indices.
-
-`extent` and `free_indices`:
-
-- The extent is the extent of the table.
-- The free indices are the free indices of the `Index` entries, each with the
-  extent of the axis, and the free indices of the `GatheredIndex` entries, in
-  order. Each `Index` is taken once.
-
-Raises:
-
-- `TypeError` for an entry that is neither exactly `int`, `Index` nor
-  `GatheredIndex`.
-- `IndexError` if the number of entries differs from the number of axes.
-- `IndexError` for an `int` entry out of range.
-- `IndexError` for a `GatheredIndex` entry whose extent differs from the
-  extent of the axis.
-
-#### Where a `GatheredIndex` appears
-
-- A `GatheredIndex` is an entry of [`Indexed`](#indexed), and covers one axis
-  whose extent equals the extent of the `GatheredIndex`. The free indices of
-  the `GatheredIndex` are free in the `Indexed`.
-- A `GatheredIndex` is also an entry of a `GatheredIndex`, with the same rule,
-  so gathers nest. For example, the vertices of the cell on the side of each
-  facet are read through the cell on the side of the facet.
-
-#### Examples
-
-The examples use the following objects:
-
-- A table `cells` of the shape `(4,)`, the extent 2 and the values
-  `(0, 1, 1, 0)`, such as the cell of each of the four boundary edges of the
-  square divided into two triangles.
-- An array `a` of value shape `(2,)`, with one value for each triangle.
-
-```python
-e = index("e")
-g = gathered_index(cells, (e,))
-
-# The value of a on the triangle of each edge, with the free index e of extent 4.
-a_e = a[g]
-
-# The array (a[0], a[1], a[1], a[0]) of value shape (4,).
-b = component_tensor(a_e, (e,))
-
-# The sum over the edges, 2 * (a[0] + a[1]) after evaluation.
-total = index_sum(a_e, (e,))
-```
-
-- Let `cell_vertices` be a table of the vertices of each triangle, of the shape
-  `(2, 3)` and the extent 4. `gathered_index(cell_vertices, (g, w))` is the
-  vertex `w` of the triangle of edge `e`, with the free indices `e` and `w`.
-- For an array `c` of value shape `(3,)`, `c[g]` raises `IndexError`, because
-  the extent 2 of `g` differs from the extent 3 of the axis.
+A derived index has a `tuple` label, which a free function or a pass builds
+from the operands, so that the index is fresh without a global counter (see
+[Derived indices](#derived-indices)).
 
 ### Free indices
 
 Requires: [`AbstractExpression`](#abstractexpression), [`Index`](#index),
-[`EllipsisIndex`](#ellipsisindex), [Extents](#extents).
+[Extents](#extents).
 
-See also: [`Sum`](#sum), [`Tensor`](#tensor), [`Indexed`](#indexed), [`ComponentTensor`
-and `IndexSum`](#componenttensor-and-indexsum).
+See also: [`EllipsisIndex`](#ellipsisindex), [`Sum`](#sum),
+[`Tensor`](#tensor), [`Indexed`](#indexed), [`ComponentTensor` and
+`IndexSum`](#componenttensor-and-indexsum).
 
-Every `AbstractExpression` derives the free indices, a `tuple` of pairs of an
-`Index` and an extent, or of an `EllipsisIndex` and a `tuple` of extents. The
-order is the order of first occurrence, never the order of a `set`.
+Every `AbstractExpression` derives the free indices, a `tuple` of pairs. Each
+pair is an `Index` and an extent, or an [`EllipsisIndex`](#ellipsisindex) and
+a `tuple` of extents. The order is the order of first occurrence, never the
+order of a `set`.
 
-Unless a node class states otherwise, the free indices of a node are the free
-indices of the edges of the node that are expressions, in edge order, with each
-`Index` taken once at the first occurrence. An `Index` that occurs in two edges
-must have the same extent in both edges, or construction raises `ValueError`.
+Unless a node class states otherwise, the free indices of a node are derived
+from the edges of the node that are expressions:
+
+- The free indices of the edges are taken in edge order, with each `Index`
+  taken once, at the first occurrence.
+- An `Index` that occurs in two edges must have the same extent in both edges,
+  or construction raises `ValueError`.
 
 Summation is never implicit. `a[i] * b[i]` has the free index `i` and denotes
 the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], (i,))`.
@@ -702,7 +544,7 @@ See also: [Transpose and matrix product](EXAMPLES.md#transpose-and-matrix-produc
 [`Division`](#division), [Elementary functions (very
 incomplete)](#elementary-functions-very-incomplete),
 [Tensor algebra with
-`EllipsisIndex`](#tensor-algebra-with-ellipsisindex),
+`EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex),
 [Language extensions](#language-extensions).
 
 A concept must be a free function, not a node class, if the free function can
@@ -732,7 +574,7 @@ decomposed domain](#integral-over-a-decomposed-domain) and `cell_domain` in
 [Restriction](#restriction). Every other free function belongs to a library,
 such as `transpose` (see [Transpose and matrix
 product](EXAMPLES.md#transpose-and-matrix-product)) and the operations of
-[Tensor algebra with `EllipsisIndex`](#tensor-algebra-with-ellipsisindex). The
+[Tensor algebra with `EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex). The
 operator overloads of the core are those of the free functions of the core,
 so `A + B` on tensors is not an overload (see
 [Operator overloads](#operator-overloads)).
@@ -833,7 +675,7 @@ Requires: [`AbstractExpression`](#abstractexpression), [Free
 indices](#free-indices).
 
 See also: [`ComponentTensor` and `IndexSum`](#componenttensor-and-indexsum), [`Tensor`
-algebra with `EllipsisIndex`](#tensor-algebra-with-ellipsisindex).
+algebra with `EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex).
 
 `Sum`, `Product`, `Division` and `Power` are concrete subclasses of
 `AbstractExpression` that each store two expressions. Arithmetic is scalar.
@@ -1041,62 +883,91 @@ Examples, with `zero, one, two = Integer(0), Integer(1), Integer(2)`:
 - `tensor((one, tensor((one, two))))` raises `ValueError`, because the value
   shapes of the entries differ.
 
+### Index notation
+
+Requires: [`Tensor`](#tensor), [`Index`](#index), [Free
+indices](#free-indices), [Node class or free
+function](#node-class-or-free-function).
+
+See also: [Transpose and matrix
+product](EXAMPLES.md#transpose-and-matrix-product).
+
+> LLM generated content.
+
+Index notation writes tensor algebra with four node classes. `Tensor` builds a
+tensor from scalars, `Indexed` selects one component, and `ComponentTensor`
+and `IndexSum` bind the free indices of a scalar, as axes or as a sum. Every
+other tensor operation is a fixed composition of the four, so `transpose`,
+`dot` and `inner` are free functions, not node classes (see [Node class or
+free function](#node-class-or-free-function)).
+
+With `i, j = index("i"), index("j")` and a matrix `A` of value shape `(2, 3)`:
+
+- `A[i, j]` is a scalar with the free indices `i`, of extent 2, and `j`, of
+  extent 3. The scalar denotes one value for each value of `i` and `j`.
+- `component_tensor(A[i, j], (j, i))` binds `j` and `i` as axes, in that
+  order, and is the transpose of `A`, of value shape `(3, 2)`.
+- `index_sum(A[i, j] * A[i, j], (i, j))` sums over `i` and `j`, and is the sum
+  of the squares of the entries of `A`, with no free index.
+
+The sections below give the rules. An [`EllipsisIndex`](#ellipsisindex)
+covers any number of axes, so one composition serves tensors of every rank. A
+[`GatheredIndex`](#gatheredindex) reads an index value from a table that the
+solver gives, such as the cell of each facet. A free function or a pass that
+needs a fresh index derives the index from the operands (see [Derived
+indices](#derived-indices)).
+
 ### `Indexed`
 
 Requires: [`AbstractExpression`](#abstractexpression), [`Index`](#index),
-[`EllipsisIndex`](#ellipsisindex), [Extents](#extents),
-[`AbstractIndexValue`](#abstractindexvalue), [Free indices](#free-indices),
-[Support](#support).
+[Extents](#extents), [Free indices](#free-indices), [Support](#support),
+[Index notation](#index-notation).
 
-See also: [`Coordinate`](#coordinate), [`Gradient`](#gradient).
+See also: [`EllipsisIndex`](#ellipsisindex),
+[`GatheredIndex`](#gatheredindex), [`Coordinate`](#coordinate),
+[`Gradient`](#gradient).
 
 > LLM generated content.
 
 A concrete subclass of `AbstractExpression` that selects one component of a
-tensor-valued expression.
+tensor-valued expression. `X[0]` and `A[0, 1]` are `indexed(X, (0,))` and
+`indexed(A, (0, 1))`.
 
-| `Indexed(expression, indices)` |                                                                                                                                                                                                                                                 |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Indexed(expression, indices)` |                                                                                   |
+| ------------------------------ | --------------------------------------------------------------------------------- |
 | Extends                        | `AbstractExpression` |
-| Free function                  | `indexed(expression, indices)`, with the overload `expression[indices]`                                                                                                                                                                         |
+| Free function                  | `indexed(expression, indices)`, with the overload `expression[indices]`           |
 | Takes                          | `expression: AbstractExpression`, `indices: tuple` |
-| Properties                     | `expression`, of rank $r$, and `indices`, a `tuple` of `int`, [`Index`](#index), [`EllipsisIndex`](#ellipsisindex) and [`GatheredIndex`](#gatheredindex) entries, with at most one `EllipsisIndex`                                               |
-| Static type                    | Value shape `()`, and the free indices of the expression followed by the `Index` and `EllipsisIndex` entries and the free indices of the `GatheredIndex` entries, with each `Index` taken once                                                  |
-| Raises                         | See the table below                                                                                                                                                                                                                             |
+| Properties                     | `expression`, and `indices`, a non-empty `tuple` of entries of the kinds below    |
+| Static type                    | Value shape `()`, and the free indices below                                      |
+| Raises                         | `TypeError`, `ValueError` and `IndexError`, below                                 |
 
-Indexing is full indexing only. Each `int`, each `Index` and each
-`GatheredIndex` entry covers one axis, and an
-`EllipsisIndex` entry covers every axis that the other entries do not cover.
-Without an `EllipsisIndex`, the number of entries must equal $r$. With an
-`EllipsisIndex`, the number of other entries must be at most $r$. Each `int`
-entry $i_j$ must index an axis with an `int` extent $n_j$ and must satisfy
-$0 \le i_j < n_j$, where `(n_0, ..., n_{r-1})` is the value shape of the
-expression. Each `GatheredIndex` entry must have the extent $n_j$. Each `Index` entry $i_j$ takes the extent $n_j$. An
-`EllipsisIndex` takes the `tuple` of the extents of the axes that the
-`EllipsisIndex` covers.
+Indexing is full indexing. Each entry covers one or more axes of the
+expression, and the entries together cover every axis exactly once. With
+`(n_0, ..., n_{r-1})` the value shape of the expression, an entry is one of
+the following kinds:
+
+| Entry                                | Covers                                | Rule                                                                                               | Raises       |
+| ------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------ |
+| An `int` $k$                         | One axis, of extent $n_j$             | $n_j$ is an `int`, and $0 \le k < n_j$                                                             | `IndexError` |
+| An [`Index`](#index)                 | One axis, of extent $n_j$             | The `Index` takes the extent $n_j$                                                                 |              |
+| A [`GatheredIndex`](#gatheredindex)  | One axis, of extent $n_j$             | The extent of the `GatheredIndex` equals $n_j$                                                     | `IndexError` |
+| An [`EllipsisIndex`](#ellipsisindex) | Every axis that no other entry covers | At most one per `Indexed`. The `EllipsisIndex` takes the `tuple` of the extents of the covered axes, which may be empty | `ValueError` |
+
+The free indices of the `Indexed` are the free indices of the expression,
+followed by each `Index` and `EllipsisIndex` entry with the extent that the
+entry takes, followed by the free indices of each `GatheredIndex` entry, with
+each index taken once.
 
 An `Index` may occur in two or more entries, or may already be free in the
-expression. All the occurrences are the same index, so the indexed axes take
-the same value. `A[i, i]` is the diagonal entry of a matrix `A`, and
-`index_sum(A[i, i], (i,))` is the trace. All the occurrences must have the same
-extent. An `EllipsisIndex` may also already be free in the expression, with the
-same rule and the `tuple` of extents of the `EllipsisIndex`. So with an
-`EllipsisIndex` `r` that is free with the extents `(2, 3)` in an expression
-`B` of value shape `(2, 3)`, `B[r]` is the block diagonal of `B`.
+expression. All the occurrences are the same index and must have the same
+extent, so the indexed axes take the same value. `A[i, i]` is the diagonal
+entry of a matrix `A`, and `index_sum(A[i, i], (i,))` is the trace.
 
-`X[0]` and `A[0, 1]` are `indexed(X, (0,))` and `indexed(A, (0, 1))`.
-Construction of `Indexed` raises:
-
-| Error        | Cause                                                                                                       |
-| ------------ | ----------------------------------------------------------------------------------------------------------- |
-| `TypeError`  | An entry that is neither exactly `int`, `Index`, `EllipsisIndex` nor `GatheredIndex`.                       |
-| `ValueError` | No entries.                                                                                                 |
-| `IndexError` | A number of entries that does not cover exactly the rank. An expression with value shape `()` has rank 0.   |
-| `ValueError` | More than one `EllipsisIndex` entry.                                                                        |
-| `IndexError` | A negative `int` entry, or an `int` entry $i_j \ge n_j$.                                                    |
-| `IndexError` | An `int` entry for an axis whose extent is not an `int`.                                                    |
-| `IndexError` | A `GatheredIndex` entry whose extent differs from the extent of the axis.                                   |
-| `ValueError` | An index with two extents, in two entries or in an entry and the expression.                                |
+Construction also raises `TypeError` for an entry of another kind,
+`ValueError` for no entries or for an index with two extents, in two entries
+or in an entry and the expression, and `IndexError` if the entries do not
+cover exactly the rank. An expression with value shape `()` has rank 0.
 
 Examples:
 
@@ -1107,8 +978,10 @@ Examples:
 
 ### `ComponentTensor` and `IndexSum`
 
-Requires: [`Index`](#index), [`EllipsisIndex`](#ellipsisindex), [Free
-indices](#free-indices), [`Indexed`](#indexed).
+Requires: [`Index`](#index), [Free indices](#free-indices),
+[`Indexed`](#indexed).
+
+See also: [`EllipsisIndex`](#ellipsisindex), [Passes](#passes).
 
 `ComponentTensor` and `IndexSum` are concrete subclasses of
 `AbstractExpression` that bind free indices.
@@ -1126,54 +999,173 @@ indices](#free-indices), [`Indexed`](#indexed).
 
 Scope is lexical. An occurrence of an `Index` refers to the innermost
 `ComponentTensor` or `IndexSum` that encloses the occurrence and binds the
-index, and the occurrence is free otherwise. A bound index is not free in the
-binding node, so the binding is closed, and a binder may bind an index that a
-binder inside the expression of the binder also binds. For example, with
+index. An occurrence that no such binder encloses is free. A bound index is
+not free in the binding node, so the binding is closed, and a binder may bind
+an index that a binder inside the expression of the binder also binds. For
+example, with
 `p = component_tensor(y[gathered_index(cells, (c, w)), k], (c, w, k))`, `p`
 has no free index, and `p[c, 0, k]` has the free indices `c` and `k`, which
-refer to nothing inside `p`. A pass that substitutes into the expression of a
-binder renames the bound indices that would capture a free index of the
-substituted expression (see [Passes](#passes)).
+refer to nothing inside `p`.
 
-One `IndexSum` holds a whole contraction, such as the sum over both indices of
-`A[i, j] * B[i, j]`. A pass that chooses the order of summation then finds the
-contraction in one node, not in a chain of nested nodes.
+A pass that substitutes into the expression of a binder renames the bound
+indices that would capture a free index of the substituted expression (see
+[Passes](#passes)).
 
 Examples, with `i, j = index("i"), index("j")`, two vectors `a` and `b` of value
 shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
 
 - `index_sum(a[i] * b[i], (i,))` is the inner product of `a` and `b`, with no
   free indices.
-- `index_sum(A[i, j] * A[i, j], (i, j))` is the sum of the squares of the
-  entries of `A`, with no free indices.
-- `component_tensor(A[i, j], (j, i))` has value shape `(2, 2)` and is the
-  transpose of `A`, written with user indices.
 - `index_sum(A[i, i], (i,))` is the trace of `A`, and
   `component_tensor(A[i, i], (i,))` is the diagonal of `A`, for every extent of
   `A`, including an `AbstractExtent`.
 
-### Tensor algebra with `EllipsisIndex`
+### `EllipsisIndex`
 
-Requires: [`EllipsisIndex`](#ellipsisindex), [`Indexed`](#indexed), [`ComponentTensor`
-and `IndexSum`](#componenttensor-and-indexsum), [`Sum`](#sum), [`Product`](#product),
-[`Conjugate`](#conjugate).
+Requires: [`Index`](#index), [`Indexed`](#indexed), [`ComponentTensor` and
+`IndexSum`](#componenttensor-and-indexsum).
 
-An `EllipsisIndex` writes an operation on tensors of every rank as one fixed
-composition. The operations in the table below are not part of the core. A
-library may provide the operations as free functions (see
-[New operations](#new-operations)). With derived ellipsis indices `r` and `s`
-and an ordinary index `k`:
+See also: [Tensor algebra with
+`EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex).
 
-| Operation          | Fixed composition                                              |
-| ------------------ | -------------------------------------------------------------- |
-| `scale(a, T)`      | `component_tensor(a * T[r], (r,))`                             |
-| `tensor_sum(A, B)` | `component_tensor(A[r] + B[r], (r,))`                          |
-| `outer(u, v)`      | `component_tensor(u[r] * v[s], (r, s))`                        |
-| `dot(u, v)`        | `component_tensor(index_sum(u[r, k] * v[k, s], (k,)), (r, s))` |
-| `inner(A, B)`      | `index_sum(A[r] * conjugate(B[r]), (r,))`                      |
+> LLM generated content.
 
-`A[r] + B[r]` raises `ValueError` if the value shapes of `A` and `B` differ,
-because the extents of `r` differ.
+A concrete subclass of the base object for an index that covers any number of
+axes. An `EllipsisIndex` is not an expression. With an `EllipsisIndex`, one
+composition serves tensors of every rank. For example,
+`component_tensor(a * T[r], (r,))` scales a tensor `T` of any rank by a scalar
+`a`.
+
+| `EllipsisIndex(label)` |                                                           |
+| ---------------------- | --------------------------------------------------------- |
+| Extends                | `Base` |
+| Free function          | `ellipsis_index(label)`                                   |
+| Takes                  | `label: str \| tuple` |
+| Properties             | `label`, with the rules of the label of an `Index`        |
+| Raises                 | `TypeError` if the label is neither a `str` nor a `tuple` |
+
+As an entry of an `Indexed`, an `EllipsisIndex` covers every axis that the
+other entries do not cover, so an `EllipsisIndex` may cover no axis. The
+extent of an `EllipsisIndex` is the `tuple` of the extents of the covered
+axes. A `ComponentTensor` that binds an `EllipsisIndex` gets one axis for
+each extent of the `EllipsisIndex`. In every other rule of index notation, an
+`EllipsisIndex` behaves as an `Index`.
+
+### `AbstractIndexValue`
+
+Requires: [The base object `Base`](#the-base-object-base), [Extents](#extents).
+
+See also: [`GatheredIndex`](#gatheredindex), [Sides of a
+topology](#sides-of-a-topology).
+
+An abstract subclass of the base object for a table of index values that the
+solver gives, such as the cell on one side of each facet, or the local number
+of the facet of a cell in a facet integral. The values are fixed but not known
+during construction. An `AbstractIndexValue` is not an expression and not a
+free index.
+
+| `AbstractIndexValue` |                                                        |
+| -------------------- | ------------------------------------------------------ |
+| Extends              | `Base` |
+| Provides             | `extent`, an extent, and `shape`, a `tuple` of extents |
+| Defined by           | A subclass outside the core                            |
+
+The table has the shape `shape`, and each value is an `int` $v$ with
+$0 \le v <$ `extent`. An `AbstractIndexValue` with the shape `()` is one
+value. An expression reads the table only through a
+[`GatheredIndex`](#gatheredindex), so one value is read as
+`gathered_index(v, ())`.
+
+### `GatheredIndex`
+
+Requires: [`AbstractIndexValue`](#abstractindexvalue), [`Index`](#index),
+[Extents](#extents), [`Indexed`](#indexed).
+
+See also: [Restriction](#restriction), [Gathered cell
+domains](#gathered-cell-domains).
+
+A concrete subclass of the base object for an index whose value is read from
+a table. A `GatheredIndex` is not an expression and not a free index. With
+`cells` the table of the cell of each facet, `a[gathered_index(cells, (e,))]`
+is the value of `a` on the cell of facet `e`, with the free index `e`.
+
+| `GatheredIndex(table, indices)` |                                                                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Extends                         | `Base` |
+| Free function                   | `gathered_index(table, indices)`                                                                                                   |
+| Takes                           | `table: AbstractIndexValue`, `indices: tuple` |
+| Properties                      | `table`, an `AbstractIndexValue`, and `indices`, an `int`, an `Index` or a `GatheredIndex` for each axis of the shape of the table |
+| Derived                         | `extent` and `free_indices`, below |
+| Raises                          | The errors of the entries of an [`Indexed`](#indexed)                                                                              |
+
+The value of a `GatheredIndex` is the entry of the table at the indices. The
+indices follow the rules and raise the errors of the entries of an
+[`Indexed`](#indexed), without an `EllipsisIndex` entry. A `GatheredIndex`
+entry reads through another table, so gathers nest. The extent of the
+`GatheredIndex` is the extent of the table. The free indices are the `Index`
+entries, each with the extent of the axis, followed by the free indices of
+the `GatheredIndex` entries, with each `Index` taken once.
+
+#### Examples
+
+The examples use the following objects:
+
+- A table `cells` of the shape `(4,)`, the extent 2 and the values
+  `(0, 1, 1, 0)`, such as the cell of each of the four boundary edges of the
+  square divided into two triangles.
+- An array `a` of value shape `(2,)`, with one value for each triangle.
+
+```python
+e = index("e")
+g = gathered_index(cells, (e,))
+
+# The value of a on the triangle of each edge, with the free index e of extent 4.
+a_e = a[g]
+
+# The array (a[0], a[1], a[1], a[0]) of value shape (4,).
+b = component_tensor(a_e, (e,))
+
+# The sum over the edges, 2 * (a[0] + a[1]) after evaluation.
+total = index_sum(a_e, (e,))
+```
+
+- Let `cell_vertices` be a table of the vertices of each triangle, of the shape
+  `(2, 3)` and the extent 4. `gathered_index(cell_vertices, (g, w))` is the
+  vertex `w` of the triangle of edge `e`, with the free indices `e` and `w`.
+- For an array `c` of value shape `(3,)`, `c[g]` raises `IndexError`, because
+  the extent 2 of `g` differs from the extent 3 of the axis.
+
+### Derived indices
+
+Requires: [`Index`](#index), [`EllipsisIndex`](#ellipsisindex),
+[Passes](#passes), [Node class or free function](#node-class-or-free-function).
+
+See also: [Transpose and matrix
+product](EXAMPLES.md#transpose-and-matrix-product), [Applying
+derivatives](#applying-derivatives), [New operations](#new-operations).
+
+> LLM generated content.
+
+A free function that needs fresh indices derives the indices from the
+operands. The label of a derived index is a `tuple` of the identifier of the
+free function, the arguments of the free function and a number. The
+identifier is the public name of the free function, qualified by the package
+name, such as `"uflx.cell_index"` for the core or `"library.transpose"` for a
+library. For example, `transpose(A)` of the [transpose
+example](EXAMPLES.md#transpose-and-matrix-product) uses
+`Index(("library.transpose", A, 0))` and `Index(("library.transpose", A, 1))`.
+A derived index is fresh with respect to the operands, so the free function
+does not inspect the operands to find a fresh index. A global counter is not
+allowed, because a counter makes construction depend on global state.
+
+A pass that needs fresh indices derives the indices in the same way, with the
+identifier of the pass, the arguments of the rule and a number. For example,
+`apply_derivatives` writes the new axis of `Gradient(g, P)` with the index
+`Index(("uflx.apply_derivatives", g, P, 0))`. The renamed index of
+[Passes](#passes) follows the same rule.
+
+The edges of an index to the objects in the label of the index identify the
+index and are not operands.
 
 ### `Inverse`
 
@@ -1316,7 +1308,7 @@ Examples, with `X = coordinate(RD(2))`:
 - `X[0]**2`, `2 * X[0]`, `1 - X[0]`, `0.5 * X[0]`, `2 + X[0]` and
   `tensor((1, 2))` raise `TypeError`.
 
-Worked examples for this chapter in EXAMPLES.md: [transpose and matrix product](EXAMPLES.md#transpose-and-matrix-product).
+Worked examples for this chapter in EXAMPLES.md: [transpose and matrix product](EXAMPLES.md#transpose-and-matrix-product), [tensor algebra with `EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex).
 
 ## Calculus on a domain
 
@@ -3170,7 +3162,7 @@ Requires: [Core transformations](#core-transformations),
 The partial derivative $\partial_j$ of `Gradient(f, P)` is linear for the
 linear node classes and follows the chain rule for the other node classes.
 The new axis stays the last axis of the value shape, written with the derived
-index $j$ of [`Index`](#index). For example, `Gradient(A[i], P)` is rewritten
+index $j$ (see [Derived indices](#derived-indices)). For example, `Gradient(A[i], P)` is rewritten
 as `component_tensor(Gradient(A, P)[i, j], (j,))`. The rules:
 
 | Operand                                                     | Rewrite of $\partial_j$ applied to the operand                                                      |
@@ -3382,7 +3374,7 @@ et al.:
 ### New operations
 
 Requires: [Node class or free function](#node-class-or-free-function), [`Tensor`
-algebra with `EllipsisIndex`](#tensor-algebra-with-ellipsisindex), [Language
+algebra with `EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex), [Language
 extensions](#language-extensions).
 
 A downstream library builds a new operation from existing node classes, as a
@@ -3396,7 +3388,7 @@ because `index_sum(A[k, k], (k,))`, with a derived index `k`, is the trace for
 every extent, and `divergence(u, P)` is
 `index_sum(gradient(u, P)[k, k], (k,))` for every extent. An operation that an `EllipsisIndex` expresses, such as
 `scale(a, T)`, needs no value shape (see
-[`EllipsisIndex`](#tensor-algebra-with-ellipsisindex)).
+[`EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex)).
 
 ### New subclasses
 
@@ -3497,11 +3489,8 @@ Base
 # Expressions and static type
 Base
 ├── AbstractExpression
-├── Index
-├── EllipsisIndex
 ├── AbstractExtent
-├── AbstractIndexValue
-└── GatheredIndex
+└── Index
 
 # Algebra
 AbstractExpression
@@ -3521,6 +3510,10 @@ AbstractExpression
 ├── ComponentTensor
 ├── IndexSum
 └── Inverse
+Base
+├── EllipsisIndex
+├── AbstractIndexValue
+└── GatheredIndex
 
 # Calculus on a domain
 AbstractExpression
@@ -3573,8 +3566,6 @@ AbstractExpression
 | Group                       | Free function                                                            | `AbstractExpression` overload | Takes                                                                                               | Returns                                                                                      |
 | --------------------------- | ------------------------------------------------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | Expressions and static type | [`index(label)`](#index)                                                 |                               | `label: str \| tuple`                                                                               | `Index`                                                                                      |
-|                             | [`ellipsis_index(label)`](#ellipsisindex)                                |                               | `label: str \| tuple`                                                                               | `EllipsisIndex`                                                                              |
-|                             | [`gathered_index(table, indices)`](#gatheredindex)                       |                               | `table: AbstractIndexValue`, `indices: tuple`                                                       | `GatheredIndex`                                                                              |
 | Algebra                     | [`add(first, second)`](#sum)                                             | `+`                           | `first, second: AbstractExpression`                                                                 | `Sum`                                                                                        |
 |                             | [`multiply(first, second)`](#product)                                    | `*`                           | `first, second: AbstractExpression`                                                                 | `Product`                                                                                    |
 |                             | [`power(first, second)`](#power)                                         | `**`                          | `first, second: AbstractExpression`                                                                 | `Power`                                                                                      |
@@ -3588,6 +3579,8 @@ AbstractExpression
 |                             | [`indexed(expression, indices)`](#indexed)                               | `expression[indices]`         | `expression: AbstractExpression`, `indices: tuple`                                                  | `Indexed`                                                                                    |
 |                             | [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                      | `ComponentTensor`                                                                            |
 |                             | [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                      | `IndexSum`                                                                                   |
+|                             | [`ellipsis_index(label)`](#ellipsisindex)                                |                               | `label: str \| tuple`                                                                               | `EllipsisIndex`                                                                              |
+|                             | [`gathered_index(table, indices)`](#gatheredindex)                       |                               | `table: AbstractIndexValue`, `indices: tuple`                                                       | `GatheredIndex`                                                                              |
 |                             | [`inverse(A)`](#inverse)                                                 |                               | `A: AbstractExpression`                                                                             | `Inverse`                                                                                    |
 |                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                             | The Leibniz formula for $\det A$                                                             |
 | Calculus on a domain        | [`coordinate(P)`](#coordinate)                                           |                               | `P: AbstractDomain`                                                                                 | `Coordinate`                                                                                 |

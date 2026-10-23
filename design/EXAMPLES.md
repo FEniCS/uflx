@@ -193,8 +193,8 @@ Requires: [`Index`](LANGUAGE.md#index), [`Indexed`](LANGUAGE.md#indexed), [`Comp
 `IndexSum`](LANGUAGE.md#componenttensor-and-indexsum), [`Product`](LANGUAGE.md#product).
 
 `transpose` and `matrix_product` are not part of the core. A library provides
-the two as free functions built with derived indices (see [New
-operations](LANGUAGE.md#new-operations)), and the examples of this note use the two:
+the two as free functions built with derived indices (see [Derived
+indices](LANGUAGE.md#derived-indices)), and the examples of this note use the two:
 
 - `transpose(A)` is `component_tensor(A[k, l], (l, k))`, with
   $k$ = `Index(("library.transpose", A, 0))` and
@@ -215,6 +215,33 @@ Examples, with a matrix `A` of value shape `(2, 2)`:
 
 - `transpose(A)` is not equal to `component_tensor(A[i, j], (j, i))` for user
   indices `i` and `j`, because the index labels differ.
+
+### Tensor algebra with `EllipsisIndex`
+
+Requires: [`EllipsisIndex`](LANGUAGE.md#ellipsisindex), [`Indexed`](LANGUAGE.md#indexed), [`ComponentTensor`
+and `IndexSum`](LANGUAGE.md#componenttensor-and-indexsum), [`Sum`](LANGUAGE.md#sum), [`Product`](LANGUAGE.md#product),
+[`Conjugate`](LANGUAGE.md#conjugate).
+
+See also: [Derived indices](LANGUAGE.md#derived-indices), [New
+operations](LANGUAGE.md#new-operations), [Transpose and matrix
+product](#transpose-and-matrix-product).
+
+An `EllipsisIndex` writes an operation on tensors of every rank as one fixed
+composition. The operations in the table below are not part of the core. A
+library may provide the operations as free functions (see
+[New operations](LANGUAGE.md#new-operations)), as for `transpose` above. With
+derived ellipsis indices `r` and `s` and an ordinary index `k`:
+
+| Operation          | Fixed composition                                              |
+| ------------------ | -------------------------------------------------------------- |
+| `scale(a, T)`      | `component_tensor(a * T[r], (r,))`                             |
+| `tensor_sum(A, B)` | `component_tensor(A[r] + B[r], (r,))`                          |
+| `outer(u, v)`      | `component_tensor(u[r] * v[s], (r, s))`                        |
+| `dot(u, v)`        | `component_tensor(index_sum(u[r, k] * v[k, s], (k,)), (r, s))` |
+| `inner(A, B)`      | `index_sum(A[r] * conjugate(B[r]), (r,))`                      |
+
+`A[r] + B[r]` raises `ValueError` if the value shapes of `A` and `B` differ,
+because the extents of `r` differ.
 
 ### An affinely mapped triangle
 
