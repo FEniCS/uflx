@@ -34,4 +34,5 @@ cd design && jupyter-book build --html   # the site
 cd design && jupyter-book start          # serve the site locally
 design/build-pdf.sh                      # every PDF
 design/build-pdf.sh LANGUAGE.md
+design/build-pdf.sh --proof LANGUAGE.md  # a copy for proofreading
 ```

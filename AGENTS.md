@@ -60,6 +60,7 @@ cd design && jupyter-book build --html   # the site
 cd design && jupyter-book start          # serve the site locally
 design/build-pdf.sh                      # every PDF
 design/build-pdf.sh LANGUAGE.md
+design/build-pdf.sh --proof LANGUAGE.md  # wide margins, line numbers, commit in footer
 ```
 
 Asides in the notes, such as the "Legacy UFL" notes, are MyST dropdowns,
