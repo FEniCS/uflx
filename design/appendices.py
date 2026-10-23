@@ -172,25 +172,40 @@ def core(classes: list[ClassEntry]) -> list[ClassEntry]:
 
 
 def class_hierarchy(classes: list[ClassEntry]) -> str:
-    """Render the class hierarchy as a table of parents and subclasses, by chapter."""
-    anchors = {c.name: c.anchor for c in classes}
-
-    def link(name: str) -> str:
-        return f"[`{name}`](#{anchors[name]})" if name in anchors else f"`{name}`"
-
-    rows = []
-    previous = None
+    """Render the class hierarchy, one tree per chapter."""
+    out = []
+    chapters = []
     for c in core(classes):
-        if not c.extends:
-            continue
-        parents = ", ".join(link(name) for name in c.extends)
-        if rows and rows[-1][3] == c.chapter and rows[-1][1] == parents:
-            rows[-1][2] += ", " + link(c.name)
-            continue
-        group = c.chapter if c.chapter != previous else ""
-        previous = c.chapter
-        rows.append([group, parents, link(c.name), c.chapter])
-    return table(["Group", "Extends", "Classes"], [r[:3] for r in rows])
+        if c.extends and c.chapter not in chapters:
+            chapters.append(c.chapter)
+    for chapter in chapters:
+        members = [c for c in core(classes) if c.chapter == chapter and c.extends]
+        names = {c.name for c in members}
+        out.append(f"# {chapter}")
+        roots: list[tuple[str, list[ClassEntry]]] = []
+        for c in members:
+            if len(c.extends) == 1 and c.extends[0] in names:
+                continue
+            key = ", ".join(c.extends)
+            for root, group in roots:
+                if root == key:
+                    group.append(c)
+                    break
+            else:
+                roots.append((key, [c]))
+
+        def walk(group: list[ClassEntry], prefix: str) -> None:
+            for k, c in enumerate(group):
+                last = k == len(group) - 1
+                out.append(f"{prefix}{'└── ' if last else '├── '}{c.name}")
+                children = [m for m in members if m.extends == [c.name]]
+                walk(children, prefix + ("    " if last else "│   "))
+
+        for root, group in roots:
+            out.append(root)
+            walk(group, "")
+        out.append("")
+    return "```\n" + "\n".join(out).rstrip() + "\n```\n"
 
 
 def table(header: list[str], rows: list[list[str]]) -> str:

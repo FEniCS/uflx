@@ -3483,29 +3483,88 @@ part of the extension, and is not yet decided.
 
 ## Appendix: Class hierarchy
 
-Every object in the graph extends `Base`. Each row gives the classes of a
-chapter that extend the classes in the Extends column.
+Every object in the graph extends `Base`. Each tree gives the classes of a
+chapter under the classes that they extend.
 
 <!-- generated: class-hierarchy, run design/appendices.py to update -->
-| Group                       | Extends                                                                                          | Classes                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Domains                     | [`Base`](#the-base-object-base)                                                                  | [`AbstractDomain`](#abstractdomain)                                                                                                                                                                                                                                                                                                                                                                                                                          |
-|                             | [`AbstractDomain`](#abstractdomain)                                                              | [`AbstractCoordinateDomain`](#abstractcoordinatedomain)                                                                                                                                                                                                                                                                                                                                                                                                      |
-|                             | [`AbstractCoordinateDomain`](#abstractcoordinatedomain)                                          | [`RD`](#rd)                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Expressions and static type | [`Base`](#the-base-object-base)                                                                  | [`AbstractExpression`](#abstractexpression), [`Index`](#index), [`EllipsisIndex`](#ellipsisindex), [`AbstractExtent`](#extents), [`AbstractIndexValue`](#abstractindexvalue), [`GatheredIndex`](#gatheredindex)                                                                                                                                                                                                                                              |
-| Algebra                     | [`AbstractExpression`](#abstractexpression)                                                      | [`Integer`](#literals), [`Float`](#literals), [`ImaginaryUnit`](#literals), [`Zero`](#zero), [`Sum`](#sum), [`Product`](#product), [`Power`](#power), [`Division`](#division), [`Absolute`](#absolute), [`Conjugate`](#conjugate), [`SquareRoot`](#elementary-functions-very-incomplete), [`Tensor`](#tensor), [`Indexed`](#indexed), [`ComponentTensor`](#componenttensor-and-indexsum), [`IndexSum`](#componenttensor-and-indexsum), [`Inverse`](#inverse) |
-| Calculus on a domain        | [`AbstractExpression`](#abstractexpression)                                                      | [`Coordinate`](#coordinate), [`Gradient`](#gradient), [`Integral`](#integral)                                                                                                                                                                                                                                                                                                                                                                                |
-| Maps between domains        | [`Base`](#the-base-object-base)                                                                  | [`DomainMap`](#domainmap)                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-|                             | [`AbstractExpression`](#abstractexpression)                                                      | [`PullBack`](#pullback)                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Topology                    | [`Base`](#the-base-object-base)                                                                  | [`AbstractCellType`](#abstractcelltype), [`AbstractTopology`](#abstracttopology)                                                                                                                                                                                                                                                                                                                                                                             |
-| Reference cells             | [`AbstractCoordinateDomain`](#abstractcoordinatedomain), [`AbstractCellType`](#abstractcelltype) | [`AbstractReferenceCell`](#reference-cell)                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Decomposed domains          | [`AbstractDomain`](#abstractdomain)                                                              | [`DecomposedDomain`](#decomposeddomain)                                                                                                                                                                                                                                                                                                                                                                                                                      |
-|                             | [`Base`](#the-base-object-base)                                                                  | [`SideMap`](#sidemap)                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-|                             | [`AbstractExpression`](#abstractexpression)                                                      | [`Normal`](#normal)                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Function spaces             | [`Base`](#the-base-object-base)                                                                  | [`AbstractFunctionSpace`](#abstractfunctionspace)                                                                                                                                                                                                                                                                                                                                                                                                            |
-|                             | [`AbstractExpression`](#abstractexpression)                                                      | [`Function`](#function)                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| Variational forms           | [`AbstractFunctionSpace`](#abstractfunctionspace)                                                | [`ConjugateSpace`](#conjugatespace), [`DualSpace`](#dualspace)                                                                                                                                                                                                                                                                                                                                                                                               |
-|                             | [`AbstractExpression`](#abstractexpression)                                                      | [`Form`](#form), [`Action`](#action)                                                                                                                                                                                                                                                                                                                                                                                                                         |
+```
+# Domains
+Base
+└── AbstractDomain
+    └── AbstractCoordinateDomain
+        └── RD
+
+# Expressions and static type
+Base
+├── AbstractExpression
+├── Index
+├── EllipsisIndex
+├── AbstractExtent
+├── AbstractIndexValue
+└── GatheredIndex
+
+# Algebra
+AbstractExpression
+├── Integer
+├── Float
+├── ImaginaryUnit
+├── Zero
+├── Sum
+├── Product
+├── Power
+├── Division
+├── Absolute
+├── Conjugate
+├── SquareRoot
+├── Tensor
+├── Indexed
+├── ComponentTensor
+├── IndexSum
+└── Inverse
+
+# Calculus on a domain
+AbstractExpression
+├── Coordinate
+├── Gradient
+└── Integral
+
+# Maps between domains
+Base
+└── DomainMap
+AbstractExpression
+└── PullBack
+
+# Topology
+Base
+├── AbstractCellType
+└── AbstractTopology
+
+# Reference cells
+AbstractCoordinateDomain, AbstractCellType
+└── AbstractReferenceCell
+
+# Decomposed domains
+AbstractDomain
+└── DecomposedDomain
+Base
+└── SideMap
+AbstractExpression
+└── Normal
+
+# Function spaces
+Base
+└── AbstractFunctionSpace
+AbstractExpression
+└── Function
+
+# Variational forms
+AbstractFunctionSpace
+├── ConjugateSpace
+└── DualSpace
+AbstractExpression
+├── Form
+└── Action
+```
 <!-- end generated: class-hierarchy -->
 
 ## Appendix: Free functions
