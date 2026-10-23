@@ -1533,9 +1533,12 @@ each value of the free indices. For example, with an array `x` of value shape
 family of $m$ points in `RD(n)`. A family of domains writes a set of points
 once, such as the points of a quadrature rule.
 
-$Q$ is usually `RD(n)`. $Q$ may be smaller, such as the unit triangle for an
-edge of the unit triangle, or a decomposed domain for a cell of the decomposed
-domain (see [`PullBack`](#pullback)).
+$Q$ is usually `RD(n)`. $Q$ may be a proper subset of `RD(n)`, because an
+expression can be pulled back to $D$ only if the expression lives on $Q$ (see
+[`PullBack`](#pullback)). So the ambient domain of an edge of the unit
+triangle is the unit triangle when expressions on the triangle are pulled
+back to the edge, and the ambient domain of a cell of a decomposed domain is
+the decomposed domain.
 
 Examples:
 
@@ -1630,7 +1633,8 @@ The free functions `jacobian(D)` and `density(D)` are the Jacobian matrix and
 the density of a domain $D$ = `DomainMap(P, psi, Q)` of dimension $k$. $n$ is
 the dimension of the ambient coordinate domain of $Q$, and $m$ the dimension
 of the ambient coordinate domain of $P$, with $m = k$ for a coordinate domain
-$P$.
+$P$. `density(D)` requires a coordinate domain $P$ and raises `ValueError`
+otherwise.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -1649,10 +1653,14 @@ volume of a small region of $P$:
   `G = component_tensor(index_sum(J[l, a] * J[l, b], (l,)), (a, b))`, with
   derived indices `l`, `a` and `b`.
 
-`density(D)` reads $m$ and $n$ to choose the composition. The density of a
-decomposed $P$ with $k < m$, such as a surface mesh as the parameter domain, is
-not yet covered, and the density for $m > n$ is undefined. Construction does
-not check either case. The core writes
+`density(D)` reads $m$ and $n$ to choose the composition. A decomposed $P$
+has no density of its own, because for $k < m$, such as a surface mesh, the
+Jacobian matrix has rank $k$ and both compositions above are zero. The
+integral over a decomposed domain composes a piece with the pieces of a
+decomposed parameter domain, so every density has a coordinate parameter
+domain (see [`Integral` over a decomposed
+domain](#integral-over-a-decomposed-domain)). The density for $m > n$ is
+undefined, and construction does not check. The core writes
 $\det J$ only as `determinant(jacobian(D))`, so every use of $\det J$ for one
 $D$ is one expression, and a pass that computes the geometry of a cell once
 computes $\det J$ once. A library that needs $J$ or $\det J$, such as for a
@@ -1670,8 +1678,11 @@ $$
 \int_D f = \int_P (f \circ \psi) \, \rho \, \mathrm{d}X,
 $$
 
-which is `integral(pull_back(f, D) * density(D), P)` for a scalar $f$. The
-integral does not depend on the direction in which $\psi$ traverses $D$.
+which is `integral(pull_back(f, D) * density(D), P)` for a scalar $f$ and a
+coordinate domain $P$. For a decomposed domain $P$, the integral composes $D$
+with the pieces of $P$, as for a piece of a decomposed domain (see
+[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain)).
+The integral does not depend on the direction in which $\psi$ traverses $D$.
 
 The core has no orientation of a domain. An integral that depends on a
 direction, such as a circulation or a flux, is written with the Jacobian
@@ -2133,7 +2144,9 @@ The core does not check that the domains meet only in sets of measure zero.
 - The parameter domain of a piece may itself be a decomposed domain, so
   decomposed domains nest. An expression on $D$ pulled back by such a piece is
   an expression on the parameter domain of the piece, defined through the
-  pieces of the parameter domain in turn.
+  pieces of the parameter domain in turn. An integral over $D$ composes the
+  piece with the pieces of the parameter domain (see [`Integral` over a
+  decomposed domain](#integral-over-a-decomposed-domain)).
 - The ambient domain $Q$ may also be a decomposed domain, such as a mesh in
   which a family of points lies.
 
@@ -2391,19 +2404,35 @@ Notation, for the piece $j$ of $D$:
 
 The integral is the sum over the pieces $j$ of the integrals over the domains
 of piece $j$. [`expand_integrals`](#expanding-integrals) rewrites
-`Integral(f, D)` for a scalar $f$ as that sum:
+`Integral(f, D)` for a scalar $f$ as that sum. For a piece $j$ with a
+coordinate domain $P_j$, the term of the sum is
 
 ```python
 D_j = cell_domain(D, j)
 index_sum(integral(pull_back(f, D_j) * density(D_j), P_j), indices_j)
 ```
 
+For a piece $j$ with a decomposed domain $P_j$, the term is the sum over the
+pieces $i$ of $P_j$ of the terms of the composed maps, with `E_i` =
+`cell_domain(P_j, i)`, $P_i$ the parameter domain of `E_i` and `indices_i`
+the free indices of piece $i$ of $P_j$:
+
+```python
+C_ji = domain_map(P_i, pull_back(psi_j, E_i), D)
+index_sum(integral(pull_back(pull_back(f, D_j), E_i) * density(C_ji), P_i), indices_j + indices_i)
+```
+
+`C_ji` is the image of `E_i` under piece $j$ (see [`PullBack`](#pullback)).
+When $P_i$ is decomposed in turn, `C_ji` takes the place of `D_j` and the
+rule applies again, so every density has a coordinate parameter domain. A
+decomposed $P_j$ has no density of its own, because $P_j$ may have lower
+dimension than its ambient coordinate domain, such as a surface mesh (see
+[Jacobian and density](#jacobian-and-density)).
+
 - A piece with no free indices has no `IndexSum`.
 - An array-valued $f$ integrates component by component, with the density
   written into each component in index notation.
-- For a decomposed domain $P_j$, `expand_integrals` rewrites the inner
-  integral in turn.
-- For a parameter domain $P_j$ of dimension $m = 0$, the density is
+- For a coordinate domain $P_j$ of dimension $m = 0$, the density is
   `Integer(1)`, so the integral over a set of points is the sum of the values.
 
 The density needs no orientation, so an integral of a positive $f$ is
@@ -3061,14 +3090,16 @@ domain](#integral-over-a-decomposed-domain), with these rules:
 | Domain of the `Integral` | Rewrite of `Integral(f, D)`                                                                      |
 | ------------------------ | ------------------------------------------------------------------------------------------------ |
 | A coordinate domain      | Remains                                                                                          |
-| A decomposed domain      | The sum over the pieces of the integrals of the pull-back of $f$ times the density of the piece |
+| A decomposed domain      | The sum over the pieces of the integrals of the pull-back of $f$ times the density of the piece, with a piece composed with the pieces of a decomposed parameter domain |
 
 The pull-back and the density are by `cell_domain(D, j)` for $f$ with the
 support $D$, and by piece $j$ itself for $f$ with the support
 `D.ambient_domain`. An $f$ with no
-support takes either, with the same result. The pass rewrites inner integrals
-first, so an `Integral` over a nested decomposed domain is rewritten from the
-inside out.
+support takes either, with the same result. A piece with a decomposed
+parameter domain is composed with the pieces of that domain (see [Expansion
+into pieces](#expansion-into-pieces)), so one `Integral` over a nested
+decomposed domain is rewritten in one step, and the pass never meets a
+density with a decomposed parameter domain.
 
 ### Expanding pull-backs
 
