@@ -1048,17 +1048,27 @@ coupling_avg = integral(beta * (p1 - p3_avg) * (q1 - q3_avg), D1)
 
 ### The Laplace-Beltrami operator
 
-Requires: [`Gradient`](LANGUAGE.md#gradient), [`Integral` over a decomposed
+Requires: [`DecomposedDomain`](LANGUAGE.md#decomposeddomain),
+[`Gradient`](LANGUAGE.md#gradient), [`Integral` over a decomposed
 domain](LANGUAGE.md#integral-over-a-decomposed-domain), [`Form`](LANGUAGE.md#form).
 
 See also: [Expanding pull-backs](LANGUAGE.md#expanding-pull-backs), [`Inverse`](LANGUAGE.md#inverse).
 
-The Poisson forms on a surface in $R^3$ are the forms of the Laplace–Beltrami operator. Only the geometry
-changes. The vertex positions `y` have value shape `(m, 3)`, and the ambient
-coordinate domain is `RD(3)`:
+The Poisson forms on a surface in $R^3$ are the forms of the Laplace–Beltrami
+operator. The mesh is built as the mesh of the
+[`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, with the vertex
+positions in $R^3$. A mesh library gives a topology `T` of $N$ triangles with
+the cell type `K = ReferenceSimplex(2)`, the vertex positions `y` of value
+shape `(m, 3)` and the table `cell_vertices` of the shape `(N, 3)` and the
+extent $m$, the vertices of each triangle. The ambient coordinate domain is `RD(3)`, and `V`
+is a space of a library on `M`:
 
 ```python
-# A triangulated surface in RD(3), with K, T, c and p of a triangle mesh.
+# The affine map x of each triangle, gathered from the vertex positions y.
+X = coordinate(K)
+c = cell_index(T, 0)
+k, w = index("k"), index("w")
+p = component_tensor(y[gathered_index(cell_vertices, (c, w)), k], (c, w, k))
 x = component_tensor(
     p[c, 0, k] + (p[c, 1, k] - p[c, 0, k]) * X[0] + (p[c, 2, k] - p[c, 0, k]) * X[1],
     (k,),
@@ -1383,9 +1393,10 @@ a = kappa * inner(grad(u), grad(v)) * dx
 L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
 ```
 
-- For a real `V`, `a` is the Poisson bilinear form times `kappa`,
-  `form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))`, up to
-  the labels of `u`, `v` and `i` and the conjugates, which change nothing in
+- For a real `V`, `a` is `kappa` times the Poisson bilinear form
+  `form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))`, with
+  `grad_u = gradient(u, D)`, `grad_v = gradient(v, D)` and `i = index("i")`,
+  up to the labels of `u`, `v` and `i` and the conjugates, which change nothing in
   real arithmetic: `conjugate_space(V)` is `V`, so the argument spaces are
   `(V, V)`. `L` is a sum of three forms with the argument spaces `(V,)`.
   `f * dx` with no argument stays an `Integral`, a functional.
