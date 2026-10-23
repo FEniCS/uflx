@@ -79,7 +79,7 @@ and index tables. Those are base objects with properties, not values.
 | `Integer(2)`, `X[0] * X[1]`, `tensor(...)`  | `RD(2)`, a reference cell, a mesh    |
 | `coordinate(D)`, `gradient(u, D)`           | `domain_map(K, x, RD(2))`            |
 | `pull_back(f, e)`, `normal(D, E, "+")`      | `side_map(D, E, "+")`, a topology    |
-| `function(V, "u")`                          | the space `V`, `dual(V)`             |
+| `function(V, "u")`                          | the space `V`, `dual_space(V)`       |
 | `integral(f, D)`                            | `index("i")`, an extent, a table     |
 | `form(e, (v, u))`, `action(a, 1, w)`        |                                      |
 
@@ -282,8 +282,8 @@ The form also declares the linearity of each argument. Binding `v` says the
 expression is linear in `v`; binding `conjugate(v)` says it is linear in the
 conjugate, so antilinear in `v`. The argument spaces record this through the
 complex conjugate space `conjugate_space(V)`, which is `V` itself when `V` is
-real. So a load, a function in `dual(V)`, adds to a residual only when their
-linearities agree, and there is no convention about which argument is
+real. So a load, a function in `dual_space(V)`, adds to a residual only when
+their linearities agree, and there is no convention about which argument is
 conjugated (Argument spaces, `ConjugateSpace`, `DualSpace`). For real problems
 none of this is visible.
 
@@ -497,7 +497,7 @@ here so that a reader knows which choices are load-bearing.
 | `FacetNormal(mesh)`                      | `normal(D, E, "+")`                                     |
 | `TestFunction`, `TrialFunction`          | functions bound by `form(e, (v, u))`                    |
 | `Coefficient`                            | a function not bound by the form                        |
-| `Cofunction`, `Coargument`               | a fixed and a bound function in `dual(V)`               |
+| `Cofunction`, `Coargument`               | a fixed and a bound function in `dual_space(V)`         |
 | `MixedElement`, `split`                  | an argument that is a tuple of functions                |
 | `action`, `adjoint`                      | `action(f, position, g)`, rebinding with `conjugate`     |
 | `derivative`                             | the Gateaux derivative, not yet covered                 |

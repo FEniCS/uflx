@@ -2771,13 +2771,13 @@ forms on a space or on the product of spaces.
 | `DualSpace(S)` |                                                                                                                            |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Extends        | `AbstractFunctionSpace` |
-| Free function  | `dual(S)`                                                                                                                  |
+| Free function  | `dual_space(S)`                                                                                                            |
 | Takes          | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` |
 | Properties     | `space` $S$, an `AbstractFunctionSpace`, or a `tuple` of at least two spaces                                               |
 | Derived        | `domain`, `value_shape`, `scalar_type` and `argument_spaces`, below |
 | Raises         | `TypeError` for an $S$ that is not a space or a `tuple` of spaces, and `ValueError` for a `tuple` of fewer than two spaces |
 
-`dual(S)` provides:
+`dual_space(S)` provides:
 
 - The domain `None` and the value shape `()`.
 - The argument spaces `(S',)`, with $S'$ the conjugate of $S$ as in
@@ -2786,36 +2786,37 @@ forms on a space or on the product of spaces.
 
 #### Antilinear forms
 
-A function in `dual(S)` is an antilinear form on $S$, a linear form on
+A function in `dual_space(S)` is an antilinear form on $S$, a linear form on
 `conjugate_space(S)` (see [`ConjugateSpace`](#conjugatespace)). A form is
 antilinear in the same way in an argument bound as `conjugate(v)`, such as the
 argument $v$ of $\int u \bar v$. A residual bound as `(conjugate(v),)` and an
 assembled load therefore have the same argument spaces, and the difference of
 the two is a form.
 
-The space of linear forms on a complex $S$ is `dual(conjugate_space(S))`,
-with the argument spaces `(S,)`. The core therefore fixes no convention on the
-argument in which a form is antilinear.
+The space of linear forms on a complex $S$ is
+`dual_space(conjugate_space(S))`, with the argument spaces `(S,)`. The core
+therefore fixes no convention on the argument in which a form is antilinear.
 
-The pairing of a function `l` in `dual(S)` with a function `w` in $S$ is
+The pairing of a function `l` in `dual_space(S)` with a function `w` in $S$ is
 `action(l, 0, w)`, antilinear in `w`. The library that provides the values of
 `l` evaluates the pairing.
 
 #### The dual of a product
 
-For a `tuple` $S$, a function in `dual(S)` is one antilinear form on the
+For a `tuple` $S$, a function in `dual_space(S)` is one antilinear form on the
 product of the spaces, such as the load of a mixed problem. No single function
 is in the product.
 
 #### The double dual
 
-`dual(dual(V))` is the space of antilinear forms on `dual(V)`, with the
-argument spaces `(conjugate_space(dual(V)),)`. `dual(dual(V))` is not `V`,
+`dual_space(dual_space(V))` is the space of antilinear forms on
+`dual_space(V)`, with the argument spaces
+`(conjugate_space(dual_space(V)),)`. `dual_space(dual_space(V))` is not `V`,
 because `V` has the argument spaces `()`.
 
 The canonical map takes a function `w` in `V` to
 `form(conjugate(action(l, 0, w)), (conjugate(l),))`, with a function `l` in
-`dual(V)`. The image is linear in `w` and antilinear in `l`. A library may
+`dual_space(V)`. The image is linear in `w` and antilinear in `l`. A library may
 store `w` and the image with the same values.
 
 #### Examples
@@ -2823,19 +2824,20 @@ store `w` and the image with the same values.
 The examples use the spaces `V` and `Q` and the functions `v` in `V` and `q`
 in `Q` of the [`Form`](#form) examples.
 
-- `l = function(dual(V), "l")` has the argument spaces
+- `l = function(dual_space(V), "l")` has the argument spaces
   `(conjugate_space(V),)`. `action(l, 0, v)` is the pairing
   $\langle l, v \rangle$.
-- `m = function(dual((V, Q)), "m")` has the argument spaces
+- `m = function(dual_space((V, Q)), "m")` has the argument spaces
   `((conjugate_space(V), conjugate_space(Q)),)`. `action(m, 0, (v, q))` is the
   pairing of `m` with `(v, q)`.
-- Let `w` be a function in `V` and `l` a function in `dual(V)`.
+- Let `w` be a function in `V` and `l` a function in `dual_space(V)`.
   `form(conjugate(action(l, 0, w)), (conjugate(l),))` has the argument spaces
-  `(conjugate_space(dual(V)),)`, the static type of a function in
-  `dual(dual(V))`. The form evaluates every antilinear form on `V` at `w`.
+  `(conjugate_space(dual_space(V)),)`, the static type of a function in
+  `dual_space(dual_space(V))`. The form evaluates every antilinear form on `V`
+  at `w`.
 
 ```{dropdown} Legacy UFL
-The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the canonical map is a form, so the spaces keep distinct argument spaces.
+The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual_space(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the canonical map is a form, so the spaces keep distinct argument spaces.
 ```
 
 ### `Form`
@@ -2894,7 +2896,7 @@ expression `a` linear in `u` and `v`:
 - With `m = integral(u * conjugate(v), D)`, `form(m, (conjugate(v), u))` is
   the sesquilinear mass form, with the argument spaces
   `(conjugate_space(V), V)`.
-- With `r = integral(f * conjugate(v), D)` and `l = function(dual(V), "l")`,
+- With `r = integral(f * conjugate(v), D)` and `l = function(dual_space(V), "l")`,
   `form(r, (conjugate(v),)) - l` is a residual, with the argument spaces
   `(conjugate_space(V),)`. For a complex `V`, `form(integral(f * v, D), (v,)) - l`
   raises `ValueError`, because the argument spaces `(V,)` and
@@ -2951,7 +2953,7 @@ remains for the library of the leaf.
 #### Examples
 
 The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples, and
-`l = function(dual(V), "l")`.
+`l = function(dual_space(V), "l")`.
 
 - `action(form(a, (v, u)), 1, w)` is a linear form in `v`. A pass evaluates
   the action to `form(b, (v,))`, with `b` the expression `a` with `u` replaced
@@ -3549,7 +3551,7 @@ chapter that extend the classes in the Extends column.
 |                             | [`normal(D, E, s)`](#normal)                                             |                               | `D, E: DecomposedDomain`, `s: str`                                                                  | `Normal`                                                                                     |
 | Function spaces             | [`function(V, label)`](#function)                                        |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                   | `Function`                                                                                   |
 | Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                               | `V: AbstractFunctionSpace`                                                                          | `V` for a real `V`, and `ConjugateSpace(V)` for a complex `V`                                |
-|                             | [`dual(S)`](#dualspace)                                                  |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                     | `DualSpace`                                                                                  |
+|                             | [`dual_space(S)`](#dualspace)                                            |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                     | `DualSpace`                                                                                  |
 |                             | [`form(expression, arguments)`](#form)                                   |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| tuple[Function, ...], ...]`         | `Form`                                                                                       |
 |                             | [`action(f, position, g)`](#action)                                      |                               | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]` | `Action`                                                                                     |
 <!-- end generated: free-functions -->
