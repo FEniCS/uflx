@@ -118,9 +118,9 @@ consumers, e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` exte
   `Form` is a sum/combination of integrals whose integrand must be scalar with no
   free indices.
 
-design/LANGUAGE.md specifies six core transformations on top of this object model
-(expanding integrals, pull-backs and components, applying derivatives and actions,
-and reducing component tensors), all lazy graph rewrites rather than eager
+design/LANGUAGE.md specifies five core transformations on top of this object model
+(expanding integrals and pull-backs, applying derivatives and actions, and
+reducing component tensors), all lazy graph rewrites rather than eager
 evaluation. The Gateaux derivative is planned but not yet specified (see the
 "Gateaux derivative" section of design/LANGUAGE.md).
 

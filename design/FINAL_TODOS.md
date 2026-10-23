@@ -10,13 +10,8 @@ Nothing. Integrals over cells and facets use the induced density in
 
 ## Common forms
 
-1. **Surface gradient and conormal.** `components(du, D)` is refused when $D$ has a lower
-   dimension than the ambient coordinate domain. Specify the tangential
-   projection (the pseudo-inverse of a non-square Jacobian) for surfaces and
-   shells, and the in-surface conormal of the edges of a surface mesh, which
-   `normal` refuses.
 1. **Linearisation.** Add the derivative with respect to a function or a
-   `tuple` of functions, which adds a slot to a form. For shape derivatives and
+   `tuple` of functions, which adds an argument to a form. For shape derivatives and
    ALE, the geometry must depend on a function, such as a parameterisation of
    the pieces from a displacement function on the domain, because a form binds
    only functions and the parameterisation is an expression of runtime data.
@@ -31,15 +26,15 @@ Nothing. Integrals over cells and facets use the induced density in
 ## Already expressible
 
 - The Laplacian, as `integral` over `D` of
-  `index_sum(components(du, D)[i] * components(dv, D)[i], (i,))`, with the
+  `index_sum(gradient(u, D)[i] * gradient(v, D)[i], (i,))`, with the
   Euclidean frame of `RD(n)`.
 - The volume and the size $h$ of each cell, and the area of each facet, as an
   `Integral` over the reference cell of the density, with the free cell index.
 - Mixed forms, such as Stokes and mixed Poisson with Raviart–Thomas spaces, as
-  a slot of a `tuple` of functions, `form(e, ((v, q), (u, p)))`. The members
+  an argument that is a `tuple` of functions, `form(e, ((v, q), (u, p)))`. The members
   may be on different domains.
-- H(curl) and H(div) spaces, as spaces of the degree
-  `(1,)` and `(n - 1,)`, with the normal trace through `normal`.
+- H(curl) and H(div) spaces, as vector-valued spaces with a Piola map, with
+  the normal trace through `normal`.
 - Real spaces and Lagrange multipliers, as a space with the domain `None` and a
   `Function`.
 - Subdomain and marked boundary terms, through topologies with sides of

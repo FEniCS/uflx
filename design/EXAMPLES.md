@@ -170,7 +170,7 @@ class ReferenceSimplex(Simplex, AbstractReferenceCell):
     def vertices(self) -> AbstractExpression:
         n = self.dimension
         if n == 0:
-            return Zero((1, 0), (), (), ())
+            return Zero((1, 0), (), ())
         return tensor(
             tuple(
                 tensor(tuple(Integer(1 if k == v - 1 else 0) for k in range(n)))
@@ -219,8 +219,9 @@ Examples, with a matrix `A` of value shape `(2, 2)`:
 ### An affinely mapped triangle
 
 Requires: [The unit simplex](#the-unit-simplex),
-[`Coordinate`](LANGUAGE.md#coordinate), [`Tensor`](LANGUAGE.md#tensor), [`Components`](LANGUAGE.md#components),
-[`DomainMap`](LANGUAGE.md#domainmap).
+[`Coordinate`](LANGUAGE.md#coordinate), [`Tensor`](LANGUAGE.md#tensor),
+[`DomainMap`](LANGUAGE.md#domainmap), [Jacobian and
+density](LANGUAGE.md#jacobian-and-density).
 
 The physical triangle with vertices $v_0 = (1, 0)$, $v_1 = (3, 1)$ and
 $v_2 = (2, 3)$ is the image of the unit triangle under an affine map.
@@ -250,120 +251,104 @@ The Jacobian matrix of $\psi$ is the constant matrix
 $$J = \begin{pmatrix} 2 & 1 \\ 1 & 3 \end{pmatrix},$$
 
 so $\det J = 5$, and the area of the physical triangle is $5$ times the area
-$1/2$ of the unit triangle.
+$1/2$ of the unit triangle. `jacobian(K)` evaluates to $J$,
+`determinant(jacobian(K))` to $5$, and `density(K)` to $|\det J| = 5$.
+Swapping $v_1$ and $v_2$ gives $\det J = -5$ and the same density.
 
-### Orientation of an edge and of a triangle
+### Circulation along an edge
 
-Requires: [Concept: orientation of a domain](LANGUAGE.md#concept-orientation-of-a-domain),
-[Concept: integral over a domain](LANGUAGE.md#concept-integral-over-a-domain),
-[Jacobian determinant](LANGUAGE.md#jacobian-determinant), [An affinely
+Requires: [Concept: integral over a domain](LANGUAGE.md#concept-integral-over-a-domain),
+[Jacobian and density](LANGUAGE.md#jacobian-and-density), [An affinely
 mapped triangle](#an-affinely-mapped-triangle).
 
 The examples use `T`, `X`, `one`, `S`, `t` and `e` of the
-[`PullBack`](LANGUAGE.md#pullback) example, and `K` of the
-[affinely mapped triangle example](#an-affinely-mapped-triangle).
+[`PullBack`](LANGUAGE.md#pullback) example.
 
 The edge `e`, with $\psi(t) = (1 - t, t)$, runs from vertex 1 to vertex 2 of
-the unit triangle. The edge with $\psi(t) = (t, 1 - t)$ is the same set with
-the opposite orientation, so the integral of $x \, \mathrm{d}y$ changes sign:
+the unit triangle. The edge with $\psi(t) = (t, 1 - t)$ is the same set, run
+the other way. The circulation of a vector field along an edge depends on the
+direction, and the integral of a function does not:
 
 ```python
 x, y = X[0], X[1]
-dy = exterior_derivative(y, T)
+l = index("l")
 
-# The edge e reversed, the same set with the opposite orientation.
+# The vector field F = (0, x) on T.
+F = tensor((Integer(0), x))
+
+# The edge e run the other way.
 e_reversed = domain_map(S, tensor((t, one - t)), T)
 
-# A later pass evaluates the two integrals to 1/2 and -1/2.
-integral(pull_back(x * dy, e), S)
-integral(pull_back(x * dy, e_reversed), S)
+def circulation(edge):
+    return integral(index_sum(pull_back(F, edge)[l] * jacobian(edge)[l, 0], (l,)), S)
+
+# A later pass evaluates the two circulations to 1/2 and -1/2.
+circulation(e)
+circulation(e_reversed)
+
+# A later pass evaluates both integrals of x to sqrt(2) / 2.
+integral(pull_back(x, e) * density(e), S)
+integral(pull_back(x, e_reversed) * density(e_reversed), S)
 ```
 
-On `e_reversed`, $x = t$ and $\mathrm{d}y$ pulls back to $-\mathrm{d}t$, so
-the integral is $\int_0^1 -t \, \mathrm{d}t = -1/2$.
-
-The triangle `K` has $\det J = 5$, so the orientation of `K` agrees with the
-orientation of `RD(2)`:
-
-```python
-# The pull-back of the volume form of RD(2), det J dX_0 ^ dX_1, a 2-form on T.
-w = pull_back(volume_form(RD(2)), K)
-
-# A later pass evaluates det J to 5.
-det_J = jacobian_determinant(K)
-
-# The sign of det J, 1 here.
-s = det_J / absolute(det_J)
-
-# The area of K. A later pass evaluates the integral to 5/2, whatever the sign of det J.
-integral(s * w, T)
-```
-
-Swapping $v_1$ and $v_2$ gives $\det J = -5$ and $s = -1$. The integral of `w`
-alone is then $-5/2$, and the integral of `s * w` is still $5/2$.
-
-Entry `[0, 1]` of `components(components(w, T), T)` is also $\det J$, but is a
-different expression from `jacobian_determinant(K)`. The example uses
-`jacobian_determinant(K)`, the one expression of the core for $\det J$ (see
-[Jacobian determinant](LANGUAGE.md#jacobian-determinant)).
+On `e`, $F \circ \psi = (0, 1 - t)$ and $\psi' = (-1, 1)$, so the
+circulation is $\int_0^1 (1 - t) \, \mathrm{d}t = 1/2$. On `e_reversed`,
+$F \circ \psi = (0, t)$ and $\psi' = (1, -1)$, so the circulation is
+$\int_0^1 -t \, \mathrm{d}t = -1/2$. The density is $|\psi'| = \sqrt 2$ on
+both.
 
 ### Integrating over an edge
 
 Requires: [`PullBack`](LANGUAGE.md#pullback), [`Integral`](LANGUAGE.md#integral),
-[`Components`](LANGUAGE.md#components), [Elementary functions (very
-incomplete)](LANGUAGE.md#elementary-functions-very-incomplete).
+[Jacobian and density](LANGUAGE.md#jacobian-and-density), [Circulation along
+an edge](#circulation-along-an-edge).
 
-The integral over the edge `e` of the [`PullBack`](LANGUAGE.md#pullback) example is the
-integral over `S` of the pull-back by `e`. The examples use `T`, `X`, `one`,
-`S`, `t`, `e` and `dx` of that example, and `x`, `y` and `dy` of the
-[orientation example](#orientation-of-an-edge-and-of-a-triangle).
+The integral over the edge `e` of the [`PullBack`](LANGUAGE.md#pullback)
+example is the integral over `S` of the pull-back by `e`, times the density.
+The examples use `T`, `X`, `one`, `S`, `t` and `e` of that example, and `x`
+and `y` of the [circulation example](#circulation-along-an-edge).
 
-The flux of a vector field $u$ through the edge is the integral of the 1-form
-$u_0 \, \mathrm{d}y - u_1 \, \mathrm{d}x$, which needs no metric. For
-$u = X$, the 1-form pulls back to $(1 - t) \, \mathrm{d}t + t \, \mathrm{d}t$:
+The flux of a vector field $u$ through the edge is the integral of $u$ against
+the normal $(\psi'_1, -\psi'_0)$, whose length is the density. For $u = X$:
 
 ```python
-# A later pass evaluates the integral to 1.
-integral(pull_back(x * dy - y * dx, e), S)
+J = jacobian(e)
+
+# A later pass evaluates the flux to 1.
+integral(pull_back(x, e) * J[1, 0] - pull_back(y, e) * J[0, 0], S)
 ```
 
 The flux is 1. The divergence of $X$ is 2 and the area of `T` is $1/2$, so
-the flux of $X$ out of `T` is 1. The 1-form $x \, \mathrm{d}y - y \,
-\mathrm{d}x$ is zero on the other two edges of `T`, so the whole flux passes
-through `e`. This is the divergence theorem, without a normal vector and
-without a metric.
+the flux of $X$ out of `T` is 1. $X$ is tangent to the other two edges of
+`T`, so the whole flux passes through `e`. The equality of the two fluxes is
+the divergence theorem.
 
-The integral of a scalar function with respect to arc length needs the length
-element $|\psi'| \, \mathrm{d}t$, which comes from the Euclidean metric of
-`T`. The metric enters as an expression that the user writes:
-
-> `Integral` over a coordinate domain takes the density from the user. For a
-> decomposed domain, `expand_integrals` builds the density (see [`Integral`
-> over a decomposed domain](LANGUAGE.md#integral-over-a-decomposed-domain)).
+The integral of a scalar function with respect to arc length uses the
+density $|\psi'|$:
 
 ```python
-# The Jacobian matrix of the edge, with value shape (2, 1).
-J = components(exterior_derivative(e.parameterisation, S), S)
-
-# The length element of the edge.
-ds = square_root(J[0, 0] * J[0, 0] + J[1, 0] * J[1, 0]) * volume_form(S)
-
 # A later pass evaluates the integral to the length sqrt(2) of e.
-integral(ds, S)
+integral(density(e), S)
 
 # A later pass evaluates the integral to sqrt(2) / 6.
-integral(pull_back(x * y, e) * ds, S)
+integral(pull_back(x * y, e) * density(e), S)
 ```
+
+`density(e)` is `square_root(determinant(G))`, with `G` the $1 \times 1$
+matrix $J^T J$ (see [Jacobian and density](LANGUAGE.md#jacobian-and-density)).
+For a decomposed domain, `expand_integrals` builds the same density (see
+[`Integral` over a decomposed
+domain](LANGUAGE.md#integral-over-a-decomposed-domain)).
 
 ### Integrating over the boundary of a triangle
 
 Requires: [`DomainMap`](LANGUAGE.md#domainmap),
 [`ComponentTensor` and `IndexSum`](LANGUAGE.md#componenttensor-and-indexsum),
-[Integrating over an edge](#integrating-over-an-edge).
+[Circulation along an edge](#circulation-along-an-edge).
 
 The three edges of `T` are one family of domains, with a free index. The
-example uses the names of
-[Integrating over an edge](#integrating-over-an-edge).
+example uses the names of the [circulation
+example](#circulation-along-an-edge).
 
 ```python
 zero = Integer(0)
@@ -378,22 +363,22 @@ psi_edges = component_tensor(starts[i, k] + t * (ends[i, k] - starts[i, k]), (k,
 edges = domain_map(S, psi_edges, T)
 
 # A later pass evaluates the integral to 1/2.
-index_sum(integral(pull_back(x * dy, edges), S), (i,))
+index_sum(circulation(edges), (i,))
 ```
 
-The result is the integral of $x \, \mathrm{d}y$ over the boundary of `T`,
-which is $\int_T \mathrm{d}x \wedge \mathrm{d}y = 1/2$ by Stokes' theorem.
-Without the `IndexSum`, the integral has the free index `i`, and the value
-for each `i` is the integral over one edge.
+The result is the circulation of $F = (0, x)$ around the boundary of `T`,
+which is $\int_T (\partial_x F_1 - \partial_y F_0) = 1/2$ by Green's
+theorem. Without the `IndexSum`, the integral has the free index `i`, and the
+value for each `i` is the circulation along one edge.
 
-The orientation of each edge comes from the order of `starts` and `ends`. Every
+The direction of each edge comes from the order of `starts` and `ends`. Every
 domain of a family has the same parameter domain, here `S`.
 
 ### Quadrature
 
 Requires: [Points and point evaluation](LANGUAGE.md#points-and-point-evaluation),
 [`DomainMap`](LANGUAGE.md#domainmap), [`PullBack`](LANGUAGE.md#pullback),
-[`Integral`](LANGUAGE.md#integral), [`Components`](LANGUAGE.md#components), [`Tensor`](LANGUAGE.md#tensor),
+[`Integral`](LANGUAGE.md#integral), [`Tensor`](LANGUAGE.md#tensor),
 [`ComponentTensor` and `IndexSum`](LANGUAGE.md#componenttensor-and-indexsum),
 [Extents](LANGUAGE.md#extents).
 
@@ -419,13 +404,9 @@ q = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
 The points are one domain with the free index `i`, so `f` occurs once in `q`,
 and a form compiler can evaluate `q` as a loop over the points.
 
-A later pass evaluates `q` to $1/24$, which is
-`integral(f * volume_form(T), T)`, because the rule is exact for $f$. The two
-expressions are not equal, so quadrature is a pass, and the rule is an
-argument of the pass. The pass finds the coefficient $c$ of a top form
-$c \, \mathrm{d}X_0 \wedge \mathrm{d}X_1$ on `T` as
-`components(components(c * volume_form(T), T), T)[0, 1]`. The result is an
-expression of the core.
+A later pass evaluates `q` to $1/24$, which is `integral(f, T)`, because the
+rule is exact for $f$. The two expressions are not equal, so quadrature is a
+pass, and the rule is an argument of the pass.
 
 After the passes, `q` is
 
@@ -434,7 +415,7 @@ index_sum(weights[i] * (points[i, 0] * points[i, 1]), (i,))
 ```
 
 `expand_pull_backs` replaces `X` by the parameterisation of `xs`. A pass
-replaces the integral over `RD(0)` of a 0-form by the 0-form, and
+replaces the integral over `RD(0)` of an expression by the expression, and
 `reduce_component_tensors` replaces `component_tensor(points[i, k], (k,))[0]`
 by `points[i, 0]` (see [Reducing component
 tensors](LANGUAGE.md#reducing-component-tensors)). A form compiler could generate:
@@ -512,18 +493,17 @@ The example uses `T`, `psi` and `K` of the affinely mapped triangle.
 
 ```python
 Y = coordinate(RD(2))
-vol = volume_form(RD(2))
 k = index("k")
 
 # A later pass evaluates the area of K to 5/2.
-area = integral(pull_back(vol, K), T)
+area = integral(density(K), T)
 
 # A later pass evaluates the centroid of K to (2, 4/3).
-centroid = component_tensor(integral(pull_back(Y[k] * vol, K), T) / area, (k,))
+centroid = component_tensor(integral(pull_back(Y[k], K) * density(K), T) / area, (k,))
 ```
 
-The pull-back of `vol` by `K` gives the factor $\det J = 5$, without a
-determinant. The centroid is also `pull_back(psi, c)`, the image of the
+`density(K)` is $|\det J| = 5$ (see [Jacobian and
+density](LANGUAGE.md#jacobian-and-density)). The centroid is also `pull_back(psi, c)`, the image of the
 centroid `c` of `T` of [Points and point
 evaluation](LANGUAGE.md#points-and-point-evaluation). The two expressions are not
 equal, and a later pass evaluates both to $(2, 4/3)$.
@@ -540,8 +520,8 @@ Poisson problem, the legacy UFL `dS` integral, on the square divided into two
 triangles. The example uses `D`, `square`, `K`, `X`, `y` and `cell_vertices`
 of the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, `I = ReferenceSimplex(1)`
 and the `diagonal` topology of the [Restriction](LANGUAGE.md#restriction) example, a
-space `V` on `D` of the degree `()` and the value shape `()`, and functions
-`u` and `v` in `V`. `runtime_array` is the language extension of the [cut cell example](#integrating-over-a-cut-cell).
+space `V` on `D` of the value shape `()`, and functions `u` and `v` in
+`V`. `runtime_array` is the language extension of the [cut cell example](#integrating-over-a-cut-cell).
 
 ```python
 # The interior facets, seen from the sides "+" and "-", with the free index e.
@@ -550,8 +530,8 @@ e = cell_index(diagonal, 0)
 
 # The gradients on D, in the frame of RD(2).
 i = index("i")
-grad_u = components(exterior_derivative(u, D), D)
-grad_v = components(exterior_derivative(v, D), D)
+grad_u = gradient(u, D)
+grad_v = gradient(v, D)
 
 # The restrictions from each side, expressions on E.
 u_p, u_m = restriction(u, E, "+"), restriction(u, E, "-")
@@ -585,9 +565,9 @@ a_facet = form(integral(f, E), (v, u))
 - `alpha[e]` stands for the legacy $\alpha / h$. The array is a choice, not a
   limitation. A size built from the two cells is a composition with the free
   index `e`: the measure of the cell on the side `"+"` is
-  `integral(rho_p * volume_form(K), K)`, with `rho_p` the density of $B_+$ of
-  [Restriction](LANGUAGE.md#restriction) built as in [`Integral` over a decomposed
-  domain](LANGUAGE.md#integral-over-a-decomposed-domain), and a per-cell array `h` of the
+  `integral(density(B_p), K)`, with `B_p` the map $B_+$ of
+  [Restriction](LANGUAGE.md#restriction) (see [Jacobian and
+  density](LANGUAGE.md#jacobian-and-density)), and a per-cell array `h` of the
   solver is read as `h[gathered_index(cells_p, (e,))]`.
 
 The core transformations rewrite `a_facet` as follows. With $B_\pm$ =
@@ -597,19 +577,20 @@ of the facet into that cell, both of [Restriction](LANGUAGE.md#restriction), wit
 tables `(cells_pm, positions_pm)` of each side:
 
 1. `expand_integrals` rewrites `integral(f, E)` as
-   `index_sum(integral(pull_back(f, cell_domain(E, 0)) * rho * volume_form(I), I), (e,))`,
-   with `rho` the length of the facet, from the Jacobian of the parameterisation
-   `pull_back(pull_back(coordinate(D), B_+), A_+)` of the piece.
+   `index_sum(integral(pull_back(f, cell_domain(E, 0)) * density(cell_domain(E, 0)), I), (e,))`,
+   with the density the length of the facet, from the Jacobian of the
+   parameterisation `pull_back(pull_back(coordinate(D), B_+), A_+)` of the
+   piece.
 2. `expand_pull_backs` moves the pull-back by `cell_domain(E, 0)` into `f`.
    On `u_p` the rule for `SideMap` gives `pull_back(pull_back(u, B_+), A_+)`.
    The inner pull-back remains, for the library of `V`, as `u` on the cell
    `cells_p[e]` (see [`AbstractFunctionSpace`](LANGUAGE.md#abstractfunctionspace)), and
    the outer pull-back remains outside the inner one, by the rule that
    pull-backs nest (see [Expanding pull-backs](LANGUAGE.md#expanding-pull-backs)).
-   On `du_p` the same rule gives the pull-back of `components(du, D)` by
-   $B_+$, which the rule for `Components` rewrites as
+   On `du_p` the same rule gives the pull-back of `gradient(u, D)` by
+   $B_+$, which the rule for `Gradient` rewrites as
    $K^T \hat g$, with $K$ = `inverse(J_+)` the inverse Jacobian of the cell and
-   $\hat g$ = `components(exterior_derivative(pull_back(u, B_+), K), K)` the
+   $\hat g$ = `gradient(pull_back(u, B_+), K)` the
    reference gradient, and then pulled back by $A_+$, which remains on
    $\hat g$ and on $J_+$, because `I` has lower dimension than `K`: the
    reference gradient and the cell Jacobian are read at the points of the
@@ -617,7 +598,7 @@ tables `(cells_pm, positions_pm)` of each side:
    with $\hat m$ the normal of the edge `(1, 2)` of `K` pointing away from the
    centroid of `K`. On `alpha[e]`, an expression with no support whose free
    index `e` is free in `cell_domain(E, 0)`, the pull-back is `alpha[e]`.
-3. `apply_derivatives` leaves `exterior_derivative(pull_back(u, B_+), K)` on
+3. `apply_derivatives` leaves `gradient(pull_back(u, B_+), K)` on
    the function, and `reduce_component_tensors` reduces the gathers of the
    vertex positions inside $J_+$ to `Indexed`s with gathered indices, nested
    through the cell on the side, and `points_pm` to `Indexed`s of
@@ -634,14 +615,14 @@ reference facet `I` that reads the reference basis of `u` and `v` on the two
 cells, through the library of `V`, at the points of the facet in each cell's
 reference coordinates $A_\pm(t)$, and the two cell Jacobians at those points.
 This is the interface of a legacy interior facet kernel, with the local facet
-numbers replaced by the positions of the facet vertices, which also fix the orientation of the
-facet from each side.
+numbers replaced by the positions of the facet vertices, which also fix the
+direction of the facet from each side.
 
 - In the example, $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$ (see
   [Restriction](LANGUAGE.md#restriction)), $J_+$ is the identity and $J_-$ is
   $\begin{pmatrix} 0 & -1 \\ 1 & 1 \end{pmatrix}$, and $\hat m = (1, 1) / \sqrt 2$,
   so `n` evaluates to $(1, 1) / \sqrt 2$ on the diagonal, pointing from
-  triangle 0 into triangle 1, and `rho` to $\sqrt 2$.
+  triangle 0 into triangle 1, and the density to $\sqrt 2$.
 - `restriction(u, E, "-")` on the same `t` reads `u` on triangle 1 at
   $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
   is a difference at one point.
@@ -690,14 +671,14 @@ i = index("i")
 half = Integer(1) / Integer(2)
 
 # The local bilinear form, one block for each cell because W is discontinuous.
-grad_e = components(exterior_derivative(e, D), D)
-grad_v = components(exterior_derivative(v, D), D)
+grad_e = gradient(e, D)
+grad_v = gradient(v, D)
 a = form(integral(index_sum(grad_e[i] * grad_v[i], (i,)), D), (v, e))
 
 # The interior residual. The Laplacian of u_h is zero for degree 1, and is kept
 # for higher degrees.
-grad_u = components(exterior_derivative(u_h, D), D)
-lap_u = index_sum(components(exterior_derivative(grad_u, D), D)[i, i], (i,))
+grad_u = gradient(u_h, D)
+lap_u = index_sum(gradient(grad_u, D)[i, i], (i,))
 r_cell = integral((f + lap_u) * v, D)
 
 # The jump of the normal derivative with the normal of "+". From "-" the normal
@@ -764,10 +745,10 @@ with the two kernels of the global form in place of hand-written code.
   cell. The form is the same with `restriction(v, E, "self")` in place of the
   sum of the two restrictions.
 - The per-cell estimator $\eta_K^2 = \int_K \lvert \nabla e \rvert^2$ is
-  `integral(pull_back(index_sum(grad_e[i] * grad_e[i], (i,)), cell_domain(D, 0)) * rho * volume_form(K), K)`,
-  with `rho` the density of the cell of [`Integral` over a decomposed
-  domain](LANGUAGE.md#integral-over-a-decomposed-domain), an expression with
-  no support and the cell index free: one value for each cell.
+  `integral(pull_back(index_sum(grad_e[i] * grad_e[i], (i,)), cell_domain(D, 0)) * density(cell_domain(D, 0)), K)`,
+  with the density of the cell (see [Jacobian and
+  density](LANGUAGE.md#jacobian-and-density)), an expression with no support
+  and the cell index free: one value for each cell.
 
 ### A fluid and a solid
 
@@ -830,8 +811,8 @@ in the [interior facet example](#an-interior-facet-integral).
 The problem is Stokes flow in the fluid and linear elasticity in the solid,
 coupled by a multiplier on the interface that equates the fluid velocity to
 the velocity of the solid over a time step. With spaces of a library, `V` and
-`Q` on `F`, `W` on `S` and `L` on `G`, all of the degree `()`, with `V`, `W`
-and `L` of the value shape `(2,)` and `Q` of the value shape `()`:
+`Q` on `F`, `W` on `S` and `L` on `G`, with `V`, `W` and `L` of the value
+shape `(2,)` and `Q` of the value shape `()`:
 
 ```python
 u, v = function(V, "u"), function(V, "v")
@@ -846,16 +827,16 @@ i, j = index("i"), index("j")
 half, two = Integer(1) / Integer(2), Integer(2)
 
 # Stokes flow on F.
-grad_u = components(exterior_derivative(u, F), F)
-grad_v = components(exterior_derivative(v, F), F)
+grad_u = gradient(u, F)
+grad_v = gradient(v, F)
 div_u, div_v = index_sum(grad_u[i, i], (i,)), index_sum(grad_v[i, i], (i,))
 fluid = integral(
     nu * index_sum(grad_u[i, j] * grad_v[i, j], (i, j)) - p * div_v - q * div_u, F
 )
 
 # Linear elasticity on S.
-grad_d = components(exterior_derivative(d, S), S)
-grad_w = components(exterior_derivative(w, S), S)
+grad_d = gradient(d, S)
+grad_w = gradient(w, S)
 eps_d, eps_w = half * (grad_d[i, j] + grad_d[j, i]), half * (grad_w[i, j] + grad_w[j, i])
 div_d, div_w = index_sum(grad_d[i, i], (i,)), index_sum(grad_w[i, i], (i,))
 solid = integral(two * mu_s * index_sum(eps_d * eps_w, (i, j)) + lam_s * div_d * div_w, S)
@@ -943,7 +924,7 @@ coordinates `x3` of the tetrahedra with the free index `cell_index(T3, 0)`,
 built as in the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, the
 topology `T1` of the segments with the cell type `I` and the side
 `(("tissue", T3, 0),)`, spaces of a library `V3` on `D3` and `V1` on `D1` of
-the degree `()` and the value shape `()`, and `runtime_extent` and
+the value shape `()`, and `runtime_extent` and
 `runtime_array` of the [cut cell
 example](#integrating-over-a-cut-cell):
 
@@ -959,10 +940,10 @@ m = index("m")
 
 # The Laplacian of each part on its own mesh. On D1 the gradient is the
 # derivative along the segment, in the frame of RD(3).
-grad_p3 = components(exterior_derivative(p3, D3), D3)
-grad_q3 = components(exterior_derivative(q3, D3), D3)
-grad_p1 = components(exterior_derivative(p1, D1), D1)
-grad_q1 = components(exterior_derivative(q1, D1), D1)
+grad_p3 = gradient(p3, D3)
+grad_q3 = gradient(q3, D3)
+grad_p1 = gradient(p1, D1)
+grad_q1 = gradient(q1, D1)
 tissue = integral(index_sum(grad_p3[m] * grad_q3[m], (m,)), D3)
 vessel = integral(index_sum(grad_p1[m] * grad_q1[m], (m,)), D1)
 
@@ -992,7 +973,7 @@ a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
   Every integral has no support, so the three terms add, and the arguments of
   `a` are tuples of functions on the two meshes.
 - The positions take one of twelve values, an edge of `K3` in one of two
-  orientations. A library may write the table as a gather from the twelve by
+  directions. A library may write the table as a gather from the twelve by
   a `RuntimeIndex` of the [cut cell
   example](#integrating-over-a-cut-cell), as `StaticTopology` computes
   the positions from vertex numbers, and a form compiler may then tabulate
@@ -1068,7 +1049,7 @@ coupling_avg = integral(beta * (p1 - p3_avg) * (q1 - q3_avg), D1)
 ### The Laplace-Beltrami operator
 
 Requires: [The tour](DESIGN.md#the-tour),
-[`Components`](LANGUAGE.md#components), [`Integral` over a decomposed
+[`Gradient`](LANGUAGE.md#gradient), [`Integral` over a decomposed
 domain](LANGUAGE.md#integral-over-a-decomposed-domain), [`Form`](LANGUAGE.md#form).
 
 See also: [Expanding pull-backs](LANGUAGE.md#expanding-pull-backs), [`Inverse`](LANGUAGE.md#inverse).
@@ -1091,81 +1072,85 @@ u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
 
 # The surface gradients, of value shape (3,) in the frame of RD(3).
 i = index("i")
-grad_u = components(exterior_derivative(u, M), M)
-grad_v = components(exterior_derivative(v, M), M)
+grad_u = gradient(u, M)
+grad_v = gradient(v, M)
 
 a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), M), (v, u))
 L = form(integral(f * v, M), (v,))
 ```
 
 - `M` has the dimension 2 and the ambient coordinate domain `RD(3)`, so
-  [`Components`](LANGUAGE.md#components) projects the frame of `RD(3)` onto the tangent
-  plane of each cell, and `grad_u` is the surface gradient of `u`.
+  [`Gradient`](LANGUAGE.md#gradient) on `M` is the tangential gradient, and
+  `grad_u` is the surface gradient of `u`.
 - `integral(..., M)` multiplies the integrand on `K` by the density
   $\rho = \sqrt{\det(J^T J)}$, with $J$ the Jacobian matrix of `x`, of value
-  shape `(3, 2)`. The integrands are 0-forms, so the forms need no orientation
-  of `M`.
+  shape `(3, 2)`. The forms need no orientation of `M`.
 - `expand_pull_backs` rewrites the pull-back of `grad_u` by the cells as
   $K^T \hat g$, with $K$ = `inverse(J)` the pseudo-inverse, of value shape
-  `(2, 3)`, and $\hat g$ the components of the exterior derivative of the
-  pull-back of `u` on `K`. The integrand of `a` on `K` is then
+  `(2, 3)`, and $\hat g$ the gradient of the pull-back of `u` on `K`. The integrand of `a` on `K` is then
   $\hat g_u^T K K^T \hat g_v \, \rho$, and $K K^T = (J^T J)^{-1}$ is the
   inverse of the metric that `x` induces.
-- With `P = components(exterior_derivative(coordinate(M), M), M)`, the
-  projection onto the tangent plane,
-  `components(exterior_derivative(grad_u, M), M)` is the tangential
+- With `P = gradient(coordinate(M), M)`, the projection onto the tangent
+  plane, `gradient(grad_u, M)` is the tangential
   derivative $H$ of the surface gradient, which is not symmetric in general.
   The covariant Hessian of `u` is $P H P$.
 
 ```{dropdown} Legacy UFL
-Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Components` gives the gradient in every dimension.
+Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Gradient` gives the gradient in every dimension.
 ```
 
 ### The flux through a surface
 
 Requires: [The Laplace-Beltrami
-operator](#the-laplace-beltrami-operator), [Concept: orientation of a
-domain](LANGUAGE.md#concept-orientation-of-a-domain), [`Integral` over a decomposed
-domain](LANGUAGE.md#integral-over-a-decomposed-domain).
+operator](#the-laplace-beltrami-operator), [Concept: integral over a
+domain](LANGUAGE.md#concept-integral-over-a-domain), [Jacobian and
+density](LANGUAGE.md#jacobian-and-density).
 
-The flux of a vector field through a surface is the integral of a 2-form, so
-the flux needs an orientation of the surface. With `M`, `T` and `c` of the
-[Laplace-Beltrami example](#the-laplace-beltrami-operator), where `M` is
-a closed surface such as a triangulated sphere:
+The flux of a vector field through a surface depends on which side of the
+surface is out, so the flux needs a consistent orientation of the cells. With
+`K`, `T`, `c` and `x` of the [Laplace-Beltrami
+example](#the-laplace-beltrami-operator), where `M` is a closed surface such
+as a triangulated sphere:
 
 ```python
-# The 2-form of the flux of the position field through a surface in RD(3).
-Y = coordinate(RD(3))
-dY = exterior_derivative(Y, RD(3))
-omega = Y[0] * dY[1] * dY[2] + Y[1] * dY[2] * dY[0] + Y[2] * dY[0] * dY[1]
+# The triangles of M, a family with the free index c.
+cells = domain_map(K, x, RD(3))
+J = jacobian(cells)
+r, l = index("r"), index("l")
+
+def cross(a, b):
+    return tensor((a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]))
+
+# The normal of each triangle, with the length of the density.
+nu = cross(component_tensor(J[r, 0], (r,)), component_tensor(J[r, 1], (r,)))
 
 # The sign of each triangle from the mesh library, +1 where the order of the
 # vertices of the triangle agrees with the outward orientation of M.
 N = T.num_cells[0]
 o = runtime_array("o", (N,))
 
-# The outward flux, 3 times the volume inside M.
-flux = integral(o[c] * omega, M)
+# The outward flux of the position field, 3 times the volume inside M.
+Y = coordinate(RD(3))
+flux = index_sum(
+    integral(o[c] * index_sum(pull_back(Y, cells)[l] * nu[l], (l,)), K), (c,)
+)
 
 # The area of M, with no orientation.
 area = integral(Integer(1), M)
 ```
 
-- `omega` has the support `RD(3)`, so `integral(omega, M)` pulls `omega` back
-  by the triangles of `M` (see [`Integral` over a decomposed
-  domain](LANGUAGE.md#integral-over-a-decomposed-domain)). Each triangle contributes the
-  flux with the orientation of the parameterisation of the triangle, which the
-  order of the vertices of the triangle in `T` fixes. If the mesh library
-  numbers some triangles clockwise and others anticlockwise, seen from
-  outside, the contributions of the two groups have opposite signs, and the
-  sum is not the flux.
+- The flux is an integral over the reference triangle `K` of each cell, not
+  over `M`, so no density enters. `nu` is the normal of the triangle with the
+  length of the density, and the direction of `nu` follows the order of the
+  vertices of the triangle in `T`. If the mesh library numbers some triangles
+  clockwise and others anticlockwise, seen from outside, the contributions of
+  the two groups have opposite signs, and the sum is not the flux.
 - `o[c]` has the free index `c` of the triangles, so each triangle takes the
   sign of that triangle. With the signs, every contribution uses the outward
-  orientation. A mesh library may instead number the vertices of every
-  triangle consistently, and then `integral(omega, M)` is the flux without
-  `o`.
-- `area` integrates a 0-form against the density $\sqrt{\det(J^T J)}$, which
-  does not depend on the order of the vertices, so `area` needs no signs.
+  normal. A mesh library may instead number the vertices of every triangle
+  consistently, and then the flux needs no `o`.
+- `area` integrates against the density $\sqrt{\det(J^T J)}$, which does not
+  depend on the order of the vertices, so `area` needs no signs.
 - A surface with no consistent orientation, such as a Möbius strip, has no
   signs `o`. The area of the surface is defined, and the flux is not.
 
@@ -1197,11 +1182,10 @@ from uflx import (
     AbstractExpression,
     Base,
     Function,
-    components,
     conjugate,
-    exterior_derivative,
     form,
     function,
+    gradient,
     index,
     index_sum,
     integral,
@@ -1247,7 +1231,7 @@ def is_facet_normal(obj):
 
 
 def grad(f):
-    return components(exterior_derivative(f, f.support), f.support)
+    return gradient(f, f.support)
 
 
 def div(w):

@@ -67,8 +67,8 @@ a node because the lowering should happen in a pass, not at construction.
 ## Idea 2: nearly everything is an expression
 
 Almost every object a user builds is an `AbstractExpression`: literals,
-arithmetic, tensors, the coordinate function, the exterior derivative,
-components, pull-backs, the normal, functions, integrals, forms and actions.
+arithmetic, tensors, the coordinate function, the gradient, pull-backs, the
+normal, functions, integrals, forms and actions.
 The exceptions are the
 static data an expression refers to and never computes with: domains, domain
 maps, side maps, topologies, cell types, function spaces, indices, extents
@@ -76,8 +76,8 @@ and index tables. Those are base objects with properties, not values.
 
 | An expression                               | Not an expression                    |
 | ------------------------------------------- | ------------------------------------ |
-| `Integer(2)`, `X[0] * dx`, `tensor(...)`    | `RD(2)`, a reference cell, a mesh    |
-| `coordinate(D)`, `exterior_derivative(u, D)` | `domain_map(K, x, RD(2))`            |
+| `Integer(2)`, `X[0] * X[1]`, `tensor(...)`  | `RD(2)`, a reference cell, a mesh    |
+| `coordinate(D)`, `gradient(u, D)`           | `domain_map(K, x, RD(2))`            |
 | `pull_back(f, e)`, `normal(D, E, "+")`      | `side_map(D, E, "+")`, a topology    |
 | `function(V, "u")`                          | the space `V`, `dual(V)`             |
 | `integral(f, D)`                            | `index("i")`, an extent, a table     |
@@ -100,7 +100,7 @@ as separate kinds, each with its own algebra.
   field rather than an integral is a linear operator (`Form`).
 - A pass has one rule per node class and nothing else. Because a form and an
   action are nodes like any other, a pull-back moves into a form's expression
-  past its bound arguments, and the same six transformations serve
+  past its bound arguments, and the same five transformations serve
   functionals, forms, operators and point evaluations alike (Core
   transformations).
 - What is not an expression needs no rules in any pass. A domain map is read
@@ -108,9 +108,9 @@ as separate kinds, each with its own algebra.
   the gathered indices of its tables, so the passes dispatch on node classes
   only (Passes).
 
-## Idea 3: an expression is an array-valued differential form with a static type
+## Idea 3: an expression is an array-valued function with a static type
 
-Every expression carries six static properties, derived at construction and
+Every expression carries five static properties, derived at construction and
 never changed (Expressions and static type):
 
 | Property        | What it records                                                  |
@@ -119,7 +119,6 @@ never changed (Expressions and static type):
 | free indices    | the open indices, in order of first occurrence, each with extent |
 | scalar type     | real or complex                                                  |
 | support         | the domain the expression lives on, or none for a constant       |
-| degree          | the differential-form degree of each slot, such as `(1,)`        |
 | argument spaces | the space of each bound argument, for a variational form         |
 
 Two choices here remove the rank-specific and dimension-specific operators
@@ -134,15 +133,25 @@ one composition each for every rank. Summation is never implicit. Scope is
 lexical: an index refers to the innermost `ComponentTensor` or `IndexSum`
 that binds it.
 
-Second, the calculus is exterior calculus. An expression of degree `(k,)` is
-a k-form. `ExteriorDerivative` is the only derivative, `Product` is the wedge
-product, `TensorProduct` adds a slot for double forms such as a metric or a
-Regge field, and `Components` turns the first slot into an array axis in the
-coordinate frame. The gradient of a function `u` on a domain `D` is then
-`components(exterior_derivative(u, D), D)`, and the same line is the surface
-gradient on a surface in three dimensions, because `Components` projects the
-ambient frame onto the tangent space. There are no dimension-specific
-operators, which is the point of Basic principles.
+Second, the calculus is vector calculus with one derivative. `Gradient` adds
+an axis in the coordinate frame of the ambient space, so the gradient of a
+function `u` on a domain `D` is `gradient(u, D)`, and the same line is the
+surface gradient on a surface in three dimensions, because on a domain of
+lower dimension `Gradient` is the tangential gradient. The divergence, the
+curl and the Hessian are compositions of `Gradient`. There are no
+dimension-specific operators, which is the point of Basic principles.
+
+An earlier draft used exterior calculus, with a form degree in the static
+type, the wedge product and an orientation of every domain. Exterior calculus
+gave three things: the Piola maps as pull-backs, the divergence and the curl
+of a Piola map without the derivatives of the Jacobian on a curved cell, and
+integrals of $k$-forms with an orientation. None of the three needs the core.
+A Piola map is a fixed composition of the Jacobian, the divergence and the
+curl identities hold structurally with node classes of a language extension,
+and a mesh library such as DOLFINx already computes the orientation of each
+cell. The core therefore keeps the gradient, and differential forms and Piola
+maps are language extensions (A Piola extension, A differential forms
+extension).
 
 ## Idea 4: indices carry the mesh and the runtime data
 
@@ -207,9 +216,8 @@ AbstractDomain                      the support of an expression
 
 The core has no way to write a set except as the image of a map, and a chain
 of maps must start somewhere. It starts at a coordinate domain, where the
-coordinates are canonical: the coordinate function is the identity, the
-volume form is `dX_0 ^ ... ^ dX_{n-1}`, and `Integral` is the Lebesgue
-integral (Domains). The core supplies `RD(n)`; a library supplies reference
+coordinates are canonical: the coordinate function is the identity, and
+`Integral` is the Lebesgue integral (Domains). The core supplies `RD(n)`; a library supplies reference
 cells.
 
 Everything else is a `DecomposedDomain`: a union of families of `DomainMap`s
@@ -221,18 +229,20 @@ may themselves have a decomposed parameter domain, so a macro element needs
 no construct of its own.
 
 Expressions never move between domains except by `PullBack`. A function on a
-mesh pulled back by a cell map is the function on that cell. The pull-back is
-the only place where a Jacobian can appear, and there it is a composition.
-The Jacobian is `components(exterior_derivative(psi, P), P)`, its inverse or
-pseudo-inverse is the one node `Inverse`, and the density of a cell of any
-dimension is `square_root` of the determinant of `J^T J`. One rule covers
-every dimension and every codimension (Expanding pull-backs).
+mesh pulled back by a cell map is the function on that cell. A Jacobian is
+always the composition `jacobian(D)`, the gradient of the parameterisation.
+The inverse or pseudo-inverse of `jacobian(D)` is the one node `Inverse`, and
+the density
+`density(D)` of a cell of any dimension is $|\det J|$ or
+$\sqrt{\det(J^T J)}$, with one fixed spelling of the determinant. One rule
+covers every dimension and every codimension (Jacobian and density, Expanding
+pull-backs).
 
-Orientation is a consequence rather than a datum. A coordinate domain is
-oriented by its coordinate order, a map transports that orientation, and
-a 0-form integrates against a density that needs none. Where a k-form over a
-surface needs consistent orientations, the mesh library supplies a sign per
-cell as an ordinary expression (Concept: orientation of a domain).
+The core has no orientation. An integral of a function uses a density that
+needs none, and a circulation or a flux uses the Jacobian, which carries the
+direction of the map. Where a surface needs consistent orientations, the mesh
+library supplies a sign per cell as an ordinary expression (Concept: integral
+over a domain).
 
 ## Idea 6: a facet is a cell seen from a side
 
@@ -278,17 +288,16 @@ conjugated (Argument spaces, `ConjugateSpace`, `DualSpace`). For real problems
 none of this is visible.
 
 Mixed problems need no mixed space. An argument may be a tuple of functions
-in different spaces, on different domains, with different degrees, and a
+in different spaces, on different domains, with different value shapes, and a
 library assembles the tuple as one system or in blocks (`Form`).
 
-## Idea 8: six lazy transformations do all the work
+## Idea 8: five lazy transformations do all the work
 
 ```
 form(integral(f, D), (v, u))                  what the user wrote
   │ expand_integrals          one Integral per piece, an index sum over cells, the density
-  │ expand_pull_backs         pull-backs to the terminals; Components becomes K^T times reference components
-  │ apply_derivatives         d to the terminals; d of the coordinate is dX
-  │ expand_components         components of dX are the identity; interior products
+  │ expand_pull_backs         pull-backs to the terminals; a gradient becomes K^T times the reference gradient
+  │ apply_derivatives         gradients to the terminals; the gradient of the coordinate is the identity
   │ apply_actions             substitute into bound arguments
   │ reduce_component_tensors  component_tensor(e, (i,))[j] becomes e with i := j
   ▼
@@ -298,10 +307,9 @@ form(index_sum(integral(g, K), (c,)), (v, u)) g on the reference cell K, reading
 Each transformation evaluates one node class, has a rule per operand class,
 and leaves the node where no rule applies (Core transformations, Appendix:
 Pass table). They terminate and may run together. What remains after them is
-what a library owns: a function pulled back by a cell, the exterior
-derivative of that pull-back, and the `Components` of that derivative. These
-are the basis functions and their reference gradients, which the library
-tabulates. Pull-backs nest rather than compose, so a function pulled back by a
+what a library owns: a function pulled back by a cell and the gradient of
+that pull-back. These are the basis functions and their reference gradients,
+which the library tabulates. Pull-backs nest rather than compose, so a function pulled back by a
 cell and then by a facet inclusion is still "this function, on this cell, at
 these facet points".
 
@@ -341,8 +349,8 @@ u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
 
 # The integrands on D, with the gradient in the frame of RD(2).
 i = index("i")
-grad_u = components(exterior_derivative(u, D), D)
-grad_v = components(exterior_derivative(v, D), D)
+grad_u = gradient(u, D)
+grad_v = gradient(v, D)
 a_D = index_sum(grad_u[i] * grad_v[i], (i,))
 L_D = f * v
 
@@ -353,8 +361,8 @@ L = form(integral(L_D, D), (v,))
 
 Every idea above is visible. The mesh is a family of affine maps from the
 reference triangle, built by gathers of the vertex positions through the cell
-index (ideas 4 and 5). The gradient is the exterior derivative turned into an
-array (idea 3). The functions are plain members of a space, and the forms
+index (ideas 4 and 5). The gradient is one node, in the frame of `RD(2)`
+(idea 3). The functions are plain members of a space, and the forms
 bind them (idea 7). `integral(f, D)` is one lazy node over the mesh, an
 expression like `f` itself, so `a` and `L` are expressions too (idea 2), and
 the passes turn the integral into a sum over cells of integrals over the
@@ -432,9 +440,10 @@ here so that a reader knows which choices are load-bearing.
   derived index per topology for the cells, gathers for tables and abstract
   extents for sizes, so no node class stands for a mesh (`Index`, Extents,
   `GatheredIndex`).
-- **Exterior calculus with one derivative**, and `Components` as the bridge
-  to arrays, so there are no dimension-specific operators (Degree,
-  `ExteriorDerivative`, `Components`).
+- **Vector calculus with one derivative**, the tangential gradient on a domain
+  of lower dimension, so there are no dimension-specific operators, and
+  differential forms and Piola maps are language extensions (`Gradient`,
+  Language extensions).
 - **One kind of domain with two forms**, leaf and decomposed, and `DomainMap`
   as the only way between them, so every node that takes a domain takes any
   domain (`AbstractDomain`, `DomainMap`).
@@ -462,8 +471,8 @@ here so that a reader knows which choices are load-bearing.
   a cell map are tables and arrays that a mesh library supplies as leaves
   (Sides of a topology, Points and point evaluation).
 - Finite elements: how a function is represented on a cell, including the
-  Piola maps, is the library's choice behind the pull-back by a cell
-  (`AbstractFunctionSpace`).
+  Piola maps, is the library's choice behind the pull-back by a cell, or a
+  language extension (`AbstractFunctionSpace`, A Piola extension).
 - Quadrature: a pass with the rule as an argument, not a node (the quadrature
   example).
 - Elementary functions beyond `SquareRoot`, conditionals, and `min` and
@@ -479,7 +488,7 @@ here so that a reader knows which choices are load-bearing.
 | ---------------------------------------- | ------------------------------------------------------- |
 | `Mesh`                                   | a `DecomposedDomain` with a topology                    |
 | `SpatialCoordinate(mesh)`                | `coordinate(D)`                                         |
-| `grad(u)`                                | `components(exterior_derivative(u, D), D)`              |
+| `grad(u)`                                | `gradient(u, D)`                                        |
 | `f * dx`                                 | `integral(f, D)` over the mesh                          |
 | `f * ds`                                 | `integral(f, E)` over a boundary facet topology         |
 | `f * dS`                                 | `integral(f, E)` over an interior facet topology        |
