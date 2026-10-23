@@ -3643,3 +3643,33 @@ whatever the class of the operand.
 | `Gradient`                               | Rule, Remains       | Remains             | In              |
 | `Integral`                               | Rule                | Rule                | In              |
 | `PullBack`                               | Rule, Remains       | Rule, Remains       | In              |
+
+## Appendix: Summary
+
+Counts of the core, from the sections. A rule is a row of the rule table of a
+core transformation, and the rule is trivial when the evaluated node remains.
+The node class columns count the entries of the [pass
+table](#appendix-pass-table). A node class is non-trivial for a core
+transformation with an entry that contains "Rule" or "Chain", trivial with
+"In", "Bound" or "Remains", and ruled out with "—". `expand_integrals` and
+`reduce_component_tensors` have no column in the pass table.
+
+<!-- generated: summary, run design/appendices.py to update -->
+| Quantity                        | Count |
+| ------------------------------- | ----- |
+| Classes                         | 43    |
+| Abstract classes                | 10    |
+| Concrete classes                | 33    |
+| Expression node classes         | 24    |
+| Free functions                  | 39    |
+| Free functions with an overload | 8     |
+| Core transformations            | 5     |
+
+| Core transformation                                       | Non-trivial rules | Trivial rules | Non-trivial node classes | Trivial node classes | Ruled out |
+| --------------------------------------------------------- | ----------------- | ------------- | ------------------------ | -------------------- | --------- |
+| [`expand_integrals`](#expanding-integrals)                | 1                 | 1             |                          |                      |           |
+| [`expand_pull_backs`](#expanding-pull-backs)              | 5                 | 5             | 9                        | 15                   | 0         |
+| [`apply_derivatives`](#applying-derivatives)              | 9                 | 3             | 14                       | 10                   | 0         |
+| [`apply_actions`](#applying-actions)                      | 4                 | 2             | 5                        | 10                   | 9         |
+| [`reduce_component_tensors`](#reducing-component-tensors) | 1                 | 1             |                          |                      |           |
+<!-- end generated: summary -->

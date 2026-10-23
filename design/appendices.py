@@ -75,6 +75,7 @@ class Document:
         self.classes: list[ClassEntry] = []
         self.functions: list[FreeFunction] = []
         self.tables: dict[str, list[list[list[str]]]] = {}
+        self.section_tables: dict[str, list[list[list[str]]]] = {}
         self._parse()
 
     def _parse(self) -> None:
@@ -119,6 +120,7 @@ class Document:
                     j += 1
                 self._table(header, rows, chapter, anchor, " ".join(prose))
                 self.tables.setdefault(chapter, []).append([header, *rows])
+                self.section_tables.setdefault(anchor, []).append([header, *rows])
                 i = j
                 continue
             if not in_code:
@@ -280,7 +282,66 @@ def render(lang: Document) -> dict[str, str]:
     return {
         "class-hierarchy": class_hierarchy(lang.classes),
         "free-functions": free_functions(lang.functions),
+        "summary": summary(lang),
     }
+
+
+def summary(lang: Document) -> str:
+    """Render counts of the classes, free functions, transformations and rules of the core."""
+    classes = core(lang.classes)
+    abstract = [c for c in classes if c.abstract]
+    nodes = [c for c in classes if not c.abstract and is_expression(lang, c.name)]
+    functions = [f for f in lang.functions if f.chapter not in EXCLUDED_CHAPTERS]
+    overloads = [f for f in functions if f.overload]
+    passes = next(
+        t for t in lang.tables["Core transformations"] if t[0][0] == "Core transformation"
+    )[1:]
+    counts = [
+        ["Classes", str(len(classes))],
+        ["Abstract classes", str(len(abstract))],
+        ["Concrete classes", str(len(classes) - len(abstract))],
+        ["Expression node classes", str(len(nodes))],
+        ["Free functions", str(len(functions))],
+        ["Free functions with an overload", str(len(overloads))],
+        ["Core transformations", str(len(passes))],
+    ]
+
+    pass_table = lang.tables["Appendix: Pass table"][0]
+    columns = {c.strip("`"): k for k, c in enumerate(pass_table[0]) if k > 0}
+    rows = []
+    for row in passes:
+        name, anchor = re.match(r"\[`(\w+)\(.*?\)`\]\(#([\w-]+)\)", row[0]).groups()
+        rules = lang.section_tables[anchor][0][1:]
+        trivial = sum(r[1].startswith("Remains") for r in rules)
+        kinds = {"non-trivial": "", "trivial": "", "ruled out": ""}
+        if name in columns:
+            kinds = dict.fromkeys(kinds, 0)
+            for r in pass_table[1:]:
+                entry = r[columns[name]]
+                if entry == "—":
+                    kind = "ruled out"
+                elif "Rule" in entry or "Chain" in entry:
+                    kind = "non-trivial"
+                else:
+                    kind = "trivial"
+                kinds[kind] += len(code_names(r[0]))
+        rows.append(
+            [
+                f"[`{name}`](#{anchor})",
+                str(len(rules) - trivial),
+                str(trivial),
+                *(str(v) for v in kinds.values()),
+            ]
+        )
+    header = [
+        "Core transformation",
+        "Non-trivial rules",
+        "Trivial rules",
+        "Non-trivial node classes",
+        "Trivial node classes",
+        "Ruled out",
+    ]
+    return table(["Quantity", "Count"], counts) + "\n" + table(header, rows)
 
 
 def fill(text: str, regions: dict[str, str]) -> str:
@@ -299,8 +360,12 @@ def main() -> int:
     """Rewrite or check the generated appendices."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--check", action="store_true", help="fail instead of rewriting")
+    parser.add_argument("--summary", action="store_true", help="print counts and exit")
     args = parser.parse_args()
     lang = Document(LANGUAGE)
+    if args.summary:
+        print(summary(lang), end="")
+        return 0
     text = LANGUAGE.read_text()
     new = fill(text, render(lang))
     problems = checks(lang)

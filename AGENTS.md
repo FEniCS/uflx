@@ -67,11 +67,13 @@ Asides in the notes, such as the "Legacy UFL" notes, are MyST dropdowns,
 contains backticks. The site shows a dropdown collapsed and the PDF prints it
 open.
 
-The class hierarchy and free functions appendices of `design/LANGUAGE.md`
-are generated from the class tables. Edit the sections, then regenerate (the PDF build runs `--check`):
+The class hierarchy, free functions and summary appendices of
+`design/LANGUAGE.md` are generated from the class tables, the rule tables and
+the pass table. Edit the sections, then regenerate (the PDF build runs `--check`):
 
 ```
 python3 design/appendices.py
+python3 design/appendices.py --summary   # print the summary tables only
 ```
 
 ## Architecture
