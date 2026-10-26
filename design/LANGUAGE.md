@@ -608,6 +608,7 @@ composition:
 | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | The primitives of index notation                                                                            |
 | `Coordinate`, `Function`, `Normal`               | Terminals: the coordinate function of a domain, a member of a space, the outward normal of a cell on a side   |
 | `Gradient`                                       | Nothing composes to differentiate                                                                             |
+| `DirectionalDerivative`                          | Nothing composes to differentiate with respect to an expression                                               |
 | `Integral`                                       | Nothing composes to integrate over a coordinate domain, and over a decomposed domain a pass must meet the integral as written |
 | `PullBack`                                       | Nothing composes to move an expression between domains                                                        |
 | `Form`, `Action`                                 | Binding arguments and giving an expression to an argument are not compositions                                |
@@ -1591,6 +1592,63 @@ The examples use `P = RD(3)`, `X = coordinate(P)`, `x, y, z = X[0], X[1], X[2]`,
   tangent plane of `M`, with value shape `(3, 3)`.
 - `gradient(X, RD(2))` raises `ValueError`, because `X` has the support
   `RD(3)`.
+
+### `DirectionalDerivative`
+
+Requires: [`Gradient`](#gradient), [Free indices](#free-indices),
+[Support](#support).
+
+See also: [Applying derivatives](#applying-derivatives), [Gateaux
+derivative](#gateaux-derivative), [Argument spaces](#argument-spaces).
+
+A concrete subclass of `AbstractExpression` for the derivative of an
+expression $f$ with respect to an expression $g$ in a direction $h$,
+
+$$
+\mathrm{D}(f, g, h) = \frac{d}{d\varepsilon} f[g := g + \varepsilon h] \Big|_{\varepsilon = 0},
+$$
+
+with $\varepsilon$ real and every occurrence of $g$ in $f$ replaced.
+
+| `DirectionalDerivative(f, g, h)` |                                                                                                       |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Extends                          | `AbstractExpression` |
+| Free function                    | `directional_derivative(f, g, h)`                                                                     |
+| Takes                            | `f, g, h: AbstractExpression` |
+| Properties                       | `expression` $f$, `variable` $g$ and `direction` $h$ |
+| Requires                         | $g$ with no free indices, $h$ with the value shape of $g$, $g$ and $h$ with the argument spaces `()`, and $h$ with the support of $g$ or no support |
+| Static type                      | The value shape of $f$, the free indices of $f$ followed by those of $h$, and the argument spaces of $f$ |
+| Raises                           | `ValueError` if a requirement fails                                                                   |
+| Evaluated by                     | [`apply_derivatives`](#applying-derivatives)                                                          |
+
+An occurrence of $g$ is a node of $f$ equal to $g$. Construction never
+simplifies, so the occurrences are those that the user built. An expression
+with the value of $g$ that is built differently is not an occurrence. $f$ is
+fixed except through the occurrences of $g$, so `DirectionalDerivative` is a
+partial derivative. For example, with a deformation gradient `F` and
+`C = transpose(F) @ F`, the derivative with respect to `C` does not see a
+`determinant(F)` in $f$.
+
+The derivative is real-linear in $h$. The gradient of a direction with no
+support is zero, so the derivative with respect to a function `u` in a constant
+direction holds `gradient(u, P)` fixed. A direction that is a function in the
+space of `u` gives the Gateaux derivative (see [Gateaux
+derivative](#gateaux-derivative)).
+
+The derivative with respect to a tensor is a composition over unit
+directions. The direction states the symmetry, and the core has none. With a
+strain energy `psi` of `C`, the identity matrix `I` of value shape `(3, 3)`
+and indices `i`, `j`, `k` and `l`:
+
+```python
+E = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / Integer(2), (i, j))
+S = Integer(2) * component_tensor(directional_derivative(psi, C, E), (k, l))
+```
+
+`E` has the free indices `k` and `l`, and is symmetric for each value of `k`
+and `l`, so `S` is $2 \operatorname{sym}(\partial \psi / \partial C)$, the second
+Piola–Kirchhoff stress. The direction `component_tensor(I[i, k] * I[j, l], (i, j))`
+gives the full derivative, without `sym`.
 
 ### `Integral`
 
@@ -3143,7 +3201,7 @@ every node class for each of the three.
 | ----------------------------------------------------------- | -------------------- | ----------------------------------------------------------- |
 | [`expand_integrals(f)`](#expanding-integrals)               | `Integral`           | One rule, by the domain of the `Integral`                   |
 | [`expand_pull_backs(f)`](#expanding-pull-backs)             | `PullBack`           | Commutes with every node class                              |
-| [`apply_derivatives(f)`](#applying-derivatives)             | `Gradient`           | Linear for the linear node classes, the chain rule otherwise |
+| [`apply_derivatives(f)`](#applying-derivatives)             | `Gradient`, `DirectionalDerivative` | Linear for the linear node classes, the chain rule otherwise |
 | [`apply_actions(f)`](#applying-actions)                     | `Action`             | Moves into the operand that carries the argument            |
 | [`reduce_component_tensors(f)`](#reducing-component-tensors) | `Indexed`            | Two rules, for a `ComponentTensor` and a `Conjugate` operand, and otherwise remains |
 
@@ -3322,7 +3380,8 @@ remains.
 Requires: [Core transformations](#core-transformations),
 [`Gradient`](#gradient), [`Product`](#product), [`Zero`](#zero),
 [`Conjugate`](#conjugate), [`RealPart` and
-`ImaginaryPart`](#realpart-and-imaginarypart), [`Inverse`](#inverse).
+`ImaginaryPart`](#realpart-and-imaginarypart), [`Inverse`](#inverse),
+[`DirectionalDerivative`](#directionalderivative).
 
 The partial derivative $\partial_j$ of `Gradient(f, P)` is linear for the
 linear node classes and follows the chain rule for the other node classes.
@@ -3346,6 +3405,18 @@ as `component_tensor(Gradient(A, P)[i, j], (j,))`. The rules:
 | An expression with no support, or a `PullBack` of one       | `Zero`, with the value shape of the operand and the new axis, and the free indices and the argument spaces of the operand |
 | `Coordinate(P)` on a decomposed domain of lower dimension than the frame, `Gradient`, `Normal`, `Function` or a downstream terminal | Remains |
 | A `PullBack` of an expression with a support                | Remains                                                                                             |
+
+`apply_derivatives` evaluates `DirectionalDerivative(f, g, h)` with the same
+rules, with $\mathrm{D}(a, g, h)$ in place of $\partial_j a$ and no new axis,
+and with these changes:
+
+- An occurrence of $g$ is rewritten as $h$.
+- A terminal that is not $g$ is rewritten as `Zero`, with the value shape
+  and the argument spaces of the terminal and the free indices of the terminal
+  and of $h$.
+- `Gradient(a, P)` is rewritten as
+  `gradient(directional_derivative(a, g, h), P)`.
+- A `PullBack`, a `Form` and an `Action` remain, as not yet decided.
 
 ```{dropdown} Notes on the rules
 A `PullBack` with a support remains because moving the gradient inside the
@@ -3428,18 +3499,56 @@ rewritten as `points[i, 0]`, and with `p` of the
 ### Gateaux derivative
 
 Requires: [Core transformations](#core-transformations), [`Form`](#form),
-[`Function`](#function).
+[`Function`](#function), [`DirectionalDerivative`](#directionalderivative),
+[`ConjugateSpace`](#conjugatespace), [`DualSpace`](#dualspace).
 
-> Not yet covered. This section states only the shape of the transformation.
+> A sketch. This section states the definition and the static type of the
+> result. The rules are not yet decided.
 
-The Gateaux derivative of an expression with respect to a function $u$ in a
-space $V$ is expected to be a core transformation that adds an argument. The
-result is linear in a new function in $V$, the direction, bound by a `Form` at
-a new position, and the rule for the class of $u$ replaces $u$ by the direction
-in the derivative of each occurrence of $u$. The rules for the node classes of
-the core, the derivative with respect to a function bound by an enclosing
-`Form`, and the derivative of a downstream terminal through the pull-back by a
-cell are not yet decided.
+The Gateaux derivative of an expression $e$ with respect to a function $u$ in
+a space $V$ is expected to be a core transformation that adds an argument. The
+direction is a new function $w$ in $V$, bound as the last argument. The
+derivative is defined by the real differential
+
+$$
+\delta e[w] = \frac{d}{d\varepsilon} e(u + \varepsilon w) \Big|_{\varepsilon = 0},
+$$
+
+with $\varepsilon$ real and every occurrence of $u$ replaced. $\delta e[w]$
+is `directional_derivative(e, u, w)` (see
+[`DirectionalDerivative`](#directionalderivative)). $\delta e$ is real-linear
+in $w$, and the scalar types of $V$ and $e$ decide how the result binds $w$:
+
+| $V$ and $e$ | Result | Binds |
+| ----------- | ------ | ----- |
+| $V$ real | $\delta e$ | `w` |
+| $V$ complex, $e$ real | The antilinear $R$ with $\operatorname{Re} R[w] = \delta e[w]$, so $R[w] = \delta e[w] + i \, \delta e[i w]$ | `conjugate(w)` |
+| $V$ complex, $e$ complex | The linear part $J_+[w] = \tfrac12 (\delta e[w] - i \, \delta e[i w])$ and the antilinear part $J_-[w] = \tfrac12 (\delta e[w] + i \, \delta e[i w])$ | `w` in $J_+$, `conjugate(w)` in $J_-$ |
+
+For a real functional $\Pi$, $R$ is the derivative of $\Pi$ in
+`dual_space(V)` (see [Antilinear forms](#antilinear-forms)), so $R$ minus a
+load is a residual. For a real $V$, `conjugate_space(V)` is $V$ and $R$ is
+$\delta \Pi$.
+
+$\delta e = J_+ + J_-$ for a complex $e$, and the two parts are unique. If no
+occurrence of $u$ is under a `Conjugate`, an `Absolute`, a `RealPart` or an
+`ImaginaryPart`, $e$ is holomorphic in $u$, $J_-$ is `Zero` and the derivative
+is the form $J_+$. The Jacobian of the residual of a sesquilinear problem, such
+as the Helmholtz equation, is such a $J_+$, with the argument spaces
+`(conjugate_space(V), V)`. Otherwise the derivative is the pair of forms, which
+do not add because the argument spaces differ. Newton's method then solves
+$J_+ \, \delta u + J_- \, \overline{\delta u} = -R$, with an algorithm that
+the solver chooses.
+
+The transformation builds $R$, $J_+$ and $J_-$ with the rules, not as the
+compositions above, so no terms that cancel occur. The variable $u$ may be a
+`tuple` of functions, as for a mixed problem, with a `tuple` direction bound as
+one argument. The second derivative of a real functional is symmetric, or
+Hermitian, and the graph does not record the symmetry.
+
+The rules for the node classes of the core, the derivative with respect to a
+function bound by an enclosing `Form`, and the derivative of a downstream
+terminal through the pull-back by a cell are not yet decided.
 
 ## Extending the core
 
@@ -3691,6 +3800,7 @@ Base
 AbstractExpression
 ├── Coordinate
 ├── Gradient
+├── DirectionalDerivative
 └── Integral
 
 # Maps between domains
@@ -3760,6 +3870,7 @@ AbstractExpression
 |                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                             | The Leibniz formula for $\det A$                                                                                                                                                      |
 | Calculus on a domain        | [`coordinate(P)`](#coordinate)                                           |                               | `P: AbstractDomain`                                                                                 | `Coordinate`                                                                                                                                                                          |
 |                             | [`gradient(f, P)`](#gradient)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                        | `Gradient`                                                                                                                                                                            |
+|                             | [`directional_derivative(f, g, h)`](#directionalderivative)              |                               | `f, g, h: AbstractExpression`                                                                       | `DirectionalDerivative`                                                                                                                                                               |
 |                             | [`integral(f, P)`](#integral)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                        | `Integral`                                                                                                                                                                            |
 | Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractDomain`, `psi: AbstractExpression`, `Q: AbstractDomain`                                 | `DomainMap`                                                                                                                                                                           |
 |                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap`                                                  | `PullBack`                                                                                                                                                                            |
@@ -3812,6 +3923,7 @@ the argument spaces column must have the argument spaces `()`.
 | `Form`                                   | The space of each entry, conjugated for a `conjugate(v)` entry |
 | `Action`                                 | Those of the form without the entry at `position`              |
 | `Gradient`                               | Those of the operand                                           |
+| `DirectionalDerivative`                  | Those of the expression                                        |
 | `Integral`                               | Those of the integrand                                         |
 | `PullBack`                               | Those of the expression                                        |
 
@@ -3869,6 +3981,7 @@ whatever the class of the operand.
 | `Form`                                   | Bound               | Bound               | Rule            |
 | `Action`                                 | Bound               | Bound               | Remains         |
 | `Gradient`                               | Rule, Remains       | Remains             | In              |
+| `DirectionalDerivative`                  | Remains             | In                  | In              |
 | `Integral`                               | Rule                | Rule                | In              |
 | `PullBack`                               | Rule, Remains       | Rule, Remains       | In              |
 
@@ -3885,19 +3998,19 @@ transformation with an entry that contains "Rule" or "Chain", trivial with
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 45    |
+| Classes                         | 46    |
 | Abstract classes                | 10    |
-| Concrete classes                | 35    |
-| Expression node classes         | 26    |
-| Free functions                  | 42    |
+| Concrete classes                | 36    |
+| Expression node classes         | 27    |
+| Free functions                  | 43    |
 | Free functions with an overload | 9     |
 | Core transformations            | 5     |
 
 | Core transformation                                       | Non-trivial rules | Trivial rules | Non-trivial node classes | Trivial node classes | Ruled out |
 | --------------------------------------------------------- | ----------------- | ------------- | ------------------------ | -------------------- | --------- |
 | [`expand_integrals`](#expanding-integrals)                | 1                 | 1             |                          |                      |           |
-| [`expand_pull_backs`](#expanding-pull-backs)              | 5                 | 5             | 9                        | 17                   | 0         |
-| [`apply_derivatives`](#applying-derivatives)              | 11                | 3             | 16                       | 10                   | 0         |
-| [`apply_actions`](#applying-actions)                      | 4                 | 2             | 5                        | 10                   | 11        |
+| [`expand_pull_backs`](#expanding-pull-backs)              | 5                 | 5             | 9                        | 18                   | 0         |
+| [`apply_derivatives`](#applying-derivatives)              | 11                | 3             | 16                       | 11                   | 0         |
+| [`apply_actions`](#applying-actions)                      | 4                 | 2             | 5                        | 11                   | 11        |
 | [`reduce_component_tensors`](#reducing-component-tensors) | 2                 | 1             |                          |                      |           |
 <!-- end generated: summary -->
