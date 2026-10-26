@@ -223,8 +223,11 @@ arithmetic](LANGUAGE.md#tensor-arithmetic).
 
 An `EllipsisIndex` writes an operation on tensors of every rank as one fixed
 composition. The scaling `a * T` and the sum `A + B` of tensors are
-overloads of the core with such compositions (see [Tensor
-arithmetic](LANGUAGE.md#tensor-arithmetic)). The operations in the table below
+overloads of the core, built with one index for each axis (see [Tensor
+arithmetic](LANGUAGE.md#tensor-arithmetic)). An operation of the table does
+not reduce when the `EllipsisIndex` meets a binder with one index for each
+axis, such as `inner(transpose(A), B)` (see [Derived
+indices](LANGUAGE.md#derived-indices)). The operations in the table below
 are not part of the core. A library may provide the operations as free
 functions (see [New operations](LANGUAGE.md#new-operations)), as for
 `transpose` above. With derived ellipsis indices `r` and `s` and an ordinary
@@ -1429,6 +1432,89 @@ R_h = l - action(a, 1, u_h)
   and the facet jumps of the [Bank-Weiser example](#a-bank-weiser-error-estimator),
   with `z - z_h` in place of `v`, so that each cell receives its own weighted
   residual.
+
+### Hyperelasticity and the stress
+
+Requires: [`DirectionalDerivative`](LANGUAGE.md#directionalderivative),
+[Gateaux derivative](LANGUAGE.md#gateaux-derivative), [Tensor
+arithmetic](LANGUAGE.md#tensor-arithmetic), [Transpose](#transpose).
+
+See also: [Symmetric tensors](#symmetric-tensors).
+
+A Saint Venant–Kirchhoff material on the square mesh `D`, with a real vector
+space `V` and a real space `M` for the Lamé parameters, both of a library on
+`D`. The stress is $S = 2 \operatorname{sym}(\partial \psi / \partial C)$:
+
+```python
+one, zero, two = Integer(1), Integer(0), Integer(2)
+I = tensor((tensor((one, zero)), tensor((zero, one))))
+i, j, k, l, a = index("i"), index("j"), index("k"), index("l"), index("a")
+
+u, v, w = function(V, "u"), function(V, "v"), function(V, "w")
+mu, lmbda = function(M, "mu"), function(M, "lambda")
+
+F = I + gradient(u, D)
+C = transpose(F) @ F
+E = (C - I) / two
+psi = lmbda / two * index_sum(E[a, a], (a,)) ** two + mu * index_sum(E[i, j] * E[i, j], (i, j))
+
+# The symmetric unit directions, with the free indices k and l.
+N = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / two, (i, j))
+S = two * component_tensor(directional_derivative(psi, C, N), (k, l))
+sigma = F @ S @ transpose(F) / determinant(F)
+
+Pi = integral(psi, D)
+r = directional_derivative(Pi, u, v)
+residual = form(r, (v,))
+# A gateaux_derivative transformation could later build tangent from residual.
+tangent = form(directional_derivative(r, u, w), (v, w))
+```
+
+- `S` and the Cauchy stress `sigma` are expressions on `D`, which a solver
+  interpolates or evaluates for output. `apply_derivatives` evaluates `S` to
+  an expression equal to $\lambda \operatorname{tr}(E) I + 2 \mu E$.
+- `V` is real, so `residual` and `tangent` are Gateaux derivatives.
+
+### Symmetric tensors
+
+Requires: [`GatheredIndex`](LANGUAGE.md#gatheredindex), [Hyperelasticity and
+the stress](#hyperelasticity-and-the-stress).
+
+The core has no symmetry of a tensor. A symmetric array of data is read from
+its stored values through a table, and a derivative with respect to a
+symmetric tensor states the symmetry with the direction.
+
+A stiffness tensor $\mathbb{C}_{ijkl}$ with the minor and the major
+symmetries has 6 values in 2D. With the names of the [hyperelasticity
+example](#hyperelasticity-and-the-stress), a real space `K` of constants of
+value shape `(6,)`, and a table `packed` of the shape `(2, 2, 2, 2)` and the
+extent 6 with the position of each entry in `c`:
+
+```python
+c = function(K, "c")
+stiffness = component_tensor(c[gathered_index(packed, (i, j, k, l))], (i, j, k, l))
+
+eps_u = (gradient(u, D) + transpose(gradient(u, D))) / two
+eps_v = (gradient(v, D) + transpose(gradient(v, D))) / two
+elastic = form(integral(index_sum(stiffness[i, j, k, l] * eps_u[k, l] * eps_v[i, j], (i, j, k, l)), D), (v, u))
+```
+
+`stiffness` has 16 entries, and the kernel receives the 6 values of `c`.
+
+```{dropdown} Directions and Voigt notation
+For `psi_2 = C[0, 1] ** two`, the direction
+`component_tensor(I[i, k] * I[j, l], (i, j))` gives a derivative with the
+entry $2 C_{01}$ at `(0, 1)` and 0 at `(1, 0)`, and the symmetric direction
+`N` gives $C_{01}$ at both. The two agree in every symmetric direction, and
+only the second is symmetric.
+
+Voigt and Mandel notation are representations of the full arrays. A Voigt
+strain or a Mandel vector scales the entries off the diagonal, by 2 or by
+$\sqrt{2}$, so a library reads the vector with a table and an array of the
+factors. The derivative with respect to the stored values of a Voigt vector
+differs from the derivative with respect to the full tensor by a factor 2 off
+the diagonal.
+```
 
 ### A classic FEniCS layer for the Poisson problem
 
