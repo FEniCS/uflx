@@ -598,7 +598,8 @@ composition:
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
 | `Integer`, `Float`, `ImaginaryUnit`              | A number written down is a leaf                                                                               |
 | `Zero`                                           | No composition gives a zero with free indices without edges to other expressions                              |
-| `Sum`, `Product`, `Power`, `Absolute`, `Conjugate` | Operations of the scalar field, which nothing else composes                                                 |
+| `Sum`, `Product`, `Power`, `Absolute`             | Operations of the scalar field, which nothing else composes                                                 |
+| `Conjugate`                                      | An operation of the scalar field, and `Form` meets `conjugate(v)` of a function of any value shape as written |
 | `RealPart`                                       | `(f + conjugate(f)) / Integer(2)` has the value of the real part but is complex, and the real part is real    |
 | `ImaginaryPart`                                  | `real_part(ImaginaryUnit() * conjugate(f))` multiplies the real part by zero, which is NaN for an infinite real part |
 | `Division`                                       | `multiply(f, power(g, Integer(-1)))` rounds twice, and the quotient the user wrote rounds once                |
@@ -810,10 +811,11 @@ modulus of a complex scalar.
 Requires: [`AbstractExpression`](#abstractexpression), [Scalar
 type](#scalar-type).
 
-See also: [Variational forms](#variational-forms).
+See also: [Variational forms](#variational-forms), [Reducing component
+tensors](#reducing-component-tensors).
 
-A concrete subclass of `AbstractExpression` for the complex conjugate of a
-scalar.
+A concrete subclass of `AbstractExpression` for the complex conjugate of an
+expression of any value shape, entry by entry.
 
 | `Conjugate(f)` |                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------- |
@@ -821,12 +823,16 @@ scalar.
 | Free function  | `conjugate(f)`                                                                              |
 | Takes          | `f: AbstractExpression` |
 | Properties     | `operand` $f$ |
-| Requires       | A scalar $f$                                                                                |
-| Static type    | The argument spaces of $f$ with each space conjugated (see [`ConjugateSpace`](#conjugatespace)) |
-| Raises         | `ValueError` if a requirement fails                                                         |
+| Static type    | The value shape and the free indices of $f$, and the argument spaces of $f$ with each space conjugated (see [`ConjugateSpace`](#conjugatespace)) |
 
 A sesquilinear variational form, such as the $L^2$ inner product
-$\int u \bar{v}$, needs `Conjugate`.
+$\int u \bar{v}$, needs `Conjugate`. `Conjugate` is the one operation of the
+scalar field that takes an operand of any value shape. A form binds an
+argument as `conjugate(v)` (see [`Form`](#form)), and `v` may be a vector,
+such as the argument of $\int \operatorname{curl} u \cdot \overline{\operatorname{curl} v}$.
+`reduce_component_tensors` moves an `Indexed` inside a `Conjugate`, so the
+entries of a tensor are conjugated as scalars (see [Reducing component
+tensors](#reducing-component-tensors)).
 
 
 
@@ -843,7 +849,7 @@ for the real part and the imaginary part of a scalar.
 | `RealPart(f)`, `ImaginaryPart(f)` |                                       |
 | --------------------------------- | ------------------------------------- |
 | Extends                           | `AbstractExpression` |
-| Free function                     | `real_part(f)`, `imaginary_part(f)`   |
+| Free function                     | [`real_part`](#tensor-arithmetic), [`imaginary_part`](#tensor-arithmetic) |
 | Takes                             | `f: AbstractExpression` |
 | Properties                        | `operand` $f$ |
 | Requires                          | A scalar $f$                          |
@@ -855,6 +861,9 @@ classes that take a complex operand to a real expression. A real quantity of
 a complex field, such as $\operatorname{Re} \int u \bar{v}$, needs
 `RealPart`. `(f + conjugate(f)) / Integer(2)` has the value of the real part,
 but is complex by the rule of [Scalar type](#scalar-type).
+
+The free functions `real_part` and `imaginary_part` take a tensor and apply
+the node class entry by entry (see [Tensor arithmetic](#tensor-arithmetic)).
 
 The operand may be real. Construction does not simplify, so `real_part(f)`
 of a real $f$ is not $f$, and `imaginary_part(f)` of a real $f$ is not
@@ -1209,7 +1218,8 @@ index and are not operands.
 ### Tensor arithmetic
 
 Requires: [Arithmetic](#arithmetic), [Negation and
-subtraction](#negation-and-subtraction), [`Indexed`](#indexed),
+subtraction](#negation-and-subtraction), [`Conjugate`](#conjugate),
+[`RealPart` and `ImaginaryPart`](#realpart-and-imaginarypart), [`Indexed`](#indexed),
 [`ComponentTensor` and `IndexSum`](#componenttensor-and-indexsum),
 [`EllipsisIndex`](#ellipsisindex), [Derived indices](#derived-indices), [Node
 class or free function](#node-class-or-free-function).
@@ -1218,17 +1228,19 @@ See also: [Operator overloads](#operator-overloads), [Tensor algebra with
 `EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex).
 
 The node classes of [Arithmetic](#arithmetic) are scalar. The free functions
-`add`, `multiply` and `divide` read the ranks of the operands, and on tensors
-build the fixed compositions below. The free function `matrix_product`
-contracts one axis. The four free functions are the overloads `+`, `*`, `/`
-and `@` (see [Operator overloads](#operator-overloads)), so tensor arithmetic
-is written as `A + B`, `a * T`, `T / a` and `A @ x`.
+`add`, `multiply`, `divide`, `real_part` and `imaginary_part` read the ranks
+of the operands, and on tensors build the fixed compositions below. The free function `matrix_product`
+contracts one axis. `add`, `multiply`, `divide` and `matrix_product` are the
+overloads `+`, `*`, `/` and `@` (see [Operator overloads](#operator-overloads)),
+so tensor arithmetic is written as `A + B`, `a * T`, `T / a` and `A @ x`.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `add(first, second)` | `+` | `first, second: AbstractExpression` | `component_tensor(first[r] + second[r], (r,))` if both operands have rank 1 or more, otherwise `Sum(first, second)` |
 | `multiply(first, second)` | `*` | `first, second: AbstractExpression` | `component_tensor(first * second[r], (r,))` if only `first` is a scalar, `component_tensor(first[r] * second, (r,))` if only `second` is a scalar, otherwise `Product(first, second)` |
 | `divide(first, second)` | `/` | `first, second: AbstractExpression` | `component_tensor(first[r] / second, (r,))` if `first` has rank 1 or more and `second` is a scalar, otherwise `Division(first, second)` |
+| `real_part(f)` | | `f: AbstractExpression` | `component_tensor(RealPart(f[r]), (r,))` if $f$ has rank 1 or more, otherwise `RealPart(f)` |
+| `imaginary_part(f)` | | `f: AbstractExpression` | `component_tensor(ImaginaryPart(f[r]), (r,))` if $f$ has rank 1 or more, otherwise `ImaginaryPart(f)` |
 | `matrix_product(first, second)` | `@` | `first, second: AbstractExpression` | The contraction of the last axis of `first` with the first axis of `second`, below |
 
 In each composition, `r` is a derived [`EllipsisIndex`](#ellipsisindex) with
@@ -1252,7 +1264,24 @@ of two tensors other than `@`:
 `negate` and `subtract` compose `multiply` and `add` (see [Negation and
 subtraction](#negation-and-subtraction)), so `-T` is
 `component_tensor(Integer(-1) * T[r], (r,))` and `A - B` is
-`add(A, negate(B))` on tensors. `**` and `abs` stay scalar.
+`add(A, negate(B))` on tensors.
+
+A free function of a scalar operation takes a tensor only if the operation
+has no other meaning on a tensor. `conjugate`, `real_part` and
+`imaginary_part` have one meaning on a tensor, entry by entry. `Conjugate` itself takes
+any value shape (see [`Conjugate`](#conjugate)). The following stay scalar,
+and raise `ValueError` for a tensor, because the tensor has a second meaning:
+
+| Free function | Second meaning on a tensor |
+| ------------- | -------------------------- |
+| `power`, `**` | The matrix power |
+| `absolute`, `abs` | The norm of a vector |
+| `square_root` | The matrix square root |
+
+An elementary function added later, such as the exponential, stays scalar for
+the same reason, because the matrix exponential is a second meaning. The
+entry-by-entry application of a scalar operation `op` is written as
+`component_tensor(op(T[r]), (r,))` with an `EllipsisIndex` `r`.
 
 The graph of `A + B` is the composition, with no node for the sum of tensors.
 A language extension adds such a node if a pass must meet `A + B` as written
@@ -3104,8 +3133,8 @@ Requires: [Passes](#passes), [`Integral`](#integral), [`PullBack`](#pullback),
 
 The core has five transformations, each a pass (see [Passes](#passes)) that
 evaluates one node class. `expand_integrals` dispatches on the domain of the
-`Integral` and not on the operand, and `reduce_component_tensors` has one rule,
-for an `Indexed` whose operand is a `ComponentTensor`. Each of the other three
+`Integral` and not on the operand, and `reduce_component_tensors` has two rules,
+for an `Indexed` whose operand is a `ComponentTensor` or a `Conjugate`. Each of the other three
 has a default for the node classes of the operand, and a table of the operand
 classes with a rule of their own. The [pass table](#appendix-pass-table) gives
 every node class for each of the three.
@@ -3116,7 +3145,7 @@ every node class for each of the three.
 | [`expand_pull_backs(f)`](#expanding-pull-backs)             | `PullBack`           | Commutes with every node class                              |
 | [`apply_derivatives(f)`](#applying-derivatives)             | `Gradient`           | Linear for the linear node classes, the chain rule otherwise |
 | [`apply_actions(f)`](#applying-actions)                     | `Action`             | Moves into the operand that carries the argument            |
-| [`reduce_component_tensors(f)`](#reducing-component-tensors) | `Indexed`            | One rule, for a `ComponentTensor` operand, and otherwise remains |
+| [`reduce_component_tensors(f)`](#reducing-component-tensors) | `Indexed`            | Two rules, for a `ComponentTensor` and a `Conjugate` operand, and otherwise remains |
 
 The linear node classes are the following:
 
@@ -3364,12 +3393,16 @@ Requires: [Core transformations](#core-transformations), [`Indexed`](#indexed),
 [Passes](#passes).
 
 `reduce_component_tensors` evaluates an `Indexed` whose operand is a
-`ComponentTensor`, with these rules:
+`ComponentTensor` or a `Conjugate`, with these rules:
 
 | Operand of the `Indexed`      | Rewrite of `Indexed(operand, entries)`                                                            |
 | ----------------------------- | ------------------------------------------------------------------------------------------------- |
 | `ComponentTensor(e, indices)` | $e$ with each index of `indices` replaced by the entries of the axes of the index, when possible |
+| `Conjugate(f)`                | `Conjugate(Indexed(f, entries))`                                                                  |
 | Any other node class          | Remains                                                                                           |
+
+The rule for `Conjugate` is the identity $\bar{f}[e] = \overline{f[e]}$, so
+after the pass no `Indexed` has a `Conjugate` operand.
 
 The entries are matched to the indices axis by axis. An `Index` of `indices`
 covers one axis and is replaced by the entry of that axis, an `int`, an
@@ -3710,8 +3743,6 @@ AbstractExpression
 |                             | [`subtract(f, g)`](#negation-and-subtraction)                            | `f - g`                       | `f, g: AbstractExpression`                                                                          | `add(f, negate(g))`                                                                                                                                                                   |
 |                             | [`absolute(f)`](#absolute)                                               | `abs(f)`                      | `f: AbstractExpression`                                                                             | `Absolute`                                                                                                                                                                            |
 |                             | [`conjugate(f)`](#conjugate)                                             |                               | `f: AbstractExpression`                                                                             | `Conjugate`                                                                                                                                                                           |
-|                             | [`real_part(f)`](#realpart-and-imaginarypart)                            |                               | `f: AbstractExpression`                                                                             | `RealPart`                                                                                                                                                                            |
-|                             | [`imaginary_part(f)`](#realpart-and-imaginarypart)                       |                               | `f: AbstractExpression`                                                                             | `ImaginaryPart`                                                                                                                                                                       |
 |                             | [`square_root(f)`](#elementary-functions-very-incomplete)                |                               | `f: AbstractExpression`                                                                             | `SquareRoot`                                                                                                                                                                          |
 |                             | [`tensor(entries)`](#tensor)                                             |                               | `entries: tuple[AbstractExpression, ...]`                                                           | `Tensor`                                                                                                                                                                              |
 |                             | [`indexed(expression, indices)`](#indexed)                               | `expression[indices]`         | `expression: AbstractExpression`, `indices: tuple`                                                  | `Indexed`                                                                                                                                                                             |
@@ -3722,6 +3753,8 @@ AbstractExpression
 |                             | [`add(first, second)`](#tensor-arithmetic)                               | `+`                           | `first, second: AbstractExpression`                                                                 | `component_tensor(first[r] + second[r], (r,))` if both operands have rank 1 or more, otherwise `Sum(first, second)`                                                                   |
 |                             | [`multiply(first, second)`](#tensor-arithmetic)                          | `*`                           | `first, second: AbstractExpression`                                                                 | `component_tensor(first * second[r], (r,))` if only `first` is a scalar, `component_tensor(first[r] * second, (r,))` if only `second` is a scalar, otherwise `Product(first, second)` |
 |                             | [`divide(first, second)`](#tensor-arithmetic)                            | `/`                           | `first, second: AbstractExpression`                                                                 | `component_tensor(first[r] / second, (r,))` if `first` has rank 1 or more and `second` is a scalar, otherwise `Division(first, second)`                                               |
+|                             | [`real_part(f)`](#tensor-arithmetic)                                     |                               | `f: AbstractExpression`                                                                             | `component_tensor(RealPart(f[r]), (r,))` if $f$ has rank 1 or more, otherwise `RealPart(f)`                                                                                           |
+|                             | [`imaginary_part(f)`](#tensor-arithmetic)                                |                               | `f: AbstractExpression`                                                                             | `component_tensor(ImaginaryPart(f[r]), (r,))` if $f$ has rank 1 or more, otherwise `ImaginaryPart(f)`                                                                                 |
 |                             | [`matrix_product(first, second)`](#tensor-arithmetic)                    | `@`                           | `first, second: AbstractExpression`                                                                 | The contraction of the last axis of `first` with the first axis of `second`, below                                                                                                    |
 |                             | [`inverse(A)`](#inverse)                                                 |                               | `A: AbstractExpression`                                                                             | `Inverse`                                                                                                                                                                             |
 |                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                             | The Leibniz formula for $\det A$                                                                                                                                                      |
@@ -3866,5 +3899,5 @@ transformation with an entry that contains "Rule" or "Chain", trivial with
 | [`expand_pull_backs`](#expanding-pull-backs)              | 5                 | 5             | 9                        | 17                   | 0         |
 | [`apply_derivatives`](#applying-derivatives)              | 11                | 3             | 16                       | 10                   | 0         |
 | [`apply_actions`](#applying-actions)                      | 4                 | 2             | 5                        | 10                   | 11        |
-| [`reduce_component_tensors`](#reducing-component-tensors) | 1                 | 1             |                          |                      |           |
+| [`reduce_component_tensors`](#reducing-component-tensors) | 2                 | 1             |                          |                      |           |
 <!-- end generated: summary -->
