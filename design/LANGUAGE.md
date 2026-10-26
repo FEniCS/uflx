@@ -498,7 +498,8 @@ the free indices `i` and `j` and denotes the outer sum.
 
 Requires: [`AbstractExpression`](#abstractexpression).
 
-See also: [Literals](#literals), [`Absolute`](#absolute).
+See also: [Literals](#literals), [`Absolute`](#absolute), [`RealPart` and
+`ImaginaryPart`](#realpart-and-imaginarypart).
 
 The scalar type is real or complex. Unless the [static type
 table](#appendix-static-type-table) states otherwise, an expression is complex
@@ -598,6 +599,8 @@ composition:
 | `Integer`, `Float`, `ImaginaryUnit`              | A number written down is a leaf                                                                               |
 | `Zero`                                           | No composition gives a zero with free indices without edges to other expressions                              |
 | `Sum`, `Product`, `Power`, `Absolute`, `Conjugate` | Operations of the scalar field, which nothing else composes                                                 |
+| `RealPart`                                       | `(f + conjugate(f)) / Integer(2)` has the value of the real part but is complex, and the real part is real    |
+| `ImaginaryPart`                                  | `real_part(ImaginaryUnit() * conjugate(f))` multiplies the real part by zero, which is NaN for an infinite real part |
 | `Division`                                       | `multiply(f, power(g, Integer(-1)))` rounds twice, and the quotient the user wrote rounds once                |
 | `SquareRoot`                                     | IEEE 754 rounds the square root correctly and the power not, so `power(f, Integer(1) / Integer(2))` differs   |
 | `Inverse`                                        | No one composition covers every $k \le n$, and a pass chooses the algorithm, as for `Division`                |
@@ -826,6 +829,43 @@ A sesquilinear variational form, such as the $L^2$ inner product
 $\int u \bar{v}$, needs `Conjugate`.
 
 
+
+### `RealPart` and `ImaginaryPart`
+
+Requires: [`AbstractExpression`](#abstractexpression), [Scalar
+type](#scalar-type), [`Conjugate`](#conjugate).
+
+See also: [Applying derivatives](#applying-derivatives).
+
+`RealPart` and `ImaginaryPart` are concrete subclasses of `AbstractExpression`
+for the real part and the imaginary part of a scalar.
+
+| `RealPart(f)`, `ImaginaryPart(f)` |                                       |
+| --------------------------------- | ------------------------------------- |
+| Extends                           | `AbstractExpression` |
+| Free function                     | `real_part(f)`, `imaginary_part(f)`   |
+| Takes                             | `f: AbstractExpression` |
+| Properties                        | `operand` $f$ |
+| Requires                          | A scalar $f$                          |
+| Static type                       | Value shape `()`, real                |
+| Raises                            | `ValueError` if a requirement fails   |
+
+Apart from `Absolute`, `RealPart` and `ImaginaryPart` are the only node
+classes that take a complex operand to a real expression. A real quantity of
+a complex field, such as $\operatorname{Re} \int u \bar{v}$, needs
+`RealPart`. `(f + conjugate(f)) / Integer(2)` has the value of the real part,
+but is complex by the rule of [Scalar type](#scalar-type).
+
+The operand may be real. Construction does not simplify, so `real_part(f)`
+of a real $f$ is not $f$, and `imaginary_part(f)` of a real $f$ is not
+`Zero`.
+
+Examples, with `one, two = Integer(1), Integer(2)`:
+
+- `real_part(one + ImaginaryUnit() * two)` is real, and a later pass
+  evaluates the expression to 1.
+- `imaginary_part(one + ImaginaryUnit() * two)` is real, and a later pass
+  evaluates the expression to 2.
 
 ### Elementary functions (very incomplete)
 
@@ -3252,7 +3292,8 @@ remains.
 
 Requires: [Core transformations](#core-transformations),
 [`Gradient`](#gradient), [`Product`](#product), [`Zero`](#zero),
-[`Conjugate`](#conjugate), [`Inverse`](#inverse).
+[`Conjugate`](#conjugate), [`RealPart` and
+`ImaginaryPart`](#realpart-and-imaginarypart), [`Inverse`](#inverse).
 
 The partial derivative $\partial_j$ of `Gradient(f, P)` is linear for the
 linear node classes and follows the chain rule for the other node classes.
@@ -3267,6 +3308,8 @@ as `component_tensor(Gradient(A, P)[i, j], (j,))`. The rules:
 | `Inverse` $A^+$                                             | $-A^+ \, \partial_j A \, A^+ + A^+ (A^+)^T \, \partial_j A^T \, (I - A A^+)$                           |
 | `Absolute` $\lvert a \rvert$                                | $(\bar{a} \, \partial_j a + a \, \overline{\partial_j a}) / (2 \lvert a \rvert)$                       |
 | `Conjugate` $\bar{a}$                                       | $\overline{\partial_j a}$                                                                            |
+| `RealPart` $\operatorname{Re} a$                            | $\operatorname{Re} \partial_j a$                                                                     |
+| `ImaginaryPart` $\operatorname{Im} a$                       | $\operatorname{Im} \partial_j a$                                                                     |
 | `Power` $a^b$ with an exponent $b$ with no support          | $b \, a^{b - 1} \, \partial_j a$, the chain rule, with `b - Integer(1)` the exponent                  |
 | `Power` $a^b$ with an exponent $b$ with a support           | Remains                                                                                             |
 | `SquareRoot` $\sqrt{a}$                                     | $\partial_j a / (2 \sqrt{a})$, with `Integer(2)`                                                  |
@@ -3598,6 +3641,8 @@ AbstractExpression
 ├── Division
 ├── Absolute
 ├── Conjugate
+├── RealPart
+├── ImaginaryPart
 ├── SquareRoot
 ├── Tensor
 ├── Indexed
@@ -3665,6 +3710,8 @@ AbstractExpression
 |                             | [`subtract(f, g)`](#negation-and-subtraction)                            | `f - g`                       | `f, g: AbstractExpression`                                                                          | `add(f, negate(g))`                                                                                                                                                                   |
 |                             | [`absolute(f)`](#absolute)                                               | `abs(f)`                      | `f: AbstractExpression`                                                                             | `Absolute`                                                                                                                                                                            |
 |                             | [`conjugate(f)`](#conjugate)                                             |                               | `f: AbstractExpression`                                                                             | `Conjugate`                                                                                                                                                                           |
+|                             | [`real_part(f)`](#realpart-and-imaginarypart)                            |                               | `f: AbstractExpression`                                                                             | `RealPart`                                                                                                                                                                            |
+|                             | [`imaginary_part(f)`](#realpart-and-imaginarypart)                       |                               | `f: AbstractExpression`                                                                             | `ImaginaryPart`                                                                                                                                                                       |
 |                             | [`square_root(f)`](#elementary-functions-very-incomplete)                |                               | `f: AbstractExpression`                                                                             | `SquareRoot`                                                                                                                                                                          |
 |                             | [`tensor(entries)`](#tensor)                                             |                               | `entries: tuple[AbstractExpression, ...]`                                                           | `Tensor`                                                                                                                                                                              |
 |                             | [`indexed(expression, indices)`](#indexed)                               | `expression[indices]`         | `expression: AbstractExpression`, `indices: tuple`                                                  | `Indexed`                                                                                                                                                                             |
@@ -3720,6 +3767,7 @@ the argument spaces column must have the argument spaces `()`.
 | `Sum`                                    | Those of the operands, which must be equal                     |
 | `Product`                                | Those of the operands, concatenated                            |
 | `Power`, `Absolute`                      | `()`                                                           |
+| `RealPart`, `ImaginaryPart`              | `()`                                                           |
 | `Division`                               | Those of the first operand                                     |
 | `Conjugate`                              | Those of the operand, each conjugated                          |
 | `SquareRoot`, `Inverse`                  | `()`                                                           |
@@ -3743,6 +3791,7 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 | `ImaginaryUnit`          | None                               | Complex                           |
 | `Zero`                   | None                               | Real                              |
 | `Absolute`               | The default                        | Real                              |
+| `RealPart`, `ImaginaryPart` | The default                     | Real                              |
 | `Coordinate`, `Gradient` | The domain $P$                     | The default                       |
 | `Integral`               | None                               | The default                       |
 | `PullBack`               | The parameter domain of the domain | The default                       |
@@ -3779,6 +3828,7 @@ whatever the class of the operand.
 | `SquareRoot`                             | In                  | Rule                | —               |
 | `Absolute`, `Inverse`                    | In                  | Rule                | —               |
 | `Conjugate`                              | In                  | Rule                | In              |
+| `RealPart`, `ImaginaryPart`              | In                  | Rule                | —               |
 | `Indexed`, `ComponentTensor`, `IndexSum` | In                  | In                  | In              |
 | `Coordinate`                             | Rule                | Rule, Remains       | —               |
 | `Normal`                                 | Rule, Remains       | Remains             | —               |
@@ -3802,19 +3852,19 @@ transformation with an entry that contains "Rule" or "Chain", trivial with
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 43    |
+| Classes                         | 45    |
 | Abstract classes                | 10    |
-| Concrete classes                | 33    |
-| Expression node classes         | 24    |
-| Free functions                  | 40    |
+| Concrete classes                | 35    |
+| Expression node classes         | 26    |
+| Free functions                  | 42    |
 | Free functions with an overload | 9     |
 | Core transformations            | 5     |
 
 | Core transformation                                       | Non-trivial rules | Trivial rules | Non-trivial node classes | Trivial node classes | Ruled out |
 | --------------------------------------------------------- | ----------------- | ------------- | ------------------------ | -------------------- | --------- |
 | [`expand_integrals`](#expanding-integrals)                | 1                 | 1             |                          |                      |           |
-| [`expand_pull_backs`](#expanding-pull-backs)              | 5                 | 5             | 9                        | 15                   | 0         |
-| [`apply_derivatives`](#applying-derivatives)              | 9                 | 3             | 14                       | 10                   | 0         |
-| [`apply_actions`](#applying-actions)                      | 4                 | 2             | 5                        | 10                   | 9         |
+| [`expand_pull_backs`](#expanding-pull-backs)              | 5                 | 5             | 9                        | 17                   | 0         |
+| [`apply_derivatives`](#applying-derivatives)              | 11                | 3             | 16                       | 10                   | 0         |
+| [`apply_actions`](#applying-actions)                      | 4                 | 2             | 5                        | 10                   | 11        |
 | [`reduce_component_tensors`](#reducing-component-tensors) | 1                 | 1             |                          |                      |           |
 <!-- end generated: summary -->
