@@ -129,7 +129,9 @@ First, tensor algebra is index notation. `a[i] * b[i]` is the pointwise
 product with a free index, `index_sum(a[i] * b[i], (i,))` is the
 contraction, and `component_tensor(A[k, l], (l, k))` is the transpose. An
 `EllipsisIndex` covers any number of axes, so `inner`, `dot` and `outer` are
-one composition each for every rank. Summation is never implicit. Scope is
+one composition each for every rank. The overloads `A + B`, `a * T`,
+`T / a` and `A @ B` on tensors are free functions that build such
+compositions from the ranks of the operands. Summation is never implicit. Scope is
 lexical: an index refers to the innermost `ComponentTensor` or `IndexSum`
 that binds it.
 

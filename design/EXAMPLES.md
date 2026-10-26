@@ -187,29 +187,24 @@ expression on one is not an expression on the other. Likewise,
 
 ## Examples
 
-### Transpose and matrix product
+### Transpose
 
 Requires: [`Index`](LANGUAGE.md#index), [`Indexed`](LANGUAGE.md#indexed), [`ComponentTensor` and
-`IndexSum`](LANGUAGE.md#componenttensor-and-indexsum), [`Product`](LANGUAGE.md#product).
+`IndexSum`](LANGUAGE.md#componenttensor-and-indexsum).
 
-`transpose` and `matrix_product` are not part of the core. A library provides
-the two as free functions built with derived indices (see [Derived
-indices](LANGUAGE.md#derived-indices)), and the examples of this note use the two:
+See also: [Tensor arithmetic](LANGUAGE.md#tensor-arithmetic).
 
-- `transpose(A)` is `component_tensor(A[k, l], (l, k))`, with
-  $k$ = `Index(("library.transpose", A, 0))` and
-  $l$ = `Index(("library.transpose", A, 1))`.
-- `matrix_product(A, B)` is
-  `component_tensor(index_sum(A[i, k] * B[k, j], (k,)), (i, j))`, with $i$, $k$
-  and $j$ the derived indices `Index(("library.matrix_product", A, B, m))` for
-  $m = 0, 1, 2$.
+`transpose` is not part of the core. A library provides `transpose` as a free
+function built with derived indices (see [Derived
+indices](LANGUAGE.md#derived-indices)), and the examples of this note use
+`transpose`. `transpose(A)` is `component_tensor(A[k, l], (l, k))`, with
+$k$ = `Index(("library.transpose", A, 0))` and
+$l$ = `Index(("library.transpose", A, 1))`.
 
 An operand that does not have rank 2, including a scalar operand, is rejected
-with `IndexError` by the constructor of `Indexed`. Unequal inner extents in
-`matrix_product` are rejected with `ValueError` by the constructor of `Product`,
-because the index $k$ has two extents. So `matrix_product` accepts only rank 2
-operands. Contractions of other ranks, such as a matrix-vector product, are
-written in index notation.
+with `IndexError` by the constructor of `Indexed`. The matrix product is the
+free function `matrix_product` of the core, with the overload `@` (see [Tensor
+arithmetic](LANGUAGE.md#tensor-arithmetic)).
 
 Examples, with a matrix `A` of value shape `(2, 2)`:
 
@@ -223,25 +218,26 @@ and `IndexSum`](LANGUAGE.md#componenttensor-and-indexsum), [`Sum`](LANGUAGE.md#s
 [`Conjugate`](LANGUAGE.md#conjugate).
 
 See also: [Derived indices](LANGUAGE.md#derived-indices), [New
-operations](LANGUAGE.md#new-operations), [Transpose and matrix
-product](#transpose-and-matrix-product).
+operations](LANGUAGE.md#new-operations), [Transpose](#transpose), [Tensor
+arithmetic](LANGUAGE.md#tensor-arithmetic).
 
 An `EllipsisIndex` writes an operation on tensors of every rank as one fixed
-composition. The operations in the table below are not part of the core. A
-library may provide the operations as free functions (see
-[New operations](LANGUAGE.md#new-operations)), as for `transpose` above. With
-derived ellipsis indices `r` and `s` and an ordinary index `k`:
+composition. The scaling `a * T` and the sum `A + B` of tensors are
+overloads of the core with such compositions (see [Tensor
+arithmetic](LANGUAGE.md#tensor-arithmetic)). The operations in the table below
+are not part of the core. A library may provide the operations as free
+functions (see [New operations](LANGUAGE.md#new-operations)), as for
+`transpose` above. With derived ellipsis indices `r` and `s` and an ordinary
+index `k`:
 
 | Operation          | Fixed composition                                              |
 | ------------------ | -------------------------------------------------------------- |
-| `scale(a, T)`      | `component_tensor(a * T[r], (r,))`                             |
-| `tensor_sum(A, B)` | `component_tensor(A[r] + B[r], (r,))`                          |
 | `outer(u, v)`      | `component_tensor(u[r] * v[s], (r, s))`                        |
 | `dot(u, v)`        | `component_tensor(index_sum(u[r, k] * v[k, s], (k,)), (r, s))` |
 | `inner(A, B)`      | `index_sum(A[r] * conjugate(B[r]), (r,))`                      |
 
-`A[r] + B[r]` raises `ValueError` if the value shapes of `A` and `B` differ,
-because the extents of `r` differ.
+For operands of rank 1 and 2, `dot(u, v)` contracts the same axes as `u @ v`
+with a different composition, so `dot(u, v)` and `u @ v` are not equal.
 
 ### An affinely mapped triangle
 
