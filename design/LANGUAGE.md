@@ -3193,6 +3193,8 @@ In legacy UFL, the arguments of a form are the test functions and the trial func
 
 Requires: [`Form`](#form).
 
+See also: [Applying actions](#applying-actions).
+
 A concrete subclass of `AbstractExpression` for the action of a form, an
 expression given to one argument of the form.
 
@@ -3327,9 +3329,9 @@ domain, `PullBack`, `Gradient`, `DirectionalDerivative` and `Action`.
 
 A pass that rewrites a node keeps the value of the node and the static type of
 the node, with the free indices possibly in another order, never simplifies,
-and substitutes with the renaming of [Passes](#passes). Which passes the core
-provides, the order of the passes, and the core normal form (see
-[Grammars](#grammars)) are not yet decided.
+and substitutes with the renaming of [Passes](#passes). The first pass of the
+core is [`apply_actions`](#applying-actions). The later passes, their order,
+and the core normal form (see [Grammars](#grammars)) are not yet decided.
 
 ### Grammars
 
@@ -3371,8 +3373,51 @@ A grammar may restrict two layers of an expression separately. The form layer
 consists of every `Action` and every node with argument spaces other than
 `()`. The integrand layer consists of the other nodes.
 
-The intermediate grammars and their order are part of the design of the
-passes, and are not yet decided.
+The section of each pass states the input grammar and the output grammar of
+the pass, such as $N_1$ of [`apply_actions`](#applying-actions). The later
+grammars are part of the design of the passes, and are not yet decided.
+
+### Applying actions
+
+Requires: [Grammars](#grammars), [`Action`](#action), [`Form`](#form),
+[Passes](#passes).
+
+| `apply_actions(f)` |  |
+| ------------------ | - |
+| Evaluates          | `Action` |
+| Input grammar      | $N_0$ |
+| Output grammar     | $N_1 = N_0 \setminus \{$an `Action` whose form is not a `Function` in a dual space$\}$ |
+
+The pass rewrites every `Action(f, p, g)`, inner actions first, with the rule
+for the class of the form $f$, and keeps the value of [`Action`](#action).
+Moving `Action(f, p, g)` into a binding node first renames a bound name of the
+node that is free in $g$, as for a substitution (see [Passes](#passes)).
+
+| Form $f$ | Rewrite of `Action(f, p, g)` |
+| -------- | ---------------------------- |
+| `Form(e, arguments)` | The value of `Action`: `Form(e, others)` with $g$ substituted for the argument at $p$, or $e$ with $g$ substituted if no entries remain |
+| `Sum(a, b)` | `Sum(Action(a, p, g), Action(b, p, g))` |
+| `Product(a, b)`, with $n$ the arity of $a$ | `Product(Action(a, p, g), b)` for $p < n$, otherwise `Product(a, Action(b, p - n, g))` |
+| `Division(a, c)` | `Division(Action(a, p, g), c)` |
+| `Conjugate(a)` | `Conjugate(Action(a, p, g))` |
+| `Tensor` | The `Tensor` of the actions on the entries |
+| `Indexed`, `ComponentTensor`, `IndexSum` | The node of the action on the expression |
+| `Gradient(a, P)`, `PullBack(a, D)`, `Integral(a, P)` | The node of the action on $a$ |
+| `DirectionalDerivative(a, x, b, h)` | `DirectionalDerivative(Action(a, p, g), x, b, h)` |
+| `Zero` | `Zero` with the free indices of $g$ added and the entry at $p$ removed |
+| `Function` in a dual space | Remains, a pairing of $N_1$ |
+| `Action` | Cannot occur, because the inner action is rewritten first, and an action that remains has the argument spaces `()` |
+| Any other class of the core | Cannot occur, because the argument spaces are `()` |
+
+- `Gradient`, `PullBack` and `Integral` commute with the action, because a
+  bound argument is a field like any other: the gradient of the form at $g$ is
+  the gradient of the value at $g$, including the variation of $g$.
+- `DirectionalDerivative` binds the variable $x$ in $a$, and the point $b$ is
+  not bound (see [Passes](#passes)). If $x$ is free in $g$, the substitution
+  renames $x$, so the $x$ in $g$ is not differentiated.
+- Forms are first order (see [`Form`](#form)), so a substitution never creates
+  an `Action` on a `Form`. Each rule removes the action from one node or moves
+  the action to operands that are smaller, so the pass terminates.
 
 ## Extending the core
 
