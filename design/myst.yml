@@ -4,7 +4,6 @@ project:
   authors:
     - name: Jack S. Hale
     - name: Matthew Scroggs
-    - name: Michal Habera
   github: https://github.com/FEniCS/uflx
   toc:
     - file: README.md
