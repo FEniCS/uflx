@@ -241,15 +241,22 @@ replacement commutes with the free functions: replacing `A` by `B` in
 `transpose(A)` gives `transpose(B)`, with the derived indices of `B`. A pass
 may cache results for each object, because objects are immutable.
 
-Substitution respects scope. A `ComponentTensor` or an `IndexSum` binds
-indices (see [`ComponentTensor` and
-`IndexSum`](#componenttensor-and-indexsum)), and a [`Form`](#form) binds
-functions, the bound names of the binding node. When a pass substitutes an
-expression $s$ for an expression $r$ inside a binding node:
+Substitution respects scope. A binding node binds names in some of its
+operands:
 
-- If a bound name of the binding node is free in $r$, the pass leaves the
-  binding node unchanged, because every occurrence of $r$ inside the binding
-  node refers to the bound name.
+| Binding node | Bound names | Bound in |
+| ------------ | ----------- | -------- |
+| [`ComponentTensor(e, indices)`, `IndexSum(e, indices)`](#componenttensor-and-indexsum) | The indices of `indices` | `e` and `indices` |
+| [`Form(e, arguments)`](#form) | The functions of `arguments` | `e` and `arguments` |
+| [`DirectionalDerivative(f, x, a, h)`](#directionalderivative) | $x$ | $f$ and $x$ |
+
+When a pass substitutes an expression $s$ for an expression $r$ inside a
+binding node, the pass substitutes into the other operands as anywhere else,
+and into the operands in which the names are bound as follows:
+
+- If a bound name of the binding node is free in $r$, the pass leaves those
+  operands unchanged, because every occurrence of $r$ in them refers to the
+  bound name.
 - Otherwise, if a bound name of the binding node is free in $s$, the pass
   renames the bound name and then substitutes, so that the binding node does
   not capture the name.
@@ -264,7 +271,15 @@ distinct, so the new names are distinct. For example, replacing
 `index_sum(a[j] * b[i], (j,))`, with `j` the renamed index, and the result has
 the free index `i`. Without the renaming, the result would be
 `index_sum(a[i] * b[i], (i,))`, with no free index. Replacing `v` by `w` in
-`form(a, (v,))` gives `form(a, (v,))`, because the form binds `v`.
+`form(a, (v,))` gives `form(a, (v,))`, because the form binds `v`. Replacing
+`u` by `u0` in `DirectionalDerivative(f, u, u, h)` gives
+`DirectionalDerivative(f, u, u0, h)`, the derivative at `u0`, because the
+point is not bound.
+
+The variable of a `DirectionalDerivative` that is not a `Function` has no new
+name. A pass that would rename such a variable first rewrites the
+`DirectionalDerivative` as an expression with the same value and no
+`DirectionalDerivative`, and then substitutes.
 
 A pass does one thing, such as differentiating or lowering. Passes compose,
 and the user of the core chooses which passes run and in what order.
@@ -1638,28 +1653,35 @@ derivative](#gateaux-derivative), [Argument spaces](#argument-spaces),
 [Symmetric tensors](EXAMPLES.md#symmetric-tensors).
 
 A concrete subclass of `AbstractExpression` for the derivative of an
-expression $f$ with respect to an expression $g$ in a direction $h$,
+expression $f$ with respect to a variable $x$ at a point $a$ in a direction
+$h$,
 
 $$
-\mathrm{D}(f, g, h) = \frac{d}{d\varepsilon} f[g := g + \varepsilon h] \Big|_{\varepsilon = 0},
+\mathrm{D}(f, x, a, h) = \frac{d}{d\varepsilon} f[x := a + \varepsilon h] \Big|_{\varepsilon = 0},
 $$
 
-with $\varepsilon$ real and $f[g := s]$ the substitution of $s$ for $g$ in $f$
-(see [Passes](#passes)).
+with $\varepsilon$ real and $f[x := s]$ the substitution of $s$ for $x$ in $f$.
+The variable $x$ is bound in $f$ (see [Passes](#passes)).
 
-| `DirectionalDerivative(f, g, h)` |                                                                                                       |
+| `DirectionalDerivative(f, x, a, h)` |                                                                                                       |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Extends                          | `AbstractExpression` |
-| Free function                    | `directional_derivative(f, g, h)`                                                                     |
-| Takes                            | `f, g, h: AbstractExpression` |
-| Properties                       | `expression` $f$, `variable` $g$ and `direction` $h$ |
-| Requires                         | $g$ with no free indices, $h$ with the value shape of $g$, $g$ and $h$ with the argument spaces `()`, and $h$ with the support of $g$ or no support |
-| Static type                      | The value shape of $f$, the free indices of $f$ followed by those of $h$, and the argument spaces of $f$ |
+| Takes                            | `f, x, a, h: AbstractExpression` |
+| Properties                       | `expression` $f$, `variable` $x$, `point` $a$ and `direction` $h$ |
+| Requires                         | $x$ with no free indices, $a$ and $h$ with the value shape of $x$, $x$, $a$ and $h$ with the argument spaces `()`, and $a$ and $h$ with the support of $x$ or no support |
+| Static type                      | The value shape of $f$, the free indices of $f$ followed by those of $a$ and $h$, each `Index` taken once, and the argument spaces of $f$ |
 | Raises                           | `ValueError` if a requirement fails                                                                   |
 
-The substitution replaces only the nodes of $f$ equal to $g$, so
-`DirectionalDerivative` is a partial derivative. For example, with a deformation gradient `F` and
-`C = transpose(F) @ F`, the derivative with respect to `C` does not see a
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `directional_derivative(f, g, h)` | | `f, g, h: AbstractExpression` | `DirectionalDerivative(f, g, g, h)` |
+
+`directional_derivative(f, g, h)` passes $g$ as both the variable and the
+point, so the derivative is with respect to $g$ at $g$. The variable and the
+point differ only after a pass renames the variable or substitutes into the
+point (see [Passes](#passes)). The substitution replaces only the nodes of $f$
+equal to $x$, so `DirectionalDerivative` is a partial derivative. For example,
+with a deformation gradient `F` and `C = transpose(F) @ F`, the derivative with respect to `C` does not see a
 `determinant(F)` in $f$.
 
 The derivative is real-linear in $h$. The gradient of a direction with no
@@ -1776,9 +1798,8 @@ element comes from.
 
 A $\psi$ with free indices makes $D$ a family of domains, with one domain for
 each value of the free indices. For example, with an array `x` of value shape
-`(m, n)` and indices `i` and `k`,
-`domain_map(RD(0), component_tensor(x[i, k], (k,)), RD(n))` is a
-family of $m$ points in `RD(n)`. A family of domains writes a set of points
+`(m, n)` and an index `i`, `domain_map(RD(0), x[i], RD(n))` is a family of $m$
+points in `RD(n)`. A family of domains writes a set of points
 once, such as the points of a quadrature rule.
 
 $Q$ is usually `RD(n)`. $Q$ may be smaller, such as the unit triangle for an
@@ -1989,7 +2010,7 @@ index:
 
 ```python
 g = gathered_index(cells, (i,))
-R = domain_map(RD(0), component_tensor(positions[i, 0, k], (k,)), K_j)
+R = domain_map(RD(0), positions[i, 0], K_j)
 pull_back(pull_back(u, gathered_cell_domain(D, j, g)), R)
 ```
 
@@ -3047,10 +3068,9 @@ is in the product.
 `(conjugate_space(dual_space(V)),)`. `dual_space(dual_space(V))` is not `V`,
 because `V` has the argument spaces `()`.
 
-The canonical map takes a function `w` in `V` to
-`form(conjugate(action(l, 0, w)), (conjugate(l),))`, with a function `l` in
-`dual_space(V)`. The image is linear in `w` and antilinear in `l`. A library may
-store `w` and the image with the same values.
+A function in `dual_space(dual_space(V))` is a leaf, such as data of a library.
+A form never binds a function in a dual space (see [`Form`](#form)), so the
+canonical map from `V` is not a form of the core.
 
 #### Examples
 
@@ -3063,14 +3083,11 @@ in `Q` of the [`Form`](#form) examples.
 - `m = function(dual_space((V, Q)), "m")` has the argument spaces
   `((conjugate_space(V), conjugate_space(Q)),)`. `action(m, 0, (v, q))` is the
   pairing of `m` with `(v, q)`.
-- Let `w` be a function in `V` and `l` a function in `dual_space(V)`.
-  `form(conjugate(action(l, 0, w)), (conjugate(l),))` has the argument spaces
-  `(conjugate_space(dual_space(V)),)`, the static type of a function in
-  `dual_space(dual_space(V))`. The form evaluates every antilinear form on `V`
-  at `w`.
+- With `l` in `dual_space(V)`, `form(conjugate(action(l, 0, v)), (conjugate(l),))`
+  raises `ValueError`, because `l` has argument spaces.
 
 ```{dropdown} Legacy UFL
-The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual_space(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the canonical map is a form, so the spaces keep distinct argument spaces.
+The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual_space(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the spaces keep distinct argument spaces. A form of the core binds no `Coargument`, and an operator with a `Coargument` is a node class of a language extension.
 ```
 
 ### `Form`
@@ -3086,9 +3103,9 @@ expression with some of its functions bound as arguments.
 | Free function                 | `form(expression, arguments)`                                                                                                                                                                      |
 | Takes                         | `expression: AbstractExpression`, `arguments: tuple[Function \| tuple[Function, ...], ...]` |
 | Properties                    | `expression`, an expression with the argument spaces `()`, and `arguments`, a `tuple` of entries, each a [function](#function) `v`, the [conjugate](#conjugate) `conjugate(v)` of a function, or a `tuple` of at least two of these |
-| Requires                      | Every function in `arguments` distinct                                                                                                                                                             |
+| Requires                      | Every function in `arguments` distinct, with the argument spaces `()` |
 | Static type                   | That of the expression, with the argument spaces the space $V$ of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
-| Raises                        | `TypeError` for an entry that is not a `Function`, a `Conjugate` of a `Function` or a `tuple` of these, and `ValueError` for a repeated function, a `tuple` of fewer than two members or an expression with argument spaces |
+| Raises                        | `TypeError` for an entry that is not a `Function`, a `Conjugate` of a `Function` or a `tuple` of these, and `ValueError` for a repeated function, a function with argument spaces, a `tuple` of fewer than two members or an expression with argument spaces |
 
 The position
 of an argument is the index of the entry in `arguments`. The entry states the
@@ -3100,7 +3117,11 @@ For a `tuple` entry, the expression is linear in the members jointly, so a term
 may depend on one member only. Construction does not check the linearity, and
 a pass may check the linearity (see [Checking linearity](#checking-linearity)).
 Every other function in the expression is fixed, so one function may be an argument
-of one form and fixed in another. The scope of a bound function is lexical, as
+of one form and fixed in another. A form never binds a function in a dual space,
+so forms are first order, and an action never substitutes a form into a pairing.
+An operator with an argument in a dual space, such as the adjoint of an
+interpolation, is a node class of a language extension that states the
+argument spaces (see [Language extensions](#language-extensions)). The scope of a bound function is lexical, as
 the scope of an index is (see [`ComponentTensor` and
 `IndexSum`](#componenttensor-and-indexsum)): an occurrence of a function refers
 to the innermost enclosing `Form` that binds the function, and is fixed
@@ -3175,9 +3196,10 @@ expression given to one argument of the form.
 
 Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
 
-- For a space $V$, $g$ has the value shape and the scalar type of a function
-  in $V$, the argument spaces `()`, and the support of that function or no
-  support.
+- For a space $V$, $g$ has the value shape, the scalar type and the argument
+  spaces of a function in $V$, and the support of that function or no
+  support. The argument spaces are `()`, or `(S',)` for $V$ =
+  `dual_space(S)` (see [`DualSpace`](#dualspace)).
 - For a `tuple` of spaces, $g$ is a `tuple` with one such member per space.
 - An `Index` free in both $f$ and $g$ has the same extent in both.
 
@@ -3294,8 +3316,8 @@ domain, `PullBack`, `Gradient`, `DirectionalDerivative` and `Action`.
 A pass that rewrites a node keeps the value of the node and the static type of
 the node, with the free indices possibly in another order, never simplifies,
 and substitutes with the renaming of [Passes](#passes). Which passes the core
-provides, the order of the passes, and what a form compiler receives are not
-yet decided.
+provides, the order of the passes, and the core normal form (see
+[Grammars](#grammars)) are not yet decided.
 
 ### Grammars
 
@@ -3306,24 +3328,36 @@ See also: [New questions](#new-questions), [Rule tables](#rule-tables).
 A grammar is a set of expressions. A grammar is checked by a pass that asks
 whether an expression belongs to the grammar (see [New
 questions](#new-questions)), built from rule tables as any other pass (see
-[Rule tables](#rule-tables)). A language extension that adds a node class adds
-a table to the check that states where the node class may occur.
+[Rule tables](#rule-tables)).
 
-- The grammar $N_0$ is the set of every expression that construction accepts.
+- An expression node of an expression $e$ is an expression reached from $e$
+  along the edges of the graph, including $e$ (see [The base object
+  `Base`](#the-base-object-base)). The grammar $N_0$ is the set of the
+  expressions $e$ in which every expression node is an instance of a concrete
+  class of the core or a terminal of a downstream library (see [Leaves and
+  subclassing](#leaves-and-subclassing)). Every object is valid, so $N_0$
+  needs no other condition. A node class of a language extension is not in
+  $N_0$, and an extension that adds node classes states the grammars that
+  contain them.
 - A pass maps a source grammar into a target grammar if, for every
   expression of the source grammar, the result of the pass belongs to the
   target grammar.
-- An intermediate grammar is written as a delta: an earlier grammar without
-  the expressions that contain a node matching a stated pattern. For example,
-  a grammar without `Action` except on a leaf.
-- The last grammar of the passes, which a form compiler receives, is written
-  as a list of the node classes and the patterns that the grammar allows.
+- A pattern is a condition on one expression node that reads only the node
+  and the objects within a bounded number of edges of the node. A pattern
+  never reads the result of a pass.
+- For a grammar $N$ and a set of patterns $P$, the delta $N \setminus P$ is
+  the set of the expressions of $N$ with no expression node that matches a
+  pattern of $P$. An intermediate grammar is written as a delta of an earlier
+  grammar.
+- The core normal form is the last grammar of the passes of the core, written
+  as a list of the node classes and the patterns that the grammar allows. A
+  form compiler receives the integrand layer of an expression in the core
+  normal form and continues with passes of its own, and the code that
+  assembles receives the form layer.
 
 A grammar may restrict two layers of an expression separately. The form layer
 consists of every `Action` and every node with argument spaces other than
-`()`, such as a `Form`, a sum of forms or a function in a dual space. The
-integrand layer consists of the other nodes, such as the expression of a
-`Form` and its subexpressions.
+`()`. The integrand layer consists of the other nodes.
 
 The intermediate grammars and their order are part of the design of the
 passes, and are not yet decided.
@@ -3374,6 +3408,12 @@ extension provides, as part of the class:
 - a lowering to an equal expression of node classes of the core, if such an
   expression exists.
 
+A node class of a language extension may state argument spaces, as a function
+in a dual space does, so that the node is an operator with arguments. The
+argument spaces may include a dual space, which a `Form` of the core never
+binds. The table of the extension for a pass that evaluates actions gives the
+action on each argument.
+
 #### Rule tables
 
 A pass is built from an ordered `tuple` of rule tables. A rule table is a list
@@ -3414,6 +3454,13 @@ composition (see [A Piola extension](#a-piola-extension)).
   pull-back gives the node of the pulled-back operands, because the operation
   is pointwise. A pass with no table of the extension raises `TypeError` for
   the node.
+- A language extension for interpolation adds a node class for the
+  interpolation of functions of a space `U` into a space `V`, with the
+  argument spaces `(conjugate_space(dual_space(V)), U)`, the operator from
+  `U` to `V` as a form. The action at position 0 on a function in
+  `dual_space(V)` is the adjoint interpolation of that function, and the
+  action at position 1 on a function in `U` is the interpolant. The table of
+  the extension for a pass that evaluates actions gives both.
 - A named composition that must survive a pass, or print as written, is a node
   class of a language extension whose lowering is the composition. A
   `Transpose` node class lowers to `component_tensor(A[k, l], (l, k))`. The
@@ -3672,7 +3719,7 @@ AbstractExpression
 |                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                             | The Leibniz formula for $\det A$                                                                                                                                                |
 | Calculus on a domain        | [`coordinate(P)`](#coordinate)                                           |                               | `P: AbstractDomain`                                                                                 | `Coordinate`                                                                                                                                                                    |
 |                             | [`gradient(f, P)`](#gradient)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                        | `Gradient`                                                                                                                                                                      |
-|                             | [`directional_derivative(f, g, h)`](#directionalderivative)              |                               | `f, g, h: AbstractExpression`                                                                       | `DirectionalDerivative`                                                                                                                                                         |
+|                             | [`directional_derivative(f, g, h)`](#directionalderivative)              |                               | `f, g, h: AbstractExpression`                                                                       | `DirectionalDerivative(f, g, g, h)`                                                                                                                                             |
 |                             | [`integral(f, P)`](#integral)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                        | `Integral`                                                                                                                                                                      |
 | Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractDomain`, `psi: AbstractExpression`, `Q: AbstractDomain`                                 | `DomainMap`                                                                                                                                                                     |
 |                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap`                                                  | `PullBack`                                                                                                                                                                      |

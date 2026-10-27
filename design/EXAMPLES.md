@@ -416,13 +416,13 @@ rule is:
 ```python
 zero, half = Integer(0), Integer(1) / Integer(2)
 sixth = Integer(1) / Integer(6)
-i, k = index("i"), index("k")
+i = index("i")
 
 points = tensor((tensor((half, zero)), tensor((half, half)), tensor((zero, half))))
 weights = tensor((sixth, sixth, sixth))
 
 # A family of three points in T, with the free index i.
-xs = domain_map(RD(0), component_tensor(points[i, k], (k,)), T)
+xs = domain_map(RD(0), points[i], T)
 
 q = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
 ```
@@ -442,8 +442,9 @@ index_sum(weights[i] * (points[i, 0] * points[i, 1]), (i,))
 
 `expand_pull_backs` replaces `X` by the parameterisation of `xs`. A pass
 replaces the integral over `RD(0)` of an expression by the expression, and
-`reduce_component_tensors` replaces `component_tensor(points[i, k], (k,))[0]`
-by `points[i, 0]`. A form compiler could generate:
+`reduce_component_tensors` replaces `points[i][0]`, the entry 0 of a
+`ComponentTensor` (see [Partial indexing](LANGUAGE.md#partial-indexing)), by
+`points[i, 0]`. A form compiler could generate:
 
 ```python
 weights = (1 / 6, 1 / 6, 1 / 6)
@@ -484,7 +485,7 @@ that part of each cut cell, so the number of points differs from cell to cell.
 > such as the local number of a facet, read as
 > `gathered_index(RuntimeIndex(label, extent), ())`.
 
-With `T`, `f`, `i` and `k` of the quadrature example:
+With `T`, `f` and `i` of the quadrature example:
 
 ```python
 # These are language extensions, not the core.
@@ -495,7 +496,7 @@ weights = runtime_array("weights", (q,))
 
 # The family of q points in the part of T where phi < 0. The level set phi
 # is not written here, because the core has no conditional.
-xs = domain_map(RD(0), component_tensor(points[i, k], (k,)), T)
+xs = domain_map(RD(0), points[i], T)
 
 a = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
 ```
