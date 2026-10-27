@@ -984,12 +984,12 @@ See also: [`EllipsisIndex`](#ellipsisindex),
 
 A concrete subclass of `AbstractExpression` that selects one component of a
 tensor-valued expression. `X[0]` and `A[0, 1]` are `indexed(X, (0,))` and
-`indexed(A, (0, 1))`.
+`indexed(A, (0, 1))`, through the free function `component` below.
 
 | `Indexed(expression, indices)` |                                                                                   |
 | ------------------------------ | --------------------------------------------------------------------------------- |
 | Extends                        | `AbstractExpression` |
-| Free function                  | `indexed(expression, indices)`, with the overload `expression[indices]`           |
+| Free function                  | `indexed(expression, indices)`                                                    |
 | Takes                          | `expression: AbstractExpression`, `indices: tuple` |
 | Properties                     | `expression`, and `indices`, a non-empty `tuple` of entries of the kinds below    |
 | Static type                    | Value shape `()`, and the free indices below                                      |
@@ -1025,9 +1025,32 @@ cover exactly the rank. An expression with value shape `()` has rank 0.
 Examples:
 
 - For a matrix `A` of value shape `(2, 2)`, `A[1, 0]` has value shape `()`,
-  and `A[1]` raises `IndexError`.
+  and `indexed(A, (1,))` raises `IndexError`.
 - `tensor((Integer(1) - X[0], X[0]))` has value shape `(2,)` and the support
   `RD(2)`.
+
+#### Partial indexing
+
+The overload `[]` calls the free function `component`, which also takes fewer
+entries than the rank and indexes the leading axes:
+
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `component(f, entries)` | `[]` | `f: AbstractExpression`, `entries: tuple` | `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$ and contain no `EllipsisIndex`, otherwise `indexed(f, entries)` |
+
+`K` is the `tuple` of the derived indices
+`Index(("uflx.component", f, entries, m))`, one for each axis that the entries
+do not cover (see [Derived indices](#derived-indices)). `component` reads only
+the rank of $f$ and the number of entries. `Indexed` validates the entries, so
+too many entries raise `IndexError` from `Indexed`.
+
+A free function of the core calls `indexed`, never `component`, so a
+composition in this document that writes `f[K]` is `indexed(f, K)`, and an
+operand of the wrong rank raises from `Indexed`.
+
+For the matrix `A` of the examples, `A[1]` is row 1 of `A`, the composition
+`component_tensor(indexed(A, (1, k)), (k,))` of value shape `(2,)`, with `k`
+the derived index.
 
 ### `ComponentTensor` and `IndexSum`
 
@@ -1450,7 +1473,8 @@ and the two are not equal. `a ** b ** c` is `power(a, power(b, c))`, and
 
 `__getitem__` is the one exception. Python passes `f[i]` to `__getitem__` as the
 single entry `i`, and passes `f[i, j]` as the `tuple` `(i, j)`. `__getitem__`
-converts a single entry into a `tuple` of one entry and calls `indexed`. The
+converts a single entry into a `tuple` of one entry and calls `component` (see
+[Partial indexing](#partial-indexing)). The
 conversion exists because of Python indexing syntax.
 
 `AbstractExpression` defines `__iter__` to raise `TypeError`, because
@@ -3188,9 +3212,9 @@ The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples, and
 - `action(form(a, (v, u)) + 2 * form(a, (v, u)), 1, w)` is, by linearity,
   the sum of the actions on both operands, with `2` times the action on the
   form of the product.
-- With `c = tensor((Integer(1), Integer(2)))` and an index `k`,
-  `action(form(a, (v, u)), 1, c[k] * w)` is a family of two linear forms in
-  `v`, with the free index `k`, the actions on `w` and on `2 * w`.
+- With fixed functions `w0` and `w1` in `V` and an index `k`,
+  `action(form(a, (v, u)), 1, tensor((w0, w1))[k])` is a family of two linear
+  forms in `v`, with the free index `k`, the actions on `w0` and on `w1`.
 - Let `w` in `V` and `r` in `Q` be fixed functions, with the Stokes form of the
   [`Form`](#form) examples. `action(form(e, ((v, q), (u, p))), 1, (w, r))` is
   a linear form in `(v, q)`, the residual at `(w, r)`.
@@ -3601,7 +3625,8 @@ AbstractExpression
 |                             | [`conjugate(f)`](#conjugate)                                             |                               | `f: AbstractExpression`                                                                             | `Conjugate`                                                                                                                                                                     |
 |                             | [`square_root(f)`](#elementary-functions-very-incomplete)                |                               | `f: AbstractExpression`                                                                             | `SquareRoot`                                                                                                                                                                    |
 |                             | [`tensor(entries)`](#tensor)                                             |                               | `entries: tuple[AbstractExpression, ...]`                                                           | `Tensor`                                                                                                                                                                        |
-|                             | [`indexed(expression, indices)`](#indexed)                               | `expression[indices]`         | `expression: AbstractExpression`, `indices: tuple`                                                  | `Indexed`                                                                                                                                                                       |
+|                             | [`indexed(expression, indices)`](#indexed)                               |                               | `expression: AbstractExpression`, `indices: tuple`                                                  | `Indexed`                                                                                                                                                                       |
+|                             | [`component(f, entries)`](#partial-indexing)                             | `[]`                          | `f: AbstractExpression`, `entries: tuple`                                                           | `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$ and contain no `EllipsisIndex`, otherwise `indexed(f, entries)`                    |
 |                             | [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                      | `ComponentTensor`                                                                                                                                                               |
 |                             | [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                      | `IndexSum`                                                                                                                                                                      |
 |                             | [`ellipsis_index(label)`](#ellipsisindex)                                |                               | `label: str \| tuple`                                                                               | `EllipsisIndex`                                                                                                                                                                 |
@@ -3702,6 +3727,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 36    |
 | Expression node classes         | 27    |
-| Free functions                  | 43    |
+| Free functions                  | 44    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

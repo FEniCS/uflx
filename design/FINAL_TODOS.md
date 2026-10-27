@@ -47,7 +47,6 @@ Nothing. Integrals over cells and facets use the induced density in
    `transpose` is a function of a library.
 1. **`Inverse` with an `AbstractExtent`.** The requirement that $k$ is at most $n$ cannot be
    checked when an extent is symbolic.
-1. **Partial indexing.** `A[0]` for `A` of rank 2 is not defined.
 1. **Ellipsis operations of a library.** `outer`, `dot` and `inner` build
    results with an `EllipsisIndex`, which `reduce_component_tensors` cannot
    split per axis. Derive one `Index` per axis, or state that the results do
