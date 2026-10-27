@@ -241,21 +241,30 @@ replacement commutes with the free functions: replacing `A` by `B` in
 `transpose(A)` gives `transpose(B)`, with the derived indices of `B`. A pass
 may cache results for each object, because objects are immutable.
 
-Substitution avoids capture. A `ComponentTensor` or an `IndexSum` binds
+Substitution respects scope. A `ComponentTensor` or an `IndexSum` binds
 indices (see [`ComponentTensor` and
 `IndexSum`](#componenttensor-and-indexsum)), and a [`Form`](#form) binds
-functions. If a pass substitutes an expression
-into the expression of a binding node, and a bound index of the binding node is
-free in the substituted expression, the pass renames the bound index. The new
-name is the derived index `Index(("uflx.rename", node, m))`, or the derived
-`EllipsisIndex` with the same label, or the function
-`Function(V, ("uflx.rename", node, m))` in the space $V$ of a bound function,
-with `node` the binding node before the substitution and `m` the position of
-the bound index or function. For example, replacing
+functions, the bound names of the binding node. When a pass substitutes an
+expression $s$ for an expression $r$ inside a binding node:
+
+- If a bound name of the binding node is free in $r$, the pass leaves the
+  binding node unchanged, because every occurrence of $r$ inside the binding
+  node refers to the bound name.
+- Otherwise, if a bound name of the binding node is free in $s$, the pass
+  renames the bound name and then substitutes, so that the binding node does
+  not capture the name.
+
+The new name of a bound index `i` is the derived index
+`Index(("uflx.rename", node, i))`, or the derived `EllipsisIndex` with the
+same label for a bound `EllipsisIndex`, and the new name of a bound function
+`v` in a space $V$ is `Function(V, ("uflx.rename", node, v))`, with `node` the
+binding node before the substitution. The bound names of a binding node are
+distinct, so the new names are distinct. For example, replacing
 `c` by `b[i]` in `index_sum(a[i] * c, (i,))` gives
 `index_sum(a[j] * b[i], (j,))`, with `j` the renamed index, and the result has
 the free index `i`. Without the renaming, the result would be
-`index_sum(a[i] * b[i], (i,))`, with no free index.
+`index_sum(a[i] * b[i], (i,))`, with no free index. Replacing `v` by `w` in
+`form(a, (v,))` gives `form(a, (v,))`, because the form binds `v`.
 
 A pass does one thing, such as differentiating or lowering. Passes compose,
 and the user of the core chooses which passes run and in what order.
@@ -1204,7 +1213,9 @@ allowed, because a counter makes construction depend on global state.
 
 A pass that needs fresh indices derives the indices in the same way, with the
 identifier of the pass, the arguments of the rewritten node and a number. The
-renamed index of [Passes](#passes) follows the same rule.
+renamed index of [Passes](#passes) has the label `("uflx.rename", node, i)`,
+with the binding node and the bound index in place of the arguments and the
+number.
 
 The edges of an index to the objects in the label of the index identify the
 index and are not operands.
@@ -1595,7 +1606,7 @@ The examples use `P = RD(3)`, `X = coordinate(P)`, `x, y, z = X[0], X[1], X[2]`,
 ### `DirectionalDerivative`
 
 Requires: [`Gradient`](#gradient), [Free indices](#free-indices),
-[Support](#support).
+[Support](#support), [Passes](#passes).
 
 See also: [Gateaux
 derivative](#gateaux-derivative), [Argument spaces](#argument-spaces),
@@ -1609,7 +1620,8 @@ $$
 \mathrm{D}(f, g, h) = \frac{d}{d\varepsilon} f[g := g + \varepsilon h] \Big|_{\varepsilon = 0},
 $$
 
-with $\varepsilon$ real and every occurrence of $g$ in $f$ replaced.
+with $\varepsilon$ real and $f[g := s]$ the substitution of $s$ for $g$ in $f$
+(see [Passes](#passes)).
 
 | `DirectionalDerivative(f, g, h)` |                                                                                                       |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -1621,11 +1633,8 @@ with $\varepsilon$ real and every occurrence of $g$ in $f$ replaced.
 | Static type                      | The value shape of $f$, the free indices of $f$ followed by those of $h$, and the argument spaces of $f$ |
 | Raises                           | `ValueError` if a requirement fails                                                                   |
 
-An occurrence of $g$ is a node of $f$ equal to $g$. Construction never
-simplifies, so the occurrences are those that the user built. An expression
-with the value of $g$ that is built differently is not an occurrence. $f$ is
-fixed except through the occurrences of $g$, so `DirectionalDerivative` is a
-partial derivative. For example, with a deformation gradient `F` and
+The substitution replaces only the nodes of $f$ equal to $g$, so
+`DirectionalDerivative` is a partial derivative. For example, with a deformation gradient `F` and
 `C = transpose(F) @ F`, the derivative with respect to `C` does not see a
 `determinant(F)` in $f$.
 
@@ -3137,30 +3146,51 @@ expression given to one argument of the form.
 | Takes                    | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]` |
 | Properties               | `form`, an expression with more than `position` argument spaces, `position`, an `int`, and `argument`, the expression $g$, or a `tuple` of expressions |
 | Requires                 | The conditions below                                                                                                                                   |
-| Static type              | That of $f$, with the argument spaces of $f$ without the entry at `position`.                                                                          |
+| Static type              | That of $f$, with the free indices of $f$ followed by those of $g$, each `Index` taken once, and the argument spaces of $f$ without the entry at `position` |
 | Raises                   | `ValueError` if a requirement fails                                                                                                                    |
 
 Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
 
-- For a space $V$, $g$ has the static type of a function in $V$, with the
-  support of that function or no support.
+- For a space $V$, $g$ has the value shape and the scalar type of a function
+  in $V$, the argument spaces `()`, and the support of that function or no
+  support.
 - For a `tuple` of spaces, $g$ is a `tuple` with one such member per space.
+- An `Index` free in both $f$ and $g$ has the same extent in both.
 
-`Action` is lazy. An action on a leaf, such as a function in a dual space,
-remains for the library of the leaf.
+$g$ may have free indices, and is then a family of arguments, one for each
+value of the free indices, as a domain map with free indices is a family of
+domains (see [`DomainMap`](#domainmap)). The action is then the family of
+actions. The free indices of $g$ are the free indices of the members of a
+`tuple`.
+
+The value of `Action(Form(e, arguments), position, g)` is `Form(e, others)`,
+with `others` the entries other than the entry at `position`, and with $g$
+substituted for the argument at `position` (see [Passes](#passes)). A function
+of `others` that is free in $g$ is therefore renamed. If no entries remain, the
+value is $e$ with $g$ substituted. For an entry
+`conjugate(v)`, $g$ is substituted for `v`. For a `tuple` entry, each member of
+$g$ is substituted for the matching member. The action of any other form is
+defined by linearity, and the action on a leaf, such as a function in a dual
+space, is the pairing, which the library of the leaf states, with one pairing
+for each value of the free indices of $g$.
 
 #### Examples
 
 The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples, and
 `l = function(dual_space(V), "l")`.
 
-- `action(form(a, (v, u)), 1, w)` is a linear form in `v`. A pass evaluates
-  the action to `form(b, (v,))`, with `b` the expression `a` with `u` replaced
-  by `w`.
+- `action(form(a, (v, u)), 1, w)` is a linear form in `v`, with the value
+  `form(b, (v,))`, with `b` the expression `a` with `u` replaced by `w`.
 - `action(action(form(a, (v, u)), 1, w), 0, w)` is a functional.
+- `action(form(a, (v, u)), 1, v)` is a linear form in a renamed function, with
+  the fixed `v` in place of `u`, because the form binds `v`.
 - `action(l, 0, w)` is the pairing of `l` with `w`, with no support.
-- `action(form(a, (v, u)) + 2 * form(a, (v, u)), 1, w)` moves into both
-  operands of the sum, and into the form of the product.
+- `action(form(a, (v, u)) + 2 * form(a, (v, u)), 1, w)` is, by linearity,
+  the sum of the actions on both operands, with `2` times the action on the
+  form of the product.
+- With `c = tensor((Integer(1), Integer(2)))` and an index `k`,
+  `action(form(a, (v, u)), 1, c[k] * w)` is a family of two linear forms in
+  `v`, with the free index `k`, the actions on `w` and on `2 * w`.
 - Let `w` in `V` and `r` in `Q` be fixed functions, with the Stokes form of the
   [`Form`](#form) examples. `action(form(e, ((v, q), (u, p))), 1, (w, r))` is
   a linear form in `(v, q)`, the residual at `(w, r)`.
@@ -3189,7 +3219,7 @@ $$
 \delta e[w] = \frac{d}{d\varepsilon} e(u + \varepsilon w) \Big|_{\varepsilon = 0},
 $$
 
-with $\varepsilon$ real and every occurrence of $u$ replaced. $\delta e[w]$
+with $\varepsilon$ real. $\delta e[w]$
 is `directional_derivative(e, u, w)` (see
 [`DirectionalDerivative`](#directionalderivative)). $\delta e$ is real-linear
 in $w$, and the scalar types of $V$ and $e$ decide how the result binds $w$:
@@ -3289,32 +3319,57 @@ extension provides, as part of the class:
 - a lowering to an equal expression of node classes of the core, if such an
   expression exists.
 
-A pass without a rule for a node class of a language extension lowers the node
-and continues, so a pass such as `units` needs no rule for the node class. For
-a node class without a lowering, every pass without a rule raises
-`TypeError`. A rule must agree with the lowering followed by the rules for the
-lowered expression, up to mathematical equality.
+#### Rule tables
 
-For example, a language extension for local external operators adds a node
-class for an operation known only by name, such as `exp`, a material law or a
-neural network. The extension gives the derivative of the operation. The
-pull-back of the node is the node of the pulled-back operands, because the
-operation is pointwise. The node class has no lowering.
+A pass is built from an ordered `tuple` of rule tables. A rule table is a list
+of rules, each a pattern and a rewrite. A pattern may match the class of a
+node, the classes of the operands, a condition on the static type, or the
+result of the pass on an operand. The pass applies to a node the first rule,
+in the order of the tables and of the rules in each table, whose pattern
+matches the node. Each rule receives the pass, so a rule applies the whole
+pass, with every table, to the operands.
 
-A named composition that must survive a pass, or print as written, is a node
-class of a language extension whose lowering is the composition. For example,
-a `Transpose` node class lowers to `component_tensor(A[k, l], (l, k))`. The
-pull-back of a `Transpose` is the `Transpose` of the pull-back, because the
-transpose is pointwise, so `Transpose` survives the pull-back.
+- A table of a language extension may match only some nodes. The table of
+  the core comes last, and has a rule for every node class of the core.
+- A pass applied to a node that no rule matches raises `TypeError`.
+- The lowering table of a node class with a lowering matches the nodes of the
+  class, lowers the node and applies the pass to the lowering.
+- No global registry holds the tables. The code that builds a pass, such as a
+  solver library, chooses the tables and the order, including the tables for
+  the language extensions that the code loads. The pass is a function of the
+  ordered tables, so the result does not depend on the order in which the
+  extensions are loaded.
 
-A rule of a language extension dispatches on a node class of the extension,
-and may read which node classes of the extension the operands have, or the
-results of a pass on the operands have. A rule of a language extension never
-matches a pattern of node classes of the core. So at most one rule applies to
-a node, and the order in which the extensions are loaded does not change the
-result. An identity that holds for a composition of the core, such
-as a cancellation in the divergence of a Piola map, needs node classes of an
-extension for the composition (see [A Piola extension](#a-piola-extension)).
+A language extension gives a rule table for each pass that the extension
+supports. For a pass of the core or of another library, such as `units`, the
+extension gives a table of rules or the lowering table. A rule of an extension
+may match a pattern that a rule of the core also matches, and the earlier
+table wins. Every rule keeps the value of the node, and a rule must agree with
+the lowering followed by the pass, up to mathematical equality. An identity
+that holds for a composition of the core, such as a cancellation in the
+divergence of a Piola map, needs node classes of an extension for the
+composition (see [A Piola extension](#a-piola-extension)).
+
+#### Examples
+
+- A language extension for local external operators adds a node class for an
+  operation known only by name, such as `exp`, a material law or a neural
+  network. The node class has no lowering. The table of the extension for a
+  derivative gives the derivative of the operation, and the table for a
+  pull-back gives the node of the pulled-back operands, because the operation
+  is pointwise. A pass with no table of the extension raises `TypeError` for
+  the node.
+- A named composition that must survive a pass, or print as written, is a node
+  class of a language extension whose lowering is the composition. A
+  `Transpose` node class lowers to `component_tensor(A[k, l], (l, k))`. The
+  table of the extension for a pull-back gives the `Transpose` of the
+  pull-back, because the transpose is pointwise, so `Transpose` survives the
+  pull-back. A pass such as a derivative takes the lowering table of
+  `Transpose`.
+- For a pass that reduces an `Indexed` of a `ComponentTensor`, the table of
+  the `Transpose` extension matches an `Indexed` of a `Transpose`, and
+  rewrites `Transpose(A)[i, j]` as `A[j, i]`. The table comes before the table
+  of the core, which has a rule for every `Indexed`.
 
 ### New questions
 
@@ -3322,9 +3377,10 @@ Requires: [Passes](#passes), [Language extensions](#language-extensions),
 [`Coordinate`](#coordinate), [`Gradient`](#gradient).
 
 A downstream library asks a new question of an expression with a pass. The pass
-has one rule for each node class of the core and one rule for each leaf class
-of the library. The pass needs no rule for a node class of a language extension
-that has a lowering (see [Language extensions](#language-extensions)).
+has a rule table for the node classes of the core and the leaf classes of the
+library. A pass that meets a node class of a language extension also has a
+table for that class before the table of the core, such as the lowering table
+(see [Rule tables](#rule-tables)).
 
 For example, a library that checks physical units, such as the work of Habera
 et al.:
@@ -3437,10 +3493,10 @@ domain $D$ = `DomainMap(P, psi, Q)` with $k = n$:
   pull-back of `Curl(u, Q)` is `ContravariantPiola(Curl(u_hat, P), D)`.
 - Otherwise the pull-back lowers `Divergence` or `Curl`.
 
-A pass of the extension builds `pull_back(u, D)` and dispatches on the class
-of the result after the library evaluates the pull-back, so the pass reads
-only node classes of the extension. The order of the passes is part of the
-extension, and is not yet decided.
+The table of the extension for the pull-back holds these rules (see [Rule
+tables](#rule-tables)). Each rule applies the pass to `pull_back(u, D)`, which
+the library of the space evaluates, and reads the class of the result, a node
+class of the extension.
 
 ## Appendix: Class hierarchy
 
