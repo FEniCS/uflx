@@ -1519,16 +1519,14 @@ S = two * component_tensor(directional_derivative(strain_energy(C_), C_, N, C), 
 sigma = F @ S @ transpose(F) / determinant(F)
 
 Pi = integral(psi, D)
-r = directional_derivative(Pi, u, v)
-residual = form(r, (v,))
-# A gateaux_derivative transformation could later build tangent from residual.
-tangent = form(directional_derivative(r, u, w), (v, w))
+residual = gateaux_derivative(Pi, u, v)
+tangent = gateaux_derivative(residual, u, w)
 ```
 
 - `S` and the Cauchy stress `sigma` are expressions on `D`, which a solver
   interpolates or evaluates for output. `apply_derivatives` evaluates `S` to
   an expression equal to $\lambda \operatorname{tr}(E) I + 2 \mu E$.
-- `V` is real, so `residual` and `tangent` are Gateaux derivatives.
+- `V` is real, so `residual` is the form of `directional_derivative(Pi, u, v)` that binds `v`, and `tangent` binds `w` after `v`.
 
 ### Symmetric tensors
 

@@ -10,12 +10,6 @@ Nothing. Integrals over cells and facets use the induced density in
 
 ## Common forms
 
-1. **Linearisation.** `DirectionalDerivative` gives the derivative of an
-   expression, with the geometry fixed. Add the Gateaux derivative to the core
-   as a lazy node of the form layer, `gateaux_derivative(F, u, w)`, with the
-   value `Form(D(e, u, u, w), arguments + (w,))` for each `Form` of `F`, and
-   decide its rules for complex spaces. A derivative in a fixed direction is
-   an action on the new argument.
 1. **Interpolation.** Add the interpolant of an expression in a space, as a
    language extension, and its adjoint on the dual space. Interpolation from
    another mesh needs the cell that contains each point, a runtime gather of
