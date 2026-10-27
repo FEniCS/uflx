@@ -531,8 +531,8 @@ table](#appendix-static-type-table) states otherwise, an expression is complex
 if and only if at least one edge is a complex expression.
 
 The scalar type is the arithmetic in which the expression is evaluated, not a
-statement about the value. A real `SquareRoot` or a real `Power` whose value is
-not a real number, such as `square_root(Integer(-1))`, is undefined.
+statement about the value. A real `SquareRoot`, `Logarithm` or `Power` whose
+value is not a real number, such as `square_root(Integer(-1))`, is undefined.
 
 ### Support
 
@@ -630,6 +630,7 @@ composition:
 | `ImaginaryPart`                                  | `real_part(ImaginaryUnit() * conjugate(f))` multiplies the real part by zero, which is NaN for an infinite real part |
 | `Division`                                       | `multiply(f, power(g, Integer(-1)))` rounds twice, and the quotient the user wrote rounds once                |
 | `SquareRoot`                                     | IEEE 754 rounds the square root correctly and the power not, so `power(f, Integer(1) / Integer(2))` differs   |
+| `Logarithm`                                      | An elementary function, which nothing else composes                                                           |
 | `Inverse`                                        | No one composition covers every $k \le n$, and a pass chooses the algorithm, as for `Division`                |
 | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | The primitives of index notation                                                                            |
 | `Coordinate`, `Function`, `Normal`               | Terminals: the coordinate function of a domain, a member of a space, the outward normal of a cell on a side   |
@@ -774,9 +775,10 @@ power.
 | Requires               | The operands of [Arithmetic](#arithmetic)                                   |
 | Raises                 | `ValueError` if a requirement fails                                         |
 
-The exponent may have a support. The derivative of a power whose exponent has
-a support needs a logarithm, which the core does not have, so the core
-cannot write the gradient of such a power as a composition.
+The exponent may have a support. The derivative of a power $a^b$ whose
+exponent has a support is $a^b (\log(a) \, \mathrm{d}b + b \, \mathrm{d}a / a)$,
+with `Logarithm` (see [Elementary
+functions](#elementary-functions-very-incomplete)).
 
 ### Negation and subtraction
 
@@ -900,18 +902,22 @@ Examples, with `one, two = Integer(1), Integer(2)`:
 Requires: [`AbstractExpression`](#abstractexpression), [`Power`](#power),
 [`Division`](#division), [Literals](#literals).
 
-`SquareRoot` is the only elementary function so far, a concrete subclass of
-`AbstractExpression` for the square root of a scalar.
+The elementary functions so far are `SquareRoot` and `Logarithm`, concrete
+subclasses of `AbstractExpression` for the square root and the natural
+logarithm of a scalar.
 
-| `SquareRoot(f)` |                                     |
-| --------------- | ----------------------------------- |
+| `SquareRoot(f)`, `Logarithm(f)` |                                     |
+| ------------------------------- | ----------------------------------- |
 | Extends         | `AbstractExpression` |
-| Free function   | `square_root(f)`                    |
+| Free function   | `square_root(f)` and `logarithm(f)` |
 | Takes           | `f: AbstractExpression` |
 | Properties      | `operand` $f$ |
 | Requires        | A scalar $f$                        |
 | Static type     | Value shape `()`                    |
 | Raises          | `ValueError` if a requirement fails |
+
+For a complex operand, `Logarithm` is the principal branch, with the imaginary
+part in $(-\pi, \pi]$, and `SquareRoot` is the principal square root.
 
 ~~~{dropdown} Why `SquareRoot` is a node class
 `SquareRoot` is not the composition `power(f, Integer(1) / Integer(2))`,
@@ -1331,6 +1337,7 @@ and raise `ValueError` for a tensor, because the tensor has a second meaning:
 | `power`, `**` | The matrix power |
 | `absolute`, `abs` | The norm of a vector |
 | `square_root` | The matrix square root |
+| `logarithm` | The matrix logarithm |
 
 An elementary function added later, such as the exponential, stays scalar for
 the same reason, because the matrix exponential is a second meaning. The
@@ -1660,8 +1667,9 @@ $$
 \mathrm{D}(f, x, a, h) = \frac{d}{d\varepsilon} f[x := a + \varepsilon h] \Big|_{\varepsilon = 0},
 $$
 
-with $\varepsilon$ real and $f[x := s]$ the substitution of $s$ for $x$ in $f$.
-The variable $x$ is bound in $f$ (see [Passes](#passes)).
+with $\varepsilon$ real and $f[x := s]$ the substitution of $s$ for $x$ in $f$
+that does not enter domains, domain maps or the spaces of functions. The
+variable $x$ is bound in $f$ (see [Passes](#passes)).
 
 | `DirectionalDerivative(f, x, a, h)` |                                                                                                       |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -1683,6 +1691,10 @@ point (see [Passes](#passes)). The substitution replaces only the nodes of $f$
 equal to $x$, so `DirectionalDerivative` is a partial derivative. For example,
 with a deformation gradient `F` and `C = transpose(F) @ F`, the derivative with respect to `C` does not see a
 `determinant(F)` in $f$.
+
+The substitution does not enter domains, so the derivative holds the geometry
+fixed. A shape derivative, with respect to the coordinates of a mesh, is a
+language extension (see [Language extensions](#language-extensions)).
 
 The derivative is real-linear in $h$. The gradient of a direction with no
 support is zero, so the derivative with respect to a function `u` in a constant
@@ -3461,6 +3473,13 @@ composition (see [A Piola extension](#a-piola-extension)).
   `dual_space(V)` is the adjoint interpolation of that function, and the
   action at position 1 on a function in `U` is the interpolant. The table of
   the extension for a pass that evaluates actions gives both.
+- A language extension for shape derivatives adds a node class for the
+  derivative of an expression when the coordinates of the vertices of a mesh
+  move in a direction. After the integrals and the pull-backs are expanded,
+  the coordinates occur explicitly in the parameterisations of the cells, and
+  the table of the extension lowers the node to a `DirectionalDerivative` with
+  respect to the coordinates, which holds the domains fixed. A function keeps
+  its values on the reference cell, so the function moves with the mesh.
 - A named composition that must survive a pass, or print as written, is a node
   class of a language extension whose lowering is the composition. A
   `Transpose` node class lowers to `component_tensor(A[k, l], (l, k))`. The
@@ -3634,6 +3653,7 @@ AbstractExpression
 ├── RealPart
 ├── ImaginaryPart
 ├── SquareRoot
+├── Logarithm
 ├── Tensor
 ├── Indexed
 ├── ComponentTensor
@@ -3702,6 +3722,7 @@ AbstractExpression
 |                             | [`absolute(f)`](#absolute)                                               | `abs(f)`                      | `f: AbstractExpression`                                                                             | `Absolute`                                                                                                                                                                      |
 |                             | [`conjugate(f)`](#conjugate)                                             |                               | `f: AbstractExpression`                                                                             | `Conjugate`                                                                                                                                                                     |
 |                             | [`square_root(f)`](#elementary-functions-very-incomplete)                |                               | `f: AbstractExpression`                                                                             | `SquareRoot`                                                                                                                                                                    |
+|                             | [`logarithm(f)`](#elementary-functions-very-incomplete)                  |                               | `f: AbstractExpression`                                                                             | `Logarithm`                                                                                                                                                                     |
 |                             | [`tensor(entries)`](#tensor)                                             |                               | `entries: tuple[AbstractExpression, ...]`                                                           | `Tensor`                                                                                                                                                                        |
 |                             | [`indexed(expression, indices)`](#indexed)                               |                               | `expression: AbstractExpression`, `indices: tuple`                                                  | `Indexed`                                                                                                                                                                       |
 |                             | [`component(f, entries)`](#partial-indexing)                             | `[]`                          | `f: AbstractExpression`, `entries: tuple`                                                           | `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$ and contain no `EllipsisIndex`, otherwise `indexed(f, entries)`                    |
@@ -3763,7 +3784,7 @@ the argument spaces column must have the argument spaces `()`.
 | `RealPart`, `ImaginaryPart`              | `()`                                                           |
 | `Division`                               | Those of the first operand                                     |
 | `Conjugate`                              | Those of the operand, each conjugated                          |
-| `SquareRoot`, `Inverse`                  | `()`                                                           |
+| `SquareRoot`, `Logarithm`, `Inverse`     | `()`                                                           |
 | `Tensor`                                 | Those of the entries, which must be equal                      |
 | `Indexed`, `ComponentTensor`, `IndexSum` | Those of the expression                                        |
 | `Coordinate`                             | `()`                                                           |
@@ -3801,10 +3822,10 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 46    |
+| Classes                         | 47    |
 | Abstract classes                | 10    |
-| Concrete classes                | 36    |
-| Expression node classes         | 27    |
-| Free functions                  | 44    |
+| Concrete classes                | 37    |
+| Expression node classes         | 28    |
+| Free functions                  | 45    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

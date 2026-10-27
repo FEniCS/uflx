@@ -11,12 +11,11 @@ Nothing. Integrals over cells and facets use the induced density in
 ## Common forms
 
 1. **Linearisation.** `DirectionalDerivative` gives the derivative of an
-   expression. Add the Gateaux transformation and its free function, which adds
-   an argument to a form, and decide whether it applies to a form, so that a
-   tangent can be built from a residual. For shape derivatives and ALE, the
-   geometry must depend on a function, such as a parameterisation of the
-   pieces from a displacement function on the domain, because a form binds
-   only functions and the parameterisation is an expression of runtime data.
+   expression, with the geometry fixed. Add the Gateaux derivative to the core
+   as a lazy node of the form layer, `gateaux_derivative(F, u, w)`, with the
+   value `Form(D(e, u, u, w), arguments + (w,))` for each `Form` of `F`, and
+   decide its rules for complex spaces. A derivative in a fixed direction is
+   an action on the new argument.
 1. **Interpolation.** Add the interpolant of an expression in a space, as a
    language extension, and its adjoint on the dual space. Interpolation from
    another mesh needs the cell that contains each point, a runtime gather of
@@ -27,17 +26,17 @@ Nothing. Integrals over cells and facets use the induced density in
 
 ## Derivatives
 
-1. **`DirectionalDerivative` through `PullBack`, `Form` and `Action`.** See
-   PASSES_DRAFT.md. Through `PullBack` it is needed for
-   shape derivatives. Through `Form` and `Action` it is needed to differentiate
-   after binding, such as a Hessian-vector product of a bound vector-Jacobian
-   product.
+1. **Shape derivatives.** A language extension, with a node for the
+   derivative when the coordinates of a mesh move, lowered after the integrals
+   and the pull-backs are expanded to a `DirectionalDerivative` with respect to
+   the coordinates (see PASSES_DRAFT.md). ALE needs the same extension, with
+   the parameterisation of the pieces built from a displacement function.
 1. **Missed occurrences.** `directional_derivative` finds `g` by equality, so
    an expression equal in value to `g` but built differently is not
    differentiated. Decide on a checking pass or a stated warning.
 1. **Static real types.** A complex function that appears only in real-valued
    combinations gives a misleading derivative.
-1. **Literals in derivatives.** `apply_derivatives` produces many `Zero` and
+1. **Literals in derivatives.** The derivative pass produces many `Zero` and
    `Integer(1)` terms. State whether a later pass or the form compiler folds
    them.
 
@@ -48,8 +47,8 @@ Nothing. Integrals over cells and facets use the induced density in
 1. **`Inverse` with an `AbstractExtent`.** The requirement that $k$ is at most $n$ cannot be
    checked when an extent is symbolic.
 1. **Ellipsis operations of a library.** `outer`, `dot` and `inner` build
-   results with an `EllipsisIndex`, which `reduce_component_tensors` cannot
-   split per axis. Derive one `Index` per axis, or state that the results do
+   results with an `EllipsisIndex`, which the reduction cannot split per
+   axis. Derive one `Index` per axis, or state that the results do
    not reduce.
 1. **Symmetry of a form.** Detecting that a bilinear form is symmetric is left
    to a pass, which is not specified.
