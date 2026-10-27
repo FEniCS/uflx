@@ -3352,7 +3352,26 @@ simplifies, a term that is zero stays in the graph, and zero times an
 undefined value is undefined. So a rule never multiplies a term that may be
 zero by an expression that may be undefined where the rewritten node is
 defined, such as the logarithm in the derivative of a power (see [Applying
-derivatives](#applying-derivatives)). The first passes of
+derivatives](#applying-derivatives)).
+
+`Action` and `DirectionalDerivative` are real-linear, and each commutes with
+the following node classes in the listed operands, when the other operands do
+not depend on what the evaluated node changes:
+
+| Node class | Operands |
+| ---------- | -------- |
+| `Sum`, `Tensor` | Every operand |
+| `Indexed`, `ComponentTensor`, `IndexSum`, `Form`, `DirectionalDerivative` | The expression |
+| `Conjugate`, `RealPart`, `ImaginaryPart` | The operand |
+| `Division` | The numerator |
+| `Gradient`, `PullBack`, `Integral` | The expression |
+
+The value of a commuting node is real-linear in the listed operands, and the
+evaluated node acts on the value of an operand alone: an action substitutes
+into a bound argument, which is a field like any other, and a directional
+derivative differentiates in a real parameter with the domains fixed. Moving
+an evaluated node into a binding node first makes the binding node fresh for
+the other operands of the evaluated node (see [Passes](#passes)). The first passes of
 the core are [`apply_actions`](#applying-actions), then
 [`apply_derivatives`](#applying-derivatives), then
 [`expand_integrals`](#expanding-integrals). The later passes, their order,
@@ -3413,33 +3432,22 @@ Requires: [Grammars](#grammars), [`Action`](#action), [`Form`](#form),
 | Input grammar      | $N_0$ |
 | Output grammar     | $N_1 = N_0 \setminus \{$an `Action` whose form is not a `Function` in a dual space$\}$ |
 
-The pass rewrites every `Action(f, p, g)`, inner actions first, with the rule
-for the class of the form $f$, and keeps the value of [`Action`](#action).
-Moving `Action(f, p, g)` into a binding node first makes the node fresh for
-$g$, or for the members of a `tuple` $g$ (see [Passes](#passes)).
+The pass rewrites every `Action(f, p, g)`, inner actions first, with the first
+row that matches the form $f$, and keeps the value of [`Action`](#action).
 
 | Form $f$ | Rewrite of `Action(f, p, g)` |
 | -------- | ---------------------------- |
 | `Form(e, arguments)` | The value of `Action`: `Form(e, others)` with $g$ substituted for the argument at $p$, or $e$ with $g$ substituted if no entries remain |
-| `Sum(a, b)` | `Sum(Action(a, p, g), Action(b, p, g))` |
 | `Product(a, b)`, with $n$ the arity of $a$ | `Product(Action(a, p, g), b)` for $p < n$, otherwise `Product(a, Action(b, p - n, g))` |
-| `Division(a, c)` | `Division(Action(a, p, g), c)` |
-| `Conjugate(a)` | `Conjugate(Action(a, p, g))` |
-| `Tensor` | The `Tensor` of the actions on the entries |
-| `Indexed`, `ComponentTensor`, `IndexSum` | The node of the action on the expression |
-| `Gradient(a, P)`, `PullBack(a, D)`, `Integral(a, P)` | The node of the action on $a$ |
-| `DirectionalDerivative(a, x, b, h)` | `DirectionalDerivative(Action(a, p, g), x, b, h)` |
+| A commuting node class (see [Evaluation](#evaluation)) | The node with the action moved into the listed operands |
 | `Zero` | `Zero` with the free indices of $g$ added and the entry at $p$ removed |
 | `Function` in a dual space | Remains, a pairing of $N_1$ |
 | `Action` | Cannot occur, because the inner action is rewritten first, and an action that remains has the argument spaces `()` |
 | Any other class of the core | Cannot occur, because the argument spaces are `()` |
 
-- `Gradient`, `PullBack` and `Integral` commute with the action, because a
-  bound argument is a field like any other: the gradient of the form at $g$ is
-  the gradient of the value at $g$, including the variation of $g$.
-- `DirectionalDerivative` binds the variable $x$ in $a$, and the point $b$ is
-  not bound (see [Passes](#passes)). If $x$ is free in $g$, the substitution
-  renames $x$, so the $x$ in $g$ is not differentiated.
+- `DirectionalDerivative` binds its variable, so moving the action into it
+  renames the variable if the variable is free in $g$, and the $x$ in $g$ is
+  not differentiated.
 - Forms are first order (see [`Form`](#form)), so a substitution never creates
   an `Action` on a `Form`. Each rule removes the action from one node or moves
   the action to operands that are smaller, so the pass terminates.
@@ -3460,15 +3468,11 @@ The pass rewrites every `DirectionalDerivative(f, x, a, h)`, inner derivatives
 first, with the first row that matches $f$. $\mathrm{D} b$ is short for
 `DirectionalDerivative(b, x, x, h)`. The rules give the derivative at $x$, and
 if $a$ is not $x$, the pass then substitutes $a$ for $x$ in the result.
-Moving the derivative into a binding node first makes the node fresh for $h$
-(see [Passes](#passes)). The substitution of $a$ makes the binding nodes fresh
-for $a$.
 
 | Expression $f$ | Rewrite of the derivative at $x$ |
 | -------------- | -------------------------------- |
 | $x$ not free in $f$ | `Zero`, with the value shape and the argument spaces of $f$, and the free indices of $f$ followed by those of $a$ and $h$ |
 | $f$ equal to $x$ | $h$ |
-| `Sum`, `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum`, `Conjugate`, `RealPart`, `ImaginaryPart` | The node of the derivatives of the operands that are expressions |
 | `Product(b, c)` | $\mathrm{D} b \, c + b \, \mathrm{D} c$ |
 | `Division(b, c)` | $\mathrm{D} b / c - (b \, \mathrm{D} c) / (c c)$ |
 | `Power(b, c)`, $x$ not free in $c$ | $c \, b^{c - 1} \, \mathrm{D} b$ |
@@ -3477,9 +3481,8 @@ for $a$.
 | `SquareRoot(b)` | $\mathrm{D} b / (2 \sqrt b)$ |
 | `Logarithm(b)` | $\mathrm{D} b / b$ |
 | `Inverse(A)` | $-A^+ \, \mathrm{D} A \, A^+ + A^+ (A^+)^T (\mathrm{D} A^T - \mathrm{D} A^T A A^+)$, with `@`, `transpose` and `-` |
-| `Gradient(b, P)`, `PullBack(b, ψ)`, `Integral(b, P)` | The node of $\mathrm{D} b$ |
-| `Form(e, arguments)` | `Form(D e, arguments)` |
 | `Action(l, 0, w)`, a pairing | `Action(l, 0, D w)` |
+| A commuting node class (see [Evaluation](#evaluation)) | The node with the derivative moved into the listed operands |
 | `DirectionalDerivative` | Cannot occur, because the inner derivative is rewritten first |
 
 - The first row comes first, so no derivative is built for an operand that
@@ -3490,8 +3493,6 @@ for $a$.
   when the value of the exponent is 0, which occurs when an integer power is
   differentiated more times than its degree, and is the one known exception to
   the principle of [Evaluation](#evaluation).
-- `Gradient`, `PullBack` and `Integral` commute with the derivative, because
-  the derivative holds the domains fixed.
 - A `Form` that binds $x$ has no free $x$, so the first row gives `Zero`.
 - The variable has the argument spaces `()`, so the variable is never the
   function $l$ of a pairing.
