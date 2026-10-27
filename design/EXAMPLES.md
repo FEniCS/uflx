@@ -929,6 +929,49 @@ through the two side tables, the entity maps of the two submeshes.
 The legacy UFL `dx(1)`, `ds(3)` and `ds((3, 4))` are integrals over the decomposed domains of marked topologies, one topology for each marker value. A DOLFINx submesh is the decomposed domain of a marked topology, and its entity map is the side table into the parent.
 ```
 
+### Constants on a domain
+
+Requires: [A fluid and a solid](#a-fluid-and-a-solid), [Spaces of
+constants](LANGUAGE.md#spaces-of-constants).
+
+With the names of the [fluid and solid example](#a-fluid-and-a-solid), `R` a
+space of constants of value shape `()`, and `R_S` a space of a library on `S`
+whose functions are constant on `S`:
+
+```python
+# Multipliers for the mean pressure of the fluid and the mean volume change of the solid.
+r, s = function(R, "r"), function(R, "s")
+k, z = function(R_S, "k"), function(R_S, "z")
+means = integral(p * s + q * r, F) + integral(k * div_w + z * div_d, S)
+```
+
+- `r` and `s` have no support, so the integrals decide where `r` and `s` act.
+  `k` and `z` have the support `S`, so `k * q` raises `ValueError`.
+- The multipliers join the `tuple` arguments, as in
+  `((v, q, w, s, z), (u, p, d, r, k))`.
+- A value for each cell marker is a function in a space of a library that is
+  constant on each cell.
+
+Known data is a constant that no form binds. With `nu` and `mu_s` as functions
+in place of the arrays of the solver:
+
+```python
+nu, h = function(R, "nu"), function(R, "h")
+mu_s = function(R_S, "mu_s")
+
+# The sensitivity of the solid form to mu_s.
+e = integral(two * mu_s * index_sum(eps_d * eps_w, (i, j)), S)
+de_dmu = form(directional_derivative(e, mu_s, Integer(1)), (w, d))
+
+# The gradient of the dissipation with respect to nu.
+dissipation = integral(nu * index_sum(grad_u[i, j] * grad_u[i, j], (i, j)), F)
+g_nu = form(directional_derivative(dissipation, nu, h), (h,))
+```
+
+`g_nu` is a linear form on `R`, a function in `dual_space(R)`. For a
+`runtime_array`, `directional_derivative` gives the sensitivity, but no space
+holds a direction such as `h`, so there is no gradient form.
+
 ### A 1D network in a 3D mesh
 
 Requires: [`DecomposedDomain`](LANGUAGE.md#decomposeddomain),

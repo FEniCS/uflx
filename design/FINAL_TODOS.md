@@ -10,10 +10,12 @@ Nothing. Integrals over cells and facets use the induced density in
 
 ## Common forms
 
-1. **Linearisation.** Add the derivative with respect to a function or a
-   `tuple` of functions, which adds an argument to a form. For shape derivatives and
-   ALE, the geometry must depend on a function, such as a parameterisation of
-   the pieces from a displacement function on the domain, because a form binds
+1. **Linearisation.** `DirectionalDerivative` gives the derivative of an
+   expression. Add the Gateaux transformation and its free function, which adds
+   an argument to a form, and decide whether it applies to a form, so that a
+   tangent can be built from a residual. For shape derivatives and ALE, the
+   geometry must depend on a function, such as a parameterisation of the
+   pieces from a displacement function on the domain, because a form binds
    only functions and the parameterisation is an expression of runtime data.
 1. **Interpolation.** Add the interpolant of an expression in a space, as a
    language extension, and its adjoint on the dual space. Interpolation from
@@ -22,6 +24,68 @@ Nothing. Integrals over cells and facets use the induced density in
 1. **Conditionals and elementary functions.** Add `conditional` and `max` (for
    upwinding, limiters and switching materials) and more elementary functions,
    such as `exp` and `sin`.
+
+## Derivatives
+
+1. **`DirectionalDerivative` through `PullBack`, `Form` and `Action`.** The
+   three remain in `apply_derivatives`. Through `PullBack` it is needed for
+   shape derivatives. Through `Form` and `Action` it is needed to differentiate
+   after binding, such as a Hessian-vector product of a bound vector-Jacobian
+   product.
+1. **Missed occurrences.** `directional_derivative` finds `g` by equality, so
+   an expression equal in value to `g` but built differently is not
+   differentiated. Decide on a checking pass or a stated warning.
+1. **Static real types.** A complex function that appears only in real-valued
+   combinations gives a misleading derivative.
+1. **Literals in derivatives.** `apply_derivatives` produces many `Zero` and
+   `Integer(1)` terms. State whether a later pass or the form compiler folds
+   them.
+
+## Tensors
+
+1. **`transpose` in the core.** The examples use `transpose(F) @ F`, but
+   `transpose` is a function of a library.
+1. **`Inverse` with an `AbstractExtent`.** The requirement that $k$ is at most $n$ cannot be
+   checked when an extent is symbolic.
+1. **Partial indexing.** `A[0]` for `A` of rank 2 is not defined.
+1. **Ellipsis operations of a library.** `outer`, `dot` and `inner` build
+   results with an `EllipsisIndex`, which `reduce_component_tensors` cannot
+   split per axis. Derive one `Index` per axis, or state that the results do
+   not reduce.
+1. **Symmetry of a form.** Detecting that a bilinear form is symmetric is left
+   to a pass, which is not specified.
+
+## Compilers and JAX
+
+1. **The compiler contract.** What a backend receives decides how a lowering,
+   such as to JAX, is written.
+1. **Complex conventions.** The antilinear position 0 and the Wirtinger parts
+   differ from the conventions of `jax.grad` and `jax.vjp`. Document the
+   conjugate at the boundary.
+1. **Non-smooth points.** `abs`, `square_root` and `ImaginaryPart` give NaN
+   in derivatives, and the core has no `conditional` to guard them.
+1. **Lowering.** Fuse an `IndexSum` of a `Product` into one contraction, lower
+   a repeated index as a diagonal gather, and gather with in-bounds indices,
+   because tables are never negative.
+
+## Implementation
+
+1. **Pattern matching.** Derive `__match_args__` from the construction
+   arguments in `Base.__init_subclass__`, so that passes can use `match`.
+   Dataclasses conflict with the equality, the hash and the interning of
+   `Base`.
+
+## Notes
+
+1. **A check of reductions.** The fix for `EllipsisIndex` was traced by hand
+   for `sigma` and `C - I` only. Add a script that reduces every composition
+   of the core.
+1. **Generated content.** Decide whether the new sections need the marker
+   for LLM generated content.
+1. **A duplicate name.** "Symmetric tensors" in EXAMPLES.md uses `sigma`
+   twice.
+1. **Formatting.** mdformat escapes the math of EXAMPLES.md, as for
+   LANGUAGE.md.
 
 ## Already expressible
 
