@@ -1752,8 +1752,8 @@ domain.
 | Free function    | `integral(f, P)`                                                                            |
 | Takes            | `f: AbstractExpression`, `P: AbstractDomain` |
 | Properties       | `expression` $f$ and `domain` $P$                                                           |
-| Requires         | A [valid pair](#valid-pair) $(f, P)$, or $f$ with the support `P.ambient_domain`             |
-| Static type      | The value shape and the free indices of $f$, with no support                                |
+| Requires         | A [valid pair](#valid-pair) $(f, P)$, or $f$ with the support `P.ambient_domain`, and an `Index` free in both $f$ and a piece of $P$ with the same extent in both |
+| Static type      | The value shape of $f$, and the free indices of $f$ other than the free indices of the pieces of $P$, with no support |
 | Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                         |
 
 For a coordinate domain $P$ of dimension $n$, `Integral(f, P)` is the
@@ -3353,8 +3353,9 @@ undefined value is undefined. So a rule never multiplies a term that may be
 zero by an expression that may be undefined where the rewritten node is
 defined, such as the logarithm in the derivative of a power (see [Applying
 derivatives](#applying-derivatives)). The first passes of
-the core are [`apply_actions`](#applying-actions) and then
-[`apply_derivatives`](#applying-derivatives). The later passes, their order,
+the core are [`apply_actions`](#applying-actions), then
+[`apply_derivatives`](#applying-derivatives), then
+[`expand_integrals`](#expanding-integrals). The later passes, their order,
 and the core normal form (see [Grammars](#grammars)) are not yet decided.
 
 ### Grammars
@@ -3496,6 +3497,42 @@ for $a$.
   function $l$ of a pairing.
 - The rules of each row are compositions of node classes of the core, so the
   pass terminates with no `DirectionalDerivative`.
+
+### Expanding integrals
+
+Requires: [Applying derivatives](#applying-derivatives), [`Integral` over a
+decomposed domain](#integral-over-a-decomposed-domain), [Jacobian and
+density](#jacobian-and-density).
+
+| `expand_integrals(f)` |  |
+| --------------------- | - |
+| Evaluates             | `Integral` over a decomposed domain |
+| Input grammar         | $N_2$ |
+| Output grammar        | $N_3 = N_2 \setminus \{$an `Integral` whose domain is a `DecomposedDomain`$\}$ |
+
+The pass rewrites every `Integral(f, D)` with a decomposed domain $D$, inner
+integrals first, with the rows below, and applies the rows again to each
+`Integral` that a rewrite creates. For piece $j$ of $D$, $P_j$ is the parameter
+domain, `indices_j` are the free indices, and `D_j = cell_domain(D, j)`.
+
+| Integral | Rewrite |
+| -------- | ------- |
+| `Integral(f, D)`, $f$ of rank $r \ge 1$ | `component_tensor(Integral(f[K], D), K)`, with `K` one derived `Index` for each axis |
+| `Integral(f, D)`, $f$ scalar | The sum over the pieces $j$ of `index_sum(integral(g_j * density(D_j), P_j), indices_j)`, with no `IndexSum` for a piece with no free indices |
+
+$g_j$ is `pull_back(f, D_j)` for $f$ with the support $D$,
+`pull_back(f, piece_j)` for $f$ with the support `D.ambient_domain`, and $f$
+for $f$ with no support.
+
+- Each application moves to a parameter domain that is nested less deeply, so
+  the pass terminates.
+- A free index of $f$ shared with piece $j$ is identified by the static type of
+  `PullBack`, and the `IndexSum` pairs each value of the index with a member of
+  the family, so the result has the static type of the `Integral`.
+- The density is the same for `cell_domain(D, j)` and for piece $j$, because
+  both have the parameterisation $\psi_j$.
+- The integrals that remain are over coordinate domains, which a form compiler
+  integrates by quadrature.
 
 ## Extending the core
 

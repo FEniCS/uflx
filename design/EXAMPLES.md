@@ -534,6 +534,15 @@ centroid `c` of `T` of [Points and point
 evaluation](LANGUAGE.md#points-and-point-evaluation). The two expressions are not
 equal, and a later pass evaluates both to $(2, 4/3)$.
 
+Over a decomposed domain `D`, the centroid is one integral of a vector:
+
+```python
+centroid_D = integral(coordinate(D), D) / integral(Integer(1), D)
+```
+
+[`expand_integrals`](LANGUAGE.md#expanding-integrals) splits the integrand
+into its components, and each component is a scalar integral over the cells.
+
 ### An interior facet integral
 
 Requires: [Sides of a topology](LANGUAGE.md#sides-of-a-topology),
@@ -624,7 +633,7 @@ tables `(cells_pm, positions_pm)` of each side:
    with $\hat m$ the normal of the edge `(1, 2)` of `K` pointing away from the
    centroid of `K`. On `alpha[e]`, an expression with no support whose free
    index `e` is free in `cell_domain(E, 0)`, the pull-back is `alpha[e]`.
-3. `apply_derivatives` leaves `gradient(pull_back(u, B_+), K)` on
+3. The gradients pass leaves `gradient(pull_back(u, B_+), K)` on
    the function, and `reduce_component_tensors` reduces the gathers of the
    vertex positions inside $J_+$ to `Indexed`s with gathered indices, nested
    through the cell on the side, and `points_pm` to `Indexed`s of
@@ -1208,8 +1217,9 @@ a = form(integral(index_sum(gradient(u, D_s)[i] * gradient(v, D_s)[i], (i,)), D_
 ```
 
 - `expand_integrals` rewrites `volume` as the integral over `D` of
-  `density(T)`, with `T = cell_domain(D_s, 0)`, and then over the cells of
-  `D`. `jacobian(T)` is `gradient(phi, D)`, which `apply_derivatives` rewrites
+  `density(T)`, with `T = cell_domain(D_s, 0)`, and then, because `D` is
+  itself decomposed, over the cells of `D`. `jacobian(T)` is
+  `gradient(phi, D)`, which the gradients pass rewrites
   as $I + \nabla s$, so `density(T)` is $|\det(I + \nabla s)|$, the Jacobian
   determinant of shape calculus.
 - `expand_pull_backs` rewrites the pull-back of `gradient(u, D_s)` by `T` as
@@ -1405,7 +1415,7 @@ L = form(integral(-f * v, D), ((tau, v),))
   library of `DG` uses the identity. The core sees only the compositions.
 - `expand_pull_backs` rewrites the pull-back of `gradient(sigma, D)` as
   $K^T \nabla(J \hat\sigma / \det J)$, and `divergence` is its trace. On the
-  affine cells of `D`, `apply_derivatives` finds the derivatives of $J$ and
+  affine cells of `D`, the gradients pass finds the derivatives of $J$ and
   $\det J$ to be zero, and the trace reduces to
   $\widehat{\mathrm{div}}\, \hat\sigma / \det J$. On a curved cell the extra
   terms cancel only in value, which [A Piola
