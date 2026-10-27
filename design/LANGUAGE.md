@@ -3297,6 +3297,37 @@ and substitutes with the renaming of [Passes](#passes). Which passes the core
 provides, the order of the passes, and what a form compiler receives are not
 yet decided.
 
+### Grammars
+
+Requires: [Evaluation](#evaluation), [Argument spaces](#argument-spaces).
+
+See also: [New questions](#new-questions), [Rule tables](#rule-tables).
+
+A grammar is a set of expressions. A grammar is checked by a pass that asks
+whether an expression belongs to the grammar (see [New
+questions](#new-questions)), built from rule tables as any other pass (see
+[Rule tables](#rule-tables)). A language extension that adds a node class adds
+a table to the check that states where the node class may occur.
+
+- The grammar $N_0$ is the set of every expression that construction accepts.
+- A pass maps a source grammar into a target grammar if, for every
+  expression of the source grammar, the result of the pass belongs to the
+  target grammar.
+- An intermediate grammar is written as a delta: an earlier grammar without
+  the expressions that contain a node matching a stated pattern. For example,
+  a grammar without `Action` except on a leaf.
+- The last grammar of the passes, which a form compiler receives, is written
+  as a list of the node classes and the patterns that the grammar allows.
+
+A grammar may restrict two layers of an expression separately. The form layer
+consists of every `Action` and every node with argument spaces other than
+`()`, such as a `Form`, a sum of forms or a function in a dual space. The
+integrand layer consists of the other nodes, such as the expression of a
+`Form` and its subexpressions.
+
+The intermediate grammars and their order are part of the design of the
+passes, and are not yet decided.
+
 ## Extending the core
 
 Requires: [Passes](#passes), [Scalar type](#scalar-type), [`Absolute`](#absolute).
