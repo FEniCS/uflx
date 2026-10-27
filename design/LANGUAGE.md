@@ -250,16 +250,17 @@ operands:
 | [`Form(e, arguments)`](#form) | The functions of `arguments` | `e` and `arguments` |
 | [`DirectionalDerivative(f, x, a, h)`](#directionalderivative) | $x$ | $f$ and $x$ |
 
-When a pass substitutes an expression $s$ for an expression $r$ inside a
-binding node, the pass substitutes into the other operands as anywhere else,
-and into the operands in which the names are bound as follows:
+A binding node is made fresh for expressions $s_1, \dots, s_n$ by renaming,
+in the operands in which the names are bound, each bound name that is free in
+some $s_k$, so that the binding node does not capture the name.
 
-- If a bound name of the binding node is free in $r$, the pass leaves those
-  operands unchanged, because every occurrence of $r$ in them refers to the
-  bound name.
-- Otherwise, if a bound name of the binding node is free in $s$, the pass
-  renames the bound name and then substitutes, so that the binding node does
-  not capture the name.
+A substitution replaces expressions $r_1, \dots, r_n$ by $s_1, \dots, s_n$
+simultaneously, so a substituted $s_k$ is not searched for the other $r_l$.
+Inside a binding node, the substitution goes into the other operands as
+anywhere else. For the operands in which the names are bound, the substitution
+drops each pair whose $r_k$ has a bound name free in it, because every
+occurrence of that $r_k$ there refers to the bound name, makes the binding node
+fresh for the remaining $s_k$, and substitutes the remaining pairs.
 
 The new name of a bound index `i` is the derived index
 `Index(("uflx.rename", node, i))`, or the derived `EllipsisIndex` with the
@@ -277,9 +278,9 @@ the free index `i`. Without the renaming, the result would be
 point is not bound.
 
 The variable of a `DirectionalDerivative` that is not a `Function` has no new
-name. A pass that would rename such a variable first rewrites the
-`DirectionalDerivative` as an expression with the same value and no
-`DirectionalDerivative`, and then substitutes.
+name. A pass that would make such a `DirectionalDerivative` fresh first
+rewrites it as an expression with the same value and no
+`DirectionalDerivative`.
 
 A pass does one thing, such as differentiating or lowering. Passes compose,
 and the user of the core chooses which passes run and in what order.
@@ -3228,8 +3229,8 @@ with `others` the entries other than the entry at `position`, and with $g$
 substituted for the argument at `position` (see [Passes](#passes)). A function
 of `others` that is free in $g$ is therefore renamed. If no entries remain, the
 value is $e$ with $g$ substituted. For an entry
-`conjugate(v)`, $g$ is substituted for `v`. For a `tuple` entry, each member of
-$g$ is substituted for the matching member. The action of any other form is
+`conjugate(v)`, $g$ is substituted for `v`. For a `tuple` entry, the members
+of $g$ are substituted simultaneously for the matching members. The action of any other form is
 defined by linearity, and the action on a leaf, such as a function in a dual
 space, is the pairing, which the library of the leaf states, with one pairing
 for each value of the free indices of $g$.
@@ -3390,8 +3391,8 @@ Requires: [Grammars](#grammars), [`Action`](#action), [`Form`](#form),
 
 The pass rewrites every `Action(f, p, g)`, inner actions first, with the rule
 for the class of the form $f$, and keeps the value of [`Action`](#action).
-Moving `Action(f, p, g)` into a binding node first renames a bound name of the
-node that is free in $g$, as for a substitution (see [Passes](#passes)).
+Moving `Action(f, p, g)` into a binding node first makes the node fresh for
+$g$, or for the members of a `tuple` $g$ (see [Passes](#passes)).
 
 | Form $f$ | Rewrite of `Action(f, p, g)` |
 | -------- | ---------------------------- |
