@@ -39,8 +39,6 @@ Nothing. Integrals over cells and facets use the induced density in
 
 ## Tensors
 
-1. **`transpose` in the core.** The examples use `transpose(F) @ F`, but
-   `transpose` is a function of a library.
 1. **`Inverse` with an `AbstractExtent`.** The requirement that $k$ is at most $n$ cannot be
    checked when an extent is symbolic.
 1. **Ellipsis operations of a library.** `outer`, `dot` and `inner` build

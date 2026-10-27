@@ -236,7 +236,8 @@ constructing an object for each node that the pass replaces, and by
 reconstructing every object that depends on a replaced node, up to the root
 (see [The base object](#the-base-object-base)). An object depends on a
 replaced node through any edge, so a pass that replaces an object also
-reconstructs an [`Index`](#index) whose label contains the object. Hence a
+reconstructs an [`Index`](#index) whose label contains the object, other than
+a renamed name (see [Derived indices](#derived-indices)). Hence a
 replacement commutes with the free functions: replacing `A` by `B` in
 `transpose(A)` gives `transpose(B)`, with the derived indices of `B`. A pass
 may cache results for each object, because objects are immutable.
@@ -262,12 +263,16 @@ drops each pair whose $r_k$ has a bound name free in it, because every
 occurrence of that $r_k$ there refers to the bound name, makes the binding node
 fresh for the remaining $s_k$, and substitutes the remaining pairs.
 
-The new name of a bound index `i` is the derived index
-`Index(("uflx.rename", node, i))`, or the derived `EllipsisIndex` with the
-same label for a bound `EllipsisIndex`, and the new name of a bound function
-`v` in a space $V$ is `Function(V, ("uflx.rename", node, v))`, with `node` the
-binding node before the substitution. The bound names of a binding node are
-distinct, so the new names are distinct. For example, replacing
+When a binding node is made fresh for $s_1, \dots, s_n$, the new name of a
+bound index `i` is the derived index
+`Index(("uflx.rename", i, body, (s_1, ..., s_n)))`, or the derived
+`EllipsisIndex` with the same label for a bound `EllipsisIndex`, and the new
+name of a bound function `v` in a space $V$ is
+`Function(V, ("uflx.rename", v, body, (s_1, ..., s_n)))`, with `body` the
+`tuple` of the operands in which the names are bound. The label refers to
+`body` and to each $s_k$, so the new name occurs in neither (see [Derived
+indices](#derived-indices)). The bound names of a binding node are distinct,
+so the new names are distinct. For example, replacing
 `c` by `b[i]` in `index_sum(a[i] * c, (i,))` gives
 `index_sum(a[j] * b[i], (j,))`, with `j` the renamed index, and the result has
 the free index `i`. Without the renaming, the result would be
@@ -600,10 +605,10 @@ core uses the free function, such as `density` in [`Integral` over a
 decomposed domain](#integral-over-a-decomposed-domain) and `cell_domain` in
 [Restriction](#restriction), or if a Python operator calls the free function
 as an overload, such as `matrix_product` for `@` (see [Operator
-overloads](#operator-overloads)). Every other free function belongs to a
-library, such as `transpose` (see [Transpose](EXAMPLES.md#transpose)) and the
-operations of [Tensor algebra with
-`EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex).
+overloads](#operator-overloads)). `transpose` is in the core because the rule
+for `Inverse` of [Applying derivatives](#applying-derivatives) uses it. Every
+other free function belongs to a library, such as the operations of [Tensor
+algebra with `EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex).
 
 A free function that builds a fixed composition is a definition, not a
 simplification. The free function does not read the structure of the
@@ -1247,19 +1252,26 @@ A free function that needs fresh indices derives the indices from the
 operands. The label of a derived index is a `tuple` of the identifier of the
 free function, the arguments of the free function and a number. The
 identifier is the public name of the free function, qualified by the package
-name, such as `"uflx.cell_index"` for the core or `"library.transpose"` for a
-library. For example, `transpose(A)` of the [transpose
-example](EXAMPLES.md#transpose) uses
-`Index(("library.transpose", A, 0))` and `Index(("library.transpose", A, 1))`.
+name, such as `"uflx.transpose"` for the core or `"library.outer"` for a
+library. For example, `transpose(A)` (see [Tensor
+arithmetic](#tensor-arithmetic)) uses `Index(("uflx.transpose", A, 0))` and
+`Index(("uflx.transpose", A, 1))`.
 A derived index is fresh with respect to the operands, so the free function
 does not inspect the operands to find a fresh index. A global counter is not
 allowed, because a counter makes construction depend on global state.
 
 A pass that needs fresh indices derives the indices in the same way, with the
 identifier of the pass, the arguments of the rewritten node and a number. The
-renamed index of [Passes](#passes) has the label `("uflx.rename", node, i)`,
-with the binding node and the bound index in place of the arguments and the
-number.
+renamed index of [Passes](#passes) has the label
+`("uflx.rename", i, body, (s_1, ..., s_n))`.
+
+A label refers only to objects that the index is fresh for, and never to an
+object that contains the index. A replacement rebuilds a derived index whose
+label contains a replaced object, so that the replacement commutes with the
+free functions. A renamed name keeps its label. The substitution that renames
+a name continues into the operands that contain the new name, and rebuilding
+the label there would substitute into $s_1, \dots, s_n$ again, which may
+contain the binding node, so the substitution would not terminate.
 
 The edges of an index to the objects in the label of the index identify the
 index and are not operands.
@@ -1287,7 +1299,7 @@ See also: [Operator overloads](#operator-overloads), [Tensor algebra with
 The node classes of [Arithmetic](#arithmetic) are scalar. The free functions
 `add`, `multiply`, `divide`, `real_part` and `imaginary_part` read the ranks
 of the operands, and on tensors build the fixed compositions below. The free function `matrix_product`
-contracts one axis. `add`, `multiply`, `divide` and `matrix_product` are the
+contracts one axis, and `transpose` swaps the two axes of a matrix. `add`, `multiply`, `divide` and `matrix_product` are the
 overloads `+`, `*`, `/` and `@` (see [Operator overloads](#operator-overloads)),
 so tensor arithmetic is written as `A + B`, `a * T`, `T / a` and `A @ x`.
 
@@ -1299,6 +1311,7 @@ so tensor arithmetic is written as `A + B`, `a * T`, `T / a` and `A @ x`.
 | `real_part(f)` | | `f: AbstractExpression` | `component_tensor(RealPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `RealPart(f)` |
 | `imaginary_part(f)` | | `f: AbstractExpression` | `component_tensor(ImaginaryPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `ImaginaryPart(f)` |
 | `matrix_product(first, second)` | `@` | `first, second: AbstractExpression` | The contraction of the last axis of `first` with the first axis of `second`, below |
+| `transpose(A)` | | `A: AbstractExpression` | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2 |
 
 In each composition, `K` is the `tuple` of the derived indices
 `Index((name, first, second, m))`, or `Index((name, f, m))`, for
@@ -1389,7 +1402,8 @@ shape `(3, 3)`:
 
 Requires: [`AbstractExpression`](#abstractexpression),
 [`Division`](#division), [Elementary
-functions](#elementary-functions-very-incomplete), [Transpose](EXAMPLES.md#transpose).
+functions](#elementary-functions-very-incomplete), [Tensor
+arithmetic](#tensor-arithmetic).
 
 A concrete subclass of `AbstractExpression` for the inverse of a square
 matrix, or the pseudo-inverse of a matrix with more rows than columns.
@@ -1410,7 +1424,9 @@ $A^+$ is the inverse matrix $A^{-1}$. If $A$ has rank less than $k$,
 `Inverse(A)` is undefined. Construction does not check the rank of $A$.
 
 A pass chooses how to evaluate `Inverse`, in closed form for a small matrix or
-by a factorisation. The core writes the determinant as the free function
+by a factorisation. The definition fixes the value and not the algorithm: the
+normal equations square the condition number of $A$, and a factorisation such
+as QR does not. The core writes the determinant as the free function
 [`determinant`](#determinant), so the core has no node class for the
 determinant.
 
@@ -3331,7 +3347,12 @@ domain, `PullBack`, `Gradient`, `DirectionalDerivative` and `Action`.
 
 A pass that rewrites a node keeps the value of the node and the static type of
 the node, with the free indices possibly in another order, never simplifies,
-and substitutes with the renaming of [Passes](#passes). The first passes of
+and substitutes with the renaming of [Passes](#passes). Because the pass never
+simplifies, a term that is zero stays in the graph, and zero times an
+undefined value is undefined. So a rule never multiplies a term that may be
+zero by an expression that may be undefined where the rewritten node is
+defined, such as the logarithm in the derivative of a power (see [Applying
+derivatives](#applying-derivatives)). The first passes of
 the core are [`apply_actions`](#applying-actions) and then
 [`apply_derivatives`](#applying-derivatives). The later passes, their order,
 and the core normal form (see [Grammars](#grammars)) are not yet decided.
@@ -3438,8 +3459,9 @@ The pass rewrites every `DirectionalDerivative(f, x, a, h)`, inner derivatives
 first, with the first row that matches $f$. $\mathrm{D} b$ is short for
 `DirectionalDerivative(b, x, x, h)`. The rules give the derivative at $x$, and
 if $a$ is not $x$, the pass then substitutes $a$ for $x$ in the result.
-Moving the derivative into a binding node first makes the node fresh for $a$
-and $h$ (see [Passes](#passes)).
+Moving the derivative into a binding node first makes the node fresh for $h$
+(see [Passes](#passes)). The substitution of $a$ makes the binding nodes fresh
+for $a$.
 
 | Expression $f$ | Rewrite of the derivative at $x$ |
 | -------------- | -------------------------------- |
@@ -3453,7 +3475,7 @@ and $h$ (see [Passes](#passes)).
 | `Absolute(b)` | $(\bar b \, \mathrm{D} b + b \, \overline{\mathrm{D} b}) / (2 \lvert b \rvert)$ |
 | `SquareRoot(b)` | $\mathrm{D} b / (2 \sqrt b)$ |
 | `Logarithm(b)` | $\mathrm{D} b / b$ |
-| `Inverse(A)` | $-A^+ \, \mathrm{D} A \, A^+ + A^+ (A^+)^T \, \mathrm{D} A^T \, (I - A A^+)$, with $I$ the identity matrix |
+| `Inverse(A)` | $-A^+ \, \mathrm{D} A \, A^+ + A^+ (A^+)^T (\mathrm{D} A^T - \mathrm{D} A^T A A^+)$, with `@`, `transpose` and `-` |
 | `Gradient(b, P)`, `PullBack(b, ψ)`, `Integral(b, P)` | The node of $\mathrm{D} b$ |
 | `Form(e, arguments)` | `Form(D e, arguments)` |
 | `Action(l, 0, w)`, a pairing | `Action(l, 0, D w)` |
@@ -3463,7 +3485,10 @@ and $h$ (see [Passes](#passes)).
   does not depend on $x$, and a terminal other than $x$ needs no row.
 - `Power` has two rows. The general row multiplies by $\log(b)$, which is
   undefined for a negative base, so the row for an exponent that does not
-  depend on $x$ avoids the logarithm.
+  depend on $x$ avoids the logarithm. That row is undefined at a zero base
+  when the value of the exponent is 0, which occurs when an integer power is
+  differentiated more times than its degree, and is the one known exception to
+  the principle of [Evaluation](#evaluation).
 - `Gradient`, `PullBack` and `Integral` commute with the derivative, because
   the derivative holds the domains fixed.
 - A `Form` that binds $x$ has no free $x$, so the first row gives `Zero`.
@@ -3834,6 +3859,7 @@ AbstractExpression
 |                             | [`real_part(f)`](#tensor-arithmetic)                                     |                               | `f: AbstractExpression`                                                                             | `component_tensor(RealPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `RealPart(f)`                                                                                        |
 |                             | [`imaginary_part(f)`](#tensor-arithmetic)                                |                               | `f: AbstractExpression`                                                                             | `component_tensor(ImaginaryPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `ImaginaryPart(f)`                                                                              |
 |                             | [`matrix_product(first, second)`](#tensor-arithmetic)                    | `@`                           | `first, second: AbstractExpression`                                                                 | The contraction of the last axis of `first` with the first axis of `second`, below                                                                                              |
+|                             | [`transpose(A)`](#tensor-arithmetic)                                     |                               | `A: AbstractExpression`                                                                             | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2                                                                                                     |
 |                             | [`inverse(A)`](#inverse)                                                 |                               | `A: AbstractExpression`                                                                             | `Inverse`                                                                                                                                                                       |
 |                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                             | The Leibniz formula for $\det A$                                                                                                                                                |
 | Calculus on a domain        | [`coordinate(P)`](#coordinate)                                           |                               | `P: AbstractDomain`                                                                                 | `Coordinate`                                                                                                                                                                    |
@@ -3924,6 +3950,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 37    |
 | Expression node classes         | 28    |
-| Free functions                  | 45    |
+| Free functions                  | 46    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

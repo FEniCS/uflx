@@ -194,12 +194,12 @@ Requires: [`Index`](LANGUAGE.md#index), [`Indexed`](LANGUAGE.md#indexed), [`Comp
 
 See also: [Tensor arithmetic](LANGUAGE.md#tensor-arithmetic).
 
-`transpose` is not part of the core. A library provides `transpose` as a free
-function built with derived indices (see [Derived
-indices](LANGUAGE.md#derived-indices)), and the examples of this note use
-`transpose`. `transpose(A)` is `component_tensor(A[k, l], (l, k))`, with
-$k$ = `Index(("library.transpose", A, 0))` and
-$l$ = `Index(("library.transpose", A, 1))`.
+`transpose` is a free function of the core (see [Tensor
+arithmetic](LANGUAGE.md#tensor-arithmetic)), built with derived indices (see
+[Derived indices](LANGUAGE.md#derived-indices)). `transpose(A)` is
+`component_tensor(A[k, l], (l, k))`, with
+$k$ = `Index(("uflx.transpose", A, 0))` and
+$l$ = `Index(("uflx.transpose", A, 1))`.
 
 An operand that does not have rank 2, including a scalar operand, is rejected
 with `IndexError` by the constructor of `Indexed`. The matrix product is the
