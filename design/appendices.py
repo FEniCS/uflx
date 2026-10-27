@@ -260,7 +260,7 @@ def checks(lang: Document) -> list[str]:
     }
     known = {c.name for c in lang.classes}
     # The first table of each appendix covers every node class.
-    for title in ("Appendix: Static type table", "Appendix: Pass table"):
+    for title in ("Appendix: Static type table",):
         tables = lang.tables.get(title, [])
         first = tables[0][1:] if tables else []
         listed = {n for r in first for n in code_names(r[0])}
@@ -302,15 +302,12 @@ def render(lang: Document) -> dict[str, str]:
 
 
 def summary(lang: Document) -> str:
-    """Render counts of the classes, free functions, transformations and rules of the core."""
+    """Render counts of the classes and free functions of the core."""
     classes = core(lang.classes)
     abstract = [c for c in classes if c.abstract]
     nodes = [c for c in classes if not c.abstract and is_expression(lang, c.name)]
     functions = [f for f in lang.functions if f.chapter not in EXCLUDED_CHAPTERS]
     overloads = [f for f in functions if f.overload]
-    passes = next(
-        t for t in lang.tables["Core transformations"] if t[0][0] == "Core transformation"
-    )[1:]
     counts = [
         ["Classes", str(len(classes))],
         ["Abstract classes", str(len(abstract))],
@@ -318,45 +315,8 @@ def summary(lang: Document) -> str:
         ["Expression node classes", str(len(nodes))],
         ["Free functions", str(len(functions))],
         ["Free functions with an overload", str(len(overloads))],
-        ["Core transformations", str(len(passes))],
     ]
-
-    pass_table = lang.tables["Appendix: Pass table"][0]
-    columns = {c.strip("`"): k for k, c in enumerate(pass_table[0]) if k > 0}
-    rows = []
-    for row in passes:
-        name, anchor = re.match(r"\[`(\w+)\(.*?\)`\]\(#([\w-]+)\)", row[0]).groups()
-        rules = lang.section_tables[anchor][0][1:]
-        trivial = sum(r[1].startswith("Remains") for r in rules)
-        kinds = {"non-trivial": "", "trivial": "", "ruled out": ""}
-        if name in columns:
-            kinds = dict.fromkeys(kinds, 0)
-            for r in pass_table[1:]:
-                entry = r[columns[name]]
-                if entry == "—":
-                    kind = "ruled out"
-                elif "Rule" in entry or "Chain" in entry:
-                    kind = "non-trivial"
-                else:
-                    kind = "trivial"
-                kinds[kind] += len(code_names(r[0]))
-        rows.append(
-            [
-                f"[`{name}`](#{anchor})",
-                str(len(rules) - trivial),
-                str(trivial),
-                *(str(v) for v in kinds.values()),
-            ]
-        )
-    header = [
-        "Core transformation",
-        "Non-trivial rules",
-        "Trivial rules",
-        "Non-trivial node classes",
-        "Trivial node classes",
-        "Ruled out",
-    ]
-    return table(["Quantity", "Count"], counts) + "\n" + table(header, rows)
+    return table(["Quantity", "Count"], counts)
 
 
 def fill(text: str, regions: dict[str, str]) -> str:

@@ -27,8 +27,8 @@ Nothing. Integrals over cells and facets use the induced density in
 
 ## Derivatives
 
-1. **`DirectionalDerivative` through `PullBack`, `Form` and `Action`.** The
-   three remain in `apply_derivatives`. Through `PullBack` it is needed for
+1. **`DirectionalDerivative` through `PullBack`, `Form` and `Action`.** See
+   PASSES_DRAFT.md. Through `PullBack` it is needed for
    shape derivatives. Through `Form` and `Action` it is needed to differentiate
    after binding, such as a Hessian-vector product of a bound vector-Jacobian
    product.

@@ -443,8 +443,7 @@ index_sum(weights[i] * (points[i, 0] * points[i, 1]), (i,))
 `expand_pull_backs` replaces `X` by the parameterisation of `xs`. A pass
 replaces the integral over `RD(0)` of an expression by the expression, and
 `reduce_component_tensors` replaces `component_tensor(points[i, k], (k,))[0]`
-by `points[i, 0]` (see [Reducing component
-tensors](LANGUAGE.md#reducing-component-tensors)). A form compiler could generate:
+by `points[i, 0]`. A form compiler could generate:
 
 ```python
 weights = (1 / 6, 1 / 6, 1 / 6)
@@ -539,7 +538,7 @@ equal, and a later pass evaluates both to $(2, 4/3)$.
 Requires: [Sides of a topology](LANGUAGE.md#sides-of-a-topology),
 [Restriction](LANGUAGE.md#restriction), [`Integral` over a decomposed
 domain](LANGUAGE.md#integral-over-a-decomposed-domain), [`Normal`](LANGUAGE.md#normal),
-[`Form`](LANGUAGE.md#form), [Core transformations](LANGUAGE.md#core-transformations).
+[`Form`](LANGUAGE.md#form), [Evaluation](LANGUAGE.md#evaluation).
 
 The interior facet terms of the symmetric interior penalty method for the
 Poisson problem, the legacy UFL `dS` integral, on the square divided into two
@@ -596,7 +595,7 @@ a_facet = form(integral(f, E), (v, u))
   density](LANGUAGE.md#jacobian-and-density)), and a per-cell array `h` of the
   solver is read as `h[gathered_index(cells_p, (e,))]`.
 
-The core transformations rewrite `a_facet` as follows. With $B_\pm$ =
+The draft passes rewrite `a_facet` as follows. With $B_\pm$ =
 `gathered_cell_domain(D, 0, gathered_index(cells_pm, (e,)))` the cell on each
 side and $A_\pm$ = `domain_map(I, affine_map(I, points_pm), K)` the inclusion
 of the facet into that cell, both of [Restriction](LANGUAGE.md#restriction), with the side
@@ -612,7 +611,7 @@ tables `(cells_pm, positions_pm)` of each side:
    The inner pull-back remains, for the library of `V`, as `u` on the cell
    `cells_p[e]` (see [`AbstractFunctionSpace`](LANGUAGE.md#abstractfunctionspace)), and
    the outer pull-back remains outside the inner one, by the rule that
-   pull-backs nest (see [Expanding pull-backs](LANGUAGE.md#expanding-pull-backs)).
+   pull-backs nest.
    On `du_p` the same rule gives the pull-back of `gradient(u, D)` by
    $B_+$, which the rule for `Gradient` rewrites as
    $K^T \hat g$, with $K$ = `inverse(J_+)` the inverse Jacobian of the cell and
@@ -743,7 +742,7 @@ r = form(r_cell + r_facets + r_boundary, (v,))
   basis to the functions with zero vertex values, as Bulle et al. do. That
   choice stays behind the pull-back and is invisible to the form.
 
-The core transformations rewrite `a` and `r` as in the [interior facet
+The draft passes rewrite `a` and `r` as in the [interior facet
 example](#an-interior-facet-integral). After the passes `a` is one
 `IndexSum` over the cells, `r_cell` and `r_boundary` are an `IndexSum` over
 the cells and over the boundary facets, and `r_facets` is an `IndexSum` over
@@ -914,7 +913,7 @@ l = form(traction + integral(index_sum(mu[i] * d_old_G[i], (i,)) / dt, G), ((v, 
   domains with the same topology, the identity in the reference coordinates of
   each cell, is a fixed composition that a later version may add.
 
-The core transformations rewrite `a` as in the [interior facet
+The draft passes rewrite `a` as in the [interior facet
 example](#an-interior-facet-integral). `expand_integrals` gives one
 `IndexSum` for each of `F`, `S` and `G`, over the cell index of its topology.
 On `G`, with `e = cell_index(interface, 0)`, the restriction `u_G` lowers to
@@ -1057,7 +1056,7 @@ a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
   network side, and the kernel evaluates the basis of `V3` at run time, as for
   a cut cell.
 
-The core transformations rewrite `a` as in the [interior facet
+The draft passes rewrite `a` as in the [interior facet
 example](#an-interior-facet-integral). `expand_integrals` gives one
 `IndexSum` for `tissue`, over `cell_index(T3, 0)`, and one for `vessel` and
 one for `coupling`, over `cell_index(T1, 0)`. On `coupling`,
@@ -1121,7 +1120,7 @@ Requires: [`DecomposedDomain`](LANGUAGE.md#decomposeddomain),
 [`Gradient`](LANGUAGE.md#gradient), [`Integral` over a decomposed
 domain](LANGUAGE.md#integral-over-a-decomposed-domain), [`Form`](LANGUAGE.md#form).
 
-See also: [Expanding pull-backs](LANGUAGE.md#expanding-pull-backs), [`Inverse`](LANGUAGE.md#inverse).
+See also: [`Inverse`](LANGUAGE.md#inverse).
 
 The Poisson forms on a surface in $R^3$ are the forms of the Laplace–Beltrami
 operator. The mesh is built as the mesh of the
@@ -1183,9 +1182,6 @@ Requires: [`DecomposedDomain`](LANGUAGE.md#decomposeddomain),
 density](LANGUAGE.md#jacobian-and-density), [`Gradient`](LANGUAGE.md#gradient),
 [`Form`](LANGUAGE.md#form), [The Laplace-Beltrami
 operator](#the-laplace-beltrami-operator).
-
-See also: [Expanding integrals](LANGUAGE.md#expanding-integrals), [Expanding
-pull-backs](LANGUAGE.md#expanding-pull-backs).
 
 Shape optimisation and updated Lagrangian mechanics write a form on the image
 of the mesh under a deformation, and assemble on the mesh. The deformation is
@@ -1374,7 +1370,7 @@ L = form(integral(f * conjugate(v), D), (conjugate(v),))
 
 Requires: [Representation on the reference
 cell](LANGUAGE.md#representation-on-the-reference-cell),
-[`Form`](LANGUAGE.md#form), [Expanding pull-backs](LANGUAGE.md#expanding-pull-backs).
+[`Form`](LANGUAGE.md#form).
 
 See also: [A Piola extension](LANGUAGE.md#a-piola-extension).
 
@@ -1852,7 +1848,7 @@ L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
   raises in the module; a module that wants the legacy behaviour gives
   `Constant` the mesh and returns a `Zero`.
 - A form compiler sees only core graphs, so the module costs nothing at
-  compile time, and the core transformations apply unchanged.
+  compile time, and the passes apply unchanged.
 
 Not in the module: `derivative`, which is the Gateaux derivative, not yet
 covered, and `u('+')`, which calls a core `Function`, so a module writes a

@@ -306,8 +306,9 @@ which an expression is defined. A domain is a coordinate domain, a leaf that a
 library supplies (see [`AbstractCoordinateDomain`](#abstractcoordinatedomain)),
 or a decomposed domain, the union of the images of families of domain maps
 that the core builds (see [`DecomposedDomain`](#decomposeddomain)). Every node class that
-takes a domain accepts either kind, and a core transformation gives the meaning
-of the node on a decomposed domain through the pieces of the decomposed domain.
+takes a domain accepts either kind, and the section of the node class gives the
+meaning of the node on a decomposed domain through the pieces of the decomposed
+domain.
 
 | `AbstractDomain` |                                                                             |
 | ---------------- | --------------------------------------------------------------------------- |
@@ -559,9 +560,10 @@ composition, and never reads the structure of an argument, such as the class,
 the edges or the values. Otherwise the concept gets its own node class. A
 concept that is evaluated by a numerical algorithm that the user supplies also
 gets its own node class, even if a fixed composition exists, because the
-composition would fix the algorithm. A concept that a core transformation must
+composition would fix the algorithm. A concept that a pass must
 meet as the user wrote the concept also gets its own node class, even if a
-fixed composition exists, and the core transformation states the composition.
+fixed composition exists, and the section of the node class states the
+composition.
 `Integral` over a decomposed domain is such a concept (see
 [`Integral`](#integral)).
 
@@ -657,7 +659,7 @@ core has no rational literal. A complex number is a composition such as
 Requires: [`AbstractExpression`](#abstractexpression), [Free
 indices](#free-indices), [Support](#support).
 
-See also: [`Indexed`](#indexed), [Applying derivatives](#applying-derivatives).
+See also: [`Indexed`](#indexed).
 
 A concrete subclass of `AbstractExpression` for the zero of any static type.
 
@@ -668,8 +670,7 @@ A concrete subclass of `AbstractExpression` for the zero of any static type.
 | Static type                                        | The stored properties, with no support                                                                                         |
 | Raises                                             | `TypeError` for an argument of another type, and `ValueError` for a negative extent or an index that occurs twice             |
 
-`apply_derivatives` produces `Zero` (see [Applying
-derivatives](#applying-derivatives)). For example, `Zero((3,), (), ())` is the
+The derivative of an expression with no support is a `Zero`. For example, `Zero((3,), (), ())` is the
 zero array of value shape `(3,)`, and `Zero((), (), (V,))` is the zero linear
 form on a space `V`.
 
@@ -737,8 +738,6 @@ pass may apply commutativity.
 
 Requires: [Arithmetic](#arithmetic), [Support](#support).
 
-See also: [Applying derivatives](#applying-derivatives).
-
 A concrete subclass of `AbstractExpression` for a scalar raised to a scalar
 power.
 
@@ -752,9 +751,8 @@ power.
 | Raises                 | `ValueError` if a requirement fails                                         |
 
 The exponent may have a support. The derivative of a power whose exponent has
-a support needs a logarithm, which the core does not have, so the gradient of
-such a power remains after
-[`apply_derivatives`](#applying-derivatives), as on a function.
+a support needs a logarithm, which the core does not have, so the core
+cannot write the gradient of such a power as a composition.
 
 ### Negation and subtraction
 
@@ -812,8 +810,7 @@ modulus of a complex scalar.
 Requires: [`AbstractExpression`](#abstractexpression), [Scalar
 type](#scalar-type).
 
-See also: [Variational forms](#variational-forms), [Reducing component
-tensors](#reducing-component-tensors).
+See also: [Variational forms](#variational-forms).
 
 A concrete subclass of `AbstractExpression` for the complex conjugate of an
 expression of any value shape, entry by entry.
@@ -831,9 +828,8 @@ $\int u \bar{v}$, needs `Conjugate`. `Conjugate` is the one operation of the
 scalar field that takes an operand of any value shape. A form binds an
 argument as `conjugate(v)` (see [`Form`](#form)), and `v` may be a vector,
 such as the argument of $\int \operatorname{curl} u \cdot \overline{\operatorname{curl} v}$.
-`reduce_component_tensors` moves an `Indexed` inside a `Conjugate`, so the
-entries of a tensor are conjugated as scalars (see [Reducing component
-tensors](#reducing-component-tensors)).
+`conjugate(f)[e]` has the value of `conjugate(f[e])`, so the entries of a
+tensor are conjugated as scalars.
 
 
 
@@ -841,8 +837,6 @@ tensors](#reducing-component-tensors)).
 
 Requires: [`AbstractExpression`](#abstractexpression), [Scalar
 type](#scalar-type), [`Conjugate`](#conjugate).
-
-See also: [Applying derivatives](#applying-derivatives).
 
 `RealPart` and `ImaginaryPart` are concrete subclasses of `AbstractExpression`
 for the real part and the imaginary part of a scalar.
@@ -1192,8 +1186,7 @@ total = index_sum(a_e, (e,))
 Requires: [`Index`](#index), [`EllipsisIndex`](#ellipsisindex),
 [Passes](#passes), [Node class or free function](#node-class-or-free-function).
 
-See also: [Transpose](EXAMPLES.md#transpose), [Applying
-derivatives](#applying-derivatives), [New operations](#new-operations).
+See also: [Transpose](EXAMPLES.md#transpose), [New operations](#new-operations).
 
 > LLM generated content.
 
@@ -1210,20 +1203,19 @@ does not inspect the operands to find a fresh index. A global counter is not
 allowed, because a counter makes construction depend on global state.
 
 A pass that needs fresh indices derives the indices in the same way, with the
-identifier of the pass, the arguments of the rule and a number. For example,
-`apply_derivatives` writes the new axis of `Gradient(g, P)` with the index
-`Index(("uflx.apply_derivatives", g, P, 0))`. The renamed index of
-[Passes](#passes) follows the same rule.
+identifier of the pass, the arguments of the rewritten node and a number. The
+renamed index of [Passes](#passes) follows the same rule.
 
 The edges of an index to the objects in the label of the index identify the
 index and are not operands.
 
 A free function or a pass of the core derives one `Index` for each axis, and
-never an `EllipsisIndex`. `reduce_component_tensors` replaces an
-`EllipsisIndex` of a binder by entries for each axis, but cannot split an
-`EllipsisIndex` entry over the indices of a binder (see [Reducing component
-tensors](#reducing-component-tensors)). So a composition with one `Index` for
-each axis reduces against every binder.
+never an `EllipsisIndex`. `component_tensor(e, K)[J]` is $e$ with each index
+of `K` replaced by the entry of `J` for the axis of the index. An
+`EllipsisIndex` of `K` may be replaced by the entries of the axes that the
+`EllipsisIndex` covers, but an `EllipsisIndex` entry of `J` cannot be split
+over the indices of `K`. So a composition with one `Index` for each axis
+reduces against every binder.
 
 ### Tensor arithmetic
 
@@ -1342,9 +1334,6 @@ shape `(3, 3)`:
 Requires: [`AbstractExpression`](#abstractexpression),
 [`Division`](#division), [Elementary
 functions](#elementary-functions-very-incomplete), [Transpose](EXAMPLES.md#transpose).
-
-See also: [Expanding pull-backs](#expanding-pull-backs), [Applying
-derivatives](#applying-derivatives).
 
 A concrete subclass of `AbstractExpression` for the inverse of a square
 matrix, or the pseudo-inverse of a matrix with more rows than columns.
@@ -1532,8 +1521,8 @@ Requires: [Valid pair](#valid-pair), [`Coordinate`](#coordinate),
 [`Indexed`](#indexed), [`ComponentTensor` and
 `IndexSum`](#componenttensor-and-indexsum).
 
-See also: [`PullBack`](#pullback), [`DomainMap`](#domainmap), [Applying
-derivatives](#applying-derivatives), [New operations](#new-operations).
+See also: [`PullBack`](#pullback), [`DomainMap`](#domainmap), [New
+operations](#new-operations).
 
 A concrete subclass of `AbstractExpression` for the gradient of an expression
 on a domain $P$. The gradient adds a last axis in the coordinate frame of the
@@ -1548,7 +1537,6 @@ ambient coordinate domain of $P$, of dimension $n$.
 | Requires         | A [valid pair](#valid-pair) $(f, P)$                                                              |
 | Static type      | Value shape `f.value_shape + (n,)`                                                                |
 | Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                               |
-| Evaluated by     | [`apply_derivatives`](#applying-derivatives)                                                      |
 
 The gradient acts on each component of an array-valued $f$. Entry `j` of the
 last axis of `Gradient(f, P)` is the partial derivative $\partial_j f$ in the
@@ -1577,8 +1565,7 @@ compositions of `Gradient`, which a library provides as free functions (see
 
 The gradient depends on the coordinates of $P$, so a pull-back does not
 commute with `Gradient`. `PullBack(Gradient(f, Q), D)` is the gradient of $f$
-on $Q$, evaluated at $\psi(p)$. [The rule for `Gradient`](#the-rule-for-gradient)
-of `expand_pull_backs` evaluates the pull-back.
+on $Q$, evaluated at $\psi(p)$.
 
 #### Examples
 
@@ -1610,7 +1597,7 @@ The examples use `P = RD(3)`, `X = coordinate(P)`, `x, y, z = X[0], X[1], X[2]`,
 Requires: [`Gradient`](#gradient), [Free indices](#free-indices),
 [Support](#support).
 
-See also: [Applying derivatives](#applying-derivatives), [Gateaux
+See also: [Gateaux
 derivative](#gateaux-derivative), [Argument spaces](#argument-spaces),
 [Hyperelasticity and the stress](EXAMPLES.md#hyperelasticity-and-the-stress),
 [Symmetric tensors](EXAMPLES.md#symmetric-tensors).
@@ -1633,7 +1620,6 @@ with $\varepsilon$ real and every occurrence of $g$ in $f$ replaced.
 | Requires                         | $g$ with no free indices, $h$ with the value shape of $g$, $g$ and $h$ with the argument spaces `()`, and $h$ with the support of $g$ or no support |
 | Static type                      | The value shape of $f$, the free indices of $f$ followed by those of $h$, and the argument spaces of $f$ |
 | Raises                           | `ValueError` if a requirement fails                                                                   |
-| Evaluated by                     | [`apply_derivatives`](#applying-derivatives)                                                          |
 
 An occurrence of $g$ is a node of $f$ equal to $g$. Construction never
 simplifies, so the occurrences are those that the user built. An expression
@@ -1684,7 +1670,6 @@ domain.
 | Requires         | A [valid pair](#valid-pair) $(f, P)$, or $f$ with the support `P.ambient_domain`             |
 | Static type      | The value shape and the free indices of $f$, with no support                                |
 | Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                         |
-| Evaluated by     | [`expand_integrals`](#expanding-integrals), for a decomposed domain $P$                     |
 
 For a coordinate domain $P$ of dimension $n$, `Integral(f, P)` is the
 Lebesgue integral in the coordinates $X$ of $P$,
@@ -1784,8 +1769,7 @@ Requires: [`DomainMap`](#domainmap), [Valid pair](#valid-pair),
 [Free indices](#free-indices), [An
 affinely mapped triangle](EXAMPLES.md#an-affinely-mapped-triangle).
 
-See also: [`Gradient`](#gradient), [Expanding
-pull-backs](#expanding-pull-backs).
+See also: [`Gradient`](#gradient).
 
 A concrete subclass of `AbstractExpression` for the pull-back $\psi^* f$ of an
 expression $f$ on $Q$ by the parameterisation $\psi$ of a domain $D$, with $P$
@@ -1800,7 +1784,6 @@ the parameter domain and $Q$ the ambient domain of $D$.
 | Requires         | A [valid pair](#valid-pair) $(f, Q)$, and an equal extent for an `Index` free in both $f$ and $D$          |
 | Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
 | Raises           | `TypeError` for $D$, and `ValueError` if another requirement fails                                         |
-| Evaluated by     | [`expand_pull_backs`](#expanding-pull-backs)                                                               |
 
 The second operand is a domain, not an expression, because a domain states
 $Q$.
@@ -1964,8 +1947,8 @@ The mesh library locates the cells and inverts the map of each cell outside
 the language, for example by Newton's method, as the mesh library computes
 every side table.
 
-`pull_back(u, M)` for a function `u` on $D$ remains after `expand_pull_backs`.
-The reason is that the library of the space of `u` defines `u` on the cells
+The core does not rewrite `pull_back(u, M)` for a function `u` on $D$,
+because the library of the space of `u` defines `u` on the cells
 only (see [`AbstractFunctionSpace`](#abstractfunctionspace)). A pass of the
 mesh library rewrites the pull-back as the [restriction](#restriction) to the
 topology of the points, with the index $i$ of the family in place of the cell
@@ -2543,8 +2526,7 @@ the cells of $S$.
 
 `pull_back(f, SideMap(D, E, s))` is an expression with the support $E$, the
 restriction of $f$ to all the groups at once. The pull-back of that expression
-by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)` (see
-[Expanding pull-backs](#expanding-pull-backs)).
+by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)`.
 
 #### Side domains
 
@@ -2612,8 +2594,6 @@ Requires: [`Integral`](#integral),
 [`DecomposedDomain`](#decomposeddomain), [Jacobian and
 density](#jacobian-and-density).
 
-See also: [Expanding integrals](#expanding-integrals).
-
 `Integral(f, D)` for a decomposed domain $D$ integrates $f$ against the
 density that the pieces induce. $f$ has the support $D$, the support
 `D.ambient_domain` or no support.
@@ -2626,8 +2606,7 @@ Notation, for the piece $j$ of $D$:
 #### Expansion into pieces
 
 The integral is the sum over the pieces $j$ of the integrals over the domains
-of piece $j$. [`expand_integrals`](#expanding-integrals) rewrites
-`Integral(f, D)` for a scalar $f$ as that sum:
+of piece $j$. For a scalar $f$, `Integral(f, D)` has the value of that sum:
 
 ```python
 D_j = cell_domain(D, j)
@@ -2637,8 +2616,7 @@ index_sum(integral(pull_back(f, D_j) * density(D_j), P_j), indices_j)
 - A piece with no free indices has no `IndexSum`.
 - An array-valued $f$ integrates component by component, with the density
   written into each component in index notation.
-- For a decomposed domain $P_j$, `expand_integrals` rewrites the inner
-  integral in turn.
+- For a decomposed domain $P_j$, the inner integral expands in turn.
 - For a parameter domain $P_j$ of dimension $m = 0$, the density is
   `Integer(1)`, so the integral over a set of points is the sum of the values.
 
@@ -2690,7 +2668,6 @@ cell on a side, on the cells of a topology with sides.
 | Requires          | The requirements of `SideMap(D, E, s)`, and $E$ of the dimension $k - 1$ for the dimension $k$ of $D$ |
 | Static type       | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the support $E$, real      |
 | Raises            | `ValueError` if a requirement fails                                                                   |
-| Evaluated by      | [`expand_pull_backs`](#expanding-pull-backs)                                                          |
 
 Notation, for the piece $i$ of $E$:
 
@@ -2900,9 +2877,6 @@ function space.
 The label identifies the function, so two functions are the same only if the
 spaces and the labels are equal. A function in a [dual space](#dualspace) is an
 antilinear form, such as a known load.
-
-The gradient of a function remains after [applying
-derivatives](#applying-derivatives).
 
 A function is not an argument or a coefficient by itself. Whether a function is
 an argument of a form is stated by the form (see [`Form`](#form)).
@@ -3165,7 +3139,6 @@ expression given to one argument of the form.
 | Requires                 | The conditions below                                                                                                                                   |
 | Static type              | That of $f$, with the argument spaces of $f$ without the entry at `position`.                                                                          |
 | Raises                   | `ValueError` if a requirement fails                                                                                                                    |
-| Evaluated by             | [`apply_actions`](#applying-actions)                                                                                                                   |
 
 Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
 
@@ -3198,321 +3171,9 @@ Legacy UFL operations are actions and rebindings. The action on the last argumen
 
 Worked examples for this chapter in EXAMPLES.md: [the Laplace-Beltrami operator](EXAMPLES.md#the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES.md#the-flux-through-a-surface), [Helmholtz with a perfectly matched layer](EXAMPLES.md#helmholtz-with-a-perfectly-matched-layer), [mixed Poisson with Raviart-Thomas elements](EXAMPLES.md#mixed-poisson-with-raviart-thomas-elements), [dual-weighted residual error estimation](EXAMPLES.md#dual-weighted-residual-error-estimation), [a classic FEniCS layer for the Poisson problem](EXAMPLES.md#a-classic-fenics-layer-for-the-poisson-problem).
 
-## Core transformations
-
-Requires: [Passes](#passes), [`Integral`](#integral), [`PullBack`](#pullback),
-[`Gradient`](#gradient), [`Action`](#action).
-
-The core has five transformations, each a pass (see [Passes](#passes)) that
-evaluates one node class. `expand_integrals` dispatches on the domain of the
-`Integral` and not on the operand, and `reduce_component_tensors` has two rules,
-for an `Indexed` whose operand is a `ComponentTensor` or a `Conjugate`. Each of the other three
-has a default for the node classes of the operand, and a table of the operand
-classes with a rule of their own. The [pass table](#appendix-pass-table) gives
-every node class for each of the three.
-
-| Core transformation                                         | Evaluates            | Default                                                     |
-| ----------------------------------------------------------- | -------------------- | ----------------------------------------------------------- |
-| [`expand_integrals(f)`](#expanding-integrals)               | `Integral`           | One rule, by the domain of the `Integral`                   |
-| [`expand_pull_backs(f)`](#expanding-pull-backs)             | `PullBack`           | Commutes with every node class                              |
-| [`apply_derivatives(f)`](#applying-derivatives)             | `Gradient`, `DirectionalDerivative` | Linear for the linear node classes, the chain rule otherwise |
-| [`apply_actions(f)`](#applying-actions)                     | `Action`             | Moves into the operand that carries the argument            |
-| [`reduce_component_tensors(f)`](#reducing-component-tensors) | `Indexed`            | Two rules, for a `ComponentTensor` and a `Conjugate` operand, and otherwise remains |
-
-The linear node classes are the following:
-
-- `Sum`, `Tensor`, `Indexed`, `ComponentTensor` and `IndexSum`, linear in
-  every operand.
-- `Division`, linear in the first operand.
-
-An evaluated node that is linear moves into the operands of a linear node
-class in which the node is linear.
-
-A rule obeys the following:
-
-- A rule rewrites a node of the evaluated class to a mathematically equal
-  expression of node classes of the core, and never simplifies.
-- The rewritten expression has the free indices of the node, with the same
-  extents, possibly in another order, and the argument spaces of the node.
-- The rule dispatches on the class of the operand and moves the evaluated node
-  towards the leaves.
-
-The pass rewrites inner nodes first, until no rule applies. A node without a
-rule is rebuilt on the rewritten edges, and the evaluated node remains on the
-rebuilt node.
-
-In a `Form`, an evaluated node moves only into the expression. In an `Action`,
-an evaluated node moves only into the form $f$. The reason is that the
-arguments and $g$ are bound, not on the support. For example,
-$\psi^* \mathrm{action}(f, s, g) = \mathrm{action}(\psi^* f, s, g)$, because
-the action replaces $\psi^* u$ in $\psi^* f$ by $\psi^* g$.
-
-Each core transformation rewrites only the evaluated class, so the five run
-separately or together. Evaluation runs the five together until no rule
-applies.
-
-```{dropdown} Termination
-Evaluation terminates for the following reasons:
-
-- An `Integral` over a decomposed domain is replaced by `Integral`s over the
-  parameter domains of the pieces, which nest less deeply.
-- A `PullBack` moves inside a `Gradient`, and never the reverse.
-- An action removes an `Action`.
-- A reduction removes an `Indexed` and a `ComponentTensor`.
-```
-
-A downstream lazy node class may join evaluation if the rules of the class
-satisfy the following:
-
-- The rules rewrite only that class.
-- The rules move the node towards the leaves.
-- The rules never reverse a core rule, as moving a `Gradient` inside a
-  `PullBack` would.
-
-The terminals are `Coordinate`, `Function`, `Normal` and the leaf expressions
-with a support of downstream libraries (see [Leaves and
-subclassing](#leaves-and-subclassing)).
-
-After evaluation, every `PullBack`, `Gradient` and `Action` applies to an
-expression that contains a `Function` or a downstream terminal, with these
-exceptions:
-
-- the gradient of the coordinate function on a decomposed domain of lower
-  dimension than the ambient coordinate domain, the orthogonal projection onto
-  the tangent space,
-- a `Gradient` of a `Power` whose exponent has a support,
-- a `PullBack` of a `Normal` by a domain other than a cell domain of the
-  domain of the `Normal`, and a `PullBack` that remains for a domain map whose
-  parameter domain the rule for `Gradient` does not cover.
-
-### Expanding integrals
-
-Requires: [Core transformations](#core-transformations), [`Integral`](#integral),
-[`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
-
-`expand_integrals` rewrites every `Integral` whose domain is a decomposed
-domain as the sum over the pieces of [`Integral` over a decomposed
-domain](#integral-over-a-decomposed-domain), with these rules:
-
-| Domain of the `Integral` | Rewrite of `Integral(f, D)`                                                                      |
-| ------------------------ | ------------------------------------------------------------------------------------------------ |
-| A coordinate domain      | Remains                                                                                          |
-| A decomposed domain      | The sum over the pieces of the integrals of the pull-back of $f$ times the density of the piece |
-
-The pull-back and the density are by `cell_domain(D, j)` for $f$ with the
-support $D$, and by piece $j$ itself for $f$ with the support
-`D.ambient_domain`. An $f$ with no
-support takes either, with the same result. The pass rewrites inner integrals
-first, so an `Integral` over a nested decomposed domain is rewritten from the
-inside out.
-
-### Expanding pull-backs
-
-Requires: [Core transformations](#core-transformations), [`PullBack`](#pullback),
-[`Coordinate`](#coordinate), [`Gradient`](#gradient), [Jacobian and
-density](#jacobian-and-density), [`Inverse`](#inverse).
-
-For a domain $D$ with the parameterisation $\psi$, the parameter domain $P$
-and the ambient domain $Q$, $\psi^*$ commutes with every node class of the
-core, with these rules:
-
-| Operand                                                                   | Rewrite of $\psi^*$ applied to the operand                                           |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| An expression $c$ with no support                                         | $c$, or $c$ `+ Zero(...)` (see [Expressions with no support](#expressions-with-no-support)) |
-| `Coordinate(Q)`                                                           | $\psi$                                                                               |
-| `PullBack(g, D2)`, for a `DomainMap` `D2`                                 | Remains, so pull-backs nest                                                          |
-| `PullBack(f, SideMap(D2, E, s))`, for `cell_domain(E, i)`                 | `pull_back(pull_back(f, B_i), A_i)` (see [Restriction](#restriction))                |
-| `Normal(D2, E, s)`, for `cell_domain(E, i)`                               | $K^T \hat m / \lvert K^T \hat m \rvert$ (see [`Normal`](#normal))                      |
-| `PullBack(f, SideMap(D2, E, s))` or `Normal(D2, E, s)`, for any other $D$ | Remains                                                                              |
-| `Gradient(f, Q)`, $P$ of the dimension of $Q$ and of the dimension $m$ of the ambient coordinate domain of $P$ | $\sum_i K_{ij} \, \partial_i(\psi^* f)$ for entry $j$ of the last axis, with $\partial_i(\psi^* f)$ entry $i$ of `Gradient(pull_back(f, D), P)` |
-| `Gradient(f, Q)`, $P$ of lower dimension than $Q$                         | Remains                                                                              |
-| `Gradient(f, Q)`, $P$ of the dimension of $Q$ and of lower dimension than $m$ | Remains, not yet covered                                                          |
-| `Function` or a downstream terminal                                       | Remains, for the library of the terminal                                             |
-
-#### Expressions with no support
-
-The rule for an expression with no support comes before every other rule and
-before commuting, whatever the class of the expression. A pull-back therefore
-never moves inside an `Integral`. The integral has no support, and the
-integrand stays on the domain of the integral.
-
-`PullBack(c, D)` has the free indices of the family $D$, and $c$ may not.
-
-- If every free index of $D$ is free in $c$, the rewrite is $c$.
-- Otherwise the rewrite is $c$ `+ Zero(...)`. The `Zero` has the value shape
-  and the argument spaces of $c$, and the missing free indices with the
-  extents of the family (see [`Zero`](#zero)).
-
-For example, take the family of three quadrature points `xs` of the [quadrature example](EXAMPLES.md#quadrature).
-`pull_back(Integer(1), xs)` is rewritten as
-`Integer(1) + Zero((), ((i, 3),), ())`, and
-`index_sum(integral(pull_back(Integer(1), xs), RD(0)), (i,))` counts the
-points.
-
-#### Nested pull-backs
-
-The pass rewrites inner nodes first. A `PullBack(g, D2)` that the outer
-pull-back meets is therefore one that remains, with $g$ one of the following
-(see the rows above):
-
-- a terminal,
-- a `Gradient(f, Q)` pulled back by a domain map whose parameter domain has
-  lower dimension than $Q$,
-- a restriction by a `SideMap`.
-
-The outer pull-back then remains outside the inner one, so pull-backs nest.
-The library of a terminal evaluates the inner pull-back, such as a function on
-the cell on the side of a facet. The outer pull-back applies to the expression
-the library gives, such as the pull-back to the facet of a basis function on
-the reference cell. That outer pull-back remains in turn, for the library to
-evaluate at the points of the facet (see [Restriction](#restriction) and
-[An interior facet
-integral](EXAMPLES.md#an-interior-facet-integral)).
-
-#### The rule for `Gradient`
-
-In the rule for `Gradient`:
-
-- $J$ is `jacobian(D)`, of value shape `(n, m)`, with $m$ the dimension of the
-  ambient coordinate domain of $P$ and $n$ the dimension of the frame of
-  `Gradient(f, Q)`.
-- $K$ is `inverse(J)`, the pseudo-inverse for $m < n$ (see
-  [`Inverse`](#inverse)).
-
-The vector fields $\sum_i K_{ij} \, \partial_i$ on $P$ push forward to the
-orthogonal projections of the $\partial_j$ of the frame onto the tangent space
-of $D$. For $m = n$, the projections are the $\partial_j$ themselves. For a
-decomposed $Q$ of dimension $k < n$, `Gradient(f, Q)` is the tangential
-gradient (see [`Gradient`](#gradient)), so the rule holds for $f$ on $Q$.
-
-If $P$ has lower dimension than $Q$, the same composition gives the tangential
-gradient along $D$, not the gradient of $f$. The pull-back therefore
-remains.
-
-### Applying derivatives
-
-Requires: [Core transformations](#core-transformations),
-[`Gradient`](#gradient), [`Product`](#product), [`Zero`](#zero),
-[`Conjugate`](#conjugate), [`RealPart` and
-`ImaginaryPart`](#realpart-and-imaginarypart), [`Inverse`](#inverse),
-[`DirectionalDerivative`](#directionalderivative).
-
-The partial derivative $\partial_j$ of `Gradient(f, P)` is linear for the
-linear node classes and follows the chain rule for the other node classes.
-The new axis stays the last axis of the value shape, written with the derived
-index $j$ (see [Derived indices](#derived-indices)). For example, `Gradient(A[i], P)` is rewritten
-as `component_tensor(Gradient(A, P)[i, j], (j,))`. The rules:
-
-| Operand                                                     | Rewrite of $\partial_j$ applied to the operand                                                      |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `Product` $a b$                                             | $\partial_j a \, b + a \, \partial_j b$                                                              |
-| `Division` $a / b$                                          | $\partial_j a / b - (a \, \partial_j b) / (b b)$                                                      |
-| `Inverse` $A^+$                                             | $-A^+ \, \partial_j A \, A^+ + A^+ (A^+)^T \, \partial_j A^T \, (I - A A^+)$                           |
-| `Absolute` $\lvert a \rvert$                                | $(\bar{a} \, \partial_j a + a \, \overline{\partial_j a}) / (2 \lvert a \rvert)$                       |
-| `Conjugate` $\bar{a}$                                       | $\overline{\partial_j a}$                                                                            |
-| `RealPart` $\operatorname{Re} a$                            | $\operatorname{Re} \partial_j a$                                                                     |
-| `ImaginaryPart` $\operatorname{Im} a$                       | $\operatorname{Im} \partial_j a$                                                                     |
-| `Power` $a^b$ with an exponent $b$ with no support          | $b \, a^{b - 1} \, \partial_j a$, the chain rule, with `b - Integer(1)` the exponent                  |
-| `Power` $a^b$ with an exponent $b$ with a support           | Remains                                                                                             |
-| `SquareRoot` $\sqrt{a}$                                     | $\partial_j a / (2 \sqrt{a})$, with `Integer(2)`                                                  |
-| `Coordinate(P)`, $P$ of the dimension of the frame          | $\delta_{ij}$ for the entry $i$ of the coordinate function                                          |
-| An expression with no support, or a `PullBack` of one       | `Zero`, with the value shape of the operand and the new axis, and the free indices and the argument spaces of the operand |
-| `Coordinate(P)` on a decomposed domain of lower dimension than the frame, `Gradient`, `Normal`, `Function` or a downstream terminal | Remains |
-| A `PullBack` of an expression with a support                | Remains                                                                                             |
-
-`apply_derivatives` evaluates `DirectionalDerivative(f, g, h)` with the same
-rules, with $\mathrm{D}(a, g, h)$ in place of $\partial_j a$ and no new axis,
-and with these changes:
-
-- An occurrence of $g$ is rewritten as $h$.
-- A terminal that is not $g$ is rewritten as `Zero`, with the value shape
-  and the argument spaces of the terminal and the free indices of the terminal
-  and of $h$.
-- `Gradient(a, P)` is rewritten as
-  `gradient(directional_derivative(a, g, h), P)`.
-- A `PullBack`, a `Form` and an `Action` remain, as not yet decided.
-
-```{dropdown} Notes on the rules
-A `PullBack` with a support remains because moving the gradient inside the
-pull-back would reverse a rule of [`expand_pull_backs`](#expanding-pull-backs).
-A `Gradient` of a `Gradient` of a function remains, so the Hessian of a
-function is a `Gradient` of a `Gradient`.
-
-The gradient of the coordinate function is the identity matrix, the `Tensor`
-of `Integer(1)` and `Integer(0)` entries, or `Zero((0, 0), (), ())` for
-$n = 0$. On a decomposed domain of lower dimension than the frame, the
-gradient of the coordinate function is the orthogonal projection onto the
-tangent space, which `expand_pull_backs` evaluates on each piece as $J K$.
-
-In the rule for `Inverse`, the matrix products are in the value shape, and $I$
-is the identity matrix of value shape `(n, n)`. For $k = n$, $I - A A^+$ is
-zero and the rule is $-A^{-1} \, \partial_j A \, A^{-1}$, but the rule does
-not drop the term, because the core never simplifies. `Absolute` is not
-complex differentiable, and for a real $a$ the rule is the chain rule.
-```
-
-### Applying actions
-
-Requires: [Core transformations](#core-transformations), [`Action`](#action),
-[`Form`](#form), [Passes](#passes).
-
-An action moves into the operand that carries the argument, with these rules:
-
-| Operand                                                  | Rewrite of `Action(f, position, g)` with $f$ the operand                                                                               |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `Form(e, arguments)`                                     | $e$ with the entry at `position` replaced by $g$, member by member for a `tuple`, in a `Form` of the other entries if any remain        |
-| `Sum`, `Tensor`                                          | The action of every operand                                                                                                            |
-| `Product`                                                | The action of the operand that carries the argument at `position`, with the position counted within that operand                       |
-| `Zero`                                                   | `Zero` with the argument spaces without the entry at `position`                                                                        |
-| `Function` or a downstream leaf, such as in a dual space | Remains, for the library of the leaf                                                                                           |
-| `Action`                                                 | Remains                                                                                                                        |
-
-The substitution into a `Form` avoids capture (see [Passes](#passes)). The
-pass rewrites inner actions first, so an outer action meets an `Action` only on
-a leaf, and the outer action remains.
-
-### Reducing component tensors
-
-Requires: [Core transformations](#core-transformations), [`Indexed`](#indexed),
-[`ComponentTensor` and `IndexSum`](#componenttensor-and-indexsum),
-[Passes](#passes).
-
-`reduce_component_tensors` evaluates an `Indexed` whose operand is a
-`ComponentTensor` or a `Conjugate`, with these rules:
-
-| Operand of the `Indexed`      | Rewrite of `Indexed(operand, entries)`                                                            |
-| ----------------------------- | ------------------------------------------------------------------------------------------------- |
-| `ComponentTensor(e, indices)` | $e$ with each index of `indices` replaced by the entries of the axes of the index, when possible |
-| `Conjugate(f)`                | `Conjugate(Indexed(f, entries))`                                                                  |
-| Any other node class          | Remains                                                                                           |
-
-The rule for `Conjugate` is the identity $\bar{f}[e] = \overline{f[e]}$, so
-after the pass no `Indexed` has a `Conjugate` operand.
-
-The entries are matched to the indices axis by axis. An `Index` of `indices`
-covers one axis and is replaced by the entry of that axis, an `int`, an
-`Index`, a `GatheredIndex` or an `EllipsisIndex` that covers one axis. An
-`EllipsisIndex` of `indices` covers the axes of the extents of the
-`EllipsisIndex`, and is replaced by the entries of those axes, or by one
-`EllipsisIndex` entry that covers exactly those axes. An occurrence of the
-replaced index in the entries of an `Indexed` or of a `GatheredIndex` takes
-the replacing entries in place, and an occurrence in the free indices of a
-`Zero` is removed or replaced in the same way. An `EllipsisIndex` cannot occur
-in a `GatheredIndex` and cannot replace a part of the axes of an
-`EllipsisIndex` of `indices`. When a replacement is not possible, the
-`Indexed` remains. The substitution
-avoids capture (see [Passes](#passes)).
-
-The rewrite is the identity `component_tensor(e, (i,))[j]` $= e[i := j]$, so
-the rewrite never changes the value, and the result has the free indices of
-the `Indexed`. For example, `component_tensor(points[i, k], (k,))[0]` is
-rewritten as `points[i, 0]`, and with `p` of the
-[`DecomposedDomain`](#decomposeddomain) examples, `p[c, 0, k]` is rewritten as
-`y[gathered_index(cell_vertices, (c, 0)), k]`.
-
 ### Gateaux derivative
 
-Requires: [Core transformations](#core-transformations), [`Form`](#form),
+Requires: [`Form`](#form),
 [`Function`](#function), [`DirectionalDerivative`](#directionalderivative),
 [`ConjugateSpace`](#conjugatespace), [`DualSpace`](#dualspace).
 
@@ -3520,7 +3181,7 @@ Requires: [Core transformations](#core-transformations), [`Form`](#form),
 > result. The rules are not yet decided.
 
 The Gateaux derivative of an expression $e$ with respect to a function $u$ in
-a space $V$ is expected to be a core transformation that adds an argument. The
+a space $V$ is expected to be a transformation that adds an argument. The
 direction is a new function $w$ in $V$, bound as the last argument. The
 derivative is defined by the real differential
 
@@ -3564,6 +3225,24 @@ The rules for the node classes of the core, the derivative with respect to a
 function bound by an enclosing `Form`, and the derivative of a downstream
 terminal through the pull-back by a cell are not yet decided.
 
+## Evaluation
+
+Requires: [Passes](#passes).
+
+> The passes that evaluate the lazy node classes are being designed again.
+> PASSES_DRAFT.md keeps the previous draft, which is not normative.
+
+A lazy node class is a node class whose section states the value of the node,
+and which a pass may rewrite as an expression of other node classes with that
+value. The lazy node classes of the core are `Integral` over a decomposed
+domain, `PullBack`, `Gradient`, `DirectionalDerivative` and `Action`.
+
+A pass that rewrites a node keeps the value of the node and the static type of
+the node, with the free indices possibly in another order, never simplifies,
+and substitutes with the renaming of [Passes](#passes). Which passes the core
+provides, the order of the passes, and what a form compiler receives are not
+yet decided.
+
 ## Extending the core
 
 Requires: [Passes](#passes), [Scalar type](#scalar-type), [`Absolute`](#absolute).
@@ -3597,7 +3276,7 @@ In legacy UFL, properties are stored on the node classes, and the set of propert
 ### Language extensions
 
 Requires: [Leaves and subclassing](#leaves-and-subclassing), [Passes](#passes),
-[Core transformations](#core-transformations), [Transpose](EXAMPLES.md#transpose).
+[Evaluation](#evaluation), [Transpose](EXAMPLES.md#transpose).
 
 A language extension adds node classes that are not leaves, in a package
 outside the core. A node class of a language extension subclasses
@@ -3605,9 +3284,8 @@ outside the core. A node class of a language extension subclasses
 subclassing](#leaves-and-subclassing)). Each node class of a language
 extension provides, as part of the class:
 
-- a rule for each [core transformation](#core-transformations) that keeps
-  the node, which produces only node classes of the core or of the language
-  extension, and
+- the value of the node, as the section of a lazy node class of the core
+  states the value (see [Evaluation](#evaluation)), and
 - a lowering to an equal expression of node classes of the core, if such an
   expression exists.
 
@@ -3619,15 +3297,15 @@ lowered expression, up to mathematical equality.
 
 For example, a language extension for local external operators adds a node
 class for an operation known only by name, such as `exp`, a material law or a
-neural network. The rule for `apply_derivatives` differentiates the node class.
-The rule for `expand_pull_backs` pulls back the operands, because the
+neural network. The extension gives the derivative of the operation. The
+pull-back of the node is the node of the pulled-back operands, because the
 operation is pointwise. The node class has no lowering.
 
 A named composition that must survive a pass, or print as written, is a node
 class of a language extension whose lowering is the composition. For example,
 a `Transpose` node class lowers to `component_tensor(A[k, l], (l, k))`. The
-rule for `expand_pull_backs` moves the pull-back inside `Transpose`, because
-the transpose is pointwise, so `Transpose` survives the pull-back.
+pull-back of a `Transpose` is the `Transpose` of the pull-back, because the
+transpose is pointwise, so `Transpose` survives the pull-back.
 
 A rule of a language extension dispatches on a node class of the extension,
 and may read which node classes of the extension the operands have, or the
@@ -3691,14 +3369,13 @@ operations](#new-operations), [Language extensions](#language-extensions),
 triangle](EXAMPLES.md#an-affinely-mapped-triangle).
 
 Every abstract class is a contract. The contract states what a subclass
-provides, so that every core transformation handles the subclass through the
-abstract class alone. A downstream library may subclass an abstract class by
+provides, so that every pass handles the subclass through the abstract class
+alone. A downstream library may subclass an abstract class by
 fulfilling the contract, without changing the core. A contract is part of the
 class, never a global registry. For example, a downstream subclass of
 `AbstractCoordinateDomain`, such as
 [`UnitSimplex`](EXAMPLES.md#the-unit-simplex), provides the dimension, and every
-core transformation handles the coordinate function of the subclass through
-`Coordinate`.
+pass handles the coordinate function of the subclass through `Coordinate`.
 
 Information that a downstream library attaches to the graph goes in one of two
 places:
@@ -3750,21 +3427,20 @@ cancellation structural with node classes for the maps and the operators:
 
 The library of a space with a Piola map gives the pull-back of a function by
 a cell as a `ContravariantPiola` or a `CovariantPiola` of the function
-$\hat u$ on the reference cell. The rules of the extension for
-`expand_pull_backs`, for a domain $D$ = `DomainMap(P, psi, Q)` with $k = n$:
+$\hat u$ on the reference cell. The extension states the pull-backs, for a
+domain $D$ = `DomainMap(P, psi, Q)` with $k = n$:
 
 - If the pull-back of $u$ by $D$ is `ContravariantPiola(u_hat, D)`, the
   pull-back of `Divergence(u, Q)` is
   `Divergence(u_hat, P) / determinant(jacobian(D))`.
 - If the pull-back of $u$ by $D$ is `CovariantPiola(u_hat, D)` and $n = 3$, the
   pull-back of `Curl(u, Q)` is `ContravariantPiola(Curl(u_hat, P), D)`.
-- Otherwise the rule lowers `Divergence` or `Curl`.
+- Otherwise the pull-back lowers `Divergence` or `Curl`.
 
-Each rule builds `pull_back(u, D)`, and dispatches on the class of the result
-after the pass of the library evaluates the pull-back. Each rule therefore
-reads only node classes of the extension, so no rule of the core competes with
-the rules. The order of the pass of the library and `expand_pull_backs` is
-part of the extension, and is not yet decided.
+A pass of the extension builds `pull_back(u, D)` and dispatches on the class
+of the result after the library evaluates the pull-back, so the pass reads
+only node classes of the extension. The order of the passes is part of the
+extension, and is not yet decided.
 
 ## Appendix: Class hierarchy
 
@@ -3959,55 +3635,9 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 | `Form`                   | The support of the expression      | The scalar type of the expression |
 | `Action`                 | The support of the form            | The scalar type of the form       |
 
-## Appendix: Pass table
-
-What each core transformation does with each node class as the operand of the
-evaluated node. `expand_integrals` and `reduce_component_tensors` have no column, because
-neither has a rule for each operand class (see [Core
-transformations](#core-transformations)). "In" moves the evaluated node into the operands, by linearity
-or commuting. "Chain" is the chain rule. "Rule" is a rule of the
-transformation. "Bound" moves the evaluated node into the expression or the
-form only, past the bound arguments. "Remains" keeps the
-evaluated node on the operand. "Rule, Remains" is a rule for some operands of
-the class and "Remains" for the others, as the table of the transformation
-states. "—" cannot occur, because the static type rules out the pair.
-
-For `expand_pull_backs`, the entry is for an operand with a support. An
-operand with no support takes the rule for an expression with no support,
-whatever the class of the operand.
-
-| Class                                    | `expand_pull_backs` | `apply_derivatives` | `apply_actions` |
-| ---------------------------------------- | ------------------- | ------------------- | --------------- |
-| `Integer`, `Float`, `ImaginaryUnit`      | Rule                | Rule                | —               |
-| `Zero`                                   | Rule                | Rule                | Rule            |
-| `Sum`, `Tensor`                          | In                  | In                  | Rule            |
-| `Product`                                | In                  | Rule                | Rule            |
-| `Division`                               | In                  | Rule                | In              |
-| `Power`                                  | In                  | Chain, Remains      | —               |
-| `SquareRoot`                             | In                  | Rule                | —               |
-| `Absolute`, `Inverse`                    | In                  | Rule                | —               |
-| `Conjugate`                              | In                  | Rule                | In              |
-| `RealPart`, `ImaginaryPart`              | In                  | Rule                | —               |
-| `Indexed`, `ComponentTensor`, `IndexSum` | In                  | In                  | In              |
-| `Coordinate`                             | Rule                | Rule, Remains       | —               |
-| `Normal`                                 | Rule, Remains       | Remains             | —               |
-| `Function`                               | Remains             | Remains             | Remains         |
-| `Form`                                   | Bound               | Bound               | Rule            |
-| `Action`                                 | Bound               | Bound               | Remains         |
-| `Gradient`                               | Rule, Remains       | Remains             | In              |
-| `DirectionalDerivative`                  | Remains             | In                  | In              |
-| `Integral`                               | Rule                | Rule                | In              |
-| `PullBack`                               | Rule, Remains       | Rule, Remains       | In              |
-
 ## Appendix: Summary
 
-Counts of the core, from the sections. A rule is a row of the rule table of a
-core transformation, and the rule is trivial when the evaluated node remains.
-The node class columns count the entries of the [pass
-table](#appendix-pass-table). A node class is non-trivial for a core
-transformation with an entry that contains "Rule" or "Chain", trivial with
-"In", "Bound" or "Remains", and ruled out with "—". `expand_integrals` and
-`reduce_component_tensors` have no column in the pass table.
+Counts of the core, from the sections.
 
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
@@ -4018,13 +3648,4 @@ transformation with an entry that contains "Rule" or "Chain", trivial with
 | Expression node classes         | 27    |
 | Free functions                  | 43    |
 | Free functions with an overload | 9     |
-| Core transformations            | 5     |
-
-| Core transformation                                       | Non-trivial rules | Trivial rules | Non-trivial node classes | Trivial node classes | Ruled out |
-| --------------------------------------------------------- | ----------------- | ------------- | ------------------------ | -------------------- | --------- |
-| [`expand_integrals`](#expanding-integrals)                | 1                 | 1             |                          |                      |           |
-| [`expand_pull_backs`](#expanding-pull-backs)              | 5                 | 5             | 9                        | 18                   | 0         |
-| [`apply_derivatives`](#applying-derivatives)              | 11                | 3             | 16                       | 11                   | 0         |
-| [`apply_actions`](#applying-actions)                      | 4                 | 2             | 5                        | 11                   | 11        |
-| [`reduce_component_tensors`](#reducing-component-tensors) | 2                 | 1             |                          |                      |           |
 <!-- end generated: summary -->
