@@ -968,9 +968,9 @@ dissipation = integral(nu * index_sum(grad_u[i, j] * grad_u[i, j], (i, j)), F)
 g_nu = form(directional_derivative(dissipation, nu, h), (h,))
 ```
 
-`g_nu` is a linear form on `R`, a function in `dual_space(R)`. For a
-`runtime_array`, `directional_derivative` gives the sensitivity, but no space
-holds a direction such as `h`, so there is no gradient form.
+`g_nu` is a linear form on `R`, a function in `dual_space(R)`. The variable
+of a derivative is a function, so a constant whose sensitivity is wanted is a
+function in `R`, not a `runtime_array`.
 
 ### A 1D network in a 3D mesh
 
@@ -1483,7 +1483,8 @@ See also: [Symmetric tensors](#symmetric-tensors).
 
 A Saint Venant–Kirchhoff material on the square mesh `D`, with a real vector
 space `V` and a real space `M` for the Lamé parameters, both of a library on
-`D`. The stress is $S = 2 \operatorname{sym}(\partial \psi / \partial C)$:
+`D`, and a real space `R` of constants of value shape `(2, 2)`. The stress is
+$S = 2 \operatorname{sym}(\partial \psi / \partial C)$:
 
 ```python
 one, zero, two = Integer(1), Integer(0), Integer(2)
@@ -1493,14 +1494,18 @@ i, j, k, l, a = index("i"), index("j"), index("k"), index("l"), index("a")
 u, v, w = function(V, "u"), function(V, "v"), function(V, "w")
 mu, lmbda = function(M, "mu"), function(M, "lambda")
 
+def strain_energy(C):
+    E = (C - I) / two
+    return lmbda / two * index_sum(E[a, a], (a,)) ** two + mu * index_sum(E[i, j] * E[i, j], (i, j))
+
 F = I + gradient(u, D)
 C = transpose(F) @ F
-E = (C - I) / two
-psi = lmbda / two * index_sum(E[a, a], (a,)) ** two + mu * index_sum(E[i, j] * E[i, j], (i, j))
+psi = strain_energy(C)
 
-# The symmetric unit directions, with the free indices k and l.
+# The derivative with respect to a symbol at C, in the symmetric unit directions.
+C_ = function(R, "C")
 N = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / two, (i, j))
-S = two * component_tensor(directional_derivative(psi, C, N), (k, l))
+S = two * component_tensor(directional_derivative(strain_energy(C_), C_, N, C), (k, l))
 sigma = F @ S @ transpose(F) / determinant(F)
 
 Pi = integral(psi, D)
@@ -1542,7 +1547,7 @@ elastic = form(integral(index_sum(stiffness[i, j, k, l] * eps_u[k, l] * eps_v[i,
 `stiffness` has 16 entries, and the kernel receives the 6 values of `c`.
 
 ```{dropdown} Directions and Voigt notation
-For `psi_2 = C[0, 1] ** two`, the direction
+For `psi_2 = C_[0, 1] ** two`, the direction
 `component_tensor(I[i, k] * I[j, l], (i, j))` gives a derivative with the
 entry $2 C_{01}$ at `(0, 1)` and 0 at `(1, 0)`, and the symmetric direction
 `N` gives $C_{01}$ at both. The two agree in every symmetric direction, and

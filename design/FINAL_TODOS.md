@@ -31,9 +31,6 @@ Nothing. Integrals over cells and facets use the induced density in
    and the pull-backs are expanded to a `DirectionalDerivative` with respect to
    the coordinates (see PASSES_DRAFT.md). ALE needs the same extension, with
    the parameterisation of the pieces built from a displacement function.
-1. **Missed occurrences.** `directional_derivative` finds `g` by equality, so
-   an expression equal in value to `g` but built differently is not
-   differentiated. Decide on a checking pass or a stated warning.
 1. **Static real types.** A complex function that appears only in real-valued
    combinations gives a misleading derivative.
 1. **Literals in derivatives.** The derivative pass produces many `Zero` and

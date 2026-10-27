@@ -277,10 +277,9 @@ the free index `i`. Without the renaming, the result would be
 `DirectionalDerivative(f, u, u0, h)`, the derivative at `u0`, because the
 point is not bound.
 
-The variable of a `DirectionalDerivative` that is not a `Function` has no new
-name. A pass that would make such a `DirectionalDerivative` fresh first
-rewrites it as an expression with the same value and no
-`DirectionalDerivative`.
+The pass `replace(e, mapping)` of the core substitutes the value of each key of
+the `dict` `mapping` for the key in $e$, simultaneously and with the scope
+above.
 
 A pass does one thing, such as differentiating or lowering. Passes compose,
 and the user of the core chooses which passes run and in what order.
@@ -1675,23 +1674,21 @@ variable $x$ is bound in $f$ (see [Passes](#passes)).
 | `DirectionalDerivative(f, x, a, h)` |                                                                                                       |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Extends                          | `AbstractExpression` |
-| Takes                            | `f, x, a, h: AbstractExpression` |
+| Takes                            | `f: AbstractExpression`, `x: Function`, `a, h: AbstractExpression` |
 | Properties                       | `expression` $f$, `variable` $x$, `point` $a$ and `direction` $h$ |
-| Requires                         | $x$ with no free indices, $a$ and $h$ with the value shape of $x$, $x$, $a$ and $h$ with the argument spaces `()`, and $a$ and $h$ with the support of $x$ or no support |
+| Requires                         | $x$ a `Function` with the argument spaces `()`, $a$ and $h$ with the value shape of $x$ and the argument spaces `()`, and $h$ with the support of $x$ or no support |
 | Static type                      | The value shape of $f$, the free indices of $f$ followed by those of $a$ and $h$, each `Index` taken once, and the argument spaces of $f$ |
-| Raises                           | `ValueError` if a requirement fails                                                                   |
+| Raises                           | `TypeError` for an $x$ that is not a `Function`, and `ValueError` if another requirement fails |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `directional_derivative(f, g, h)` | | `f, g, h: AbstractExpression` | `DirectionalDerivative(f, g, g, h)` |
+| `directional_derivative(f, x, h, a)` | | `f: AbstractExpression`, `x: Function`, `h, a: AbstractExpression`, with the default $x$ for $a$ | `DirectionalDerivative(f, x, a, h)` |
 
-`directional_derivative(f, g, h)` passes $g$ as both the variable and the
-point, so the derivative is with respect to $g$ at $g$. The variable and the
-point differ only after a pass renames the variable or substitutes into the
-point (see [Passes](#passes)). The substitution replaces only the nodes of $f$
-equal to $x$, so `DirectionalDerivative` is a partial derivative. For example,
-with a deformation gradient `F` and `C = transpose(F) @ F`, the derivative with respect to `C` does not see a
-`determinant(F)` in $f$.
+The variable is a function, and the point is any expression of the value shape
+of the function, so the derivative of an expression of a symbol $x$ at a point
+$a$ is the derivative of a function of $x$ at $a$. The default point is the
+variable itself. The substitution replaces only the occurrences of $x$, so
+`DirectionalDerivative` is a partial derivative.
 
 The substitution does not enter domains, so the derivative holds the geometry
 fixed. A shape derivative, with respect to the coordinates of a mesh, is a
@@ -1705,17 +1702,21 @@ derivative](#gateaux-derivative)).
 
 The derivative with respect to a tensor is a composition over unit
 directions. The direction states the symmetry, and the core has none. With a
-strain energy `psi` of `C`, the identity matrix `I` of value shape `(3, 3)`
-and indices `i`, `j`, `k` and `l`:
+Python function `strain_energy` that builds the strain energy from a tensor,
+the right Cauchy–Green tensor `C`, a function `C_` in a real space of
+constants of value shape `(3, 3)`, the identity matrix `I` of value shape
+`(3, 3)` and indices `i`, `j`, `k` and `l`:
 
 ```python
 E = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / Integer(2), (i, j))
-S = Integer(2) * component_tensor(directional_derivative(psi, C, E), (k, l))
+S = Integer(2) * component_tensor(directional_derivative(strain_energy(C_), C_, E, C), (k, l))
 ```
 
 `E` has the free indices `k` and `l`, and is symmetric for each value of `k`
-and `l`, so `S` is $2 \operatorname{sym}(\partial \psi / \partial C)$, the second
-Piola–Kirchhoff stress. The direction `component_tensor(I[i, k] * I[j, l], (i, j))`
+and `l`, so `S` is $2 \operatorname{sym}(\partial \psi / \partial C)$ at `C`,
+the second Piola–Kirchhoff stress. For a strain energy `psi` already built
+from `C`, `replace(psi, {C: C_})` gives the strain energy of the symbol (see
+[Passes](#passes)). The direction `component_tensor(I[i, k] * I[j, l], (i, j))`
 gives the full derivative, without `sym`.
 
 ### `Integral`
@@ -3330,8 +3331,9 @@ domain, `PullBack`, `Gradient`, `DirectionalDerivative` and `Action`.
 
 A pass that rewrites a node keeps the value of the node and the static type of
 the node, with the free indices possibly in another order, never simplifies,
-and substitutes with the renaming of [Passes](#passes). The first pass of the
-core is [`apply_actions`](#applying-actions). The later passes, their order,
+and substitutes with the renaming of [Passes](#passes). The first passes of
+the core are [`apply_actions`](#applying-actions) and then
+[`apply_derivatives`](#applying-derivatives). The later passes, their order,
 and the core normal form (see [Grammars](#grammars)) are not yet decided.
 
 ### Grammars
@@ -3419,6 +3421,56 @@ $g$, or for the members of a `tuple` $g$ (see [Passes](#passes)).
 - Forms are first order (see [`Form`](#form)), so a substitution never creates
   an `Action` on a `Form`. Each rule removes the action from one node or moves
   the action to operands that are smaller, so the pass terminates.
+
+### Applying derivatives
+
+Requires: [Applying actions](#applying-actions),
+[`DirectionalDerivative`](#directionalderivative), [Elementary
+functions](#elementary-functions-very-incomplete), [`Inverse`](#inverse).
+
+| `apply_derivatives(f)` |  |
+| ---------------------- | - |
+| Evaluates              | `DirectionalDerivative` |
+| Input grammar          | $N_1$ |
+| Output grammar         | $N_2 = N_1 \setminus \{$a `DirectionalDerivative`$\}$ |
+
+The pass rewrites every `DirectionalDerivative(f, x, a, h)`, inner derivatives
+first, with the first row that matches $f$. $\mathrm{D} b$ is short for
+`DirectionalDerivative(b, x, x, h)`. The rules give the derivative at $x$, and
+if $a$ is not $x$, the pass then substitutes $a$ for $x$ in the result.
+Moving the derivative into a binding node first makes the node fresh for $a$
+and $h$ (see [Passes](#passes)).
+
+| Expression $f$ | Rewrite of the derivative at $x$ |
+| -------------- | -------------------------------- |
+| $x$ not free in $f$ | `Zero`, with the value shape and the argument spaces of $f$, and the free indices of $f$ followed by those of $a$ and $h$ |
+| $f$ equal to $x$ | $h$ |
+| `Sum`, `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum`, `Conjugate`, `RealPart`, `ImaginaryPart` | The node of the derivatives of the operands that are expressions |
+| `Product(b, c)` | $\mathrm{D} b \, c + b \, \mathrm{D} c$ |
+| `Division(b, c)` | $\mathrm{D} b / c - (b \, \mathrm{D} c) / (c c)$ |
+| `Power(b, c)`, $x$ not free in $c$ | $c \, b^{c - 1} \, \mathrm{D} b$ |
+| `Power(b, c)` | $b^c (\log(b) \, \mathrm{D} c + c \, \mathrm{D} b / b)$ |
+| `Absolute(b)` | $(\bar b \, \mathrm{D} b + b \, \overline{\mathrm{D} b}) / (2 \lvert b \rvert)$ |
+| `SquareRoot(b)` | $\mathrm{D} b / (2 \sqrt b)$ |
+| `Logarithm(b)` | $\mathrm{D} b / b$ |
+| `Inverse(A)` | $-A^+ \, \mathrm{D} A \, A^+ + A^+ (A^+)^T \, \mathrm{D} A^T \, (I - A A^+)$, with $I$ the identity matrix |
+| `Gradient(b, P)`, `PullBack(b, ψ)`, `Integral(b, P)` | The node of $\mathrm{D} b$ |
+| `Form(e, arguments)` | `Form(D e, arguments)` |
+| `Action(l, 0, w)`, a pairing | `Action(l, 0, D w)` |
+| `DirectionalDerivative` | Cannot occur, because the inner derivative is rewritten first |
+
+- The first row comes first, so no derivative is built for an operand that
+  does not depend on $x$, and a terminal other than $x$ needs no row.
+- `Power` has two rows. The general row multiplies by $\log(b)$, which is
+  undefined for a negative base, so the row for an exponent that does not
+  depend on $x$ avoids the logarithm.
+- `Gradient`, `PullBack` and `Integral` commute with the derivative, because
+  the derivative holds the domains fixed.
+- A `Form` that binds $x$ has no free $x$, so the first row gives `Zero`.
+- The variable has the argument spaces `()`, so the variable is never the
+  function $l$ of a pairing.
+- The rules of each row are compositions of node classes of the core, so the
+  pass terminates with no `DirectionalDerivative`.
 
 ## Extending the core
 
@@ -3786,7 +3838,7 @@ AbstractExpression
 |                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                             | The Leibniz formula for $\det A$                                                                                                                                                |
 | Calculus on a domain        | [`coordinate(P)`](#coordinate)                                           |                               | `P: AbstractDomain`                                                                                 | `Coordinate`                                                                                                                                                                    |
 |                             | [`gradient(f, P)`](#gradient)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                        | `Gradient`                                                                                                                                                                      |
-|                             | [`directional_derivative(f, g, h)`](#directionalderivative)              |                               | `f, g, h: AbstractExpression`                                                                       | `DirectionalDerivative(f, g, g, h)`                                                                                                                                             |
+|                             | [`directional_derivative(f, x, h, a)`](#directionalderivative)           |                               | `f: AbstractExpression`, `x: Function`, `h, a: AbstractExpression`, with the default $x$ for $a$    | `DirectionalDerivative(f, x, a, h)`                                                                                                                                             |
 |                             | [`integral(f, P)`](#integral)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                        | `Integral`                                                                                                                                                                      |
 | Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractDomain`, `psi: AbstractExpression`, `Q: AbstractDomain`                                 | `DomainMap`                                                                                                                                                                     |
 |                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap`                                                  | `PullBack`                                                                                                                                                                      |
