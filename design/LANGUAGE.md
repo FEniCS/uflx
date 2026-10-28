@@ -3342,13 +3342,18 @@ argument $w$ after the arguments of $F$.
 | Extends     | `AbstractExpression` |
 | Takes       | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` |
 | Properties  | `expression` $F$, `variable` $x$, `point` $a$ and `argument` $w$, an entry as in [`Form`](#form) |
-| Requires    | $x$ a `Function` or a `tuple` of functions with the argument spaces `()`, $a$ and the functions of $w$ with the value shapes of $x$, member by member, the members of a `tuple` $w$ all functions or all conjugates, no function of $w$ free in $F$, and each member of $a$ real for a real member of $x$ |
-| Static type | The value shape of $F$, the free indices of $F$ followed by those of $a$, the argument spaces of $F$ followed by the space of the entry $w$, and the scalar type of $F$ if every member of $x$ is real, and complex otherwise |
+| Requires    | $x$ a `Function` or a `tuple` of functions with the argument spaces `()`, $a$ and the functions of $w$ with the value shapes of $x$, member by member, the members of a `tuple` $w$ all functions or all conjugates, no function of $w$ free in $F$, the members of a `tuple` $x$ all real or all complex, and each member of $a$ real for a real $x$ |
+| Static type | The value shape of $F$, the free indices of $F$ followed by those of $a$, the argument spaces of $F$ followed by the space of the entry $w$, and the scalar type of $F$ for a real $x$, and complex for a complex $x$ |
 | Raises      | `TypeError` for an $x$ that is not a function, and `ValueError` if another requirement fails |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `gateaux_derivative(F, x, a, w)` | | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | `GateauxDerivative(F, x, a, w)` |
+
+The members of a `tuple` $x$ have one scalar type, the scalar type of $x$.
+The linear and the antilinear parts below are defined only on a complex
+space, and the product of a real and a complex space is a real space, so a
+`tuple` that mixes the two is rejected.
 
 The real differential in a direction $v$ is
 $\delta F[v]$ = `directional_derivative(F, x, a, v)`, with the members of a
