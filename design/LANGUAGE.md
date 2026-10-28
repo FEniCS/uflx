@@ -1690,25 +1690,30 @@ $$
 
 with $\varepsilon$ real and $f[x := s]$ the substitution of $s$ for $x$ in $f$
 that does not enter domains, domain maps or the spaces of functions. The
-variable $x$ is bound in $f$ (see [Passes](#passes)).
+variable $x$ is a function or a `tuple` of functions. For a `tuple`, $a$ and
+$h$ are `tuple`s with one member for each member of $x$, and the substitution
+replaces every member $x_k$ by $a_k + \varepsilon h_k$ at once. The functions
+of $x$ are bound in $f$ (see [Passes](#passes)).
 
 | `DirectionalDerivative(f, x, a, h)` |                                                                                                       |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Extends                          | `AbstractExpression` |
-| Takes                            | `f: AbstractExpression`, `x: Function`, `a, h: AbstractExpression` |
+| Takes                            | `f: AbstractExpression`, `x: Function \| tuple[Function, ...]`, `a, h: AbstractExpression \| tuple[AbstractExpression, ...]` |
 | Properties                       | `expression` $f$, `variable` $x$, `point` $a$ and `direction` $h$ |
-| Requires                         | $x$ a `Function` with the argument spaces `()`, $a$ and $h$ with the value shape of $x$ and the argument spaces `()`, $h$ with the support of $x$ or no support, and $a$ and $h$ real for a real $x$ |
-| Static type                      | The value shape of $f$, the free indices of $f$ followed by those of $a$ and $h$, each `Index` taken once, and the argument spaces and the scalar type of $f$ |
-| Raises                           | `TypeError` for an $x$ that is not a `Function`, and `ValueError` if another requirement fails |
+| Requires                         | $x$ a `Function`, or a `tuple` of at least two distinct functions, each with the argument spaces `()`, and member by member: $a$ and $h$ with the value shape of the member of $x$ and the argument spaces `()`, $h$ with the support of the member of $x$ or no support, and $a$ and $h$ real for a real member of $x$ |
+| Static type                      | The value shape of $f$, the free indices of $f$ followed by those of the members of $a$ and $h$, each `Index` taken once, and the argument spaces and the scalar type of $f$ |
+| Raises                           | `TypeError` for an $x$ that is not a `Function` or a `tuple` of functions, and `ValueError` if another requirement fails |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `directional_derivative(f, x, a, h)` | | `f: AbstractExpression`, `x: Function`, `a, h: AbstractExpression` | `DirectionalDerivative(f, x, a, h)` |
+| `directional_derivative(f, x, a, h)` | | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple` | `DirectionalDerivative(f, x, a, h)` |
 
 The variable is a function, and the point is any expression of the value shape
 of the function, so the derivative of an expression of a symbol $x$ at a point
 $a$ is the derivative of a function of $x$ at $a$. The substitution replaces only the occurrences of $x$, so
-`DirectionalDerivative` is a partial derivative.
+`DirectionalDerivative` is a partial derivative. A `tuple` variable gives the
+derivative in all of its members at once, at the point $a$ of all the
+members, such as for the unknowns of a mixed problem.
 
 The substitution does not enter domains, so the derivative holds the geometry
 fixed. A shape derivative, with respect to the coordinates of a mesh, is a
@@ -3346,8 +3351,9 @@ argument $w$ after the arguments of $F$.
 | `gateaux_derivative(F, x, a, w)` | | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | `GateauxDerivative(F, x, a, w)` |
 
 The real differential in a direction $v$ is
-$\delta F[v] = \sum_k$ `directional_derivative(F, x_k, a_k, v_k)`, over the
-members of a `tuple` variable, or the one term for a function. $\delta F$ is
+$\delta F[v]$ = `directional_derivative(F, x, a, v)`, with the members of a
+`tuple` variable substituted at once (see
+[`DirectionalDerivative`](#directionalderivative)). $\delta F$ is
 real-linear in $v$, and the value of the Gateaux derivative binds $w$ by the
 scalar type of the space of $x$:
 
@@ -3494,7 +3500,7 @@ Requires: [Grammars](#grammars), [Gateaux derivative](#gateaux-derivative).
 
 The pass rewrites every `GateauxDerivative(F, x, a, w)`, inner derivatives
 first, as a `Form` that binds $w$ after the arguments of $F$, with
-$\delta F[v]$ the sum of the directional derivatives of [Gateaux
+$\delta F[v]$ the directional derivative of [Gateaux
 derivative](#gateaux-derivative):
 
 | Space of $x$ and entry $w$ | Rewrite |
@@ -3511,6 +3517,8 @@ derivative](#gateaux-derivative):
   An action is linear in its argument (see [`Action`](#action)), so an
   action never hides a conjugation, and the four node classes are the only
   ones antilinear in an operand.
+- For a `tuple` $w$, `ImaginaryUnit() * w` is the `tuple` of the products of
+  `ImaginaryUnit()` with each member.
 - The pass runs first, so the forms of $F$ may still be under actions, and
   [`apply_actions`](#applying-actions) substitutes an argument for $w$ like
   any other argument. An action on $w$ is then the derivative in a fixed
@@ -3605,18 +3613,20 @@ classes](#derivatives-of-the-node-classes).
 The pass rewrites every `DirectionalDerivative(f, x, a, h)`, inner derivatives
 first, with the first row that matches $f$. $\mathrm{D} b$ is short for
 `DirectionalDerivative(b, x, x, h)`. The rules give the derivative at $x$, and
-if $a$ is not $x$, the pass then substitutes $a$ for $x$ in the result.
+if $a$ is not $x$, the pass then substitutes $a$ for $x$ in the result, every
+member of a `tuple` at once.
 
 | Expression $f$ | Rewrite of the derivative at $x$ |
 | -------------- | -------------------------------- |
-| $x$ not free in $f$ | `Zero`, with the value shape and the argument spaces of $f$, and the free indices of $f$ followed by those of $a$ and $h$ |
-| $f$ equal to $x$ | $h$ |
+| No function of $x$ free in $f$ | `Zero`, with the value shape and the argument spaces of $f$, and the free indices of $f$ followed by those of the members of $a$ and $h$ |
+| $f$ equal to the member $x_k$ of $x$ | $h_k$, or $h$ for a function $x$ |
 | Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \mathrm{D} b$ |
 | `DirectionalDerivative` | Cannot occur, because the inner derivative is rewritten first |
 
 - The first row comes first, so no derivative is built for an operand that
-  does not depend on $x$, and a terminal other than $x$ needs no row. An
-  operand is constant for the pass if $x$ is not free in the operand.
+  does not depend on $x$, and a terminal other than a function of $x$ needs no
+  row. An operand is constant for the pass if no function of $x$ is free in
+  the operand.
 - A `Form` that binds $x$ has no free $x$, so the first row gives `Zero`.
 - The variable has the argument spaces `()`, so the variable is never the
   function $l$ of a pairing.
@@ -4185,7 +4195,7 @@ AbstractExpression
 |                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                                                | The Leibniz formula for $\det A$                                                                                                                                                |
 | Calculus on a domain        | [`coordinate(P)`](#coordinate)                                           |                               | `P: AbstractDomain`                                                                                                    | `Coordinate`                                                                                                                                                                    |
 |                             | [`gradient(f, P)`](#gradient)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                           | `Gradient`                                                                                                                                                                      |
-|                             | [`directional_derivative(f, x, a, h)`](#directionalderivative)           |                               | `f: AbstractExpression`, `x: Function`, `a, h: AbstractExpression`                                                     | `DirectionalDerivative(f, x, a, h)`                                                                                                                                             |
+|                             | [`directional_derivative(f, x, a, h)`](#directionalderivative)           |                               | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple`                                   | `DirectionalDerivative(f, x, a, h)`                                                                                                                                             |
 |                             | [`integral(f, P)`](#integral)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                           | `Integral`                                                                                                                                                                      |
 | Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractDomain`, `psi: AbstractExpression`, `Q: AbstractDomain`                                                    | `DomainMap`                                                                                                                                                                     |
 |                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap`                                                                     | `PullBack`                                                                                                                                                                      |
