@@ -1919,49 +1919,69 @@ E = domain_map(S, pull_back(psi, e), RD(2))
 ### Jacobian and density
 
 Requires: [`DomainMap`](#domainmap), [`Gradient`](#gradient),
-[Determinant](#determinant), [`Absolute`](#absolute), [Elementary
-functions](#elementary-functions-very-incomplete).
+[`Inverse`](#inverse), [Determinant](#determinant), [`Absolute`](#absolute),
+[Elementary functions](#elementary-functions-very-incomplete).
 
 See also: [Concept: integral over a domain](#concept-integral-over-a-domain),
 [`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
 
-The free functions `jacobian(D)` and `density(D)` are the Jacobian matrix and
-the density of a domain $D$ = `DomainMap(P, psi, Q)` of dimension $k$. $n$ is
-the dimension of the ambient coordinate domain of $Q$, and $m$ the dimension
-of the ambient coordinate domain of $P$, with $m = k$ for a coordinate domain
-$P$.
+The free functions `jacobian(D)`, `inverse_jacobian(D)` and `density(D)` are
+the Jacobian matrix, the left inverse of the Jacobian matrix on the tangent
+space, and the density of a domain $D$ = `DomainMap(P, psi, Q)` of dimension
+$k$. $n$ is the dimension of the ambient coordinate domain of $Q$, and $m$ the
+dimension of the ambient coordinate domain of $P$, with $m = k$ for a
+coordinate domain $P$.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `jacobian(D)` | | `D: DomainMap` | `gradient(D.parameterisation, D.parameter_domain)` |
+| `inverse_jacobian(D)` | | `D: DomainMap` | The matrix $K$ below |
 | `density(D)` | | `D: DomainMap` | The density $\rho$ below |
 
-The Jacobian matrix $J$ = `jacobian(D)` has value shape `(n, m)`. The density
-$\rho$ is the factor by which $\psi$ scales the length, the area or the
-volume of a small region of $P$:
+The Jacobian matrix $J$ = `jacobian(D)` has value shape `(n, m)`. With
+$\Pi$ = `gradient(coordinate(P), P)`, the orthogonal projection onto the
+tangent space of $P$ (see [`Gradient`](#gradient)), and $I$ the identity
+matrix of value shape `(m, m)`, the metric of $D$ is
 
-- For $m = 0$, $\rho$ is `Integer(1)`.
-- For $0 < k = m = n$, $\rho = |\det J|$, which is
-  `absolute(determinant(jacobian(D)))`.
-- For $0 < k = m < n$, $\rho = \sqrt{\det(J^T J)}$, which is
-  `square_root(determinant(G))` with
-  `G = component_tensor(index_sum(J[l, a] * J[l, b], (l,)), (a, b))`, with
-  derived indices `l`, `a` and `b`.
-- For $k < m$, a decomposed $P$ of lower dimension than its ambient
-  coordinate domain, such as a surface mesh, $\rho = \sqrt{\det(J^T J + I - \Pi)}$,
-  with $\Pi$ = `gradient(coordinate(P), P)` the orthogonal projection onto
-  the tangent space of $P$ (see [`Gradient`](#gradient)) and $I$ the identity
-  matrix of value shape `(m, m)`. $J^T J$ is zero on the normal space of $P$
-  and $I - \Pi$ is the identity there, so the determinant is the Gram
-  determinant of $J$ on the tangent space, for which $J$ is the tangential
-  gradient of $\psi$.
+$$
+G = J^T J + I - \Pi.
+$$
 
-`density(D)` reads $k$, $m$ and $n$ to choose the composition. The density for
-$m > n$ is undefined, and construction does not check. The core writes
-$\det J$ only as `determinant(jacobian(D))`, so every use of $\det J$ for one
-$D$ is one expression, and a pass that computes the geometry of a cell once
-computes $\det J$ once. A library that needs $J$ or $\det J$, such as for a
-Piola map, uses `jacobian(D)` and `determinant(jacobian(D))`.
+$J^T J$ is zero on the normal space of $P$ and $I - \Pi$ is the identity
+there, so $G$ is invertible, and on the tangent space $G$ is the metric
+$J^T J$ that $\psi$ induces. For $k = m$, $\Pi$ is the identity and
+$G = J^T J$. The density $\rho$ is the factor by which $\psi$ scales the
+length, the area or the volume of a small region of $P$, and $K$, of value
+shape `(m, n)`, is the left inverse of $J$ on the tangent space of $P$:
+
+$$
+\rho = \sqrt{\det G}, \qquad K = G^{-1} J^T.
+$$
+
+The definitions fix the values. `density(D)` and `inverse_jacobian(D)` read
+$k$, $m$ and $n$ to choose the composition, so that a cell gets the closed
+form and not the normal equations:
+
+| Case | `density(D)` | `inverse_jacobian(D)` |
+| ---- | ------------ | --------------------- |
+| $m = 0$ | `Integer(1)` | `inverse(J)`, of value shape `(0, n)` |
+| $0 < k = m = n$ | `absolute(determinant(J))` | `inverse(J)` |
+| $0 < k = m < n$ | `square_root(determinant(G))` | `inverse(J)`, the pseudo-inverse |
+| $k < m$, a decomposed $P$ such as a surface mesh | `square_root(determinant(G))` | `component_tensor(index_sum(inverse(G)[a, c] * J[l, c], (c,)), (a, l))` |
+
+$J^T J$ is `component_tensor(index_sum(J[l, a] * J[l, b], (l,)), (a, b))`, and
+the indices in the compositions are derived indices. For $k < m$, $J$ is the
+tangential gradient of $\psi$ and has less than full rank, so `inverse(J)` is
+undefined, and $G$ is the device that gives the Gram determinant and the
+pseudo-inverse of $J$ on the tangent space.
+
+The density for $m > n$ is undefined, and construction does not check. The
+core writes $\det J$ only as `determinant(jacobian(D))` and $K$ only as
+`inverse_jacobian(D)`, so every use of $\det J$ or $K$ for one $D$ is one
+expression, and a pass that computes the geometry of a cell once computes
+each once. A library that needs $J$, $\det J$ or $K$, such as for a Piola
+map, uses `jacobian(D)`, `determinant(jacobian(D))` and
+`inverse_jacobian(D)`.
 
 ### Concept: integral over a domain
 
@@ -2742,7 +2762,7 @@ Examples:
 ### `Normal`
 
 Requires: [Restriction](#restriction), [Reference cell](#reference-cell),
-[`Inverse`](#inverse).
+[Jacobian and density](#jacobian-and-density).
 
 A concrete subclass of `AbstractExpression` for the unit outward normal of the
 cell on a side, on the cells of a topology with sides.
@@ -2774,8 +2794,9 @@ $$
 
 where:
 
-- $K$ is the [inverse](#inverse) of the Jacobian matrix of $B_i$ at the points
-  of $A_i$. For $k < n$, $K$ is the pseudo-inverse.
+- $K$ is `inverse_jacobian(B_i)` at the points of $A_i$ (see [Jacobian and
+  density](#jacobian-and-density)). The parameter domain of $B_i$ is a
+  reference cell (see [`SideMap`](#sidemap)), so $K$ is `inverse(J)`.
 - $\hat m$ is a normal of the cell of $E$ in $K_j$. $\hat m$ is orthogonal to
   the columns of the Jacobian matrix of $A_i$, and $\hat m$ points away from
   the centroid of the vertices of $K_j$.
@@ -2901,7 +2922,7 @@ cell, as a map of a function $\hat u$ on the reference cell.
 
 In the table, $k$ is the dimension of $D$, $n$ is the dimension of the ambient
 coordinate domain, $J$ is the Jacobian matrix of the cell, of value shape
-`(n, k)`, $K$ is `inverse(J)`, and $\rho$ is the density of the cell (see
+`(n, k)`, $K$ is `inverse_jacobian` of the cell, and $\rho$ is the density of the cell (see
 [Jacobian and density](#jacobian-and-density)):
 
 | Space                             | Value shape | Map of $\hat u$                                    | Legacy UFL map      |
@@ -3625,8 +3646,7 @@ into it (see [Restriction](#restriction)).
 | `PullBack(g, SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
 | `PullBack(g, φ)` | Remains, so pull-backs nest |
 | `Gradient(g, Q)`, $P$ of lower dimension than $Q$ | Remains, a gradient on a cell read at the points of $P$ |
-| `Gradient(g, Q)`, $P$ of the dimension of its ambient coordinate domain | $K^T \nabla_P(\psi^* g)$, with $K$ = `inverse(J)` |
-| `Gradient(g, Q)`, $P$ of lower dimension than its ambient coordinate domain | $K^T \nabla_P(\psi^* g)$, with $K = (J^T J + I - \Pi)^{-1} J^T$ and $\Pi$ = `gradient(coordinate(P), P)` |
+| `Gradient(g, Q)` | $K^T \nabla_P(\psi^* g)$, with $K$ = `inverse_jacobian(ψ)` |
 | `Normal(D, E, s)`, $\psi$ = `cell_domain(E, i)` | $K^T \hat m / \lvert K^T \hat m \rvert$ of [`Normal`](#normal) |
 | A terminal | Remains, for the library of the terminal |
 | Any other node class | The node of the pull-backs of the operands that are expressions |
@@ -3639,12 +3659,9 @@ into it (see [Restriction](#restriction)).
   [Restriction](#restriction)), so this pass also lowers restrictions. A
   pull-back by a `SideMap` that no pull-back by a cell of $E$ encloses, such
   as on an expression on $E$ that is not integrated, remains.
-- The second `Gradient` row is the device of the density on such a domain
-  (see [Jacobian and density](#jacobian-and-density)): $J$ has less than full
-  rank, and on the tangent space the matrix is the pseudo-inverse of $J$.
-- The `Normal` row needs no such device. The cell on a side has a reference
-  cell as its parameter domain (see [`SideMap`](#sidemap)), so $J$ has full
-  column rank and `inverse(J)` is defined.
+- `inverse_jacobian` chooses the composition of $K$ for the dimensions of
+  $\psi$, including a parameter domain of lower dimension than its ambient
+  coordinate domain (see [Jacobian and density](#jacobian-and-density)).
 - Every pull-back that remains reads a value of a library on a cell, possibly
   at the points of a cell of lower dimension through $A_i$, such as the
   reference gradient of a function on the cell at the points of a facet. A
@@ -3876,7 +3893,7 @@ cancellation structural with node classes for the maps and the operators:
 | Node class                     | Lowering                                                               |
 | ------------------------------ | ---------------------------------------------------------------------- |
 | `ContravariantPiola(u_hat, D)` | $J \hat u / \det J$, with `jacobian(D)` and `determinant(jacobian(D))` |
-| `CovariantPiola(u_hat, D)`     | $K^T \hat u$, with $K$ = `inverse(jacobian(D))`                        |
+| `CovariantPiola(u_hat, D)`     | $K^T \hat u$, with $K$ = `inverse_jacobian(D)`                         |
 | `Divergence(u, P)`             | `index_sum(gradient(u, P)[k, k], (k,))`                                |
 | `Curl(u, P)`                   | The curl in $R^3$, a fixed composition of `gradient(u, P)`             |
 
@@ -4025,6 +4042,7 @@ AbstractExpression
 | Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractDomain`, `psi: AbstractExpression`, `Q: AbstractDomain`                                                     | `DomainMap`                                                                                                                                                                     |
 |                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap`                                                                      | `PullBack`                                                                                                                                                                      |
 |                             | [`jacobian(D)`](#jacobian-and-density)                                   |                               | `D: DomainMap`                                                                                                          | `gradient(D.parameterisation, D.parameter_domain)`                                                                                                                              |
+|                             | [`inverse_jacobian(D)`](#jacobian-and-density)                           |                               | `D: DomainMap`                                                                                                          | The matrix $K$ below                                                                                                                                                            |
 |                             | [`density(D)`](#jacobian-and-density)                                    |                               | `D: DomainMap`                                                                                                          | The density $\rho$ below                                                                                                                                                        |
 | Topology                    | [`cell_index(T, j)`](#abstracttopology)                                  |                               | `T: AbstractTopology`, `j: int`                                                                                         | `Index`                                                                                                                                                                         |
 | Reference cells             | [`affine_map(F, points)`](#affine-maps)                                  |                               | `F: AbstractReferenceCell`, `points: AbstractExpression`                                                                | The affine map of the vertices                                                                                                                                                  |
@@ -4108,6 +4126,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 38    |
 | Expression node classes         | 29    |
-| Free functions                  | 47    |
+| Free functions                  | 48    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

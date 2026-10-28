@@ -1172,7 +1172,7 @@ L = form(integral(f * v, M), (v,))
   $\rho = \sqrt{\det(J^T J)}$, with $J$ the Jacobian matrix of `x`, of value
   shape `(3, 2)`. The forms need no orientation of `M`.
 - `expand_pull_backs` rewrites the pull-back of `grad_u` by the cells as
-  $K^T \hat g$, with $K$ = `inverse(J)` the pseudo-inverse, of value shape
+  $K^T \hat g$, with $K$ = `inverse_jacobian` of the cells, here `inverse(J)`, the pseudo-inverse, of value shape
   `(2, 3)`, and $\hat g$ the gradient of the pull-back of `u` on `K`. The integrand of `a` on `K` is then
   $\hat g_u^T K K^T \hat g_v \, \rho$, and $K K^T = (J^T J)^{-1}$ is the
   inverse of the metric that `x` induces.
@@ -1223,7 +1223,7 @@ a = form(integral(index_sum(gradient(u, D_s)[i] * gradient(v, D_s)[i], (i,)), D_
   as $I + \nabla s$, so `density(T)` is $|\det(I + \nabla s)|$, the Jacobian
   determinant of shape calculus.
 - `expand_pull_backs` rewrites the pull-back of `gradient(u, D_s)` by `T` as
-  $K^T \nabla(u \circ \phi)$ with $K$ = `inverse(jacobian(T))`, the
+  $K^T \nabla(u \circ \phi)$ with $K$ = `inverse_jacobian(T)`, here `inverse(jacobian(T))`, the
   $(I + \nabla s)^{-T}$ of shape calculus. The library represents `V_s` on
   `D`, so `u` has the degrees of freedom of a space on `D` and the geometry of
   `D_s`.
