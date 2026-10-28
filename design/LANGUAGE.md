@@ -702,7 +702,10 @@ A concrete subclass of `AbstractExpression` for the zero of any static type.
 | Static type                                        | The stored properties, with no support                                                                                         |
 | Raises                                             | `TypeError` for an argument of another type, and `ValueError` for a negative extent or an index that occurs twice             |
 
-The derivative of an expression with no support is a `Zero`. For example, `Zero((3,), (), ())` is the
+A `Zero` is real and has no support, and is also the zero of a complex
+expression and of an expression with a support (see
+[Evaluation](#evaluation)). The derivative of an expression with no support is
+a `Zero`. For example, `Zero((3,), (), ())` is the
 zero array of value shape `(3,)`, and `Zero((), (), (V,))` is the zero linear
 form on a space `V`.
 
@@ -3278,9 +3281,9 @@ expression given to one argument of the form.
 
 Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
 
-- For a space $V$, $g$ has the value shape, the scalar type and the argument
-  spaces of a function in $V$, and the support of that function or no
-  support. The argument spaces are `()`, or `(S',)` for $V$ =
+- For a space $V$, $g$ has the value shape and the argument spaces of a
+  function in $V$, the scalar type of that function or the real scalar type,
+  and the support of that function or no support. The argument spaces are `()`, or `(S',)` for $V$ =
   `dual_space(S)` (see [`DualSpace`](#dualspace)).
 - For `ConjugateSpace(V)`, $g$ has the same static type, and $g$ is the value
   of an entry `conjugate(v)`, such as `conjugate(w)` for a function `w` in $V$.
@@ -3406,7 +3409,12 @@ value. The lazy node classes of the core are `GateauxDerivative`, `Action`,
 
 A pass that rewrites a node keeps the value of the node and the static type of
 the node, with the free indices possibly in another order, never simplifies,
-and substitutes with the renaming of [Passes](#passes). Because the pass never
+and substitutes with the renaming of [Passes](#passes). The one exception to
+the static type is `Zero`, which is real and has no support: where a rewrite
+produces `Zero`, the scalar type of the result may be real for a complex node,
+and the result may have no support for a node with a support. The value is
+the same, because real arithmetic embeds in complex arithmetic and a constant
+is a field on every domain. Because the pass never
 simplifies, a term that is zero stays in the graph, and zero times an
 undefined value is undefined. So a rule never multiplies a term that may be
 zero by an expression that may be undefined where the rewritten node is
@@ -3581,7 +3589,7 @@ its own rows first, for the leaves of the expression, and then the rows below.
 | `Division(b, c)` | $\delta b / c - (b \, \delta c) / (c c)$ |
 | `Power(b, c)`, $c$ constant | $c \, b^{c - 1} \, \delta b$ |
 | `Power(b, c)` | $b^c (\log(b) \, \delta c + c \, \delta b / b)$ |
-| `Absolute(b)` | $(\bar b \, \delta b + b \, \overline{\delta b}) / (2 \lvert b \rvert)$ |
+| `Absolute(b)` | $\operatorname{Re}(\bar b \, \delta b) / \lvert b \rvert$, with `real_part`, so the derivative is real |
 | `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
 | `Logarithm(b)` | $\delta b / b$ |
 | `Inverse(A)` | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
