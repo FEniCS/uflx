@@ -3381,12 +3381,15 @@ evaluated node acts on the value of an operand alone: an action substitutes
 into a bound argument, which is a field like any other, and a directional
 derivative differentiates in a real parameter with the domains fixed. Moving
 an evaluated node into a binding node first makes the binding node fresh for
-the other operands of the evaluated node (see [Passes](#passes)). The first passes of
-the core are [`apply_gateaux_derivatives`](#applying-gateaux-derivatives),
-then [`apply_actions`](#applying-actions), then
-[`apply_derivatives`](#applying-derivatives), then
-[`expand_integrals`](#expanding-integrals). The later passes, their order,
-and the core normal form (see [Grammars](#grammars)) are not yet decided.
+the other operands of the evaluated node (see [Passes](#passes)).
+
+The first passes of the core are, in order,
+[`apply_gateaux_derivatives`](#applying-gateaux-derivatives),
+[`apply_actions`](#applying-actions),
+[`apply_derivatives`](#applying-derivatives),
+[`expand_integrals`](#expanding-integrals) and
+[`expand_pull_backs`](#expanding-pull-backs). The later passes and the core
+normal form (see [Grammars](#grammars)) are not yet decided.
 
 ### Grammars
 
@@ -3567,9 +3570,10 @@ domain, `indices_j` are the free indices, and `D_j = cell_domain(D, j)`.
 | `Integral(f, D)`, $f$ of rank $r \ge 1$ | `component_tensor(Integral(f[K], D), K)`, with `K` one derived `Index` for each axis |
 | `Integral(f, D)`, $f$ scalar | The sum over the pieces $j$ of `index_sum(integral(g_j * density(D_j), P_j), indices_j)`, with no `IndexSum` for a piece with no free indices |
 
-$g_j$ is `pull_back(f, D_j)` for $f$ with the support $D$,
-`pull_back(f, piece_j)` for $f$ with the support `D.ambient_domain`, and $f$
-for $f$ with no support.
+$g_j$ is `pull_back(f, piece_j)` for $f$ with the support `D.ambient_domain`,
+and `pull_back(f, D_j)` otherwise. An $f$ with no support is pulled back too,
+so that $g_j$ has the free indices of piece $j$ when the density does not,
+such as for a family of points, whose density is `Integer(1)`.
 
 - Each application moves to a parameter domain that is nested less deeply, so
   the pass terminates.
@@ -3580,6 +3584,57 @@ for $f$ with no support.
   both have the parameterisation $\psi_j$.
 - The integrals that remain are over coordinate domains, which a form compiler
   integrates by quadrature.
+
+### Expanding pull-backs
+
+Requires: [Expanding integrals](#expanding-integrals), [`PullBack`](#pullback),
+[Restriction](#restriction), [`Normal`](#normal), [Jacobian and
+density](#jacobian-and-density), [`Inverse`](#inverse).
+
+| `expand_pull_backs(f)` |  |
+| ---------------------- | - |
+| Evaluates              | `PullBack` |
+| Input grammar          | $N_4$ |
+| Output grammar         | $N_5 = N_4 \setminus \{$a `PullBack` by a domain map whose expression is not a terminal, a `PullBack` or a `Gradient` on a domain of higher dimension than the parameter domain$\}$ |
+
+The pass rewrites every `PullBack(f, ψ)`, inner pull-backs first, with the
+first row that matches, and applies the rows again to each `PullBack` that a
+rewrite creates. $P$ and $Q$ are the parameter domain and the ambient domain
+of $\psi$, $J$ = `jacobian(ψ)`, and for $\psi$ = `cell_domain(E, i)` and a side
+$s$, $B_i$ is the cell on the side and $A_i$ the inclusion of the cell of $E$
+into it (see [Restriction](#restriction)).
+
+| `PullBack(f, ψ)` | Rewrite |
+| ---------------- | ------- |
+| $\psi$ a `SideMap`, $f$ with a support | Remains until a pull-back by a cell of $E$ |
+| $f$ with no support | $f$, or `f + Zero(…)` with the free indices of $\psi$ that $f$ lacks |
+| `Coordinate(Q)` | $\psi$ |
+| `PullBack(g, SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
+| `PullBack(g, φ)` | Remains, so pull-backs nest |
+| `Gradient(g, Q)`, $P$ of lower dimension than $Q$ | Remains, a gradient on a cell read at the points of $P$ |
+| `Gradient(g, Q)`, $P$ of the dimension of its ambient coordinate domain | $K^T \nabla_P(\psi^* g)$, with $K$ = `inverse(J)` |
+| `Gradient(g, Q)`, $P$ of lower dimension than its ambient coordinate domain | $K^T \nabla_P(\psi^* g)$, with $K = (J^T J + I - \Pi)^{-1} J^T$ and $\Pi$ = `gradient(coordinate(P), P)` |
+| `Normal(D, E, s)`, $\psi$ = `cell_domain(E, i)` | $K^T \hat m / \lvert K^T \hat m \rvert$ of [`Normal`](#normal) |
+| A terminal | Remains, for the library of the terminal |
+| Any other node class | The node of the pull-backs of the operands that are expressions |
+
+- A pull-back is pointwise, so the last row moves the pull-back into every
+  other node class, with a binding node made fresh for $\psi$ first.
+- `Zero` is the one node class that carries free indices without operands, so
+  `f + Zero(…)` is $f$ for each member of the family $\psi$.
+- A restriction is a pull-back by a `SideMap` (see
+  [Restriction](#restriction)), so this pass also lowers restrictions. A
+  pull-back by a `SideMap` that no pull-back by a cell of $E$ encloses, such
+  as on an expression on $E$ that is not integrated, remains.
+- The second `Gradient` row is the device of the density on such a domain
+  (see [Jacobian and density](#jacobian-and-density)): $J$ has less than full
+  rank, and on the tangent space the matrix is the pseudo-inverse of $J$.
+- Every pull-back that remains reads a value of a library on a cell, possibly
+  at the points of a cell of lower dimension through $A_i$, such as the
+  reference gradient of a function on the cell at the points of a facet. A
+  pull-back of a terminal by a map other than a cell domain, such as for
+  point evaluation, needs a pass of the mesh library that locates the points
+  (see [Points and point evaluation](#points-and-point-evaluation)).
 
 ## Extending the core
 
