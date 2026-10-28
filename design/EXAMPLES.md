@@ -970,11 +970,11 @@ mu_s = function(R_S, "mu_s")
 
 # The sensitivity of the solid form to mu_s.
 e = integral(two * mu_s * index_sum(eps_d * eps_w, (i, j)), S)
-de_dmu = form(directional_derivative(e, mu_s, Integer(1)), (w, d))
+de_dmu = form(directional_derivative(e, mu_s, mu_s, Integer(1)), (w, d))
 
 # The gradient of the dissipation with respect to nu.
 dissipation = integral(nu * index_sum(grad_u[i, j] * grad_u[i, j], (i, j)), F)
-g_nu = form(directional_derivative(dissipation, nu, h), (h,))
+g_nu = form(directional_derivative(dissipation, nu, nu, h), (h,))
 ```
 
 `g_nu` is a linear form on `R`, a function in `dual_space(R)`. The variable
@@ -1515,18 +1515,18 @@ psi = strain_energy(C)
 # The derivative with respect to a symbol at C, in the symmetric unit directions.
 C_ = function(R, "C")
 N = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / two, (i, j))
-S = two * component_tensor(directional_derivative(strain_energy(C_), C_, N, C), (k, l))
+S = two * component_tensor(directional_derivative(strain_energy(C_), C_, C, N), (k, l))
 sigma = F @ S @ transpose(F) / determinant(F)
 
 Pi = integral(psi, D)
-residual = gateaux_derivative(Pi, u, v)
-tangent = gateaux_derivative(residual, u, w)
+residual = gateaux_derivative(Pi, u, u, v)
+tangent = gateaux_derivative(residual, u, u, w)
 ```
 
 - `S` and the Cauchy stress `sigma` are expressions on `D`, which a solver
   interpolates or evaluates for output. `apply_derivatives` evaluates `S` to
   an expression equal to $\lambda \operatorname{tr}(E) I + 2 \mu E$.
-- `V` is real, so `residual` is the form of `directional_derivative(Pi, u, v)` that binds `v`, and `tangent` binds `w` after `v`.
+- `V` is real, so `residual` is the form of `directional_derivative(Pi, u, u, v)` that binds `v`, and `tangent` binds `w` after `v`.
 
 ### Symmetric tensors
 
