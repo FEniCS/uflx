@@ -2274,9 +2274,10 @@ group $i$, with the side `(side, T, j)`, the cell type $F_i$ of group $i$ and
 - `inclusion` is a [`DomainMap`](#domainmap) from $F_i$ into $K_j$ with the
   free index `e`. Member $e$ is the inclusion of the cell $e$ into the cell on
   the side.
-- `reference_normal` is a constant expression with no support, the value shape
-  `(k_j,)` and the free index `e`, for a group of cells of dimension
-  $k_j - 1$, and `None` for any other group. Member $e$ is a normal in $K_j$ of
+- `reference_normal` is an expression with the support $F_i$ or no support,
+  the value shape `(k_j,)` and the free index `e`, for a group of cells of
+  dimension $k_j - 1$, and `None` for any other group. A normal that varies
+  along the cell, such as on a curved piece, has the support $F_i$. Member $e$ is a normal in $K_j$ of
   the image of the cell $e$. The normal points out of $K_j$ for an image on the
   boundary of $K_j$, and away from the centroid of $K_j$ for an image inside
   $K_j$.
