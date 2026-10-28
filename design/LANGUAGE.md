@@ -3355,6 +3355,12 @@ The linear and the antilinear parts below are defined only on a complex
 space, and the product of a real and a complex space is a real space, so a
 `tuple` that mixes the two is rejected.
 
+```{dropdown} Open: mixed real and complex tuples
+A complex state with a real unknown, such as a Lagrange multiplier, needs a
+mixed `tuple`. A convention could put the part in the real members into
+$J_+$. Until then, take the derivatives separately.
+```
+
 The real differential in a direction $v$ is
 $\delta F[v]$ = `directional_derivative(F, x, a, v)`, with the members of a
 `tuple` variable substituted at once (see
