@@ -1694,8 +1694,8 @@ variable $x$ is bound in $f$ (see [Passes](#passes)).
 | Extends                          | `AbstractExpression` |
 | Takes                            | `f: AbstractExpression`, `x: Function`, `a, h: AbstractExpression` |
 | Properties                       | `expression` $f$, `variable` $x$, `point` $a$ and `direction` $h$ |
-| Requires                         | $x$ a `Function` with the argument spaces `()`, $a$ and $h$ with the value shape of $x$ and the argument spaces `()`, and $h$ with the support of $x$ or no support |
-| Static type                      | The value shape of $f$, the free indices of $f$ followed by those of $a$ and $h$, each `Index` taken once, and the argument spaces of $f$ |
+| Requires                         | $x$ a `Function` with the argument spaces `()`, $a$ and $h$ with the value shape of $x$ and the argument spaces `()`, $h$ with the support of $x$ or no support, and $a$ and $h$ real for a real $x$ |
+| Static type                      | The value shape of $f$, the free indices of $f$ followed by those of $a$ and $h$, each `Index` taken once, and the argument spaces and the scalar type of $f$ |
 | Raises                           | `TypeError` for an $x$ that is not a `Function`, and `ValueError` if another requirement fails |
 
 | Free function | Overload | Takes | Returns |
@@ -3355,8 +3355,8 @@ argument $w$ after the arguments of $F$.
 | Extends     | `AbstractExpression` |
 | Takes       | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` |
 | Properties  | `expression` $F$, `variable` $x$, `point` $a$ and `argument` $w$, an entry as in [`Form`](#form) |
-| Requires    | $x$ a `Function` or a `tuple` of functions with the argument spaces `()`, $a$ and the functions of $w$ with the value shapes of $x$, member by member, the members of a `tuple` $w$ all functions or all conjugates, and no function of $w$ free in $F$ |
-| Static type | The value shape of $F$, the free indices of $F$ followed by those of $a$, and the argument spaces of $F$ followed by the space of the entry $w$ |
+| Requires    | $x$ a `Function` or a `tuple` of functions with the argument spaces `()`, $a$ and the functions of $w$ with the value shapes of $x$, member by member, the members of a `tuple` $w$ all functions or all conjugates, no function of $w$ free in $F$, and each member of $a$ real for a real member of $x$ |
+| Static type | The value shape of $F$, the free indices of $F$ followed by those of $a$, the argument spaces of $F$ followed by the space of the entry $w$, and the scalar type of $F$ if every member of $x$ is real, and complex otherwise |
 | Raises      | `TypeError` for an $x$ that is not a function, and `ValueError` if another requirement fails |
 
 | Free function | Overload | Takes | Returns |
@@ -4269,6 +4269,8 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 | `Absolute`               | The default                        | Real                              |
 | `RealPart`, `ImaginaryPart` | The default                     | Real                              |
 | `Coordinate`, `Gradient` | The domain $P$                     | The default                       |
+| `DirectionalDerivative`  | The default                        | The scalar type of $f$            |
+| `GateauxDerivative`      | The default                        | The scalar type of $F$ for a real $x$, and complex otherwise |
 | `Integral`               | None                               | The default                       |
 | `PullBack`               | The parameter domain of the domain | The default                       |
 | `Normal`                 | $E$                                | Real                              |
