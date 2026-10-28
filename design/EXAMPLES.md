@@ -79,10 +79,11 @@ each cell of type $j$, as vertex numbers of the topology. Local vertex $i$ of
 cell $c$ of type $j$ is the vertex `cells[j][c][i]` of the topology. A
 `StaticTopology` with sides has one topology on every side, uses the vertex
 numbers of that topology, pairs each vertex with the same vertex, and computes
-the side tables from the vertex numbers: the cell on the side, and the
-positions of the vertices of each cell as the coordinates `vertices` of the
-paired local vertices of the reference cell on the side. So a `StaticTopology`
-covers sub-entities only, not pieces of a cell. For a cell seen from two cells of the
+the side tables from the vertex numbers: the cell on the side, the inclusion of
+each cell as the affine map through the coordinates `vertices` of the paired
+local vertices of the reference cell on the side, and the reference normal of
+a facet (see [Side tables of a static topology](#side-tables-of-a-static-topology)).
+So a `StaticTopology` covers sub-entities only, not pieces of a cell. For a cell seen from two cells of the
 same group, the cell with the lower number is on the first side, and otherwise
 the group of each side decides. For a sub-entity of lower dimension than a
 facet, the cell with the lowest number that contains the sub-entity is chosen.
@@ -150,6 +151,73 @@ and `(1,)`.
 coordinates. The positions of the vertices come from the
 [coordinates of a decomposed domain](LANGUAGE.md#decomposeddomain).
 
+#### Side tables of a static topology
+
+The [side tables](LANGUAGE.md#side-tables) of a `StaticTopology` are built from
+the vertices of the reference cells, which the core does not read. The
+library function `affine_map(F, points)` returns the affine map on a reference
+cell $F$ of dimension $k$ with the vertices $V_v$ that sends vertex $v$ of $F$
+to row $p_v$ of `points` for $v \le k$:
+
+$$
+X \mapsto p_0 + \sum_{d < k} (p_{d+1} - p_0) \, \big(E^{-1} (X - V_0)\big)_d,
+$$
+
+with $E$ the matrix with the columns $V_{d+1} - V_0$. With the derived index
+`l = Index(("library.affine_map", F, points, 0))`, the map is
+
+```python
+def affine_map(F, points):
+    l = Index(("library.affine_map", F, points, 0))
+    k, V = F.dimension, F.vertices
+    if k == 0:
+        return component_tensor(points[0, l], (l,))
+    E = tensor(tuple(tensor(tuple(V[d + 1, r] - V[0, r] for d in range(k))) for r in range(k)))
+    Y = inverse(E) @ (coordinate(F) - V[0])
+    total = points[0, l]
+    for d in range(k):
+        total = total + (points[d + 1, l] - points[0, l]) * Y[d]
+    return component_tensor(total, (l,))
+```
+
+Only the first $k + 1$ rows of `points` enter the map, and the first $k + 1$
+vertices of $F$ must not lie in a hyperplane of $F$. A sub-entity of $K$ with
+the vertex numbers $(w_0, w_1, \dots)$ and the reference cell $F$ is
+`domain_map(F, affine_map(F, points), K)`, with row $v$ of `points` the
+coordinates `K.vertices[w_v]`. For the unit triangle, the sub-entity with the
+vertex numbers $(1, 2)$ and the unit interval as $F$ is the hypotenuse
+$t \mapsto (1 - t, t)$, and for the unit interval, the sub-entity with the
+vertex number $(1)$ and the reference point as $F$ is the end point.
+
+For the group $i$ and a side with the reference cell $K_j$, with the cell
+index `e` of the group, the positions `positions[e, v]` of the vertices of
+each cell $e$ in $K_j$, and derived indices `v` and `k` of the library:
+
+```python
+points = component_tensor(positions[e, v, k], (v, k))
+inclusion = domain_map(F_i, affine_map(F_i, points), K_j)
+```
+
+For a group of facets, the reference normal is the cofactor vector of the
+Jacobian of the inclusion, turned away from the centroid of $K_j$:
+
+```python
+J_A = jacobian(inclusion)  # value shape (k, k - 1)
+C_r = tensor(tuple(
+    tensor((Integer(1 if q == r else 0), J_A[q, 0], ..., J_A[q, k - 2]))
+    for q in range(k)
+))
+m0 = tensor((determinant(C_0), ..., determinant(C_(k - 1))))
+centroid = (V[0] + V[1] + ... + V[m_j - 1]) / Integer(m_j)
+away = m0 @ (points[0] - centroid)
+reference_normal = away / absolute(away) * m0
+```
+
+with `V = K_j.vertices` and $m_j$ vertices. The sums are nested to the left.
+Every side sends the vertices of $F_i$ to the positions of the same vertices
+of the cell $e$, in the order of the cell, so the inclusions of all sides
+parameterise the cell $e$ in the same way.
+
 ### The unit simplex as a reference cell
 
 > LLM generated content.
@@ -178,6 +246,10 @@ class ReferenceSimplex(Simplex, AbstractReferenceCell):
             )
         )
 ```
+
+`vertices` is a property of the library, not of `AbstractReferenceCell`. The
+side tables of a `StaticTopology` read it (see [Side tables of a static
+topology](#side-tables-of-a-static-topology)).
 
 `ReferenceSimplex(2)` and `Simplex(2)` are different cell types, so a topology
 of `Simplex(2)` cells has no reference cells. `ReferenceSimplex(2)` and
@@ -608,9 +680,11 @@ a_facet = form(integral(f, E), (v, u))
 
 The draft passes rewrite `a_facet` as follows. With $B_\pm$ =
 `gathered_cell_domain(D, 0, gathered_index(cells_pm, (e,)))` the cell on each
-side and $A_\pm$ = `domain_map(I, affine_map(I, points_pm), K)` the inclusion
-of the facet into that cell, both of [Restriction](LANGUAGE.md#restriction), with the side
-tables `(cells_pm, positions_pm)` of each side:
+side and $A_\pm$ the inclusion of the facet into that cell, both of
+[Restriction](LANGUAGE.md#restriction), from the side tables of each side. A
+`StaticTopology` builds $A_\pm$ = `domain_map(I, affine_map(I, points_pm), K)`
+from the positions `positions_pm` of the facet vertices (see [Side tables of a
+static topology](#side-tables-of-a-static-topology)):
 
 1. `expand_integrals` rewrites `integral(f, E)` as
    `index_sum(integral(pull_back(f, cell_domain(E, 0)) * density(cell_domain(E, 0)), I), (e,))`,
@@ -631,8 +705,8 @@ tables `(cells_pm, positions_pm)` of each side:
    $\hat g$ and on $J_+$, because `I` has lower dimension than `K`: the
    reference gradient and the cell Jacobian are read at the points of the
    facet. On `n` the rule for `Normal` gives $K^T \hat m / \lvert K^T \hat m \rvert$,
-   with $\hat m$ the normal of the edge `(1, 2)` of `K` pointing away from the
-   centroid of `K`. On `alpha[e]`, an expression with no support whose free
+   with $\hat m$ the reference normal of the side tables, the normal of the
+   edge `(1, 2)` of `K` pointing out of `K`. On `alpha[e]`, an expression with no support whose free
    index `e` is free in `cell_domain(E, 0)`, the pull-back is `alpha[e]`.
 3. The gradients pass leaves `gradient(pull_back(u, B_+), K)` on
    the function, and `reduce_component_tensors` reduces the gathers of the
@@ -1034,13 +1108,14 @@ a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
 
 - The side tables of `T1` hold, for each segment `e`, one tetrahedron
   `cells_t[e]` that has the segment as an edge, chosen by the library among
-  those that share the edge, and the positions `positions_t[e, v, k]` of the
-  two ends in `K3`, the coordinates of two vertices of `K3`. The tables come
+  those that share the edge, and the inclusion of the segment into it, the
+  affine map through the positions `positions_t[e, v, k]` of the two ends in
+  `K3`, the coordinates of two vertices of `K3`. The tables come
   from the connectivity of the mesh, and a segment and its tetrahedron share
   vertices, so the partition of `T3` gives the partition of `T1`.
 - `p3_1` is `pull_back(pull_back(p3, B_t), A_t)` on each segment, with
-  $B_t$ the tetrahedron of each segment and $A_t$ =
-  `domain_map(I, affine_map(I, points_t), K3)` the edge, by
+  $B_t$ the tetrahedron of each segment and $A_t$ the inclusion of the side
+  tables, the edge, by
   [Restriction](LANGUAGE.md#restriction), an expression on `D1` that combines
   with `p1`. `p3` is continuous, so the restriction is the same from every
   tetrahedron that shares the edge, and the choice of the library does not

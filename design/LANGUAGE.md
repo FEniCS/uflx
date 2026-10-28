@@ -2047,8 +2047,7 @@ Notation:
   the reference cell of cell type $j$, and $k_j$ is the dimension of $K_j$.
 
 $M$ needs the cell of $D$ that contains each point, and the position of each
-point in that cell. These are the side tables `(cells, positions)` of the
-topology of the points (see [Sides of a topology](#sides-of-a-topology)). The
+point in that cell. These are the side tables of the topology of the points (see [Sides of a topology](#sides-of-a-topology)). The
 topology of the points has one cell of a reference cell type of dimension 0
 for each point, and the side `("inside", T, j)`. A family of points in a mesh is
 therefore a topology with a side.
@@ -2056,8 +2055,9 @@ therefore a topology with a side.
 The mesh library locates the cells and inverts the map of each cell outside
 the language, for example by Newton's method, when the mesh library builds the
 topology $S$ of the points, as the mesh library computes every side table.
-`cells` has the shape `(m,)` and the extent `T.num_cells[j]`, and `positions`
-has the value shape `(m, 1, k_j)`.
+`cells` has the shape `(m,)` and the extent `T.num_cells[j]`. The inclusion
+of each point is the constant map onto the position of the point in $K_j$,
+and the points have no reference normal.
 
 An expression $f$ on $D$ is evaluated at the points through the
 [restriction](#restriction) to the points, with $P$ = `side_domain(D, S)` the
@@ -2087,9 +2087,12 @@ the points, with the index $i$ of the family in place of the cell index:
 
 ```python
 g = gathered_index(cells, (i,))
-R = domain_map(RD(0), positions[i, 0], K_j)
+R = domain_map(RD(0), positions[i], K_j)
 pull_back(pull_back(u, gathered_cell_domain(D, j, g)), R)
 ```
+
+with `positions[i]` the position in $K_j$ of the point $i$, which the mesh
+library computes.
 
 The pull-back of `u` by a gathered cell domain is in the contract of the
 space. The maps below `u` may be a chain, such as a family of maps from a
@@ -2239,8 +2242,8 @@ Notation, for the group $i$ of $S$ with a side `(name, T, j)`:
 
 #### The image of a cell on a side
 
-On each side, a cell of type $i$ of $S$ is the image of cell type $i$ of $S$
-under the affine map through the positions of the vertices of the cell of $S$ in $K_j$ (see
+On each side, a cell of type $i$ of $S$ is the image of the cell type $F_i$
+of group $i$ under the inclusion of the side tables, a map into $K_j$ (see
 [Restriction](#restriction)). The image is one of the following:
 
 - A sub-entity of the cell on the side. The sub-entity is the cell itself, with
@@ -2249,8 +2252,10 @@ under the affine map through the positions of the vertices of the cell of $S$ in
 - A piece of the cell on the side that is not a sub-entity, such as half of a
   facet at a hanging node or a segment of a line through the cell.
 
-The concrete mesh gives the position of each vertex of a cell of $S$ in the
-reference cell on each side:
+The concrete mesh gives the inclusion of each cell of $S$ into the cell on
+each side. A mesh library may build the inclusion as the affine map through
+the positions of the vertices of the cell in $K_j$ (see [A static
+topology](EXAMPLES.md#a-static-topology)):
 
 - For a matching facet, the position is that of the same vertex.
 - For a periodic boundary, the position is that of the vertex one period away.
@@ -2258,20 +2263,29 @@ reference cell on each side:
 
 #### Side tables
 
-A concrete topology with sides also provides `side_tables(i, side)`, a pair of
-tables `(cells, positions)` for the side named `side` of group $i$, with the
-side `(side, T, j)`:
+A concrete topology with sides also provides `side_tables(i, side)`, the
+triple `(cells, inclusion, reference_normal)` for the side named `side` of
+group $i$, with the side `(side, T, j)`, the cell type $F_i$ of group $i$ and
+`e = cell_index(S, i)`:
 
 - `cells` is an [`AbstractIndexValue`](#abstractindexvalue) of the shape
   `(S.num_cells[i],)` and the extent `T.num_cells[j]`. Entry $e$ is the cell of
   type $j$ of $T$ on the side of the cell $e$ of $S$.
-- `positions` is a constant expression with no support and the value shape
-  `(S.num_cells[i], m, k_j)`. Entry $(e, v)$ is the position in $K_j$ of vertex
-  $v$ of the cell $e$. For a sub-entity, the position is the coordinates of a
-  vertex of $K_j$. For a piece, the position is any point of $K_j$.
+- `inclusion` is a [`DomainMap`](#domainmap) from $F_i$ into $K_j$ with the
+  free index `e`. Member $e$ is the inclusion of the cell $e$ into the cell on
+  the side.
+- `reference_normal` is a constant expression with no support, the value shape
+  `(k_j,)` and the free index `e`, for a group of cells of dimension
+  $k_j - 1$, and `None` for any other group. Member $e$ is a normal in $K_j$ of
+  the image of the cell $e$. The normal points out of $K_j$ for an image on the
+  boundary of $K_j$, and away from the centroid of $K_j$ for an image inside
+  $K_j$.
 
-[Restriction](#restriction) reads the tables. The core does not check the
-sides or the tables.
+The inclusions of the sides of one group parameterise each cell $e$ in the same
+way: a point of $F_i$ is the same point of the cell $e$ from every side, so the
+difference of two restrictions is the jump (see [Restriction](#restriction)).
+[Restriction](#restriction) and [`Normal`](#normal) read the tables. The core
+does not check the sides or the tables.
 
 #### What the concrete mesh decides
 
@@ -2314,8 +2328,8 @@ entity meets several cells:
 
 The concrete mesh computes which parts of an entity meet which cells, outside
 the language, as the concrete mesh locates the cell that contains a point (see
-[Points and point evaluation](#points-and-point-evaluation)). The positions of
-a piece of a curved cell are an approximation, as a quadrature rule is. The
+[Points and point evaluation](#points-and-point-evaluation)). The inclusion of
+a piece of a curved cell may be an approximation, as a quadrature rule is. The
 core does not check that the image of a cell of $S$ lies in the cell on the
 side.
 
@@ -2362,83 +2376,23 @@ Worked examples for this chapter in EXAMPLES.md: [the simplex as a cell type](EX
 
 ### Reference cell
 
-Requires: [`AbstractCoordinateDomain`](#abstractcoordinatedomain), [`RD`](#rd),
-[`Tensor`](#tensor), [`DomainMap`](#domainmap),
-[`Inverse`](#inverse), [`AbstractCellType`](#abstractcelltype).
+Requires: [`AbstractCoordinateDomain`](#abstractcoordinatedomain),
+[`AbstractCellType`](#abstractcelltype).
 
 See also: [`AbstractTopology`](#abstracttopology), [Integrating over
 the boundary of a triangle](EXAMPLES.md#integrating-over-the-boundary-of-a-triangle).
 
 An abstract subclass of `AbstractCoordinateDomain` and of `AbstractCellType`
-for a reference cell `AbstractReferenceCell`, a cell type whose vertices have
-coordinates.
+for a reference cell `AbstractReferenceCell`, a cell type that is also a
+coordinate domain. The core reads no vertices of a reference cell. A library
+that builds inclusions, such as from vertex positions, keeps the vertices of
+its reference cells (see [The unit simplex as a reference
+cell](EXAMPLES.md#the-unit-simplex-as-a-reference-cell)).
 
 | `AbstractReferenceCell` |                                                                                                                                                            |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                 | `AbstractCoordinateDomain`, `AbstractCellType` |
-| Provides                | `vertices`, a constant expression with no support and value shape `(m, n)`, with row $v$ the coordinates of vertex $v$, for dimension $n$ and $m$ vertices |
 | Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](EXAMPLES.md#the-unit-simplex-as-a-reference-cell)                                                   |
-
-#### Affine maps
-
-Notation, for `affine_map(F, points)`:
-
-- $F$ is a reference cell of dimension $k$ with $m_F$ vertices, and $V_v$ are
-  the vertices of $F$.
-- `points` has value shape `(m_F, m)`, and $p_v$ are the rows of `points`.
-- $E$ is the matrix with the columns $V_{d+1} - V_0$.
-
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `affine_map(F, points)` | | `F: AbstractReferenceCell`, `points: AbstractExpression` | The affine map of the vertices |
-
-The free function `affine_map(F, points)` returns the affine map on $F$ that
-sends vertex $v$ of $F$ to row $v$ of `points` for $v \le k$:
-
-$$
-X \mapsto p_0 + \sum_{d < k} (p_{d+1} - p_0) \, \big(E^{-1} (X - V_0)\big)_d.
-$$
-
-- The map is an expression on $F$ with value shape `(m,)`, with the derived
-  index $l$ = `Index(("uflx.affine_map", F, points, 0))` (see [Derived
-  indices](#derived-indices)). For $k \ge 1$, the map is
-
-  ```python
-  component_tensor(
-      points[0, l]
-      + (points[1, l] - points[0, l]) * Y[0]
-      + ...
-      + (points[k, l] - points[0, l]) * Y[k - 1],
-      (l,),
-  )
-  ```
-
-  with the terms nested to the left, `Y = inverse(E) @ (coordinate(F) - V[0])`,
-  `V = F.vertices`, and `E` the `tensor` of the rows $r < k$, each the `tensor`
-  of `V[d + 1, r] - V[0, r]` for $d < k$.
-- For $k = 0$ the map is the constant `component_tensor(points[0, l], (l,))`.
-- Only the first $k + 1$ rows enter the map. The other rows are the images of
-  the other vertices when the image is affine, such as the facet of a
-  reference cell.
-- The first $k + 1$ vertices of $F$ must not lie in a hyperplane of $F$.
-
-#### Sub-entities
-
-Let a sub-entity of $K$ have the vertex numbers $(w_0, w_1, \dots)$ and the
-reference cell $F$. The sub-entity is
-`domain_map(F, affine_map(F, points), K)`. Row $v$ of `points` is the
-coordinates `K.vertices[w_v, k]` of the vertex $w_v$ of $K$, stacked with
-`component_tensor` over the vertex and the coordinate indices. The core does
-not check that the image is a sub-entity of $K$.
-
-#### Examples
-
-- The unit triangle has the vertices $(0, 0)$, $(1, 0)$ and $(0, 1)$. The
-  sub-entity with the vertex numbers $(1, 2)$ and the unit interval as $F$ is
-  the hypotenuse, with $\psi(t) = (1 - t, t)$, as in the
-  [`DomainMap`](#domainmap) examples.
-- The unit interval has the vertices $(0)$ and $(1)$. The sub-entity with the
-  vertex number $(1)$ and the reference point as $F$ is the end point.
 
 Worked examples for this chapter in EXAMPLES.md: [the unit simplex as a reference cell](EXAMPLES.md#the-unit-simplex-as-a-reference-cell).
 
@@ -2601,8 +2555,8 @@ The restriction of an expression $f$ on a decomposed domain $D$ to the cells
 of a topology $S$ with sides, from the side $s$, is the pull-back of $f$ along
 the inclusion of each cell of $S$ into the cell on the side $s$. The side
 tables of $S$ give the cell on the side, through a
-[`GatheredIndex`](#gatheredindex) entry, and the positions of the vertices of
-the inclusion. The restriction of $f$ to a decomposed domain $E$ of the cells
+[`GatheredIndex`](#gatheredindex) entry, and the inclusion of each cell of $S$
+into that cell. The restriction of $f$ to a decomposed domain $E$ of the cells
 of $S$ from the side $s$ is `pull_back(f, side_map(D, E, s))` (see
 [`SideMap`](#sidemap)).
 
@@ -2614,7 +2568,8 @@ Notation, for the group $i$ of $S$ with the side `(s, T, j)`:
 
 - $T$ is the topology of $D$, and $K_j$ is the reference cell of cell type $j$
   of $T$.
-- `(cells, positions)` are the side tables of the side $s$ of group $i$.
+- `(cells, inclusion, reference_normal)` are the side tables of the side $s$
+  of group $i$.
 - $F_i$ is the cell type of group $i$.
 - `e = cell_index(S, i)` is the free index of the cells of group $i$.
 - $Q$ is the ambient domain of $D$.
@@ -2628,24 +2583,17 @@ cells of group $i$:
   `gathered_cell_domain(D, j, gathered_index(cells, (e,)))`. $B_i$ is the cell
   of type $j$ of $T$ on the side of each cell $e$ of $S$ (see
   [`DecomposedDomain`](#decomposeddomain)).
-- $A_i$, the inclusion into the cell on the side, is
-  `domain_map(F_i, affine_map(F_i, points), K_j)`. Here
-  `points = component_tensor(positions[e, v, k], (v, k))` is the position in
-  $K_j$ of each vertex $v$ of the cell $e$, with the derived indices $v$ and
-  $k$ of the free function or the pass that builds the inclusion (see
-  [Derived indices](#derived-indices)). $F_i$ must be a reference cell. $A_i$ sends each vertex of the cell $e$
-  to the position of that vertex in the cell on the side:
-  - For a vertex, $A_i$ is the constant point.
-  - For the cell itself with the vertices in order, $A_i$ is the identity map.
-  - For a piece of the cell, $A_i$ is the affine map onto the piece.
+- $A_i$, the inclusion into the cell on the side, is `inclusion` of the side
+  tables, a domain map from $F_i$ into $K_j$. $F_i$ must be a reference cell.
 
 The restriction of $f$ to group $i$ from the side $s$ is
 `pull_back(pull_back(f, B_i), A_i)`, an expression on $F_i$ with the free index
 `e`.
 
-Each side uses the vertex numbering of the cell $e$. The restrictions from two
-sides are therefore expressions on the same $F_i$, with the same coordinates,
-and the difference of the two restrictions is the jump. A cell of $S$ with more
+The inclusions of all sides parameterise the cell $e$ in the same way (see
+[Side tables](#side-tables)). The restrictions from two sides are therefore
+expressions on the same $F_i$, with the same coordinates, and the difference
+of the two restrictions is the jump. A cell of $S$ with more
 than two sides, such as an edge where three triangles meet, has no jump, and a
 form uses the restriction from each side.
 
@@ -2669,7 +2617,8 @@ the cells of $S$.
 2. Every cell type of $S$ is an `AbstractReferenceCell`.
 3. Every group of $S$ has a side named $s$ with the topology of $D$.
 4. The parameter domain of piece $j$ of $D$ is the reference cell $K_j$ of
-   the topology of $D$, because the side tables give positions in $K_j$.
+   the topology of $D$, because the inclusions of the side tables map into
+   $K_j$.
 
 `pull_back(f, SideMap(D, E, s))` is an expression with the support $E$, the
 restriction of $f$ to all the groups at once. The pull-back of that expression
@@ -2713,20 +2662,18 @@ E = side_domain(D, diagonal)
 jump = pull_back(u, side_map(D, E, "+")) - pull_back(u, side_map(D, E, "-"))
 ```
 
-- From `"+"`, the side tables are the cells `(0,)` and the positions
-  `(((1, 0), (0, 1)),)`, those of the local vertices 1 and 2 of `K`. From
-  `"-"`, the side tables are the cells `(1,)` and the positions
-  `(((0, 0), (0, 1)),)`, those of the local vertices 0 and 2. So
-  $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$. The coordinates of `E` are
-  $(1 - t, t)$.
+- From `"+"`, the side tables are the cells `(0,)` and the inclusion
+  $A_+(t) = (1 - t, t)$, through the local vertices 1 and 2 of `K`. From
+  `"-"`, the side tables are the cells `(1,)` and the inclusion
+  $A_-(t) = (0, t)$, through the local vertices 0 and 2. The coordinates of
+  `E` are $(1 - t, t)$.
 - Let `pull_back(u, cell_domain(D, 0))` be
   `a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]`. The two restrictions pulled
   back to the diagonal are $a_{0,0} + a_{0,1}(1 - t) + a_{0,2} t$ and
   $a_{1,0} + a_{1,2} t$. The two are equal for all $t$ if `u` is continuous at
   the vertices 1 and 2.
-- With the diagonal listed as `(2, 1)`, the positions from `"+"` are
-  `(((0, 1), (1, 0)),)` and $A_+(t) = (t, 1 - t)$. Both sides use the vertex
-  numbering of the diagonal, so the restrictions from both sides run the
+- With the diagonal listed as `(2, 1)`, the inclusion from `"+"` is
+  $A_+(t) = (t, 1 - t)$. Both sides use the vertex numbering of the diagonal, so the restrictions from both sides run the
   other way along the diagonal, and the jump at each point of the diagonal is
   unchanged.
 - For the facets `S` of a triangle and quadrilateral mesh, with the three
@@ -2843,38 +2790,25 @@ where:
   the cell on the side at the points of $A_i$ (see [Jacobian and
   density](#jacobian-and-density)). The parameter domain of $B_i$ is a
   reference cell (see [`SideMap`](#sidemap)), so $K$ is `inverse(J)`.
-- $\hat m$ is a normal of the cell of $E$ in $K_j$, orthogonal to the columns
-  of $J_A$ = `jacobian(A_i)`, of value shape `(k, k - 1)`, and pointing away
-  from the centroid of the vertices of $K_j$.
+- $\hat m$ is `reference_normal` of the side tables of the side $s$ of group
+  $i$ (see [Side tables](#side-tables)), a normal of the cell of $E$ in $K_j$.
 
-With `V = K_j.vertices`, `points` the positions of the inclusion, and $m_j$
-the number of vertices of $K_j$, the compositions are:
+The composition is
 
 ```python
-# Entry r is the cofactor of the unit vector e_r against the columns of J_A.
-C_r = tensor(tuple(
-    tensor((Integer(1 if q == r else 0), J_A[q, 0], ..., J_A[q, k - 2]))
-    for q in range(k)
-))
-m0 = tensor((determinant(C_0), ..., determinant(C_(k - 1))))
-centroid = (V[0] + V[1] + ... + V[m_j - 1]) / Integer(m_j)
-away = m0 @ (points[0] - centroid)
-m_hat = away / absolute(away) * m0
 w = transpose(K) @ m_hat
 nu = w / square_root(w @ w)
 ```
 
-The sums are nested to the left. `jacobian(A_i)` is a `Gradient`, which
-[`apply_gradients`](#applying-gradients) evaluates, so the core needs no
-numbering of the facets and no second composition of the Jacobian of $A_i$.
+The core needs no numbering of the facets and no vertices of $K_j$, because
+the library of the topology gives $\hat m$.
 
 #### The direction of the normal
 
 - For a cell of $E$ on the boundary of $K_j$, such as a facet or a piece of a
-  facet, $\hat m$ points out of $K_j$. The reason is that the centroid lies
-  inside a convex reference cell.
+  facet, $\hat m$ points out of $K_j$ (see [Side tables](#side-tables)).
 - For a cell of $E$ inside $K_j$, such as a cut through the cell, $\hat m$
-  points away from the centroid, by convention.
+  points away from the centroid of $K_j$, by convention.
 - For $k = n$, the normals from two sides of one cell of $E$ are opposite.
 - For $k < n$, such as on the edges of a surface in $R^3$, $\nu$ is the unit
   conormal. The conormal is tangent to the cell on the side and orthogonal to
@@ -4258,7 +4192,6 @@ AbstractExpression
 |                             | [`inverse_jacobian(D)`](#jacobian-and-density)                           |                               | `D: DomainMap`                                                                                                         | The matrix $K$ below                                                                                                                                                            |
 |                             | [`density(D)`](#jacobian-and-density)                                    |                               | `D: DomainMap`                                                                                                         | The density $\rho$ below                                                                                                                                                        |
 | Topology                    | [`cell_index(T, j)`](#abstracttopology)                                  |                               | `T: AbstractTopology`, `j: int`                                                                                        | `Index`                                                                                                                                                                         |
-| Reference cells             | [`affine_map(F, points)`](#affine-maps)                                  |                               | `F: AbstractReferenceCell`, `points: AbstractExpression`                                                               | The affine map of the vertices                                                                                                                                                  |
 | Decomposed domains          | [`decomposed_domain(pieces)`](#decomposeddomain)                         |                               | `pieces: tuple[DomainMap, ...]`                                                                                        | `DecomposedDomain`                                                                                                                                                              |
 |                             | [`cell_domain(D, j)`](#cell-domains)                                     |                               | `D: DecomposedDomain`, `j: int`                                                                                        | `DomainMap` of the cells of type `j`                                                                                                                                            |
 |                             | [`gathered_cell_domain(D, j, g)`](#gathered-cell-domains)                |                               | `D: DecomposedDomain`, `j: int`, `g: GatheredIndex`                                                                    | `DomainMap` of the cells of type `j` selected by `g`                                                                                                                            |
@@ -4340,6 +4273,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 38    |
 | Expression node classes         | 29    |
-| Free functions                  | 47    |
+| Free functions                  | 46    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->
