@@ -121,12 +121,10 @@ consumers, e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` exte
   `Form` is a sum/combination of integrals whose integrand must be scalar with no
   free indices.
 
-design/LANGUAGE.md states the value of each lazy node class (integrals over
-decomposed domains, pull-backs, gradients, directional derivatives and actions).
-The passes that evaluate them are being redesigned. design/PASSES_DRAFT.md keeps
-the previous draft and notes for the redesign, and is not normative. The Gateaux
-derivative is planned but not yet specified (see the "Gateaux derivative"
-section of design/LANGUAGE.md).
+design/LANGUAGE.md states the value of each lazy node class and, in its
+Evaluation chapter, the passes of the core that evaluate them, down to the core
+normal form. design/PASSES_DRAFT.md keeps the notes of the redesign of the
+passes, and is not normative.
 
 ## Python style
 

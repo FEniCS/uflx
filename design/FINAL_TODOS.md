@@ -44,8 +44,6 @@ Nothing. Integrals over cells and facets use the induced density in
 
 ## Compilers and JAX
 
-1. **The core normal form.** The last grammar of the core passes, which a
-   backend such as JAX takes as input, decides how a lowering is written.
 1. **Complex conventions.** The antilinear position 0 and the Wirtinger parts
    differ from the conventions of `jax.grad` and `jax.vjp`. Document the
    conjugate at the boundary.

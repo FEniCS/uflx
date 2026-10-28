@@ -2021,6 +2021,8 @@ Requires: [`RD`](#rd), [`DomainMap`](#domainmap),
 [`PullBack`](#pullback), [`Integral`](#integral), [An affinely mapped
 triangle](EXAMPLES.md#an-affinely-mapped-triangle).
 
+See also: [Restriction](#restriction), [Side domains](#side-domains).
+
 A point is the image of a domain map. A point in a domain $Q$ is
 `domain_map(RD(0), x, Q)`, with $x$ a constant expression of value shape
 `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$. The core
@@ -2050,15 +2052,35 @@ for each point, and the side `("inside", T, j)`. A family of points in a mesh is
 therefore a topology with a side.
 
 The mesh library locates the cells and inverts the map of each cell outside
-the language, for example by Newton's method, as the mesh library computes
-every side table.
+the language, for example by Newton's method, when the mesh library builds the
+topology $S$ of the points, as the mesh library computes every side table.
+`cells` has the shape `(m,)` and the extent `T.num_cells[j]`, and `positions`
+has the value shape `(m, 1, k_j)`.
+
+An expression $f$ on $D$ is evaluated at the points through the
+[restriction](#restriction) to the points, with $P$ = `side_domain(D, S)` the
+decomposed domain of the points:
+
+```python
+values = pull_back(restriction(f, P, "inside"), cell_domain(P, 0))
+total = integral(restriction(f, P, "inside"), P)
+```
+
+`values` is the family of the values at the points, with the cell index of
+$S$, and `total` is their sum. [`expand_pull_backs`](#expanding-pull-backs)
+lowers the restriction as on any other topology with a side, to the value on
+the cell on the side at the position of the point, so point evaluation needs
+no pass outside the core.
 
 The core does not rewrite `pull_back(u, M)` for a function `u` on $D$,
-because the library of the space of `u` defines `u` on the cells
-only (see [`AbstractFunctionSpace`](#abstractfunctionspace)). A pass of the
-mesh library rewrites the pull-back as the [restriction](#restriction) to the
-topology of the points, with the index $i$ of the family in place of the cell
-index:
+because the library of the space of `u` defines `u` on the cells only (see
+[`AbstractFunctionSpace`](#abstractfunctionspace)), and such a pull-back
+remains in the core normal form. A family of points known in advance is
+therefore written as the topology of the points, not as $M$. Points known only
+after a pass of the compiler, such as points that depend on the quadrature
+points, are located by a pass after the core, of the compiler with the mesh
+library, which rewrites the pull-back as the restriction to the topology of
+the points, with the index $i$ of the family in place of the cell index:
 
 ```python
 g = gathered_index(cells, (i,))
@@ -2066,15 +2088,11 @@ R = domain_map(RD(0), positions[i, 0], K_j)
 pull_back(pull_back(u, gathered_cell_domain(D, j, g)), R)
 ```
 
-Here `cells` has the shape `(m,)` and the extent `T.num_cells[j]`, and
-`positions` has the value shape `(m, 1, k_j)`. The result has the free index
-$i$. The pull-back of `u` by a gathered cell domain is in the contract of the
-space.
-
-The maps below `u` may be a chain. An example of a chain is a family of maps
-from a decomposed domain, pulled back by a cell of that domain and then by a
-family of points of the reference cell. The pass reads the chain as one family
-with all of its free indices (see [A 1D network in a 3D
+The pull-back of `u` by a gathered cell domain is in the contract of the
+space. The maps below `u` may be a chain, such as a family of maps from a
+decomposed domain, pulled back by a cell of that domain and then by the
+quadrature points of the reference cell. The pass reads the chain as one
+family with all of its free indices (see [A 1D network in a 3D
 mesh](EXAMPLES.md#a-1d-network-in-a-3d-mesh)).
 
 A family whose points lie in cells of several types is not yet covered,
@@ -3177,7 +3195,10 @@ a pass may check the linearity (see [Checking linearity](#checking-linearity)).
 Every other function in the expression is fixed, so one function may be an argument
 of one form and fixed in another. The expression may itself be a form, and the
 form then binds more arguments, after the arguments of the expression, as the
-[Gateaux derivative](#gateaux-derivative) does. A form never binds a function in a dual space,
+[Gateaux derivative](#gateaux-derivative) does. No pass of the core flattens
+`Form(Form(e, a), b)` into `Form(e, a + b)`, because a product of forms would
+need a reordering of the arguments, so the code that assembles reads the
+order of the arguments from the static type. A form never binds a function in a dual space,
 so forms are first order, and an action never substitutes a form into a pairing.
 An operator with an argument in a dual space, such as the adjoint of an
 interpolation, is a node class of a language extension that states the
@@ -3378,13 +3399,11 @@ symmetry.
 
 Requires: [Passes](#passes).
 
-> The passes that evaluate the lazy node classes are being designed again.
-> PASSES_DRAFT.md keeps the previous draft, which is not normative.
-
 A lazy node class is a node class whose section states the value of the node,
 and which a pass may rewrite as an expression of other node classes with that
-value. The lazy node classes of the core are `Integral` over a decomposed
-domain, `PullBack`, `Gradient`, `DirectionalDerivative` and `Action`.
+value. The lazy node classes of the core are `GateauxDerivative`, `Action`,
+`DirectionalDerivative`, `Integral` over a decomposed domain, `PullBack` and
+`Gradient`.
 
 A pass that rewrites a node keeps the value of the node and the static type of
 the node, with the free indices possibly in another order, never simplifies,
@@ -3392,8 +3411,8 @@ and substitutes with the renaming of [Passes](#passes). Because the pass never
 simplifies, a term that is zero stays in the graph, and zero times an
 undefined value is undefined. So a rule never multiplies a term that may be
 zero by an expression that may be undefined where the rewritten node is
-defined, such as the logarithm in the derivative of a power (see [Applying
-derivatives](#applying-derivatives)).
+defined, such as the logarithm in the derivative of a power (see
+[Derivatives of the node classes](#derivatives-of-the-node-classes)).
 
 `Action` and `DirectionalDerivative` are real-linear, and each commutes with
 the following node classes in the listed operands, when the other operands do
@@ -3412,16 +3431,25 @@ evaluated node acts on the value of an operand alone: an action substitutes
 into a bound argument, which is a field like any other, and a directional
 derivative differentiates in a real parameter with the domains fixed. Moving
 an evaluated node into a binding node first makes the binding node fresh for
-the other operands of the evaluated node (see [Passes](#passes)).
+the other operands of the evaluated node (see [Passes](#passes)). The partial
+derivative of [`apply_gradients`](#applying-gradients) commutes with the same
+node classes except `Gradient`, `PullBack` and `Integral`, which the rows of
+that pass match first.
 
-The first passes of the core are, in order,
-[`apply_gateaux_derivatives`](#applying-gateaux-derivatives),
-[`apply_actions`](#applying-actions),
-[`apply_derivatives`](#applying-derivatives),
-[`expand_integrals`](#expanding-integrals),
-[`expand_pull_backs`](#expanding-pull-backs) and
-[`apply_gradients`](#applying-gradients). The later passes and the core
-normal form (see [Grammars](#grammars)) are not yet decided.
+The passes of the core run in this order, each on the output grammar of the
+one before, from $N_0$ (see [Grammars](#grammars)):
+
+| Pass | Evaluates | Output grammar |
+| ---- | --------- | -------------- |
+| [`apply_gateaux_derivatives`](#applying-gateaux-derivatives) | `GateauxDerivative` | $N_1$ |
+| [`apply_actions`](#applying-actions) | `Action`, except a pairing | $N_2$ |
+| [`apply_derivatives`](#applying-derivatives) | `DirectionalDerivative` | $N_3$ |
+| [`expand_integrals`](#expanding-integrals) | `Integral` over a decomposed domain | $N_4$ |
+| [`expand_pull_backs`](#expanding-pull-backs) | `PullBack`, except one that reads a value of a library | $N_5$ |
+| [`apply_gradients`](#applying-gradients) | `Gradient`, except of a terminal, a `PullBack` or a `Gradient` | $N_6$, [the core normal form](#the-core-normal-form) |
+
+A rewrite of index notation that keeps the value, such as the reduction of an
+`Indexed` of a `ComponentTensor`, is a pass of the compiler, not of the core.
 
 ### Grammars
 
@@ -3465,8 +3493,8 @@ consists of every `Action` and every node with argument spaces other than
 
 The section of each pass states the input grammar and the output grammar of
 the pass, such as $N_1$ of
-[`apply_gateaux_derivatives`](#applying-gateaux-derivatives). The later
-grammars are part of the design of the passes, and are not yet decided.
+[`apply_gateaux_derivatives`](#applying-gateaux-derivatives), and [The core
+normal form](#the-core-normal-form) lists what the last of them allows.
 
 ### Applying Gateaux derivatives
 
@@ -3567,6 +3595,10 @@ its own rows first, for the leaves of the expression, and then the rows below.
   exponent is 0, which occurs when an integer power is differentiated more
   times than its degree, and is the one known exception to the principle of
   [Evaluation](#evaluation).
+- A commuting row applies only to an operand that no row of the pass
+  matches first, so each pass decides through its own rows which node classes
+  the derivative moves into, as [`apply_gradients`](#applying-gradients) does
+  for `Gradient`, `PullBack` and `Integral`.
 - A language extension that adds a node class adds the derivative of the
   class to this table, and every pass that differentiates then uses the row.
 - The derivative of each row is a composition of node classes of the core,
@@ -3602,6 +3634,7 @@ if $a$ is not $x$, the pass then substitutes $a$ for $x$ in the result.
 - A `Form` that binds $x$ has no free $x$, so the first row gives `Zero`.
 - The variable has the argument spaces `()`, so the variable is never the
   function $l$ of a pairing.
+
 ### Expanding integrals
 
 Requires: [Applying derivatives](#applying-derivatives), [`Integral` over a
@@ -3685,9 +3718,12 @@ into it (see [Restriction](#restriction)).
 - Every pull-back that remains reads a value of a library on a cell, possibly
   at the points of a cell of lower dimension through $A_i$, such as the
   reference gradient of a function on the cell at the points of a facet. A
-  pull-back of a terminal by a map other than a cell domain, such as for
-  point evaluation, needs a pass of the mesh library that locates the points
-  (see [Points and point evaluation](#points-and-point-evaluation)).
+  pull-back of a function by a map other than a cell domain, such as by a
+  point of a mesh given by its coordinates, remains, because the library of
+  the function defines the function on the cells. A point of a mesh known in
+  advance is evaluated through a restriction instead, and other points are
+  located by a pass after the core (see [Points and point
+  evaluation](#points-and-point-evaluation)).
 
 ### Applying gradients
 
@@ -3725,8 +3761,9 @@ result.
 - On a decomposed domain $P$ of lower dimension than its ambient coordinate
   domain, `Gradient` is the tangential gradient (see [`Gradient`](#gradient)),
   which obeys the same rows. The `Coordinate` row does not match, so
-  `gradient(coordinate(P), P)`, the projection $\Pi$, remains, and a pass of
-  the mesh library or a pull-back by a cell evaluates it.
+  `gradient(coordinate(P), P)`, the projection $\Pi$, remains, and a
+  pull-back by a cell, such as through a restriction to points, evaluates
+  it.
 - `expand_pull_backs` leaves the pull-back of a gradient on a cell to the
   points of a facet, because the gradient does not commute with that
   pull-back. Once the gradient is rewritten, the pull-back is pointwise again,
@@ -3737,6 +3774,62 @@ result.
   pull-back of $N_5$ matches a row that remains, so the final
   `expand_pull_backs` rewrites only the pull-backs that the rewrite of the
   gradients uncovers.
+
+### The core normal form
+
+Requires: [Grammars](#grammars), [Applying gradients](#applying-gradients).
+
+The core normal form is $N_6$, the output grammar of
+[`apply_gradients`](#applying-gradients), the last pass of the core. Every
+expression node of an expression in the core normal form is an instance of a
+concrete class of the core or a terminal of a downstream library. The table
+gives every node class that the core normal form allows, with the condition
+on each, and no other node class occurs in the core normal form:
+
+| Chapter | Node class | Allowed in the core normal form |
+| ------- | ---------- | ------------------------------- |
+| [Algebra](#algebra) | `Integer`, `Float`, `ImaginaryUnit`, `Zero` | Always |
+| [Algebra](#algebra) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
+| [Algebra](#algebra) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of a `ComponentTensor`, which the compiler rewrites (see [Evaluation](#evaluation)) |
+| [Algebra](#algebra) | `Inverse` | Always, for the compiler to evaluate |
+| [Calculus on a domain](#calculus-on-a-domain) | `Coordinate` | Always |
+| [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `PullBack` or a `Gradient`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
+| [Calculus on a domain](#calculus-on-a-domain) | `Integral` | Over a domain that is not a `DecomposedDomain`, such as a reference cell or `RD(0)` |
+| [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap`, or by a domain map of a terminal, a `PullBack`, or a `Gradient` on a domain of higher dimension than the parameter domain |
+| [Decomposed domains](#decomposed-domains) | `Normal` | Always |
+| [Function spaces](#function-spaces) | `Function` | Always |
+| [Variational forms](#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](#form)) |
+| [Variational forms](#variational-forms) | `Action` | A pairing, an `Action` whose form is a `Function` in a dual space |
+| | A terminal of a downstream library | Always |
+
+The objects of an expression that are not expressions, such as an `Index`, an
+`EllipsisIndex`, a `GatheredIndex`, a domain, a `DomainMap`, a `SideMap` and a
+space, occur as in any expression, because a grammar restricts only the
+expression nodes.
+
+The code that assembles receives the form layer (see [Grammars](#grammars)):
+sums and products of forms, `Zero`, forms whose expression may be a form,
+with the order of the arguments from the static type (see [`Form`](#form)),
+and pairings, which the library of the function in the dual space evaluates.
+
+A form compiler receives the integrand layer: integrals over reference cells
+and over points, whose integrands are arithmetic and index notation of
+constants, of the coordinates of the reference cell, and of the values that
+the pull-backs read from libraries on the cells. Such a value is a function
+pulled back by a cell, the reference gradient of one, or either at the points
+of a cell of lower dimension through the inclusion of a side (see
+[Expanding pull-backs](#expanding-pull-backs)).
+
+In particular, the core normal form may still contain:
+
+- A pull-back of a function by points known only after a pass of the
+  compiler, which a pass after the core locates (see [Points and point
+  evaluation](#points-and-point-evaluation)).
+- A pull-back by a `SideMap` that no pull-back by a cell encloses, such as a
+  restriction that is not integrated.
+- A `Gradient` of the coordinates of a decomposed domain of lower dimension
+  than its ambient coordinate domain, the projection $\Pi$, and a `Gradient`
+  of a function on a decomposed domain, both under a pull-back by points.
 
 ## Extending the core
 
