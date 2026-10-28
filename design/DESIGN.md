@@ -261,8 +261,8 @@ mesh library has cut them into pieces that lie in one cell on each side, and
 the points of a point evaluation. Each is a topology whose groups list their
 sides.
 
-Restriction is then not a node. `restriction(u, E, "+")` is the pull-back of
-`u` by a lazy `SideMap`, and a pass rewrites it on each piece as two nested
+Restriction is then not a node. The restriction
+`pull_back(u, side_map(D, E, "+"))` is the pull-back of `u` by a lazy `SideMap`, and a pass rewrites it on each piece as two nested
 pull-backs: first by the cell on that side, selected through the table by
 `gathered_cell_domain`, then by the affine inclusion of the reference facet
 into that cell through the vertex positions (Restriction). Two restrictions of
@@ -495,7 +495,7 @@ here so that a reader knows which choices are load-bearing.
 | `f * ds`                                 | `integral(f, E)` over a boundary facet topology         |
 | `f * dS`                                 | `integral(f, E)` over an interior facet topology        |
 | `f * dx(1)`                              | `integral(f, E)` over a marked subdomain topology       |
-| `u('+')`                                 | `restriction(u, E, "+")`                                |
+| `u('+')`                                 | `pull_back(u, side_map(D, E, "+"))`                     |
 | `FacetNormal(mesh)`                      | `normal(D, E, "+")`                                     |
 | `TestFunction`, `TrialFunction`          | functions bound by `form(e, (v, u))`                    |
 | `Coefficient`                            | a function not bound by the form                        |

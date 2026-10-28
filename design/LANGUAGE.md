@@ -307,7 +307,7 @@ Three kinds of code produce objects:
 | Pass, such as differentiation, lowering or `units` | After construction              | Yes, and a pass may rewrite the graph                                     | No                            |
 
 A construction free function fails when a constructor rejects the
-arguments, for example `restriction(f, E, s)` raises `ValueError` from the
+arguments, for example `side_map(D, E, s)` raises `ValueError` from the
 constructor of `SideMap` when no group of the topology of `E` has a side named
 `s`. A pass fails with `TypeError` for a node class that
 the pass has no rule for, or with an error of the pass, such as inconsistent
@@ -2064,8 +2064,9 @@ An expression $f$ on $D$ is evaluated at the points through the
 decomposed domain of the points:
 
 ```python
-values = pull_back(restriction(f, P, "inside"), cell_domain(P, 0))
-total = integral(restriction(f, P, "inside"), P)
+inside = side_map(D, P, "inside")
+values = pull_back(pull_back(f, inside), cell_domain(P, 0))
+total = integral(pull_back(f, inside), P)
 ```
 
 `values` is the family of the values at the points, with the cell index of
@@ -2585,12 +2586,13 @@ of a topology $S$ with sides, from the side $s$, is the pull-back of $f$ along
 the inclusion of each cell of $S$ into the cell on the side $s$. The side
 tables of $S$ give the cell on the side, through a
 [`GatheredIndex`](#gatheredindex) entry, and the positions of the vertices of
-the inclusion.
+the inclusion. The restriction of $f$ to a decomposed domain $E$ of the cells
+of $S$ from the side $s$ is `pull_back(f, side_map(D, E, s))` (see
+[`SideMap`](#sidemap)).
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `restriction(f, E, s)` | | `f: AbstractExpression`, `E: DecomposedDomain`, `s: str` | `pull_back(f, side_map(D, E, s))`, with $D$ the support of $f$, or $f$ if $f$ has no support |
-| `side_domain(D, S)` | | `D: DecomposedDomain`, `S: AbstractTopology` | The decomposed domain of the cells of $S$, with the geometry of the first side of each group |
+| `side_domain(D, S)` | | `D: DecomposedDomain`, `S: AbstractTopology` | The decomposed domain of the cells of $S$, with the geometry of the first side of each group on the topology of $D$ |
 
 Notation, for the group $i$ of $S$ with the side `(s, T, j)`:
 
@@ -2660,8 +2662,10 @@ by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)`.
 
 Piece $i$ of `side_domain(D, S)` is
 `domain_map(F_i, pull_back(pull_back(coordinate(D), B_i), A_i), Q)`, with
-$B_i$ and $A_i$ of the first side of group $i$. $F_i$ must be an
-`AbstractReferenceCell`. The topology of the result is $S$. The core does not
+$B_i$ and $A_i$ of the first side of group $i$ whose topology is the
+topology of $D$. $D$ must have a topology, every group of $S$ must have a side
+on that topology, and $F_i$ must be an `AbstractReferenceCell`. The topology
+of the result is $S$. The core does not
 check that the other sides have the same geometry.
 
 #### Traces and normals
@@ -2672,7 +2676,7 @@ of $S$, from the side:
 - The restriction of `gradient(u, D)` is the whole gradient of `u` on the cell
   on the side, as for a normal derivative. The last axis is in the frame of
   the ambient coordinate domain from every side.
-- `gradient(restriction(u, E, s), E)` is the tangential gradient of the
+- `gradient(pull_back(u, side_map(D, E, s)), E)` is the tangential gradient of the
   restriction along the cells of $E$.
 
 The outward normal of the cell on a side is [`normal(D, E, s)`](#normal).
@@ -2688,7 +2692,7 @@ diagonal = StaticTopology(
     (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
 )
 E = side_domain(D, diagonal)
-jump = restriction(u, E, "+") - restriction(u, E, "-")
+jump = pull_back(u, side_map(D, E, "+")) - pull_back(u, side_map(D, E, "-"))
 ```
 
 - From `"+"`, the side tables are the cells `(0,)` and the positions
@@ -2712,7 +2716,7 @@ jump = restriction(u, E, "+") - restriction(u, E, "-")
   with `E = side_domain(D, S)` give one jump for all three groups.
 
 ```{dropdown} Legacy UFL
-The legacy UFL restriction `f('+')` is `restriction(f, E, "+")` on the decomposed domain $E$ of the interior facets, whose sides are named `'+'` and `'-'`.
+The legacy UFL restriction `f('+')` is `pull_back(f, side_map(D, E, "+"))` on the decomposed domain $E$ of the interior facets, whose sides are named `'+'` and `'-'`.
 ```
 
 ### `Integral` over a decomposed domain
@@ -2773,7 +2777,7 @@ Examples:
 - `integral(Integer(1), D)` is the area 1 of the square, the sum of two
   integrals over `K`.
 - `integral(Integer(1), B)` is the perimeter 4.
-- `integral(restriction(u, B, "inside"), B)` integrates `u` over the boundary.
+- `integral(pull_back(u, side_map(D, B, "inside")), B)` integrates `u` over the boundary.
 
 ```{dropdown} Legacy UFL
 `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the decomposed domain of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
@@ -2858,13 +2862,14 @@ The examples use the following objects:
 
 ```python
 n_B = normal(D, B, "inside")
+inside, plus, minus = side_map(D, B, "inside"), side_map(D, E, "+"), side_map(D, E, "-")
 
 # The flux of grad u out of the square, the legacy UFL dot(grad(u), n) * ds.
-flux = integral(index_sum(restriction(grad_u, B, "inside")[i] * n_B[i], (i,)), B)
+flux = integral(index_sum(pull_back(grad_u, inside)[i] * n_B[i], (i,)), B)
 
 # The jump of the normal derivative across the diagonal, from the side "+".
 n_E = normal(D, E, "+")
-jump = restriction(grad_u, E, "+")[i] - restriction(grad_u, E, "-")[i]
+jump = pull_back(grad_u, plus)[i] - pull_back(grad_u, minus)[i]
 penalty = integral(index_sum(jump * n_E[i], (i,)) ** Integer(2), E)
 ```
 
@@ -4218,8 +4223,7 @@ AbstractExpression
 | Decomposed domains          | [`decomposed_domain(pieces)`](#decomposeddomain)                         |                               | `pieces: tuple[DomainMap, ...]`                                                                                        | `DecomposedDomain`                                                                                                                                                              |
 |                             | [`cell_domain(D, j)`](#cell-domains)                                     |                               | `D: DecomposedDomain`, `j: int`                                                                                        | `DomainMap` of the cells of type `j`                                                                                                                                            |
 |                             | [`gathered_cell_domain(D, j, g)`](#gathered-cell-domains)                |                               | `D: DecomposedDomain`, `j: int`, `g: GatheredIndex`                                                                    | `DomainMap` of the cells of type `j` selected by `g`                                                                                                                            |
-|                             | [`restriction(f, E, s)`](#restriction)                                   |                               | `f: AbstractExpression`, `E: DecomposedDomain`, `s: str`                                                               | `pull_back(f, side_map(D, E, s))`, with $D$ the support of $f$, or $f$ if $f$ has no support                                                                                    |
-|                             | [`side_domain(D, S)`](#restriction)                                      |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                                           | The decomposed domain of the cells of $S$, with the geometry of the first side of each group                                                                                    |
+|                             | [`side_domain(D, S)`](#restriction)                                      |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                                           | The decomposed domain of the cells of $S$, with the geometry of the first side of each group on the topology of $D$                                                             |
 |                             | [`side_map(D, E, s)`](#sidemap)                                          |                               | `D, E: DecomposedDomain`, `s: str`                                                                                     | `SideMap`                                                                                                                                                                       |
 |                             | [`normal(D, E, s)`](#normal)                                             |                               | `D, E: DecomposedDomain`, `s: str`                                                                                     | `Normal`                                                                                                                                                                        |
 | Function spaces             | [`function(V, label)`](#function)                                        |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                                      | `Function`                                                                                                                                                                      |
@@ -4297,6 +4301,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 38    |
 | Expression node classes         | 29    |
-| Free functions                  | 48    |
+| Free functions                  | 47    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

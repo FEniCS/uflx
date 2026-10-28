@@ -568,11 +568,12 @@ i = index("i")
 grad_u = gradient(u, D)
 grad_v = gradient(v, D)
 
-# The restrictions from each side, expressions on E.
-u_p, u_m = restriction(u, E, "+"), restriction(u, E, "-")
-v_p, v_m = restriction(v, E, "+"), restriction(v, E, "-")
-du_p, du_m = restriction(grad_u, E, "+"), restriction(grad_u, E, "-")
-dv_p, dv_m = restriction(grad_v, E, "+"), restriction(grad_v, E, "-")
+# The restrictions from each side, pull-backs by the side maps, expressions on E.
+plus, minus = side_map(D, E, "+"), side_map(D, E, "-")
+u_p, u_m = pull_back(u, plus), pull_back(u, minus)
+v_p, v_m = pull_back(v, plus), pull_back(v, minus)
+du_p, du_m = pull_back(grad_u, plus), pull_back(grad_u, minus)
+dv_p, dv_m = pull_back(grad_v, plus), pull_back(grad_v, minus)
 
 # The normal out of the cell on the side "+", and the jumps and averages.
 n = normal(D, E, "+")
@@ -589,8 +590,8 @@ f = -avg_dn_u * jump_v - jump_u * avg_dn_v + alpha[e] * jump_u * jump_v
 a_facet = form(integral(f, E), (v, u))
 ```
 
-- `restriction(u, E, "+")` is `pull_back(u, side_map(D, E, "+"))`, an
-  expression with the support `E` and no free index. `jump_u` is the
+- `u_p` is `pull_back(u, side_map(D, E, "+"))`, an expression with the
+  support `E` and no free index. `jump_u` is the
   difference of two expressions on `E`, and `f` has the support `E` and the
   free index `e`, from `alpha[e]`.
 - `n` points out of the cell on the side `"+"`, the triangle `(0, 1, 2)`, so
@@ -658,7 +659,7 @@ direction of the facet from each side.
   $\begin{pmatrix} 0 & -1 \\ 1 & 1 \end{pmatrix}$, and $\hat m = (1, 1) / \sqrt 2$,
   so `n` evaluates to $(1, 1) / \sqrt 2$ on the diagonal, pointing from
   triangle 0 into triangle 1, and the density to $\sqrt 2$.
-- `restriction(u, E, "-")` on the same `t` reads `u` on triangle 1 at
+- `u_m` on the same `t` reads `u` on triangle 1 at
   $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
   is a difference at one point.
 
@@ -719,17 +720,15 @@ r_cell = integral((f + lap_u) * v, D)
 # The jump of the normal derivative with the normal of "+". From "-" the normal
 # and the jump both change sign, so the same scalar serves both cells.
 n = normal(D, E, "+")
-jump_n = index_sum(
-    (restriction(grad_u, E, "+")[i] - restriction(grad_u, E, "-")[i]) * n[i], (i,)
-)
-r_facets = integral(
-    -half * jump_n * (restriction(v, E, "+") + restriction(v, E, "-")), E
-)
+plus, minus = side_map(D, E, "+"), side_map(D, E, "-")
+jump_n = index_sum((pull_back(grad_u, plus)[i] - pull_back(grad_u, minus)[i]) * n[i], (i,))
+r_facets = integral(-half * jump_n * (pull_back(v, plus) + pull_back(v, minus)), E)
 
 # The Neumann residual on the boundary.
 n_B = normal(D, B, "inside")
-dn_u = index_sum(restriction(grad_u, B, "inside")[i] * n_B[i], (i,))
-r_boundary = integral((g - dn_u) * restriction(v, B, "inside"), B)
+inside = side_map(D, B, "inside")
+dn_u = index_sum(pull_back(grad_u, inside)[i] * n_B[i], (i,))
+r_boundary = integral((g - dn_u) * pull_back(v, inside), B)
 
 r = form(r_cell + r_facets + r_boundary, (v,))
 ```
@@ -777,7 +776,7 @@ with the two kernels of the global form in place of hand-written code.
 - With a topology of the pairs (cell, local facet) in place of `E`, with the
   sides `"self"` and `"other"` and `v` restricted from `"self"` only, the
   facet kernel returns the rows of the one cell and the pairs come packed by
-  cell. The form is the same with `restriction(v, E, "self")` in place of the
+  cell. The form is the same with `pull_back(v, side_map(D, E, "self"))` in place of the
   sum of the two restrictions.
 - The per-cell estimator $\eta_K^2 = \int_K \lvert \nabla e \rvert^2$ is
   `integral(pull_back(index_sum(grad_e[i] * grad_e[i], (i,)), cell_domain(D, 0)) * density(cell_domain(D, 0)), K)`,
@@ -876,10 +875,11 @@ eps_d, eps_w = half * (grad_d[i, j] + grad_d[j, i]), half * (grad_w[i, j] + grad
 div_d, div_w = index_sum(grad_d[i, i], (i,)), index_sum(grad_w[i, i], (i,))
 solid = integral(two * mu_s * index_sum(eps_d * eps_w, (i, j)) + lam_s * div_d * div_w, S)
 
-# The restrictions to the interface, expressions on G.
-u_G, v_G = restriction(u, G, "fluid"), restriction(v, G, "fluid")
-d_G, w_G = restriction(d, G, "solid"), restriction(w, G, "solid")
-d_old_G = restriction(d_old, G, "solid")
+# The restrictions to the interface, pull-backs by the side maps, expressions on G.
+from_fluid, from_solid = side_map(F, G, "fluid"), side_map(S, G, "solid")
+u_G, v_G = pull_back(u, from_fluid), pull_back(v, from_fluid)
+d_G, w_G = pull_back(d, from_solid), pull_back(w, from_solid)
+d_old_G = pull_back(d_old, from_solid)
 
 # The coupling: lam is the traction on both parts, and mu enforces u = (d - d_old) / dt.
 coupling = integral(
@@ -888,7 +888,7 @@ coupling = integral(
 a = form(fluid + solid + coupling, ((v, q, w, mu), (u, p, d, lam)))
 
 # The right-hand side: the inlet traction and the old displacement.
-traction = integral(index_sum(g[i] * restriction(v, G_in, "fluid")[i], (i,)), G_in)
+traction = integral(index_sum(g[i] * pull_back(v, side_map(F, G_in, "fluid"))[i], (i,)), G_in)
 l = form(traction + integral(index_sum(mu[i] * d_old_G[i], (i,)) / dt, G), ((v, q, w, mu),))
 ```
 
@@ -898,8 +898,8 @@ l = form(traction + integral(index_sum(mu[i] * d_old_G[i], (i,)) / dt, G), ((v, 
   the reference facet `I`. Every integral has no support, so `fluid`, `solid`
   and `coupling` add into one expression, and the arguments of `a` are tuples
   of functions on three domains (see [`Form`](LANGUAGE.md#form)).
-- `side_domain(F, interface)` takes the geometry of the first side, so the
-  first argument is `F`, whose topology is `fluid_cells`. `normal(F, G, "fluid")`
+- `side_domain(F, interface)` takes the geometry of the side on the topology
+  of `F`, `fluid_cells`. `normal(F, G, "fluid")`
   is the normal out of the fluid, and `normal(S, G, "solid")` is the negative
   of it.
 - An integral is over the smallest domain, and the fields of the larger domains
@@ -1026,7 +1026,8 @@ tissue = integral(index_sum(grad_p3[m] * grad_q3[m], (m,)), D3)
 vessel = integral(index_sum(grad_p1[m] * grad_q1[m], (m,)), D1)
 
 # The tissue pressure on the network, and the exchange between the two.
-p3_1, q3_1 = restriction(p3, D1, "tissue"), restriction(q3, D1, "tissue")
+from_tissue = side_map(D3, D1, "tissue")
+p3_1, q3_1 = pull_back(p3, from_tissue), pull_back(q3, from_tissue)
 coupling = integral(beta * (p1 - p3_1) * (q1 - q3_1), D1)
 a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
 ```
@@ -1037,7 +1038,7 @@ a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
   two ends in `K3`, the coordinates of two vertices of `K3`. The tables come
   from the connectivity of the mesh, and a segment and its tetrahedron share
   vertices, so the partition of `T3` gives the partition of `T1`.
-- `restriction(p3, D1, "tissue")` is `pull_back(pull_back(p3, B_t), A_t)` with
+- `p3_1` is `pull_back(pull_back(p3, B_t), A_t)` on each segment, with
   $B_t$ the tetrahedron of each segment and $A_t$ =
   `domain_map(I, affine_map(I, points_t), K3)` the edge, by
   [Restriction](LANGUAGE.md#restriction), an expression on `D1` that combines
@@ -1604,8 +1605,9 @@ from uflx import (
     index_sum,
     integral,
     normal,
-    restriction,
+    pull_back,
     side_domain,
+    side_map,
     tensor,
 )
 
@@ -1709,7 +1711,7 @@ def restrict(obj, E):
     if not isinstance(obj, AbstractExpression) or obj.support is None:
         return obj
     if not contains(obj, is_facet_normal):
-        return restriction(obj, E, "inside")
+        return pull_back(obj, side_map(obj.support, E, "inside"))
     return obj.__class__(*restrict(obj.construction_arguments, E))
 
 
@@ -1837,13 +1839,13 @@ L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
   side `"inside"`, which legacy UFL does without saying so for exterior facets
   and subdomains. `restrict` is the legacy `apply_restrictions`, run when the
   form is built: the largest subtrees on the mesh become one restriction each,
-  so `grad(u)` becomes `restriction(grad(u), E, "inside")` and not the
+  so `grad(u)` becomes the pull-back of `grad(u)` by the side map and not the
   derivative of a restriction, and the rebuilding of the other nodes uses
   rule 4 of [`Base`](LANGUAGE.md#the-base-object-base). `dx` with the mesh
   as domain restricts nothing, since the domain of the measure is the support
   of the integrand. A `dS` would be a
   measure over the interior facets with a side for each restriction, the
-  legacy `u('+')` would be `restriction(u, E, "+")`, and `avg` and `jump`
+  legacy `u('+')` would be `pull_back(u, side_map(D, E, "+"))`, and `avg` and `jump`
   would be arithmetic, as in the [interior facet
   example](#an-interior-facet-integral).
 - The legacy `FacetNormal` belongs to the mesh and is resolved per integral.
