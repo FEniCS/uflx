@@ -576,7 +576,7 @@ du_p, du_m = pull_back(grad_u, plus), pull_back(grad_u, minus)
 dv_p, dv_m = pull_back(grad_v, plus), pull_back(grad_v, minus)
 
 # The normal out of the cell on the side "+", and the jumps and averages.
-n = normal(D, E, "+")
+n = normal(plus)
 half = Integer(1) / Integer(2)
 jump_u, jump_v = u_p - u_m, v_p - v_m
 avg_dn_u = half * index_sum((du_p[i] + du_m[i]) * n[i], (i,))
@@ -719,14 +719,14 @@ r_cell = integral((f + lap_u) * v, D)
 
 # The jump of the normal derivative with the normal of "+". From "-" the normal
 # and the jump both change sign, so the same scalar serves both cells.
-n = normal(D, E, "+")
 plus, minus = side_map(D, E, "+"), side_map(D, E, "-")
+n = normal(plus)
 jump_n = index_sum((pull_back(grad_u, plus)[i] - pull_back(grad_u, minus)[i]) * n[i], (i,))
 r_facets = integral(-half * jump_n * (pull_back(v, plus) + pull_back(v, minus)), E)
 
 # The Neumann residual on the boundary.
-n_B = normal(D, B, "inside")
 inside = side_map(D, B, "inside")
+n_B = normal(inside)
 dn_u = index_sum(pull_back(grad_u, inside)[i] * n_B[i], (i,))
 r_boundary = integral((g - dn_u) * pull_back(v, inside), B)
 
@@ -899,8 +899,8 @@ l = form(traction + integral(index_sum(mu[i] * d_old_G[i], (i,)) / dt, G), ((v, 
   and `coupling` add into one expression, and the arguments of `a` are tuples
   of functions on three domains (see [`Form`](LANGUAGE.md#form)).
 - `side_domain(F, interface)` takes the geometry of the side on the topology
-  of `F`, `fluid_cells`. `normal(F, G, "fluid")`
-  is the normal out of the fluid, and `normal(S, G, "solid")` is the negative
+  of `F`, `fluid_cells`. `normal(from_fluid)`
+  is the normal out of the fluid, and `normal(from_solid)` is the negative
   of it.
 - An integral is over the smallest domain, and the fields of the larger domains
   are restricted into it. A field on a submesh is never extended by zero onto
@@ -1705,7 +1705,7 @@ def restrict(obj, E):
     # mesh are pulled back to E, and the facet normal of the mesh becomes the
     # normal of E.
     if is_facet_normal(obj):
-        return normal(obj.support, E, "inside")
+        return normal(side_map(obj.support, E, "inside"))
     if isinstance(obj, tuple):
         return tuple(restrict(item, E) for item in obj)
     if not isinstance(obj, AbstractExpression) or obj.support is None:
@@ -1851,7 +1851,7 @@ L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
 - The legacy `FacetNormal` belongs to the mesh and is resolved per integral.
   `n` is a placeholder function of the module in a space of fields on the
   mesh, known by its label, so that `inner(q, n)` is an expression on the
-  mesh like any other, and `restrict` replaces `n` by `normal(D, E, "inside")`
+  mesh like any other, and `restrict` replaces `n` by `normal(side_map(D, E, "inside"))`
   on the domain `E` of the measure. A subtree that contains `n` is rebuilt
   rather than restricted, because the normal has no meaning on the mesh.
 - `grad` reads the domain from the support of the function, as the legacy

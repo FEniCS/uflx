@@ -78,7 +78,7 @@ and index tables. Those are base objects with properties, not values.
 | ------------------------------------------- | ------------------------------------ |
 | `Integer(2)`, `X[0] * X[1]`, `tensor(...)`  | `RD(2)`, a reference cell, a mesh    |
 | `coordinate(D)`, `gradient(u, D)`           | `domain_map(K, x, RD(2))`            |
-| `pull_back(f, e)`, `normal(D, E, "+")`      | `side_map(D, E, "+")`, a topology    |
+| `pull_back(f, e)`, `normal(sm)`             | `side_map(D, E, "+")`, a topology    |
 | `function(V, "u")`                          | the space `V`, `dual_space(V)`       |
 | `integral(f, D)`                            | `index("i")`, an extent, a table     |
 | `form(e, (v, u))`, `action(a, 1, w)`        |                                      |
@@ -496,7 +496,7 @@ here so that a reader knows which choices are load-bearing.
 | `f * dS`                                 | `integral(f, E)` over an interior facet topology        |
 | `f * dx(1)`                              | `integral(f, E)` over a marked subdomain topology       |
 | `u('+')`                                 | `pull_back(u, side_map(D, E, "+"))`                     |
-| `FacetNormal(mesh)`                      | `normal(D, E, "+")`                                     |
+| `FacetNormal(mesh)`                      | `normal(side_map(D, E, "+"))`                           |
 | `TestFunction`, `TrialFunction`          | functions bound by `form(e, (v, u))`                    |
 | `Coefficient`                            | a function not bound by the form                        |
 | `Cofunction`, `Coargument`               | a fixed and a bound function in `dual_space(V)`         |

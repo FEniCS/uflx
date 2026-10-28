@@ -2399,9 +2399,24 @@ $$
 X \mapsto p_0 + \sum_{d < k} (p_{d+1} - p_0) \, \big(E^{-1} (X - V_0)\big)_d.
 $$
 
-- The map is an expression on $F$ with value shape `(m,)`, a fixed composition
-  for each $k$ with [`Inverse`](#inverse).
-- For $k = 0$ the map is the constant $p_0$.
+- The map is an expression on $F$ with value shape `(m,)`, with the derived
+  index $l$ = `Index(("uflx.affine_map", F, points, 0))` (see [Derived
+  indices](#derived-indices)). For $k \ge 1$, the map is
+
+  ```python
+  component_tensor(
+      points[0, l]
+      + (points[1, l] - points[0, l]) * Y[0]
+      + ...
+      + (points[k, l] - points[0, l]) * Y[k - 1],
+      (l,),
+  )
+  ```
+
+  with the terms nested to the left, `Y = inverse(E) @ (coordinate(F) - V[0])`,
+  `V = F.vertices`, and `E` the `tensor` of the rows $r < k$, each the `tensor`
+  of `V[d + 1, r] - V[0, r]` for $d < k$.
+- For $k = 0$ the map is the constant `component_tensor(points[0, l], (l,))`.
 - Only the first $k + 1$ rows enter the map. The other rows are the images of
   the other vertices when the image is affine, such as the facet of a
   reference cell.
@@ -2509,9 +2524,10 @@ selected by a [`GatheredIndex`](#gatheredindex) $g$ of the extent
 $j$, the result is `domain_map(P_j, chi, D)` with
 
 ```python
-chi = component_tensor(component_tensor(psi_j[k], (c, k))[g, k], (k,))
+chi = component_tensor(psi_j[k], (c, k))[g]
 ```
 
+with the partial indexing `[g]` (see [Partial indexing](#partial-indexing)),
 and $k$ the derived index `Index(("uflx.gathered_cell_domain", D, j, g, 0))`.
 
 The library of a function in a space on $D$ evaluates the pull-back by
@@ -2614,9 +2630,10 @@ cells of group $i$:
   [`DecomposedDomain`](#decomposeddomain)).
 - $A_i$, the inclusion into the cell on the side, is
   `domain_map(F_i, affine_map(F_i, points), K_j)`. Here
-  `points = component_tensor(positions[e, v, k], (v, k))`, with the derived
-  indices $v$ and $k$, is the position in $K_j$ of each vertex $v$ of the cell
-  $e$. $F_i$ must be a reference cell. $A_i$ sends each vertex of the cell $e$
+  `points = component_tensor(positions[e, v, k], (v, k))` is the position in
+  $K_j$ of each vertex $v$ of the cell $e$, with the derived indices $v$ and
+  $k$ of the free function or the pass that builds the inclusion (see
+  [Derived indices](#derived-indices)). $F_i$ must be a reference cell. $A_i$ sends each vertex of the cell $e$
   to the position of that vertex in the cell on the side:
   - For a vertex, $A_i$ is the constant point.
   - For the cell itself with the vertices in order, $A_i$ is the identity map.
@@ -2663,7 +2680,8 @@ by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)`.
 Piece $i$ of `side_domain(D, S)` is
 `domain_map(F_i, pull_back(pull_back(coordinate(D), B_i), A_i), Q)`, with
 $B_i$ and $A_i$ of the first side of group $i$ whose topology is the
-topology of $D$. $D$ must have a topology, every group of $S$ must have a side
+topology of $D$. Piece $i$ has the one free index `cell_index(S, i)`, the free
+index `e` of $B_i$ and $A_i$. $D$ must have a topology, every group of $S$ must have a side
 on that topology, and $F_i$ must be an `AbstractReferenceCell`. The topology
 of the result is $S$. The core does not
 check that the other sides have the same geometry.
@@ -2679,7 +2697,7 @@ of $S$, from the side:
 - `gradient(pull_back(u, side_map(D, E, s)), E)` is the tangential gradient of the
   restriction along the cells of $E$.
 
-The outward normal of the cell on a side is [`normal(D, E, s)`](#normal).
+The outward normal of the cell on a side is [`normal(side_map(D, E, s))`](#normal).
 
 #### Example
 
@@ -2791,17 +2809,20 @@ Requires: [Restriction](#restriction), [Reference cell](#reference-cell),
 A concrete subclass of `AbstractExpression` for the unit outward normal of the
 cell on a side, on the cells of a topology with sides.
 
-| `Normal(D, E, s)` |                                                                                                       |
-| ----------------- | ----------------------------------------------------------------------------------------------------- |
-| Extends           | `AbstractExpression` |
-| Free function     | `normal(D, E, s)`                                                                                     |
-| Takes             | `D, E: DecomposedDomain`, `s: str` |
-| Properties        | `ambient_domain` $D$, `parameter_domain` $E$ and `side` $s$, as for [`SideMap`](#sidemap)         |
-| Requires          | The requirements of `SideMap(D, E, s)`, and $E$ of the dimension $k - 1$ for the dimension $k$ of $D$ |
-| Static type       | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the support $E$, real      |
-| Raises            | `ValueError` if a requirement fails                                                                   |
+| `Normal(sm)` |                                                                                                       |
+| ------------ | ----------------------------------------------------------------------------------------------------- |
+| Extends      | `AbstractExpression` |
+| Free function | `normal(sm)`                                                                                         |
+| Takes        | `sm: SideMap` |
+| Properties   | `side_map`, a [`SideMap`](#sidemap) `SideMap(D, E, s)`                                               |
+| Requires     | $E$ of the dimension $k - 1$ for the dimension $k$ of $D$                                             |
+| Static type  | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the support $E$, real      |
+| Raises       | `TypeError` for an `sm` that is not a `SideMap`, and `ValueError` if the requirement fails           |
 
-Notation, for the piece $i$ of $E$:
+The normal of `sm` belongs to the same side as the restriction
+`pull_back(f, sm)`, so a form writes both from one side map.
+
+Notation, for `sm` = `SideMap(D, E, s)` and the piece $i$ of $E$:
 
 - $B_i$ and $A_i$ are the maps of [Restriction](#restriction) for the side $s$.
 - $K_j$ is the reference cell of the cell on the side.
@@ -2810,7 +2831,7 @@ Notation, for the piece $i$ of $E$:
 
 #### The pull-back of `Normal`
 
-The pull-back of `Normal(D, E, s)` by `cell_domain(E, i)` is
+The pull-back of `Normal(SideMap(D, E, s))` by `cell_domain(E, i)` is
 
 $$
 \nu = \frac{K^T \hat m}{\lvert K^T \hat m \rvert},
@@ -2818,16 +2839,34 @@ $$
 
 where:
 
-- $K$ is `inverse_jacobian(B_i)` at the points of $A_i$ (see [Jacobian and
+- $K$ is `pull_back(inverse_jacobian(B_i), A_i)`, the inverse Jacobian of
+  the cell on the side at the points of $A_i$ (see [Jacobian and
   density](#jacobian-and-density)). The parameter domain of $B_i$ is a
   reference cell (see [`SideMap`](#sidemap)), so $K$ is `inverse(J)`.
-- $\hat m$ is a normal of the cell of $E$ in $K_j$. $\hat m$ is orthogonal to
-  the columns of the Jacobian matrix of $A_i$, and $\hat m$ points away from
-  the centroid of the vertices of $K_j$.
+- $\hat m$ is a normal of the cell of $E$ in $K_j$, orthogonal to the columns
+  of $J_A$ = `jacobian(A_i)`, of value shape `(k, k - 1)`, and pointing away
+  from the centroid of the vertices of $K_j$.
 
-$K$ and $\hat m$ are fixed compositions for each $k$ and $n$, from the side
-tables and the vertices of $K_j$, so the core needs no numbering of the
-facets.
+With `V = K_j.vertices`, `points` the positions of the inclusion, and $m_j$
+the number of vertices of $K_j$, the compositions are:
+
+```python
+# Entry r is the cofactor of the unit vector e_r against the columns of J_A.
+C_r = tensor(tuple(
+    tensor((Integer(1 if q == r else 0), J_A[q, 0], ..., J_A[q, k - 2]))
+    for q in range(k)
+))
+m0 = tensor((determinant(C_0), ..., determinant(C_(k - 1))))
+centroid = (V[0] + V[1] + ... + V[m_j - 1]) / Integer(m_j)
+away = m0 @ (points[0] - centroid)
+m_hat = away / absolute(away) * m0
+w = transpose(K) @ m_hat
+nu = w / square_root(w @ w)
+```
+
+The sums are nested to the left. `jacobian(A_i)` is a `Gradient`, which
+[`apply_gradients`](#applying-gradients) evaluates, so the core needs no
+numbering of the facets and no second composition of the Jacobian of $A_i$.
 
 #### The direction of the normal
 
@@ -2861,14 +2900,14 @@ The examples use the following objects:
 - `grad_u = gradient(u, D)` and `i = index("i")`.
 
 ```python
-n_B = normal(D, B, "inside")
 inside, plus, minus = side_map(D, B, "inside"), side_map(D, E, "+"), side_map(D, E, "-")
+n_B = normal(inside)
 
 # The flux of grad u out of the square, the legacy UFL dot(grad(u), n) * ds.
 flux = integral(index_sum(pull_back(grad_u, inside)[i] * n_B[i], (i,)), B)
 
 # The jump of the normal derivative across the diagonal, from the side "+".
-n_E = normal(D, E, "+")
+n_E = normal(plus)
 jump = pull_back(grad_u, plus)[i] - pull_back(grad_u, minus)[i]
 penalty = integral(index_sum(jump * n_E[i], (i,)) ** Integer(2), E)
 ```
@@ -3712,7 +3751,7 @@ into it (see [Restriction](#restriction)).
 | `PullBack(g, φ)` | Remains, so pull-backs nest |
 | `Gradient(g, Q)`, $P$ of lower dimension than $Q$ | Remains, a gradient on a cell read at the points of $P$ |
 | `Gradient(g, Q)` | $K^T \nabla_P(\psi^* g)$, with $K$ = `inverse_jacobian(ψ)` |
-| `Normal(D, E, s)`, $\psi$ = `cell_domain(E, i)` | $K^T \hat m / \lvert K^T \hat m \rvert$ of [`Normal`](#normal) |
+| `Normal(SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | $K^T \hat m / \lvert K^T \hat m \rvert$ of [`Normal`](#normal) |
 | A terminal | Remains, for the library of the terminal |
 | Any other node class | The node of the pull-backs of the operands that are expressions |
 
@@ -4225,7 +4264,7 @@ AbstractExpression
 |                             | [`gathered_cell_domain(D, j, g)`](#gathered-cell-domains)                |                               | `D: DecomposedDomain`, `j: int`, `g: GatheredIndex`                                                                    | `DomainMap` of the cells of type `j` selected by `g`                                                                                                                            |
 |                             | [`side_domain(D, S)`](#restriction)                                      |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                                           | The decomposed domain of the cells of $S$, with the geometry of the first side of each group on the topology of $D$                                                             |
 |                             | [`side_map(D, E, s)`](#sidemap)                                          |                               | `D, E: DecomposedDomain`, `s: str`                                                                                     | `SideMap`                                                                                                                                                                       |
-|                             | [`normal(D, E, s)`](#normal)                                             |                               | `D, E: DecomposedDomain`, `s: str`                                                                                     | `Normal`                                                                                                                                                                        |
+|                             | [`normal(sm)`](#normal)                                                  |                               | `sm: SideMap`                                                                                                          | `Normal`                                                                                                                                                                        |
 | Function spaces             | [`function(V, label)`](#function)                                        |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                                      | `Function`                                                                                                                                                                      |
 | Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                               | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, and `ConjugateSpace(V)` for a complex `V`                                                                                                                   |
 |                             | [`dual_space(S)`](#dualspace)                                            |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                        | `DualSpace`                                                                                                                                                                     |
