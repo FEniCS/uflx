@@ -3418,8 +3418,9 @@ The first passes of the core are, in order,
 [`apply_gateaux_derivatives`](#applying-gateaux-derivatives),
 [`apply_actions`](#applying-actions),
 [`apply_derivatives`](#applying-derivatives),
-[`expand_integrals`](#expanding-integrals) and
-[`expand_pull_backs`](#expanding-pull-backs). The later passes and the core
+[`expand_integrals`](#expanding-integrals),
+[`expand_pull_backs`](#expanding-pull-backs) and
+[`apply_gradients`](#applying-gradients). The later passes and the core
 normal form (see [Grammars](#grammars)) are not yet decided.
 
 ### Grammars
@@ -3535,11 +3536,47 @@ row that matches the form $f$, and keeps the value of [`Action`](#action).
   an `Action` on a `Form`. Each rule removes the action from one node or moves
   the action to operands that are smaller, so the pass terminates.
 
+### Derivatives of the node classes
+
+Requires: [Evaluation](#evaluation), [Elementary
+functions](#elementary-functions-very-incomplete), [`Inverse`](#inverse),
+[`Action`](#action).
+
+The passes that differentiate share one table, the derivative of each node
+class in terms of the derivatives of its operands. In the table, $\delta b$ is
+the derivative of the operand $b$ in the pass, and an operand is constant for
+the pass if the first row of the pass matches the operand. Each pass matches
+its own rows first, for the leaves of the expression, and then the rows below.
+
+| Expression | Derivative |
+| ---------- | ---------- |
+| `Product(b, c)` | $\delta b \, c + b \, \delta c$ |
+| `Division(b, c)` | $\delta b / c - (b \, \delta c) / (c c)$ |
+| `Power(b, c)`, $c$ constant | $c \, b^{c - 1} \, \delta b$ |
+| `Power(b, c)` | $b^c (\log(b) \, \delta c + c \, \delta b / b)$ |
+| `Absolute(b)` | $(\bar b \, \delta b + b \, \overline{\delta b}) / (2 \lvert b \rvert)$ |
+| `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
+| `Logarithm(b)` | $\delta b / b$ |
+| `Inverse(A)` | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
+| `Action(l, 0, w)`, a pairing | `Action(l, 0, δw)` |
+| A commuting node class (see [Evaluation](#evaluation)) | The node with the derivative moved into the listed operands |
+
+- `Power` has two rows. The general row multiplies by $\log(b)$, which is
+  undefined for a negative base, so the row for a constant exponent avoids
+  the logarithm. That row is undefined at a zero base when the value of the
+  exponent is 0, which occurs when an integer power is differentiated more
+  times than its degree, and is the one known exception to the principle of
+  [Evaluation](#evaluation).
+- A language extension that adds a node class adds the derivative of the
+  class to this table, and every pass that differentiates then uses the row.
+- The derivative of each row is a composition of node classes of the core,
+  so a pass that applies the table terminates.
+
 ### Applying derivatives
 
 Requires: [Applying actions](#applying-actions),
-[`DirectionalDerivative`](#directionalderivative), [Elementary
-functions](#elementary-functions-very-incomplete), [`Inverse`](#inverse).
+[`DirectionalDerivative`](#directionalderivative), [Derivatives of the node
+classes](#derivatives-of-the-node-classes).
 
 | `apply_derivatives(f)` |  |
 | ---------------------- | - |
@@ -3556,32 +3593,15 @@ if $a$ is not $x$, the pass then substitutes $a$ for $x$ in the result.
 | -------------- | -------------------------------- |
 | $x$ not free in $f$ | `Zero`, with the value shape and the argument spaces of $f$, and the free indices of $f$ followed by those of $a$ and $h$ |
 | $f$ equal to $x$ | $h$ |
-| `Product(b, c)` | $\mathrm{D} b \, c + b \, \mathrm{D} c$ |
-| `Division(b, c)` | $\mathrm{D} b / c - (b \, \mathrm{D} c) / (c c)$ |
-| `Power(b, c)`, $x$ not free in $c$ | $c \, b^{c - 1} \, \mathrm{D} b$ |
-| `Power(b, c)` | $b^c (\log(b) \, \mathrm{D} c + c \, \mathrm{D} b / b)$ |
-| `Absolute(b)` | $(\bar b \, \mathrm{D} b + b \, \overline{\mathrm{D} b}) / (2 \lvert b \rvert)$ |
-| `SquareRoot(b)` | $\mathrm{D} b / (2 \sqrt b)$ |
-| `Logarithm(b)` | $\mathrm{D} b / b$ |
-| `Inverse(A)` | $-A^+ \, \mathrm{D} A \, A^+ + A^+ (A^+)^T (\mathrm{D} A^T - \mathrm{D} A^T A A^+)$, with `@`, `transpose` and `-` |
-| `Action(l, 0, w)`, a pairing | `Action(l, 0, D w)` |
-| A commuting node class (see [Evaluation](#evaluation)) | The node with the derivative moved into the listed operands |
+| Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \mathrm{D} b$ |
 | `DirectionalDerivative` | Cannot occur, because the inner derivative is rewritten first |
 
 - The first row comes first, so no derivative is built for an operand that
-  does not depend on $x$, and a terminal other than $x$ needs no row.
-- `Power` has two rows. The general row multiplies by $\log(b)$, which is
-  undefined for a negative base, so the row for an exponent that does not
-  depend on $x$ avoids the logarithm. That row is undefined at a zero base
-  when the value of the exponent is 0, which occurs when an integer power is
-  differentiated more times than its degree, and is the one known exception to
-  the principle of [Evaluation](#evaluation).
+  does not depend on $x$, and a terminal other than $x$ needs no row. An
+  operand is constant for the pass if $x$ is not free in the operand.
 - A `Form` that binds $x$ has no free $x$, so the first row gives `Zero`.
 - The variable has the argument spaces `()`, so the variable is never the
   function $l$ of a pairing.
-- The rules of each row are compositions of node classes of the core, so the
-  pass terminates with no `DirectionalDerivative`.
-
 ### Expanding integrals
 
 Requires: [Applying derivatives](#applying-derivatives), [`Integral` over a
@@ -3668,6 +3688,55 @@ into it (see [Restriction](#restriction)).
   pull-back of a terminal by a map other than a cell domain, such as for
   point evaluation, needs a pass of the mesh library that locates the points
   (see [Points and point evaluation](#points-and-point-evaluation)).
+
+### Applying gradients
+
+Requires: [Expanding pull-backs](#expanding-pull-backs),
+[`Gradient`](#gradient), [Derivatives of the node
+classes](#derivatives-of-the-node-classes).
+
+| `apply_gradients(f)` |  |
+| -------------------- | - |
+| Evaluates            | `Gradient` |
+| Input grammar        | $N_5$ |
+| Output grammar       | $N_6 = N_5 \setminus \{$a `Gradient(f, P)` whose expression $f$ is not a terminal, a `PullBack` or a `Gradient`, or is `Coordinate(P)` with $P$ of the dimension of its ambient coordinate domain$\}$ |
+
+The pass rewrites every `Gradient(f, P)` that $N_6$ excludes, inner
+gradients first, as
+`component_tensor(∂_j f[a_1, …, a_r], (a_1, …, a_r, j))`, with $r$ the rank
+of $f$ and derived indices $a_1, \ldots, a_r$ and $j$. $\partial_j b$, entry
+$j$ of the last axis of the gradient of $b$ on $P$, has the value shape of
+$b$ and the free index $j$ of the extent $n$, the dimension of the ambient
+coordinate domain of $P$. $\partial_j$ applies the first row that matches:
+
+| Expression $b$ | $\partial_j b$ |
+| -------------- | -------------- |
+| $b$ with no support | `Zero`, with the value shape and the argument spaces of $b$, and the free indices of $b$ followed by $j$ |
+| `Coordinate(P)`, $P$ of the dimension of its ambient coordinate domain | `component_tensor(I[i, j], (i,))`, with $I$ the identity matrix of value shape `(n, n)` and a derived index $i$ |
+| A terminal, a `PullBack` or a `Gradient` | `component_tensor(gradient(b, P)[a_1, …, a_s, j], (a_1, …, a_s))`, with $s$ the rank of $b$, so the gradient remains |
+| Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \partial_j b$ |
+
+The pass then applies [`expand_pull_backs`](#expanding-pull-backs) to the
+result.
+
+- An operand is constant for the pass if the operand has no support.
+- The gradient of a terminal remains for the library of the terminal, so the
+  Hessian of a function is a gradient of a gradient.
+- On a decomposed domain $P$ of lower dimension than its ambient coordinate
+  domain, `Gradient` is the tangential gradient (see [`Gradient`](#gradient)),
+  which obeys the same rows. The `Coordinate` row does not match, so
+  `gradient(coordinate(P), P)`, the projection $\Pi$, remains, and a pass of
+  the mesh library or a pull-back by a cell evaluates it.
+- `expand_pull_backs` leaves the pull-back of a gradient on a cell to the
+  points of a facet, because the gradient does not commute with that
+  pull-back. Once the gradient is rewritten, the pull-back is pointwise again,
+  as in the restriction of `gradient(u * w, D)` and in the $K$ of
+  [`Normal`](#normal), and the final `expand_pull_backs` moves the pull-back
+  to the leaves, so the output stays in $N_5$.
+- `expand_pull_backs` leaves an expression of $N_5$ unchanged, because each
+  pull-back of $N_5$ matches a row that remains, so the final
+  `expand_pull_backs` rewrites only the pull-backs that the rewrite of the
+  gradients uncovers.
 
 ## Extending the core
 
