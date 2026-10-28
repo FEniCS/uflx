@@ -2603,12 +2603,14 @@ the cells of $S$.
 | Takes              | `D, E: DecomposedDomain`, `s: str` |
 | Properties         | `ambient_domain` $D$, `parameter_domain` $E$, a decomposed domain with the topology $S$, and `side` $s$ |
 | Derived            | `free_indices`, always `()` |
-| Requires           | Conditions 1 to 3 below                                                                                 |
+| Requires           | Conditions 1 to 4 below                                                                                 |
 | Raises             | `ValueError` if a requirement fails                                                                     |
 
 1. $D$ has a topology.
 2. Every cell type of $S$ is an `AbstractReferenceCell`.
 3. Every group of $S$ has a side named $s$ with the topology of $D$.
+4. The parameter domain of piece $j$ of $D$ is the reference cell $K_j$ of
+   the topology of $D$, because the side tables give positions in $K_j$.
 
 `pull_back(f, SideMap(D, E, s))` is an expression with the support $E$, the
 restriction of $f$ to all the groups at once. The pull-back of that expression
@@ -3084,8 +3086,10 @@ The space of linear forms on a complex $S$ is
 therefore fixes no convention on the argument in which a form is antilinear.
 
 The pairing of a function `l` in `dual_space(S)` with a function `w` in $S$ is
-`action(l, 0, w)`, antilinear in `w`. The library that provides the values of
-`l` evaluates the pairing.
+`action(l, 0, conjugate(w))`, because the argument of `l` is in
+`conjugate_space(S)` and every action is linear in its argument (see
+[`Action`](#action)). The library that provides the values of `l` evaluates
+the pairing.
 
 #### The dual of a product
 
@@ -3110,12 +3114,13 @@ The examples use the spaces `V` and `Q` and the functions `v` in `V` and `q`
 in `Q` of the [`Form`](#form) examples.
 
 - `l = function(dual_space(V), "l")` has the argument spaces
-  `(conjugate_space(V),)`. `action(l, 0, v)` is the pairing
+  `(conjugate_space(V),)`. `action(l, 0, conjugate(v))` is the pairing
   $\langle l, v \rangle$.
 - `m = function(dual_space((V, Q)), "m")` has the argument spaces
-  `((conjugate_space(V), conjugate_space(Q)),)`. `action(m, 0, (v, q))` is the
-  pairing of `m` with `(v, q)`.
-- With `l` in `dual_space(V)`, `form(conjugate(action(l, 0, v)), (conjugate(l),))`
+  `((conjugate_space(V), conjugate_space(Q)),)`.
+  `action(m, 0, (conjugate(v), conjugate(q)))` is the pairing of `m` with
+  `(v, q)`.
+- With `l` in `dual_space(V)`, `form(conjugate(action(l, 0, conjugate(v))), (conjugate(l),))`
   raises `ValueError`, because `l` has argument spaces.
 
 ```{dropdown} Legacy UFL
@@ -3236,6 +3241,8 @@ Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
   spaces of a function in $V$, and the support of that function or no
   support. The argument spaces are `()`, or `(S',)` for $V$ =
   `dual_space(S)` (see [`DualSpace`](#dualspace)).
+- For `ConjugateSpace(V)`, $g$ has the same static type, and $g$ is the value
+  of an entry `conjugate(v)`, such as `conjugate(w)` for a function `w` in $V$.
 - For a `tuple` of spaces, $g$ is a `tuple` with one such member per space.
 - An `Index` free in both $f$ and $g$ has the same extent in both.
 
@@ -3254,7 +3261,8 @@ with `others` the entries other than the entry at `position`, and with $g$
 substituted for the argument at `position` (see [Passes](#passes)). A function
 of `others` that is free in $g$ is therefore renamed. If no entries remain, the
 value is $e$ with $g$ substituted. For an entry
-`conjugate(v)`, $g$ is substituted for `v`. For a `tuple` entry, the members
+`conjugate(v)`, `conjugate(g)` is substituted for `v`, so $g$ is the value of
+the entry and the action is linear in $g$ at every position. For a `tuple` entry, the members
 of $g$ are substituted simultaneously for the matching members. The action of any other form is
 defined by linearity, and the action on a leaf, such as a function in a dual
 space, is the pairing, which the library of the leaf states, with one pairing
@@ -3270,7 +3278,9 @@ The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples, and
 - `action(action(form(a, (v, u)), 1, w), 0, w)` is a functional.
 - `action(form(a, (v, u)), 1, v)` is a linear form in a renamed function, with
   the fixed `v` in place of `u`, because the form binds `v`.
-- `action(l, 0, w)` is the pairing of `l` with `w`, with no support.
+- `action(l, 0, conjugate(w))` is the pairing of `l` with `w`, with no support.
+- `action(form(a, (conjugate(v), u)), 0, conjugate(w))` is the linear form `a`
+  with `w` in place of `v`.
 - `action(form(a, (v, u)) + 2 * form(a, (v, u)), 1, w)` is, by linearity,
   the sum of the actions on both operands, with `2` times the action on the
   form of the product.
@@ -3462,6 +3472,9 @@ derivative](#gateaux-derivative):
 - $F$ is holomorphic in $x$ if no occurrence of a function of $x$ in $F$ is
   under a `Conjugate`, an `Absolute`, a `RealPart` or an `ImaginaryPart`. The
   rows for a holomorphic $F$ give $J_+$ and $J_-$ with no terms that cancel.
+  An action is linear in its argument (see [`Action`](#action)), so an
+  action never hides a conjugation, and the four node classes are the only
+  ones antilinear in an operand.
 - The pass runs first, so the forms of $F$ may still be under actions, and
   [`apply_actions`](#applying-actions) substitutes an argument for $w$ like
   any other argument. An action on $w$ is then the derivative in a fixed
@@ -3629,6 +3642,9 @@ into it (see [Restriction](#restriction)).
 - The second `Gradient` row is the device of the density on such a domain
   (see [Jacobian and density](#jacobian-and-density)): $J$ has less than full
   rank, and on the tangent space the matrix is the pseudo-inverse of $J$.
+- The `Normal` row needs no such device. The cell on a side has a reference
+  cell as its parameter domain (see [`SideMap`](#sidemap)), so $J$ has full
+  column rank and `inverse(J)` is defined.
 - Every pull-back that remains reads a value of a library on a cell, possibly
   at the points of a cell of lower dimension through $A_i$, such as the
   reference gradient of a function on the cell at the points of a facet. A
