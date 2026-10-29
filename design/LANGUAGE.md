@@ -3860,6 +3860,13 @@ pulled back by a cell, the reference gradient of one, or either at the points
 of a cell of a topology with sides through the inclusion of a side (see
 [Expanding pull-backs](#expanding-pull-backs)).
 
+Every expression that a pass builds from domain maps, such as the Jacobian,
+the inverse Jacobian, the density and the normal of a side, depends only on
+those domain maps and remains a subexpression of the result. A form compiler
+can therefore evaluate such an expression once for the values that the domain
+maps read, such as the coordinates of a mesh, and use the value in every
+integral that contains the expression.
+
 In particular, the core normal form may still contain:
 
 - A pull-back of a function by points known only after a pass of the
