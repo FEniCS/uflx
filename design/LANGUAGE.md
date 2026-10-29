@@ -4155,6 +4155,8 @@ Requires: [Language extensions](#language-extensions),
 [`DirectionalDerivative`](#directionalderivative), [Evaluation](#evaluation),
 [`DecomposedDomain`](#decomposeddomain).
 
+See also: [A shape derivative](EXAMPLES.md#a-shape-derivative).
+
 > A language extension, not a rule of the core.
 
 `ShapeDerivative(f, x, h)` is the derivative of $f$ when the coordinate

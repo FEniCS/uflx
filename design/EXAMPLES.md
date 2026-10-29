@@ -1305,7 +1305,8 @@ a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D_s), (v, u))
   so `u` has the degrees of freedom of the topology and moves with the mesh.
 - The derivatives of the core hold the domains fixed, so the shape derivative
   of `volume` in a direction `h` on `square` is `ShapeDerivative(volume, s, h)`
-  of the [extension](LANGUAGE.md#shape-derivatives). After a lowering stage,
+  of the [extension](LANGUAGE.md#shape-derivatives) (see [A shape
+  derivative](#a-shape-derivative)). After a lowering stage,
   `s` occurs explicitly in the Jacobians and the densities, and the node
   lowers to `DirectionalDerivative(volume, s, s, h)`. With an argument as `h`,
   the Gateaux derivative gives the shape gradient.
@@ -1345,6 +1346,38 @@ $\phi_0$ a function on the topology of the flat mesh, $k = 2 < n = 3$,
 is the first fundamental form in the reference coordinates, and `density(C)`
 is $\sqrt{\det(J^T J)}$, the area element of the midsurface.
 ```
+
+### A shape derivative
+
+Requires: [Shape derivatives](LANGUAGE.md#shape-derivatives),
+[`DirectionalDerivative`](LANGUAGE.md#directionalderivative), [A deformed
+domain](#a-deformed-domain).
+
+With `square` of the [static topology example](#a-static-topology), a vector
+Lagrange space `X` of degree 1 and a Lagrange space `V`, both on `square`:
+
+```python
+x, h, v = function(X, "x"), function(X, "h"), function(X, "v")
+D = image(x, RD(2))
+grad_u = gradient(push_forward(function(V, "u"), D), D)
+i = index("i")
+energy = integral(index_sum(grad_u[i] * grad_u[i], (i,)), D)
+
+d_energy = shape_derivative(energy, x, h)
+g_energy = form(shape_derivative(energy, x, v), (v,))
+```
+
+`g_energy` is the shape gradient. The pass of the extension rewrites
+`ShapeDerivative(g, x, h)` as `directional_derivative(g, x, x, h)`, after a
+lowering stage and before `apply_derivatives` and a second lowering stage.
+Written before the lowering stage, `directional_derivative(energy, x, x, h)`
+is `Zero`, because `x` occurs only inside `D` and the substitution does not
+enter domains. After the lowering stage, `x` occurs in the Jacobians and the
+densities.
+
+The whole extension is short. In a prototype it is about 60 lines, almost
+all of them the node class, and the pass is the one rule above, because the
+directional derivative of the core does the work.
 
 ### The flux through a surface
 
