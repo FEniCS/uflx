@@ -3689,7 +3689,7 @@ density](#jacobian-and-density), [`Inverse`](#inverse).
 | ---------------------- | - |
 | Evaluates              | `PullBack` |
 | Input grammar          | $N_4$ |
-| Output grammar         | $N_5 = N_4 \setminus \{$a `PullBack` by a domain map whose expression is not a terminal, a `PullBack` or a `Gradient` on a domain of higher dimension than the parameter domain$\}$ |
+| Output grammar         | $N_5 = N_4 \setminus \{$a `PullBack` by a domain map whose expression is not a terminal, a `PullBack` or a `Gradient`, and a `PullBack` of a `Gradient` by a `cell_domain` or a `gathered_cell_domain`$\}$ |
 
 The pass rewrites every `PullBack(f, ψ)`, inner pull-backs first, with the
 first row that matches, and applies the rows again to each `PullBack` that a
@@ -3705,8 +3705,8 @@ into it (see [Restriction](#restriction)).
 | `Coordinate(Q)` | $\psi$ |
 | `PullBack(g, SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
 | `PullBack(g, φ)` | Remains, so pull-backs nest |
-| `Gradient(g, Q)`, $P$ of lower dimension than $Q$ | Remains, a gradient on a cell read at the points of $P$ |
-| `Gradient(g, Q)` | $K^T \nabla_P(\psi^* g)$, with $K$ = `inverse_jacobian(ψ)` |
+| `Gradient(g, Q)`, $\psi$ = `cell_domain(Q, j)` or a `gathered_cell_domain` of $Q$ | $K^T \nabla_P(\psi^* g)$, with $K$ = `inverse_jacobian(ψ)` |
+| `Gradient(g, Q)` | Remains, the gradient on $Q$ read at the points of $P$ |
 | `Normal(SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | $K^T \hat m / \lvert K^T \hat m \rvert$ of [`Normal`](#normal) |
 | A terminal | Remains, for the library of the terminal |
 | Any other node class | The node of the pull-backs of the operands that are expressions |
@@ -3722,11 +3722,17 @@ into it (see [Restriction](#restriction)).
 - `inverse_jacobian` chooses the composition of $K$ for the dimensions of
   $\psi$, including a parameter domain of lower dimension than its ambient
   coordinate domain (see [Jacobian and density](#jacobian-and-density)).
+- Only a pull-back by a cell moves a gradient on a decomposed domain to the
+  reference cell, so the pass inverts the Jacobian of a cell only. A gradient
+  under a pull-back by any other map remains on its domain. The inclusion
+  $A_i$ of a cell of a submesh into a cell of the same dimension therefore
+  leaves the reference gradient at the points of the cell of $E$, as the
+  inclusion of a facet does.
 - Every pull-back that remains reads a value of a library on a cell, possibly
-  at the points of a cell of lower dimension through $A_i$, such as the
-  reference gradient of a function on the cell at the points of a facet. A
-  pull-back of a function by a map other than a cell domain, such as by a
-  point of a mesh given by its coordinates, remains, because the library of
+  at the points of a cell of $E$ through $A_i$, such as the reference
+  gradient of a function on the cell at the points of a facet. A pull-back of
+  a function or of its gradient by a map other than a cell domain, such as by
+  a point of a mesh given by its coordinates, remains, because the library of
   the function defines the function on the cells. A point of a mesh known in
   advance is evaluated through a restriction instead, and other points are
   located by a pass after the core (see [Points and point
@@ -3772,9 +3778,9 @@ result.
   pull-back by a cell, such as through a restriction to points, evaluates
   it.
 - `expand_pull_backs` leaves the pull-back of a gradient on a cell to the
-  points of a facet, because the gradient does not commute with that
-  pull-back. Once the gradient is rewritten, the pull-back is pointwise again,
-  as in the restriction of `gradient(u * w, D)` and in the $K$ of
+  points of a facet or of another cell through $A_i$, because the gradient
+  does not commute with that pull-back. Once the gradient is rewritten, the
+  pull-back is pointwise again, as in the restriction of `gradient(u * w, D)` and in the $K$ of
   [`Normal`](#normal), and the final `expand_pull_backs` moves the pull-back
   to the leaves, so the output stays in $N_5$.
 - `expand_pull_backs` leaves an expression of $N_5$ unchanged, because each
@@ -3802,7 +3808,7 @@ on each, and no other node class occurs in the core normal form:
 | [Calculus on a domain](#calculus-on-a-domain) | `Coordinate` | Always |
 | [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `PullBack` or a `Gradient`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
 | [Calculus on a domain](#calculus-on-a-domain) | `Integral` | Over a domain that is not a `DecomposedDomain`, such as a reference cell or `RD(0)` |
-| [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap`, or by a domain map of a terminal, a `PullBack`, or a `Gradient` on a domain of higher dimension than the parameter domain |
+| [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap`, by a domain map of a terminal or a `PullBack`, or of a `Gradient` by a domain map that is not a `cell_domain` or a `gathered_cell_domain` |
 | [Decomposed domains](#decomposed-domains) | `Normal` | Always |
 | [Function spaces](#function-spaces) | `Function` | Always |
 | [Variational forms](#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](#form)) |
@@ -3824,7 +3830,7 @@ and over points, whose integrands are arithmetic and index notation of
 constants, of the coordinates of the reference cell, and of the values that
 the pull-backs read from libraries on the cells. Such a value is a function
 pulled back by a cell, the reference gradient of one, or either at the points
-of a cell of lower dimension through the inclusion of a side (see
+of a cell of a topology with sides through the inclusion of a side (see
 [Expanding pull-backs](#expanding-pull-backs)).
 
 In particular, the core normal form may still contain:
@@ -3836,7 +3842,9 @@ In particular, the core normal form may still contain:
   restriction that is not integrated.
 - A `Gradient` of the coordinates of a decomposed domain of lower dimension
   than its ambient coordinate domain, the projection $\Pi$, and a `Gradient`
-  of a function on a decomposed domain, both under a pull-back by points.
+  of a function on a decomposed domain, both under a pull-back by points or
+  by another map that is not a cell, such as the coordinates of another
+  mesh.
 
 ## Extending the core
 
