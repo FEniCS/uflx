@@ -545,8 +545,9 @@ value is not a real number, such as `square_root(Integer(-1))`, is undefined.
 Requires: [`AbstractExpression`](#abstractexpression),
 [`AbstractDomain`](#abstractdomain).
 
-The support is an [`AbstractDomain`](#abstractdomain). The support is absent
-for an expression with no support, such as a literal. Unless the [static type
+The support is an [`AbstractDomain`](#abstractdomain), or an
+[`AbstractTopology`](#abstracttopology) whose cell types are reference cells.
+The support is absent for an expression with no support, such as a literal. Unless the [static type
 table](#appendix-static-type-table) states otherwise, the support
 of a node is the support of the edges of the node that are expressions with a support.
 All such edges must have the same support, or construction raises `ValueError`. A
@@ -559,8 +560,9 @@ Requires: [Support](#support).
 See also: [`Zero`](#zero).
 
 An expression denotes an array-valued function on the support of the
-expression. An expression with no support denotes a single array. An
-expression with argument spaces other than `()` denotes a multilinear map from
+expression. An expression on a topology denotes a function on the reference
+cell of each cell of the topology (see [`CellMap`](#cellmap)). An expression
+with no support denotes a single array. An expression with argument spaces other than `()` denotes a multilinear map from
 the argument spaces to such functions (see [Variational
 forms](#variational-forms)).
 
@@ -1190,8 +1192,8 @@ value. An expression reads the table only through a
 Requires: [`AbstractIndexValue`](#abstractindexvalue), [`Index`](#index),
 [Extents](#extents), [`Indexed`](#indexed).
 
-See also: [Restriction](#restriction), [Gathered cell
-domains](#gathered-cell-domains).
+See also: [Restriction](#restriction), [Cell
+domains](#cell-domains).
 
 A concrete subclass of the base object for an index whose value is read from
 a table. A `GatheredIndex` is not an expression and not a free index. With
@@ -1575,9 +1577,9 @@ $X : P \to R^n$, $X(p) = p$, and the gradient of $X$ is the identity matrix
 
 The coordinate function of a decomposed domain $D$ is defined through the
 pieces of $D$. The pull-back of `coordinate(D)` by a piece is the
-parameterisation of the piece (see [`DecomposedDomain`](#decomposeddomain)),
-which is built from the coordinate function of the parameter domain of the
-piece (see [`DomainMap`](#domainmap)).
+parameterisation of the piece (see [`DecomposedDomain`](#decomposeddomain)).
+For a mesh `image(x, Q)`, the pull-back by `cell_domain(D, j, e)` is
+`pull_back(x, cell_map(T, j, e))`.
 
 Examples:
 
@@ -1635,7 +1637,8 @@ $k = n$.
   $P$ with the Euclidean metric of the ambient coordinate domain. The
   tangential gradient does not depend on the extension.
 
-The divergence, the curl and other operators of vector calculus are fixed
+The divergence and the curl are [`Divergence` and `Curl`](#divergence-and-curl),
+defined by `Gradient`. Other operators of vector calculus are fixed
 compositions of `Gradient`, which a library provides as free functions (see
 [New operations](#new-operations)).
 
@@ -1663,12 +1666,49 @@ The examples use `P = RD(3)`, `X = coordinate(P)`, `x, y, z = X[0], X[1], X[2]`,
   `(n, m)`, with $n$ the dimension of the ambient coordinate domain of
   `D.ambient_domain` and $m$ the dimension of the ambient coordinate domain of
   $P$ (see [Jacobian and density](#jacobian-and-density)).
-- Let `M` be a decomposed domain of dimension 2 in `RD(3)`, and `w` a function
+- Let `M` be a decomposed domain of dimension 2 in `RD(3)`, and `w` a field
   on `M`. `gradient(w, M)` is the surface gradient of `w`, with value shape
   `(3,)`. `gradient(coordinate(M), M)` is the orthogonal projection onto the
   tangent plane of `M`, with value shape `(3, 3)`.
 - `gradient(X, RD(2))` raises `ValueError`, because `X` has the support
   `RD(3)`.
+
+### `Divergence` and `Curl`
+
+Requires: [`Gradient`](#gradient).
+
+See also: [`PushForward`](#pushforward), [Expanding
+pull-backs](#expanding-pull-backs).
+
+Concrete subclasses of `AbstractExpression` for the divergence and the curl
+of an expression $u$ on a domain $P$, with $n$ the dimension of the ambient
+coordinate domain of $P$.
+
+| `Divergence(u, P)` |                                                                     |
+| ------------------ | ------------------------------------------------------------------- |
+| Extends            | `AbstractExpression` |
+| Free function      | `divergence(u, P)`                                                  |
+| Takes              | `u: AbstractExpression`, `P: AbstractDomain` |
+| Properties         | `expression` $u$ and `domain` $P$                                   |
+| Requires           | A [valid pair](#valid-pair) $(u, P)$, and $u$ of rank at least 1 with the last extent $n$ |
+| Static type        | Value shape `u.value_shape[:-1]`                                    |
+| Raises             | `TypeError` for $P$ and `ValueError` for $u$ if a requirement fails |
+
+| `Curl(u, P)`  |                                                                     |
+| ------------- | ------------------------------------------------------------------- |
+| Extends       | `AbstractExpression` |
+| Free function | `curl(u, P)`                                                        |
+| Takes         | `u: AbstractExpression`, `P: AbstractDomain` |
+| Properties    | `expression` $u$ and `domain` $P$                                   |
+| Requires      | A [valid pair](#valid-pair) $(u, P)$, $n$ 2 or 3, and $u$ of value shape `(n,)` |
+| Static type   | Value shape `(3,)` for $n = 3$ and `()` for $n = 2$                 |
+| Raises        | `TypeError` for $P$ and `ValueError` for $u$ if a requirement fails |
+
+The value of `Divergence(u, P)` is the trace of `gradient(u, P)` over the last
+axis of $u$ and the axis of the gradient. The value of `Curl(u, P)` is the
+curl of `gradient(u, P)`. `Gradient` stays the one derivative that defines the
+others. The two node classes are in the core so that the identity of Piola
+holds structurally (see [`PushForward`](#pushforward)).
 
 ### `DirectionalDerivative`
 
@@ -1717,7 +1757,7 @@ members, such as for the unknowns of a mixed problem.
 
 The substitution does not enter domains, so the derivative holds the geometry
 fixed. A shape derivative, with respect to the coordinates of a mesh, is a
-language extension (see [Language extensions](#language-extensions)).
+language extension (see [Shape derivatives](#shape-derivatives)).
 
 The derivative is real-linear in $h$. The gradient of a direction with no
 support is zero, so the derivative with respect to a function `u` in a constant
@@ -1814,9 +1854,9 @@ expression.
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                          | `Base` |
 | Free function                    | `domain_map(P, psi, Q)`                                                                                                                                                                           |
-| Takes                            | `P: AbstractDomain`, `psi: AbstractExpression`, `Q: AbstractDomain` |
-| Properties                       | `parameter_domain` $P$, an [`AbstractDomain`](#abstractdomain) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractDomain`                                                   |
-| Requires                         | A [valid pair](#valid-pair) $(\psi, P)$, $\psi$ real with value shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$ and the argument spaces `()`, and $k \le n$ |
+| Takes                            | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractDomain` |
+| Properties                       | `parameter_domain` $P$, an [`AbstractCoordinateDomain`](#abstractcoordinatedomain) or an [`AbstractTopology`](#abstracttopology) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractDomain`                                                   |
+| Requires                         | $\psi$ with the support $P$ or no support, $\psi$ real with value shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$ and the argument spaces `()`, and $k \le n$ |
 | Derived                          | `free_indices`, the free indices of $\psi$ |
 | Raises                           | `TypeError` for $P$ or $Q$, and `ValueError` if another requirement fails                                                                                                                                   |
 
@@ -1826,14 +1866,10 @@ $D$. The 'topological dimension' of $D$ is $k$,
 dimension of the ambient coordinate domain of $Q$. Construction does not check
 that $\psi(P)$ lies in $Q$.
 
-$P$ is usually a coordinate domain, such as a reference cell. A decomposed
-domain as $P$ makes a composite cell, such as a macro element whose parameter
-domain is the decomposed domain of the sub-cells of a reference cell. The
-pull-back of an expression on $Q$ by $D$ is then an expression on the
-decomposed domain $P$, defined through the pieces of $P$ (see
-[`DecomposedDomain`](#decomposeddomain)). An integral over such a cell expands
-into the sub-cells, which is where the composite quadrature rule of a macro
-element comes from.
+$P$ is a coordinate domain, such as a reference cell, or a topology. With a
+topology $T$ as $P$, `pull_back(g, domain_map(T, x, D))` pulls a field $g$
+on $D$ back to an expression on $T$, which a pull-back by a cell map of $T$
+composes into a cell of $D$ (see [Expanding pull-backs](#expanding-pull-backs)).
 
 A $\psi$ with free indices makes $D$ a family of domains, with one domain for
 each value of the free indices. For example, with an array `x` of value shape
@@ -1862,7 +1898,7 @@ Requires: [`DomainMap`](#domainmap), [Valid pair](#valid-pair),
 [Free indices](#free-indices), [An
 affinely mapped triangle](EXAMPLES.md#an-affinely-mapped-triangle).
 
-See also: [`Gradient`](#gradient).
+See also: [`Gradient`](#gradient), [`PushForward`](#pushforward).
 
 A concrete subclass of `AbstractExpression` for the pull-back $\psi^* f$ of an
 expression $f$ on $Q$ by the parameterisation $\psi$ of a domain $D$, with $P$
@@ -1872,9 +1908,9 @@ the parameter domain and $Q$ the ambient domain of $D$.
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
 | Extends          | `AbstractExpression` |
 | Free function    | `pull_back(f, D)`                                                                                          |
-| Takes            | `f: AbstractExpression`, `D: DomainMap \| SideMap` |
-| Properties       | `expression` $f$, and `domain` $D$, a `DomainMap` or a [`SideMap`](#sidemap)                 |
-| Requires         | A [valid pair](#valid-pair) $(f, Q)$, and an equal extent for an `Index` free in both $f$ and $D$          |
+| Takes            | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap` |
+| Properties       | `expression` $f$, and `domain` $D$, a `DomainMap`, a [`SideMap`](#sidemap) or a [`CellMap`](#cellmap) |
+| Requires         | $f$ with the support $Q$ or no support, and an equal extent for an `Index` free in both $f$ and $D$          |
 | Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
 | Raises           | `TypeError` for $D$, and `ValueError` if another requirement fails                                         |
 
@@ -1886,12 +1922,17 @@ the value $f(\psi(p))$ at each point $p$ of $P$. The axes of the value shape
 are not transformed. An axis of an expression on $Q$ is an array in the
 coordinate frame of $Q$, so the pull-back keeps the frame of $Q$.
 
+The dual of the pull-back by `domain_map(T, x, D)` is a
+[`PushForward`](#pushforward) to the mesh $D$. The two are inverse only for
+the identity law, because a pull-back keeps the frame of each axis and a
+push-forward applies a law.
+
 A `PullBack` of a downstream terminal or of a
 [`Function`](#function) remains, and the library of the terminal evaluates the
 terminal at $\psi(p)$. For a function, the library
-evaluates the pull-back by a cell domain or a gathered cell domain of the
-domain of the space (see [`AbstractFunctionSpace`](#abstractfunctionspace)), and
-the pull-back by another domain map into a decomposed domain is rewritten
+evaluates the pull-back by a cell map of a topology or a cell domain of a mesh
+(see [`AbstractFunctionSpace`](#abstractfunctionspace)), and
+the pull-back by another domain map into a mesh is rewritten
 through those (see [Points and point
 evaluation](#points-and-point-evaluation)).
 
@@ -1933,62 +1974,37 @@ See also: [Concept: integral over a domain](#concept-integral-over-a-domain),
 [`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
 
 The free functions `jacobian(D)`, `inverse_jacobian(D)` and `density(D)` are
-the Jacobian matrix, the left inverse of the Jacobian matrix on the tangent
-space, and the density of a domain $D$ = `DomainMap(P, psi, Q)` of dimension
-$k$. $n$ is the dimension of the ambient coordinate domain of $Q$, and $m$ the
-dimension of the ambient coordinate domain of $P$, with $m = k$ for a
-coordinate domain $P$.
+the Jacobian matrix, the left inverse of the Jacobian matrix and the density
+of a domain $D$ = `DomainMap(P, psi, Q)` with a coordinate domain $P$ of
+dimension $k$. $n$ is the dimension of the ambient coordinate domain of $Q$.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `jacobian(D)` | | `D: DomainMap` | `gradient(D.parameterisation, D.parameter_domain)` |
-| `inverse_jacobian(D)` | | `D: DomainMap` | The matrix $K$ below |
+| `inverse_jacobian(D)` | | `D: DomainMap` | `inverse(jacobian(D))` |
 | `density(D)` | | `D: DomainMap` | The density $\rho$ below |
 
-The Jacobian matrix $J$ = `jacobian(D)` has value shape `(n, m)`. With
-$\Pi$ = `gradient(coordinate(P), P)`, the orthogonal projection onto the
-tangent space of $P$ (see [`Gradient`](#gradient)), and $I$ the identity
-matrix of value shape `(m, m)`, the metric of $D$ is
+The Jacobian matrix $J$ has value shape `(n, k)`, and $K$ =
+`inverse_jacobian(D)`, of value shape `(k, n)`, is the inverse of $J$ for
+$k = n$ and the pseudo-inverse $(J^T J)^{-1} J^T$ for $k < n$. The density
+$\rho$ is the factor by which $\psi$ scales the length, the area or the volume
+of a small region of $P$:
 
-$$
-G = J^T J + I - \Pi.
-$$
+| Case | `density(D)` |
+| ---- | ------------ |
+| $k = 0$ | `Integer(1)` |
+| $0 < k = n$ | `absolute(determinant(J))` |
+| $0 < k < n$ | `square_root(determinant(G))`, with $G = J^T J$ |
 
-$J^T J$ is zero on the normal space of $P$ and $I - \Pi$ is the identity
-there, so $G$ is invertible, and on the tangent space $G$ is the metric
-$J^T J$ that $\psi$ induces. For $k = m$, $\Pi$ is the identity and
-$G = J^T J$. The density $\rho$ is the factor by which $\psi$ scales the
-length, the area or the volume of a small region of $P$, and $K$, of value
-shape `(m, n)`, is the left inverse of $J$ on the tangent space of $P$:
+$J^T J$ is `component_tensor(index_sum(J[l, a] * J[l, b], (l,)), (a, b))`, with
+derived indices.
 
-$$
-\rho = \sqrt{\det G}, \qquad K = G^{-1} J^T.
-$$
-
-The definitions fix the values. `density(D)` and `inverse_jacobian(D)` read
-$k$, $m$ and $n$ to choose the composition, so that a cell gets the closed
-form and not the normal equations:
-
-| Case | `density(D)` | `inverse_jacobian(D)` |
-| ---- | ------------ | --------------------- |
-| $m = 0$ | `Integer(1)` | `inverse(J)`, of value shape `(0, n)` |
-| $0 < k = m = n$ | `absolute(determinant(J))` | `inverse(J)` |
-| $0 < k = m < n$ | `square_root(determinant(G))` | `inverse(J)`, the pseudo-inverse |
-| $k < m$, a decomposed $P$ such as a surface mesh | `square_root(determinant(G))` | `component_tensor(index_sum(inverse(G)[a, c] * J[l, c], (c,)), (a, l))` |
-
-$J^T J$ is `component_tensor(index_sum(J[l, a] * J[l, b], (l,)), (a, b))`, and
-the indices in the compositions are derived indices. For $k < m$, $J$ is the
-tangential gradient of $\psi$ and has less than full rank, so `inverse(J)` is
-undefined, and $G$ is the device that gives the Gram determinant and the
-pseudo-inverse of $J$ on the tangent space.
-
-The density for $m > n$ is undefined, and construction does not check. The
-core writes $\det J$ only as `determinant(jacobian(D))` and $K$ only as
+The core writes $\det J$ only as `determinant(jacobian(D))` and $K$ only as
 `inverse_jacobian(D)`, so every use of $\det J$ or $K$ for one $D$ is one
 expression, and a pass that computes the geometry of a cell once computes
-each once. A library that needs $J$, $\det J$ or $K$, such as for a Piola
-map, uses `jacobian(D)`, `determinant(jacobian(D))` and
-`inverse_jacobian(D)`.
+each once. A pass or a library that needs $J$, $\det J$ or $K$, such as for
+a [transformation law](#transformationlaw), uses `jacobian(D)`,
+`determinant(jacobian(D))` and `inverse_jacobian(D)`.
 
 ### Concept: integral over a domain
 
@@ -2018,9 +2034,9 @@ $$
 which is `integral(index_sum(pull_back(F, e)[i] * jacobian(e)[i, 0], (i,)), S)`,
 and the circulation changes sign when $\psi$ runs the other way. Where the
 cells of a decomposed domain must be oriented consistently, such as for the
-flux through a surface in $R^3$, the mesh library provides a sign $+1$ or $-1$
-for each cell as an expression (see [The flux through a
-surface](EXAMPLES.md#the-flux-through-a-surface)).
+flux through a surface in $R^3$, the orientation of the topology gives a
+sign $+1$ or $-1$ for each cell (see [`AbstractTopology`](#abstracttopology)
+and [The flux through a surface](EXAMPLES.md#the-flux-through-a-surface)).
 
 ### Points and point evaluation
 
@@ -2041,11 +2057,11 @@ The value of an expression $f$ of any value shape at a point $p$ is
 `integral(pull_back(f, p), RD(0))` (see [`Integral`](#integral)). The integral
 has no support, so the integral combines with any expression.
 
-#### A family of points in a decomposed domain
+#### A family of points in a mesh
 
 Notation:
 
-- $D$ is a decomposed domain with a topology $T$.
+- $D$ is a mesh with a topology $T$ (see [`DecomposedDomain`](#decomposeddomain)).
 - $M$ = `domain_map(RD(0), q, D)` is a family of points in $D$, with the free
   index $i$ of the family, of the extent $m$.
 - $j$ is the cell type of $T$ of the cells that contain the points, $K_j$ is
@@ -2080,10 +2096,10 @@ lowers the restriction as on any other topology with a side, to the value on
 the cell on the side at the position of the point, so point evaluation needs
 no pass outside the core.
 
-The core does not rewrite `pull_back(u, M)` for a function `u` on $D$,
-because the library of the space of `u` defines `u` on the cells only (see
-[`AbstractFunctionSpace`](#abstractfunctionspace)), and such a pull-back
-remains in the core normal form. A family of points known in advance is
+The core does not rewrite `pull_back(f, M)` for a field `f` on $D$ such as
+`push_forward(u, D)`, because the library of the space of `u` defines `u` on
+the cells only (see [`AbstractFunctionSpace`](#abstractfunctionspace)), and
+such a pull-back remains in the core normal form. A family of points known in advance is
 therefore written as the topology of the points, not as $M$. Points known only
 after a pass of the compiler, such as points that depend on the quadrature
 points, are located by a pass after the core, of the compiler with the mesh
@@ -2093,14 +2109,14 @@ the points, with the index $i$ of the family in place of the cell index:
 ```python
 g = gathered_index(cells, (i,))
 R = domain_map(RD(0), positions[i], K_j)
-pull_back(pull_back(u, gathered_cell_domain(D, j, g)), R)
+pull_back(pull_back(f, cell_domain(D, j, g)), R)
 ```
 
 with `positions[i]` the position in $K_j$ of the point $i$, which the mesh
 library computes.
 
-The pull-back of `u` by a gathered cell domain is in the contract of the
-space. The maps below `u` may be a chain, such as a family of maps from a
+The pull-back of `u` by `cell_map(T, j, g)` is in the contract of the
+space. The maps below `f` may be a chain, such as a family of maps from a
 decomposed domain, pulled back by a cell of that domain and then by the
 quadrature points of the reference cell. The pass reads the chain as one
 family with all of its free indices (see [A 1D network in a 3D
@@ -2176,7 +2192,7 @@ of given cell types, without coordinates.
 | `AbstractTopology` |                                                                                             |
 | ------------------ | ------------------------------------------------------------------------------------------- |
 | Extends            | `Base` |
-| Provides           | `cell_types`, `num_cells` and `sides`, and `side_tables(i, side)` for a topology with sides |
+| Provides           | `cell_types`, `num_cells`, `sides` and `orientation`, and `side_tables(i, side)` for a topology with sides |
 | Derived            | `dimension`, the dimension of the cell types                                                |
 | Defined by         | A subclass outside the core, such as the topology of the mesh of a solver                   |
 
@@ -2189,6 +2205,15 @@ of given cell types, without coordinates.
   such as for a macro element, or an `AbstractExtent`, such as for the mesh of
   a solver.
 - `sides` is `()`, or the sides of [Sides of a topology](#sides-of-a-topology).
+- `orientation` is `None`, or an expression on $T$ of value shape `()` with
+  the values $+1$ and $-1$. The orientation gives the unit normal field of a
+  hypersurface, the flux of an ambient field through a surface and signed
+  top forms.
+
+A topology whose cell types are reference cells may be the support of an
+expression and the domain of a space, as the cell complex of its cells (see
+[`CellMap`](#cellmap)). A topology is not an `AbstractDomain`, so
+`Coordinate`, `Gradient` and `Integral` reject a topology.
 
 Two topologies are the same topology only if the two topologies are equal as
 base objects, so a concrete `AbstractTopology` stores the arguments that
@@ -2400,6 +2425,37 @@ cell](EXAMPLES.md#the-unit-simplex-as-a-reference-cell)).
 | Extends                 | `AbstractCoordinateDomain`, `AbstractCellType` |
 | Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](EXAMPLES.md#the-unit-simplex-as-a-reference-cell)                                                   |
 
+### `CellMap`
+
+Requires: [Reference cell](#reference-cell),
+[`AbstractTopology`](#abstracttopology), [`GatheredIndex`](#gatheredindex).
+
+See also: [`PullBack`](#pullback), [`AbstractFunctionSpace`](#abstractfunctionspace).
+
+A concrete subclass of `Base` for the characteristic map of the cells of group
+$j$ of a topology $T$ that an entry $e$ selects. A `CellMap` has no
+parameterisation.
+
+| `CellMap(T, j, e)` |                                                                                                     |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| Extends            | `Base` |
+| Takes              | `T: AbstractTopology`, `j: int`, `e: Index \| GatheredIndex` |
+| Properties         | `topology` $T$, `cell_type` $j$ and `entry` $e$                                                     |
+| Requires           | Cell type $j$ of $T$ a reference cell $K_j$, and the extent `T.num_cells[j]` for $e$ or for the table of $e$ |
+| Derived            | `parameter_domain` $K_j$, `ambient_domain` $T$, and `free_indices`, $e$ with the extent `T.num_cells[j]` or the free indices of the `GatheredIndex` $e$ |
+| Raises             | `TypeError` for $T$, and `ValueError` if another requirement fails                                  |
+
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `cell_map(T, j, e)` | | `T: AbstractTopology`, `j: int`, `e: Index \| GatheredIndex` | `CellMap(T, j, e)` |
+| `cell_map(T, j)` | | `T: AbstractTopology`, `j: int` | `CellMap(T, j, cell_index(T, j))` |
+
+`pull_back(f, cell_map(T, j, e))` is the value of an expression $f$ on $T$ on
+the reference cell $K_j$ of each selected cell. For a function $f$, the
+library of the space of $f$ gives the value (see [Functions in a
+space](#functions-in-a-space)). Any other expression on $T$ is built from
+functions and constants, and the pull-back moves to them.
+
 Worked examples for this chapter in EXAMPLES.md: [the unit simplex as a reference cell](EXAMPLES.md#the-unit-simplex-as-a-reference-cell).
 
 ## Decomposed domains
@@ -2407,8 +2463,9 @@ Worked examples for this chapter in EXAMPLES.md: [the unit simplex as a referenc
 ### `DecomposedDomain`
 
 Requires: [`AbstractTopology`](#abstracttopology),
-[Reference cell](#reference-cell), [`DomainMap`](#domainmap),
-[`PullBack`](#pullback), [Free indices](#free-indices).
+[Reference cell](#reference-cell), [`CellMap`](#cellmap),
+[`DomainMap`](#domainmap), [`PullBack`](#pullback), [Free
+indices](#free-indices).
 
 See also: [Sides of a topology](#sides-of-a-topology),
 [`AbstractFunctionSpace`](#abstractfunctionspace).
@@ -2421,78 +2478,62 @@ is the union of the images of pieces, each a family of domain maps.
 | Extends                    | `AbstractDomain` |
 | Free function              | `decomposed_domain(pieces)`                                                                                             |
 | Takes                      | `pieces: tuple[DomainMap, ...]` |
-| Properties                 | `pieces`, a non-empty `tuple` of [`DomainMap`](#domainmap)s with the same ambient domain $Q$ and the same dimension $k$ |
-| Derived                    | `ambient_domain` $Q$, `dimension` $k$, and `topology`, below                                                            |
+| Properties                 | `pieces`, a non-empty `tuple` of [`DomainMap`](#domainmap)s with coordinate domains as parameter domains, the same ambient domain $Q$ and the same dimension $k$ |
+| Derived                    | `ambient_domain` $Q$, `dimension` $k$, and `topology` and `coordinate_function`, below                                  |
 | Raises                     | `TypeError` for a piece that is not a `DomainMap`, and `ValueError` if another requirement fails                        |
 
-`topology` is $T$ if the free indices of piece $j$ are `(cell_index(T, j),)`
-for every $j$, and otherwise `None`.
-
-Notation, for the piece $j$ of $D$:
-
-- $P_j$ is the parameter domain and $\psi_j$ is the parameterisation.
-- For a mesh with the topology $T$, $K_j$ is the reference cell of cell type
-  $j$, and $x_j$ are the coordinates of the cells of type $j$.
+Notation, for the piece $j$ of $D$: $P_j$ is the parameter domain and
+$\psi_j$ is the parameterisation.
 
 #### Pieces
 
 A piece with free indices is a family, one domain for each value of the free
 indices. $D$ is the union of all the domains of all the pieces. $D$ may have a
 lower dimension than the ambient coordinate domain, such as a surface in $R^3$.
+A piece with an ordinary `Index`, such as a cloud of points, gives no
+topology. A single `DomainMap` with no free indices is a decomposed domain of
+one piece. The core does not check that the domains meet only in sets of
+measure zero.
 
-- A mesh has one piece for each cell type $j$, `domain_map(K_j, x_j, Q)`, with
-  the free index `cell_index(T, j)`. Then the topology of $D$ is $T$.
-- A piece with an ordinary `Index`, such as a cloud of points, gives no
-  topology.
-- A single `DomainMap` with no free indices is a decomposed domain of one
-  piece.
+The parameter domain of a piece is a coordinate domain, so decomposed domains
+do not nest. The ambient domain $Q$ may be a decomposed domain, such as a mesh
+in which a family of points lies.
 
-The core does not check that the domains meet only in sets of measure zero.
+#### Meshes
 
-#### Nesting
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `image(x, Q)` | | `x: AbstractExpression`, `Q: AbstractDomain` | `DecomposedDomain` with the pieces `domain_map(K_j, pull_back(x, cell_map(T, j)), Q)` |
 
-- The parameter domain of a piece may itself be a decomposed domain, so
-  decomposed domains nest. An expression on $D$ pulled back by such a piece is
-  an expression on the parameter domain of the piece, defined through the
-  pieces of the parameter domain in turn.
-- The ambient domain $Q$ may also be a decomposed domain, such as a mesh in
-  which a family of points lies.
+A mesh is `image(x, Q)`, the image of a topology $T$ under $x$, with $x$ any
+expression on $T$ of value shape `(n,)` for the dimension $n$ of the ambient
+coordinate domain of $Q$. Piece $j$ is
+`domain_map(K_j, pull_back(x, cell_map(T, j)), Q)`, for every cell type $K_j$
+of $T$. The `topology` of `image(x, Q)` is $T$ and the `coordinate_function`
+is $x$. Every other decomposed domain has the `topology` and the
+`coordinate_function` `None`.
+
+Deformed surfaces, isogeometric patches and analytic maps are meshes of
+coordinate functions. Continuity across groups is a property of the space of
+$x$.
 
 #### Cell domains
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `cell_domain(D, j)` | | `D: DecomposedDomain`, `j: int` | `DomainMap` of the cells of type `j` |
+| `cell_domain(D, j, e)` | | `D: DecomposedDomain`, `j: int`, `e: Index \| GatheredIndex` | `DomainMap` of the cells of type `j` selected by `e` |
 
-The free function `cell_domain(D, j)` returns piece $j$ with the ambient domain
-$D$, `domain_map(P_j, psi_j, D)`, with the free indices of piece $j$.
+`cell_domain(D, j)` returns piece $j$ with the ambient domain $D$,
+`domain_map(P_j, psi_j, D)`, with the free indices of piece $j$. For a mesh
+$D$ = `image(x, Q)` with the topology $T$, `cell_domain(D, j, e)` is
+`domain_map(K_j, pull_back(x, cell_map(T, j, e)), D)`, and `cell_domain(D, j)`
+is `cell_domain(D, j, cell_index(T, j))`. A cell of a mesh is a
+`cell_domain(D, j, e)`, and a cell of a topology is a `CellMap`.
 
 An expression $f$ with the support $D$ is defined through the pieces.
 `pull_back(f, cell_domain(D, j))` is an expression on $P_j$, the value of $f$
 on each domain of piece $j$. The pull-back of `coordinate(D)` is $\psi_j$.
-
-#### Gathered cell domains
-
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `gathered_cell_domain(D, j, g)` | | `D: DecomposedDomain`, `j: int`, `g: GatheredIndex` | `DomainMap` of the cells of type `j` selected by `g` |
-
-The free function `gathered_cell_domain(D, j, g)` applies to a decomposed
-domain $D$ with a topology $T$. The function returns the domains of piece $j$
-selected by a [`GatheredIndex`](#gatheredindex) $g$ of the extent
-`T.num_cells[j]`. With $c$ = `cell_index(T, j)`, the one free index of piece
-$j$, the result is `domain_map(P_j, chi, D)` with
-
-```python
-chi = component_tensor(psi_j[k], (c, k))[g]
-```
-
-with the partial indexing `[g]` (see [Partial indexing](#partial-indexing)),
-and $k$ the derived index `Index(("uflx.gathered_cell_domain", D, j, g, 0))`.
-
-The library of a function in a space on $D$ evaluates the pull-back by
-`gathered_cell_domain(D, j, g)` as the pull-back by `cell_domain(D, j)` on the
-cell $g$ (see [`AbstractFunctionSpace`](#abstractfunctionspace)).
 
 #### Examples
 
@@ -2503,92 +2544,157 @@ The examples use the following objects:
   `square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())` of the
   [static topology example](EXAMPLES.md#a-static-topology), on
   reference cells.
-- An array `y` of value shape `(4, 2)` with the positions $(0, 0)$, $(1, 0)$,
-  $(0, 1)$ and $(1, 1)$ of the vertices.
-- A table `cell_vertices` of the shape `(2, 3)`, the extent 4 and the values
-  `((0, 1, 2), (1, 3, 2))`, the vertices of each triangle.
+- A function `x` on `square` in a space of vector Lagrange of degree 1 and
+  value shape `(2,)`, with the values $(0, 0)$, $(1, 0)$, $(0, 1)$ and
+  $(1, 1)$ at the vertices.
 
 ```python
-X = coordinate(K)
-c = cell_index(square, 0)
-k, v = index("k"), index("v")
-
-# The position of each local vertex of each triangle, of value shape (2, 3, 2),
-# gathered from the vertex positions.
-p = component_tensor(y[gathered_index(cell_vertices, (c, v)), k], (c, v, k))
-
-# The affine map of each triangle.
-x = component_tensor(
-    p[c, 0, k] + (p[c, 1, k] - p[c, 0, k]) * X[0] + (p[c, 2, k] - p[c, 0, k]) * X[1],
-    (k,),
-)
-D = decomposed_domain((domain_map(K, x, RD(2)),))
+D = image(x, RD(2))
 ```
 
-- `D.topology` is `square`, because `x` has the free index `c`.
-  `cell_domain(D, 0)` is the family of the two triangles, with the free index
-  `c`.
-- `pull_back(coordinate(D), cell_domain(D, 0))` is `x`. A later pass evaluates
-  `x` on triangle 1 to $(1 - X_1, X_0 + X_1)$.
+- `D.topology` is `square`. `cell_domain(D, 0)` is the family of the two
+  triangles, with the free index `cell_index(square, 0)`.
+- `pull_back(coordinate(D), cell_domain(D, 0))` is
+  `pull_back(x, cell_map(square, 0))`, which the library of the space of `x`
+  evaluates on triangle 1 to $(1 - X_1, X_0 + X_1)$.
 
 For a topology `M` of triangles and quadrilaterals, with the cell types
-`(Kt, Kq)`, $D$ has one piece for each cell type. A function `u` on `D` is one
-expression, pulled back through each cell type:
+`(Kt, Kq)`, `image(x, RD(2))` has one piece for each cell type. A function `u`
+on `M` is one expression, pulled back through each cell type:
 
 ```python
-D = decomposed_domain(
-    (domain_map(Kt, x_tri, RD(2)), domain_map(Kq, x_quad, RD(2)))
-)
-
 # On Kt with the free index cell_index(M, 0), and on Kq with cell_index(M, 1).
-u_tri = pull_back(u, cell_domain(D, 0))
-u_quad = pull_back(u, cell_domain(D, 1))
+u_tri = pull_back(u, cell_map(M, 0))
+u_quad = pull_back(u, cell_map(M, 1))
 ```
 
 ```{dropdown} Legacy UFL
-In legacy UFL, a `Mesh` is a decomposed domain, and `SpatialCoordinate(mesh)` is `coordinate(D)`.
+In legacy UFL, a `Mesh` is `image(x, Q)` for the coordinate element of `x`, and `SpatialCoordinate(mesh)` is `coordinate(D)`.
 ```
+
+### `TransformationLaw`
+
+Requires: [Jacobian and density](#jacobian-and-density), [`CellMap`](#cellmap).
+
+See also: [`PushForward`](#pushforward).
+
+A concrete subclass of `Base` for the law by which the values of a function on
+the reference cell transform to a cell of a mesh.
+
+| `TransformationLaw(variances, weight)` |                                                                       |
+| -------------------------------------- | --------------------------------------------------------------------- |
+| Extends                                | `Base` |
+| Free function                          | `transformation_law(variances, weight)`                               |
+| Takes                                  | `variances: tuple[str, ...]`, `weight: int` |
+| Properties                             | `variances`, a `tuple` of `"covariant"` and `"contravariant"`, and `weight` $w$ |
+| Raises                                 | `TypeError` for an argument of another type, and `ValueError` for another string |
+
+There is one variance for each of the last axes of the value shape, and the
+leading axes are unchanged. A library may type the variances as a `Literal`.
+
+For a cell $\psi$ of a mesh, with $J$, $K$ and $\rho$ of [Jacobian and
+density](#jacobian-and-density), $k$ the dimension of the topology and $n$ the
+dimension of the ambient coordinate domain, the law $m$ maps a value $\hat f$
+on the reference cell to $m_\psi(\hat f)$. $m_\psi$ multiplies each covariant
+axis by $K^T$ and each contravariant axis by $J$, and divides by
+$(\det J)^w$ for $k = n$ and by $\rho^w$ for $k < n$. Each transformed axis
+has the extent $k$ in $\hat f$ and $n$ in $m_\psi(\hat f)$.
+
+The maps of Basix are instances. The core names no instances:
+
+| Space                             | Law                                       | Legacy UFL map         |
+| --------------------------------- | ----------------------------------------- | ---------------------- |
+| Lagrange, vector Lagrange         | `((), 0)`                                 | identity               |
+| Nédélec, $H(\mathrm{curl})$       | `(("covariant",), 0)`                     | covariant Piola        |
+| Raviart–Thomas, $H(\mathrm{div})$ | `(("contravariant",), 1)`                 | contravariant Piola    |
+| Discontinuous densities           | `((), 1)`                                 | $L^2$ Piola            |
+| Regge                             | `(("covariant", "covariant"), 0)`         | double covariant       |
+| Hellan–Herrmann–Johnson           | `(("contravariant", "contravariant"), 2)` | double contravariant   |
+
+The law has no orientation. A space of odd weight on a topology of lower
+dimension than the ambient coordinate domain gives its own signs for each pair
+of cell and facet, as the space gives the transformations of its degrees of
+freedom.
+
+### `PushForward`
+
+Requires: [`TransformationLaw`](#transformationlaw),
+[`DecomposedDomain`](#decomposeddomain).
+
+See also: [`PullBack`](#pullback), [`Divergence` and
+`Curl`](#divergence-and-curl), [`AbstractFunctionSpace`](#abstractfunctionspace),
+[Expanding pull-backs](#expanding-pull-backs).
+
+A concrete subclass of `AbstractExpression` for the field on a mesh $D$ of an
+expression $f$ on the topology $T$ of $D$.
+
+| `PushForward(f, D, m)` |                                                                     |
+| ---------------------- | ------------------------------------------------------------------- |
+| Extends                | `AbstractExpression` |
+| Takes                  | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw` |
+| Properties             | `expression` $f$, `domain` $D$ and `law` $m$                        |
+| Requires               | $D$ a mesh with the topology $T$, $f$ with the support $T$ or no support, and the last axes of $f$, one for each variance of $m$, of the extent $k$ |
+| Static type            | The value shape of $f$ with the extent $n$ for each transformed axis, the support $D$ |
+| Raises                 | `TypeError` for $D$ or $m$, and `ValueError` if another requirement fails |
+
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `push_forward(f, D, m)` | | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw` | `PushForward(f, D, m)` |
+| `push_forward(u, D)` | | `u: Function`, `D: DecomposedDomain` | `PushForward(u, D, u.space.transformation_law)` |
+
+The pull-back of `PushForward(f, D, m)` by `cell_domain(D, j, e)` is
+$m_\psi(\hat f)$, with $\psi$ the cell and $\hat f$ =
+`pull_back(f, cell_map(T, j, e))`. The push-forward of the coordinate function
+$x$ of $D$ by `transformation_law((), 0)` is `coordinate(D)`.
+
+The core keeps the push-forward explicit. The arguments of a form, the
+variable and the direction of a derivative, and the keys of the data are the
+functions on $T$. A library may wrap `push_forward`, as the classic FEniCS
+layer of EXAMPLES.md does.
+
+The identity of Piola holds on each cell of $D$, with no derivative of $J$:
+
+- The divergence of a push-forward by `(("contravariant",), 1)` is the
+  divergence on $K_j$ of $\hat f$, carried by `((), 1)`.
+- For $k = n$, the curl of a push-forward by `(("covariant",), 0)` is the curl
+  on $K_j$ of $\hat f$, carried by `(("contravariant",), 1)` for $n = 3$ and
+  by `((), 1)` for $n = 2$.
+
+[`expand_pull_backs`](#expanding-pull-backs) applies the identity, and every
+other `Divergence` and `Curl` lowers to its composition of `Gradient`.
 
 ### Restriction
 
 Requires: [`DecomposedDomain`](#decomposeddomain),
 [Sides of a topology](#sides-of-a-topology), [`GatheredIndex`](#gatheredindex),
-[`PullBack`](#pullback), [Reference cell](#reference-cell).
+[`PullBack`](#pullback), [`CellMap`](#cellmap).
 
 See also: [`Integral` over a decomposed domain](#integral-over-a-decomposed-domain).
 
-The restriction of an expression $f$ on a decomposed domain $D$ to the cells
-of a topology $S$ with sides, from the side $s$, is the pull-back of $f$ along
-the inclusion of each cell of $S$ into the cell on the side $s$. The side
-tables of $S$ give the cell on the side, through a
+The restriction of an expression $f$ on a topology $T$ or a mesh $D$ to the
+cells of a topology $S$ with sides, from the side $s$, is the pull-back of $f$
+along the inclusion of each cell of $S$ into the cell on the side $s$. The
+side tables of $S$ give the cell on the side, through a
 [`GatheredIndex`](#gatheredindex) entry, and the inclusion of each cell of $S$
-into that cell. The restriction of $f$ to a decomposed domain $E$ of the cells
-of $S$ from the side $s$ is `pull_back(f, side_map(D, E, s))` (see
-[`SideMap`](#sidemap)).
-
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `side_domain(D, S)` | | `D: DecomposedDomain`, `S: AbstractTopology` | The decomposed domain of the cells of $S$, with the geometry of the first side of each group on the topology of $D$ |
+into that cell. The restriction is `pull_back(f, side_map(T, S, s))` for $f$
+on $T$, and `pull_back(f, side_map(D, E, s))` for $f$ on $D$ and a side
+domain $E$ (see [`SideMap`](#sidemap)).
 
 Notation, for the group $i$ of $S$ with the side `(s, T, j)`:
 
-- $T$ is the topology of $D$, and $K_j$ is the reference cell of cell type $j$
-  of $T$.
 - `(cells, inclusion, reference_normal)` are the side tables of the side $s$
   of group $i$.
-- $F_i$ is the cell type of group $i$.
-- `e = cell_index(S, i)` is the free index of the cells of group $i$.
-- $Q$ is the ambient domain of $D$.
+- $F_i$ is the cell type of group $i$, and $K_j$ the reference cell of cell
+  type $j$ of $T$.
+- `e = cell_index(S, i)` and `g = gathered_index(cells, (e,))`.
 
 #### The inclusion
 
-Two families of domain maps with the free index `e` make the inclusion of the
-cells of group $i$:
+Two families of maps with the free index `e` make the inclusion of the cells
+of group $i$:
 
-- $B_i$, the cell on the side, is
-  `gathered_cell_domain(D, j, gathered_index(cells, (e,)))`. $B_i$ is the cell
-  of type $j$ of $T$ on the side of each cell $e$ of $S$ (see
-  [`DecomposedDomain`](#decomposeddomain)).
+- $B_i$, the cell on the side, is `cell_map(T, j, g)` on $T$, and
+  `cell_domain(D, j, g)` on a mesh $D$ with the topology $T$.
 - $A_i$, the inclusion into the cell on the side, is `inclusion` of the side
   tables, a domain map from $F_i$ into $K_j$. $F_i$ must be a reference cell.
 
@@ -2606,66 +2712,71 @@ form uses the restriction from each side.
 #### `SideMap`
 
 `SideMap` is a concrete subclass of `Base`. A `SideMap` is the lazy map of the
-cells of $E$ into $D$ through the side $s$, where $E$ is a decomposed domain of
-the cells of $S$.
+cells of $S$ into $T$, or of the cells of a side domain $E$ into a mesh $D$,
+through the side $s$.
 
-| `SideMap(D, E, s)` |                                                                                                         |
+| `SideMap(X, P, s)` |                                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
 | Extends            | `Base` |
-| Free function      | `side_map(D, E, s)`                                                                                     |
-| Takes              | `D, E: DecomposedDomain`, `s: str` |
-| Properties         | `ambient_domain` $D$, `parameter_domain` $E$, a decomposed domain with the topology $S$, and `side` $s$ |
+| Takes              | `X, P: AbstractTopology \| DecomposedDomain`, `s: str \| None` |
+| Properties         | `ambient_domain` $X$, `parameter_domain` $P$, and `side` $s$ |
 | Derived            | `free_indices`, always `()` |
-| Requires           | Conditions 1 to 4 below                                                                                 |
+| Requires           | Conditions 1 to 3 below                                                                                 |
 | Raises             | `ValueError` if a requirement fails                                                                     |
 
-1. $D$ has a topology.
-2. Every cell type of $S$ is an `AbstractReferenceCell`.
-3. Every group of $S$ has a side named $s$ with the topology of $D$.
-4. The parameter domain of piece $j$ of $D$ is the reference cell $K_j$ of
-   the topology of $D$, because the inclusions of the side tables map into
-   $K_j$.
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `side_map(X, P, s)` | | `X, P: AbstractTopology \| DecomposedDomain`, `s: str` | `SideMap(X, P, s)` |
+| `side_map(X, P)` | | `X, P: AbstractTopology \| DecomposedDomain` | `SideMap(X, P, None)`, the first side of each group on $T$ |
 
-`pull_back(f, SideMap(D, E, s))` is an expression with the support $E$, the
-restriction of $f$ to all the groups at once. The pull-back of that expression
-by `cell_domain(E, i)` is `pull_back(pull_back(f, B_i), A_i)`.
+1. $X$ is a topology $T$ and $P$ a topology $S$, or $X$ is a mesh with the
+   topology $T$ and $P$ a side domain with the topology $S$.
+2. Every cell type of $S$ is an `AbstractReferenceCell`.
+3. Every group of $S$ has a side named $s$ with the topology $T$, or a side on
+   $T$ for $s$ `None`.
+
+A side map of a mesh takes a side domain, so that a coupling of two meshes
+shares one side domain. `pull_back(f, side_map(X, P, s))` is an expression
+with the support $P$, the restriction of $f$ to all the groups at once. The
+pull-back of that expression by `cell_map(S, i)`, or by `cell_domain(P, i)`
+for a side domain, is `pull_back(pull_back(f, B_i), A_i)`.
 
 #### Side domains
 
-Piece $i$ of `side_domain(D, S)` is
-`domain_map(F_i, pull_back(pull_back(coordinate(D), B_i), A_i), Q)`, with
-$B_i$ and $A_i$ of the first side of group $i$ whose topology is the
-topology of $D$. Piece $i$ has the one free index `cell_index(S, i)`, the free
-index `e` of $B_i$ and $A_i$. $D$ must have a topology, every group of $S$ must have a side
-on that topology, and $F_i$ must be an `AbstractReferenceCell`. The topology
-of the result is $S$. The core does not
-check that the other sides have the same geometry.
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `side_domain(D, S)` | | `D: DecomposedDomain`, `S: AbstractTopology` | `image(pull_back(x, side_map(T, S)), Q)` |
+
+For a mesh $D$ = `image(x, Q)` with the topology $T$, the side domain of $S$
+is the image of the trace of $x$, so the side domain moves with $x$. The
+topology of the result is $S$. The core does not check that the other sides
+have the same geometry.
 
 #### Traces and normals
 
 The restriction of an expression is the value of the expression on the cell
 of $S$, from the side:
 
-- The restriction of `gradient(u, D)` is the whole gradient of `u` on the cell
+- The restriction of `gradient(f, D)` is the whole gradient of `f` on the cell
   on the side, as for a normal derivative. The last axis is in the frame of
   the ambient coordinate domain from every side.
-- `gradient(pull_back(u, side_map(D, E, s)), E)` is the tangential gradient of the
-  restriction along the cells of $E$.
+- `gradient(pull_back(f, side_map(D, E, s)), E)` is the tangential gradient of
+  the restriction along the cells of $E$.
 
 The outward normal of the cell on a side is [`normal(side_map(D, E, s))`](#normal).
 
 #### Example
 
-The example uses `D` and `square` of the
+The example uses `D`, `x` and `square` of the
 [`DecomposedDomain`](#decomposeddomain) example, `I = ReferenceSimplex(1)`, a
-function `u` on `D`, and the diagonal of `square`:
+function `u` on `square`, and the diagonal of `square`:
 
 ```python
 diagonal = StaticTopology(
     (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
 )
+jump = pull_back(u, side_map(square, diagonal, "+")) - pull_back(u, side_map(square, diagonal, "-"))
 E = side_domain(D, diagonal)
-jump = pull_back(u, side_map(D, E, "+")) - pull_back(u, side_map(D, E, "-"))
 ```
 
 - From `"+"`, the side tables are the cells `(0,)` and the inclusion
@@ -2673,7 +2784,7 @@ jump = pull_back(u, side_map(D, E, "+")) - pull_back(u, side_map(D, E, "-"))
   `"-"`, the side tables are the cells `(1,)` and the inclusion
   $A_-(t) = (0, t)$, through the local vertices 0 and 2. The coordinates of
   `E` are $(1 - t, t)$.
-- Let `pull_back(u, cell_domain(D, 0))` be
+- Let `pull_back(u, cell_map(square, 0))` be
   `a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]`. The two restrictions pulled
   back to the diagonal are $a_{0,0} + a_{0,1}(1 - t) + a_{0,2} t$ and
   $a_{1,0} + a_{1,2} t$. The two are equal for all $t$ if `u` is continuous at
@@ -2682,12 +2793,12 @@ jump = pull_back(u, side_map(D, E, "+")) - pull_back(u, side_map(D, E, "-"))
   $A_+(t) = (t, 1 - t)$. Both sides use the vertex numbering of the diagonal, so the restrictions from both sides run the
   other way along the diagonal, and the jump at each point of the diagonal is
   unchanged.
-- For the facets `S` of a triangle and quadrilateral mesh, with the three
-  groups of [Sides of a topology](#sides-of-a-topology), the same two lines
-  with `E = side_domain(D, S)` give one jump for all three groups.
+- For the facets `S` of a triangle and quadrilateral topology, with the three
+  groups of [Sides of a topology](#sides-of-a-topology), the same line with
+  `S` gives one jump for all three groups.
 
 ```{dropdown} Legacy UFL
-The legacy UFL restriction `f('+')` is `pull_back(f, side_map(D, E, "+"))` on the decomposed domain $E$ of the interior facets, whose sides are named `'+'` and `'-'`.
+The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on the topology $S$ of the interior facets, whose sides are named `'+'` and `'-'`.
 ```
 
 ### `Integral` over a decomposed domain
@@ -2719,7 +2830,6 @@ index_sum(integral(pull_back(f, D_j) * density(D_j), P_j), indices_j)
 - A piece with no free indices has no `IndexSum`.
 - An array-valued $f$ integrates component by component, with the density
   written into each component in index notation.
-- For a decomposed domain $P_j$, the inner integral expands in turn.
 - For a parameter domain $P_j$ of dimension $m = 0$, the density is
   `Integer(1)`, so the integral over a set of points is the sum of the values.
 
@@ -2738,8 +2848,9 @@ family with the index `i`.
 
 The examples use the following objects:
 
-- `D` of the [`DecomposedDomain`](#decomposeddomain) example.
-- A function `u` on `D`.
+- `D` and `square` of the [`DecomposedDomain`](#decomposeddomain) example.
+- A field `f` on `D`, such as `push_forward(u, D)` for a function `u` on
+  `square` (see [`PushForward`](#pushforward)).
 - The decomposed domain `B` of the boundary facets of `D`, with the side
   `"inside"`.
 
@@ -2748,7 +2859,7 @@ Examples:
 - `integral(Integer(1), D)` is the area 1 of the square, the sum of two
   integrals over `K`.
 - `integral(Integer(1), B)` is the perimeter 4.
-- `integral(pull_back(u, side_map(D, B, "inside")), B)` integrates `u` over the boundary.
+- `integral(pull_back(f, side_map(D, B, "inside")), B)` integrates `f` over the boundary.
 
 ```{dropdown} Legacy UFL
 `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the decomposed domain of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
@@ -2768,7 +2879,7 @@ cell on a side, on the cells of a topology with sides.
 | Free function | `normal(sm)`                                                                                         |
 | Takes        | `sm: SideMap` |
 | Properties   | `side_map`, a [`SideMap`](#sidemap) `SideMap(D, E, s)`                                               |
-| Requires     | $E$ of the dimension $k - 1$ for the dimension $k$ of $D$                                             |
+| Requires     | $D$ a mesh, and $E$ of the dimension $k - 1$ for the dimension $k$ of $D$                             |
 | Static type  | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the support $E$, real      |
 | Raises       | `TypeError` for an `sm` that is not a `SideMap`, and `ValueError` if the requirement fails           |
 
@@ -2794,8 +2905,7 @@ where:
 
 - $K$ is `pull_back(inverse_jacobian(B_i), A_i)`, the inverse Jacobian of
   the cell on the side at the points of $A_i$ (see [Jacobian and
-  density](#jacobian-and-density)). The parameter domain of $B_i$ is a
-  reference cell (see [`SideMap`](#sidemap)), so $K$ is `inverse(J)`.
+  density](#jacobian-and-density)).
 - $\hat m$ is `reference_normal` of the side tables of the side $s$ of group
   $i$ (see [Side tables](#side-tables)), a normal of the cell of $E$ in $K_j$.
 
@@ -2824,10 +2934,9 @@ the library of the topology gives $\hat m$.
   `u_p * n_p + u_m * n_m`.
 
 `Normal` is the normal of a cell on a side, not the unit normal field of a
-domain of dimension $n - 1$, such as of a surface in $R^3$. The
-unit normal field needs a consistent orientation of the cells of the domain
-(see [Concept: integral over a domain](#concept-integral-over-a-domain)) and
-belongs to a downstream library.
+domain of dimension $n - 1$, such as of a surface in $R^3$. The unit normal
+field uses the orientation of the topology (see
+[`AbstractTopology`](#abstracttopology)).
 
 #### Examples
 
@@ -2837,18 +2946,18 @@ The examples use the following objects:
   domain](#integral-over-a-decomposed-domain) examples.
 - The decomposed domain `E` of the interior facets of `D`, with the sides
   `"+"` and `"-"`.
-- `grad_u = gradient(u, D)` and `i = index("i")`.
+- `grad_f = gradient(f, D)` and `i = index("i")`.
 
 ```python
 inside, plus, minus = side_map(D, B, "inside"), side_map(D, E, "+"), side_map(D, E, "-")
 n_B = normal(inside)
 
-# The flux of grad u out of the square, the legacy UFL dot(grad(u), n) * ds.
-flux = integral(index_sum(pull_back(grad_u, inside)[i] * n_B[i], (i,)), B)
+# The flux of grad f out of the square, the legacy UFL dot(grad(f), n) * ds.
+flux = integral(index_sum(pull_back(grad_f, inside)[i] * n_B[i], (i,)), B)
 
 # The jump of the normal derivative across the diagonal, from the side "+".
 n_E = normal(plus)
-jump = pull_back(grad_u, plus)[i] - pull_back(grad_u, minus)[i]
+jump = pull_back(grad_f, plus)[i] - pull_back(grad_f, minus)[i]
 penalty = integral(index_sum(jump * n_E[i], (i,)) ** Integer(2), E)
 ```
 
@@ -2862,41 +2971,40 @@ argument of a variational form.
 ### `AbstractFunctionSpace`
 
 Requires: [`AbstractDomain`](#abstractdomain),
-[Scalar type](#scalar-type).
+[`AbstractTopology`](#abstracttopology), [Scalar type](#scalar-type).
 
 An abstract subclass of the base object `AbstractFunctionSpace` for a space of
-functions on a domain.
+functions on a domain or a topology.
 
 | `AbstractFunctionSpace` |                                                                                                                                                       |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                 | `Base` |
-| Provides                | `domain`, an [`AbstractDomain`](#abstractdomain) $D$ or `None`, `value_shape`, `scalar_type` and `argument_spaces`, `()` for a space of fields |
+| Provides                | `domain`, an [`AbstractDomain`](#abstractdomain), an [`AbstractTopology`](#abstracttopology) or `None`, `value_shape`, `scalar_type`, `argument_spaces`, `()` for a space of fields, and `transformation_law`, a [`TransformationLaw`](#transformationlaw) for a space on a topology and otherwise `None` |
 | Defined by              | A subclass outside the core, such as a subclass for the finite element spaces of Basix, and [`DualSpace`](#dualspace) in the core                           |
 
 A space with the domain `None` has functions that do not depend on a domain.
 
 #### Functions in a space
 
-A function in $V$ is an expression with the support $D$ and with the value
-shape and the scalar type of $V$.
+A function in $V$ is an expression with the support of the domain of $V$ and
+with the value shape and the scalar type of $V$. The concrete subclass defines
+the function on the cells:
 
-For a decomposed domain $D$, the function is defined through the cells of $D$
-(see [`DecomposedDomain`](#decomposeddomain)). The concrete subclass does the
-following:
+- A space whose values on the reference cell do not depend on the geometry is
+  on a topology $T$. The concrete subclass defines
+  `pull_back(u, cell_map(T, j, e))` for every cell type $j$ and every entry
+  $e$, such as with one finite element for each cell type. The field on a
+  mesh is a [`PushForward`](#pushforward).
+- A space whose values on the reference cell depend on the geometry is on a
+  mesh $D$, such as Hermite, Argyris, Morley and the other elements that are
+  not Piola equivalent. The concrete subclass defines
+  `pull_back(u, cell_domain(D, j, e))`, and reads $x$ from the cell domain.
+- For a coordinate domain, such as a reference cell, a function is a terminal
+  that the concrete subclass evaluates.
 
-- The concrete subclass defines the pull-back of a function in $V$ by
-  `cell_domain(D, j)` for every cell type $j$ of $D$, such as with one finite
-  element for each cell type.
-- The concrete subclass evaluates the pull-back by
-  `gathered_cell_domain(D, j, g)` as the same function on the cell $g$ (see
-  [`DecomposedDomain`](#decomposeddomain)).
-
-The pull-back of a function by any other domain map into $D$, such as a family
-of points, is rewritten through these two (see [Points and point
+The pull-back of a function on a mesh by any other domain map into the mesh,
+such as a family of points, is rewritten through these (see [Points and point
 evaluation](#points-and-point-evaluation)).
-
-For a coordinate domain $D$, such as a reference cell, a function in $V$ is a
-terminal on $D$ that the concrete subclass evaluates.
 
 The core does not represent the polynomials, the degrees of freedom or the
 basis of $V$, which belong to the concrete subclass. Two spaces are the same
@@ -2917,32 +3025,6 @@ multiplier, because an argument comes from a space. Constant data needs no
 space. An expression with no support, such as a literal or an array that a
 kernel receives, is already a constant.
 
-#### Representation on the reference cell
-
-The pull-back by a cell fixes what a function in $V$ is on the cell, and
-keeps the frame of each axis of the value shape (see [`PullBack`](#pullback)).
-The library of $V$ fixes how the function is represented on the reference
-cell, as a map of a function $\hat u$ on the reference cell.
-
-In the table, $k$ is the dimension of $D$, $n$ is the dimension of the ambient
-coordinate domain, $J$ is the Jacobian matrix of the cell, of value shape
-`(n, k)`, $K$ is `inverse_jacobian` of the cell, and $\rho$ is the density of the cell (see
-[Jacobian and density](#jacobian-and-density)):
-
-| Space                             | Value shape | Map of $\hat u$                                    | Legacy UFL map      |
-| --------------------------------- | ----------- | -------------------------------------------------- | ------------------- |
-| Lagrange                          | `()`        | $\hat u$                                           | identity            |
-| Vector Lagrange                   | `(n,)`      | $\hat u$                                           | identity            |
-| Nédélec, $H(\mathrm{curl})$       | `(n,)`      | $K^T \hat u$                                       | covariant Piola     |
-| Raviart–Thomas, $H(\mathrm{div})$ | `(n,)`      | $J \hat u / \det J$ for $k = n$, and $J \hat u / \rho$ for $k < n$ | contravariant Piola |
-| Discontinuous densities           | `()`        | $\hat u / \det J$ for $k = n$, and $\hat u / \rho$ for $k < n$       | $L^2$ Piola         |
-| Regge                             | `(n, n)`    | $K^T \hat u K$                                     | double covariant    |
-
-Each map is a fixed composition of $\hat u$ with `jacobian`, `inverse`,
-`determinant` and `density`, so a library writes each map once, or takes the
-maps from a language extension (see [A Piola
-extension](#a-piola-extension)).
-
 #### Mixed and Sobolev spaces
 
 A mixed problem needs no mixed space, because an argument of a [form](#form)
@@ -2950,21 +3032,22 @@ may be a `tuple` of functions in several spaces.
 
 The Sobolev space of $V$ is not yet covered. The Sobolev space is expected to
 be stated through the [restrictions](#restriction) of the functions of $V$ to
-the facets of the topology of $D$, from the two sides of each facet.
+the facets of the topology, from the two sides of each facet.
 
 #### Examples
 
-The examples use a decomposed domain `D` of `ReferenceSimplex(2)` cells in
-`RD(2)`, so $k = n = 2$.
+The examples use a topology `T` of `ReferenceSimplex(2)` cells and the mesh
+`D = image(x, RD(2))`, so $k = n = 2$.
 
-- The Lagrange space of polynomial degree 1 on `D` has the value shape `()`.
-- The Nédélec and the Raviart–Thomas spaces on `D` both have the value shape
-  `(2,)`, and differ in the map of $\hat u$.
+- The Lagrange space of polynomial degree 1 on `T` has the value shape `()`.
+- The Nédélec and the Raviart–Thomas spaces on `T` both have the value shape
+  `(2,)`, and differ in the transformation law.
+- The Hermite space is on `D`.
 
 ```{dropdown} Legacy UFL
 The legacy UFL `Real` space is a space of constants, and the legacy UFL `Constant` is constant data.
 
-In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, the pull-back states the meaning of a function on a cell, the library states the representation, and the space holds a decomposed domain, the legacy mesh.
+In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, a space holds a topology and states its transformation law, and the push-forward to a mesh is explicit.
 ```
 
 ### `Function`
@@ -2994,10 +3077,9 @@ antilinear form, such as a known load.
 A function is not an argument or a coefficient by itself. Whether a function is
 an argument of a form is stated by the form (see [`Form`](#form)).
 
-Examples, with a decomposed domain `D` and a space `V` on `D` of the value
-shape `()`:
+Examples, with a topology `T` and a space `V` on `T` of the value shape `()`:
 
-- `u = function(V, "u")` has the support `D` and the value shape `()`, and
+- `u = function(V, "u")` has the support `T` and the value shape `()`, and
   `function(V, "u") == u` is `True`.
 
 ```{dropdown} Legacy UFL
@@ -3400,8 +3482,8 @@ Requires: [Passes](#passes).
 A lazy node class is a node class whose section states the value of the node,
 and which a pass may rewrite as an expression of other node classes with that
 value. The lazy node classes of the core are `GateauxDerivative`, `Action`,
-`DirectionalDerivative`, `Integral` over a decomposed domain, `PullBack` and
-`Gradient`.
+`DirectionalDerivative`, `Integral` over a decomposed domain, `PullBack`,
+`Gradient`, `Divergence`, `Curl` and `PushForward`.
 
 A pass that rewrites a node keeps the value of the node and the static type of
 the node, with the free indices possibly in another order, never simplifies,
@@ -3410,7 +3492,7 @@ the static type is `Zero`, which is real and has no support: where a rewrite
 produces `Zero`, the scalar type of the result may be real for a complex node,
 and the result may have no support for a node with a support. The value is
 the same, because real arithmetic embeds in complex arithmetic and a constant
-is a field on every domain. Because the pass never
+is a field on every support. Because the pass never
 simplifies, a term that is zero stays in the graph, and zero times an
 undefined value is undefined. So a rule never multiplies a term that may be
 zero by an expression that may be undefined where the rewritten node is
@@ -3427,7 +3509,7 @@ not depend on what the evaluated node changes:
 | `Indexed`, `ComponentTensor`, `IndexSum`, `Form`, `DirectionalDerivative` | The expression |
 | `Conjugate`, `RealPart`, `ImaginaryPart` | The operand |
 | `Division` | The numerator |
-| `Gradient`, `PullBack`, `Integral` | The expression |
+| `Gradient`, `Divergence`, `Curl`, `PushForward`, `PullBack`, `Integral` | The expression |
 
 The value of a commuting node is real-linear in the listed operands, and the
 evaluated node acts on the value of an operand alone: an action substitutes
@@ -3436,8 +3518,8 @@ derivative differentiates in a real parameter with the domains fixed. Moving
 an evaluated node into a binding node first makes the binding node fresh for
 the other operands of the evaluated node (see [Passes](#passes)). The partial
 derivative of [`apply_gradients`](#applying-gradients) commutes with the same
-node classes except `Gradient`, `PullBack` and `Integral`, which the rows of
-that pass match first.
+node classes except `Gradient`, `Divergence`, `Curl`, `PushForward`,
+`PullBack` and `Integral`, which the rows of that pass match first.
 
 The passes of the core run in this order, each on the output grammar of the
 one before, from $N_0$ (see [Grammars](#grammars)):
@@ -3448,21 +3530,19 @@ one before, from $N_0$ (see [Grammars](#grammars)):
 | [`apply_actions`](#applying-actions) | `Action`, except a pairing | $N_2$ |
 | [`apply_derivatives`](#applying-derivatives) | `DirectionalDerivative` | $N_3$ |
 | [`expand_integrals`](#expanding-integrals) | `Integral` over a decomposed domain | $N_4$ |
-| [`apply_gradients`](#applying-gradients) | `Gradient`, except of a terminal, a `PullBack` or a `Gradient` | $N_5$ |
-| [`expand_pull_backs`](#expanding-pull-backs) | `PullBack`, except one that reads a value of a library | $N_6$ |
-| [`apply_gradients`](#applying-gradients) | The gradients that `expand_pull_backs` creates, such as the Jacobian of a cell | $N_7$ |
-| [`expand_pull_backs`](#expanding-pull-backs) | The pull-backs that the second `apply_gradients` uncovers | $N_8$, [the core normal form](#the-core-normal-form) |
+| The lowering stage | `Gradient`, `Divergence`, `Curl`, `PushForward` and `PullBack` | $N_5$, [the core normal form](#the-core-normal-form) |
 
-The first `apply_gradients` evaluates each gradient on the domain on which the
-form states the gradient, before a pull-back by a cell moves the gradient to
-the reference cell. A gradient of an expression of the coordinates of a
-decomposed domain $D$ is therefore evaluated on $D$, such as
-`gradient(coordinate(D), D)`, which is the identity matrix for $D$ of the
-dimension of its ambient coordinate domain, and not on the reference cell as
-the product of the Jacobian $J$ and its inverse $K$. The
-second `apply_gradients` evaluates the gradients that the pull-backs create on
-the reference cells, and the second `expand_pull_backs` moves to the leaves
-the pull-backs that enclosed those gradients.
+The first four passes keep a fixed order, because the order is the meaning of
+the form. The lowering stage repeats [`apply_gradients`](#applying-gradients)
+and then [`expand_pull_backs`](#expanding-pull-backs) until neither rewrites.
+`apply_gradients` runs first, so a gradient is evaluated on the domain on
+which the form states the gradient, such as `gradient(coordinate(D), D)`, the
+identity matrix for $D$ of the dimension of its ambient coordinate domain, and
+not as the product of $J$ and $K$ on the reference cell.
+
+A lowering pass does not enter domains, domain maps or spaces. A substitution
+of indices does enter them. An extension pass with a precondition runs
+between two lowering stages (see [Shape derivatives](#shape-derivatives)).
 
 A rewrite of index notation that keeps the value, such as the reduction of an
 `Indexed` of a `ComponentTensor`, is a pass of the compiler, not of the core.
@@ -3616,7 +3696,7 @@ its own rows first, for the leaves of the expression, and then the rows below.
 - A commuting row applies only to an operand that no row of the pass
   matches first, so each pass decides through its own rows which node classes
   the derivative moves into, as [`apply_gradients`](#applying-gradients) does
-  for `Gradient`, `PullBack` and `Integral`.
+  for `Gradient`, `PushForward` and `PullBack`.
 - A language extension that adds a node class adds the derivative of the
   class to this table, and every pass that differentiates then uses the row.
 - The derivative of each row is a composition of node classes of the core,
@@ -3682,8 +3762,8 @@ and `pull_back(f, D_j)` otherwise. An $f$ with no support is pulled back too,
 so that $g_j$ has the free indices of piece $j$ when the density does not,
 such as for a family of points, whose density is `Integer(1)`.
 
-- Each application moves to a parameter domain that is nested less deeply, so
-  the pass terminates.
+- The parameter domains of the pieces are coordinate domains, so the pass
+  terminates.
 - A free index of $f$ shared with piece $j$ is identified by the static type of
   `PullBack`, and the `IndexSum` pairs each value of the index with a member of
   the family, so the result has the static type of the `Integral`.
@@ -3695,17 +3775,25 @@ such as for a family of points, whose density is `Integer(1)`.
 ### Applying gradients
 
 Requires: [Expanding integrals](#expanding-integrals),
-[`Gradient`](#gradient), [Derivatives of the node
+[`Gradient`](#gradient), [`Divergence` and `Curl`](#divergence-and-curl),
+[`PushForward`](#pushforward), [Derivatives of the node
 classes](#derivatives-of-the-node-classes).
 
 | `apply_gradients(f)` |  |
 | -------------------- | - |
-| Evaluates            | `Gradient` |
-| Input grammar        | $N_4$, and $N_6$ in the second run |
-| Output grammar       | $N_5 = N_4 \setminus G$, and $N_7 = N_6 \setminus G$ in the second run, with $G = \{$a `Gradient(f, P)` whose expression $f$ is not a terminal, a `PullBack` or a `Gradient`, or is `Coordinate(P)` with $P$ of the dimension of its ambient coordinate domain$\}$ |
+| Evaluates            | `Gradient`, `Divergence` and `Curl` |
+| Input grammar        | $N_4$, in the lowering stage |
+| Output grammar       | $N_4 \setminus G$, with $G$ the patterns of the rows below that rewrite |
 
-The pass rewrites every `Gradient(f, P)` that $G$ matches, inner
-gradients first, as
+A cell is a `CellMap` or a `cell_domain(D, j, e)`. The identity of Piola
+matches `Divergence(PushForward(f, D, m), D)` with $m$ =
+`transformation_law(("contravariant",), 1)`, and `Curl(PushForward(f, D, m), D)`
+with $m$ = `transformation_law(("covariant",), 0)` and $k = n$ (see
+[`PushForward`](#pushforward)).
+
+The pass rewrites every `Divergence` and `Curl` that the identity of Piola
+does not match as its composition of `gradient(u, P)`, and every
+`Gradient(f, P)` that a row below rewrites, inner gradients first, as
 `component_tensor(∂_j f[a_1, …, a_r], (a_1, …, a_r, j))`, with $r$ the rank
 of $f$ and derived indices $a_1, \ldots, a_r$ and $j$. $\partial_j b$, entry
 $j$ of the last axis of the gradient of $b$ on $P$, has the value shape of
@@ -3716,7 +3804,8 @@ coordinate domain of $P$. $\partial_j$ applies the first row that matches:
 | -------------- | -------------- |
 | $b$ with no support | `Zero`, with the value shape and the argument spaces of $b$, and the free indices of $b$ followed by $j$ |
 | `Coordinate(P)`, $P$ of the dimension of its ambient coordinate domain | `component_tensor(I[i, j], (i,))`, with $I$ the identity matrix of value shape `(n, n)` and a derived index $i$ |
-| A terminal, a `PullBack` or a `Gradient` | `component_tensor(gradient(b, P)[a_1, …, a_s, j], (a_1, …, a_s))`, with $s$ the rank of $b$, so the gradient remains |
+| A terminal, a `Gradient`, a `PushForward`, a node that the identity of Piola matches, or a `PullBack` by a cell or a `SideMap` | `component_tensor(gradient(b, P)[a_1, …, a_s, j], (a_1, …, a_s))`, with $s$ the rank of $b$, so the gradient remains |
+| `PullBack(g, φ)`, φ a `DomainMap` | The chain rule $(\nabla_Q g \circ \varphi) \, \nabla_P \varphi$, `pull_back(gradient(g, Q), φ)[a_1, …, a_s, l] * jacobian(φ)[l, j]` summed over a derived index $l$, with $Q$ the ambient domain of φ |
 | Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \partial_j b$ |
 
 - An operand is constant for the pass if the operand has no support.
@@ -3726,51 +3815,46 @@ coordinate domain of $P$. $\partial_j$ applies the first row that matches:
   domain, `Gradient` is the tangential gradient (see [`Gradient`](#gradient)),
   which obeys the same rows. The `Coordinate` row does not match, so
   `gradient(coordinate(P), P)`, the projection $\Pi$, remains, and a
-  pull-back by a cell, such as through a restriction to points, evaluates
-  it.
-- In the first run, a gradient that $G$ does not match remains, such as the
-  gradient of a function on a decomposed domain, and
-  [`expand_pull_backs`](#expanding-pull-backs) rewrites the gradient on the
-  reference cell. In the second run, the gradients that $G$ matches are the
-  gradients that `expand_pull_backs` creates on the reference cells, such as
-  the Jacobian of a cell in the inverse Jacobian and, in a Hessian, the
-  gradient of the pulled-back gradient.
-- A gradient on a cell under a pull-back to the points of a facet, or of
-  another cell through the inclusion of a side, remains in $N_6$, because
-  the gradient does not commute with that pull-back (see [Expanding
-  pull-backs](#expanding-pull-backs)). Once the second run rewrites the
-  gradient, the pull-back is pointwise again, as in the inverse Jacobian of
-  the cell on a side and in the inverse Jacobian of [`Normal`](#normal), and
-  the second `expand_pull_backs` moves the pull-back to the leaves.
+  pull-back by a cell evaluates it.
+- A gradient that remains is rewritten on the reference cell by
+  [`expand_pull_backs`](#expanding-pull-backs), and the gradients that
+  `expand_pull_backs` creates, such as the Jacobian of a cell, are rewritten
+  in the next round of the lowering stage.
 
 ### Expanding pull-backs
 
 Requires: [Applying gradients](#applying-gradients), [`PullBack`](#pullback),
 [Restriction](#restriction), [`Normal`](#normal), [Jacobian and
-density](#jacobian-and-density), [`Inverse`](#inverse).
+density](#jacobian-and-density), [`PushForward`](#pushforward).
 
 | `expand_pull_backs(f)` |  |
 | ---------------------- | - |
 | Evaluates              | `PullBack` |
-| Input grammar          | $N_5$, and $N_7$ in the second run |
-| Output grammar         | $N_6 = N_4 \setminus R$, and $N_8 = N_7 \setminus R$ in the second run, with $R = \{$a `PullBack` by a domain map whose expression is not a terminal, a `PullBack` or a `Gradient`, a `PullBack` of a `Gradient` by a `cell_domain` or a `gathered_cell_domain`, and a `PullBack` by a domain map of a `PullBack` by a domain map that is not a `cell_domain` or a `gathered_cell_domain`$\}$ |
+| Input grammar          | $N_4$, in the lowering stage |
+| Output grammar         | $N_4 \setminus R$, with $R$ the patterns of the rows below that rewrite |
 
 The pass rewrites every `PullBack(f, ψ)`, inner pull-backs first, with the
 first row that matches, and applies the rows again to each `PullBack` that a
 rewrite creates. $P$ and $Q$ are the parameter domain and the ambient domain
-of $\psi$, $J$ = `jacobian(ψ)`, and for $\psi$ = `cell_domain(E, i)` and a side
-$s$, $B_i$ is the cell on the side and $A_i$ the inclusion of the cell of $E$
-into it (see [Restriction](#restriction)).
+of $\psi$. For $\psi$ a cell $D_j$ = `cell_domain(D, j, e)` of a mesh $D$ with
+the topology $T$, $\hat f$ is `pull_back(f, cell_map(T, j, e))` and $m_\psi$
+is the law $m$ on $\psi$ (see [`TransformationLaw`](#transformationlaw)). For
+$\psi$ = `cell_map(S, i)` or `cell_domain(E, i)` and a side $s$, $B_i$ and
+$A_i$ are the maps of [Restriction](#restriction).
 
 | `PullBack(f, ψ)` | Rewrite |
 | ---------------- | ------- |
-| $\psi$ a `SideMap`, $f$ with a support | Remains until a pull-back by a cell of $E$ |
+| $\psi$ a `SideMap`, $f$ with a support | Remains until a pull-back by a cell of $P$ |
 | $f$ with no support | $f$, or `f + Zero(…)` with the free indices of $\psi$ that $f$ lacks |
-| `Coordinate(Q)` | $\psi$ |
-| `PullBack(g, SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
-| `PullBack(g, φ)`, φ a `SideMap`, a `cell_domain` or a `gathered_cell_domain` | Remains, so a pull-back nests only inside a read on a cell |
+| `Coordinate(Q)` | The parameterisation of $\psi$ |
+| `PullBack(g, SideMap(X, P, s))`, $\psi$ = `cell_map(S, i)` or `cell_domain(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
+| `PullBack(g, φ)`, φ a `SideMap` or a cell | Remains, so a pull-back nests only inside a read on a cell |
 | `PullBack(g, φ)` | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](#pullback)) |
-| `Gradient(g, Q)`, $\psi$ = `cell_domain(Q, j)` or a `gathered_cell_domain` of $Q$ | $K^T \nabla_P(\psi^* g)$, with $K$ = `inverse_jacobian(ψ)` |
+| `PushForward(f, D, m)`, $\psi$ a cell of $D$ | $m_\psi(\hat f)$ |
+| `Divergence(PushForward(f, D, m), D)` of the identity of Piola, $\psi$ a cell of $D$ | $m'_\psi$ of `divergence(f̂, K_j)`, with $m'$ = `transformation_law((), 1)` |
+| `Curl(PushForward(f, D, m), D)` of the identity of Piola, $\psi$ a cell of $D$ | $m'_\psi$ of `curl(f̂, K_j)`, with $m'$ = `transformation_law(("contravariant",), 1)` for $n = 3$ and `transformation_law((), 1)` for $n = 2$ |
+| `PushForward`, `Divergence` or `Curl` | Remains, read at the points of $P$ |
+| `Gradient(g, Q)`, $\psi$ a cell of $Q$ | $K^T \nabla_P(\psi^* g)$, with $K$ = `inverse_jacobian(ψ)` |
 | `Gradient(g, Q)` | Remains, the gradient on $Q$ read at the points of $P$ |
 | `Normal(SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | $K^T \hat m / \lvert K^T \hat m \rvert$ of [`Normal`](#normal) |
 | A terminal | Remains, for the library of the terminal |
@@ -3782,49 +3866,38 @@ into it (see [Restriction](#restriction)).
   `f + Zero(…)` is $f$ for each member of the family $\psi$.
 - A restriction is a pull-back by a `SideMap` (see
   [Restriction](#restriction)), so this pass also lowers restrictions. A
-  pull-back by a `SideMap` that no pull-back by a cell of $E$ encloses, such
-  as on an expression on $E$ that is not integrated, remains.
-- `inverse_jacobian` chooses the composition of $K$ for the dimensions of
-  $\psi$, including a parameter domain of lower dimension than its ambient
-  coordinate domain (see [Jacobian and density](#jacobian-and-density)).
+  pull-back by a `SideMap` that no pull-back by a cell encloses, such as on an
+  expression on $P$ that is not integrated, remains.
+- The composition of maps lowers the parameterisation of the map that the
+  composition builds. With a `CellMap` as $\psi$ and φ =
+  `domain_map(T, x, D)`, the composition is `cell_domain(D, j, e)` for the
+  coordinate function $x$ of $D$.
+- The rows of the identity of Piola read no derivative of $J$. A
+  `PushForward` and a node of the identity of Piola under a map that is not a
+  cell remain, as a function on a mesh does.
 - Only a pull-back by a cell moves a gradient on a decomposed domain to the
-  reference cell, so the pass inverts the Jacobian of a cell only. A gradient
-  under a pull-back by any other map remains on its domain. The inclusion
-  $A_i$ of a cell of a submesh into a cell of the same dimension therefore
-  leaves the reference gradient at the points of the cell of $E$, as the
-  inclusion of a facet does.
-- A pull-back by any other map composes with the pull-back that it encloses,
-  so a value that a library reads on a cell is under at most one further
-  domain map, such as the inclusion $A_i$, the points of a quadrature rule,
-  or the two composed.
+  reference cell, so the pass inverts the Jacobian of a cell only. The
+  gradient of a pull-back by another map is the chain rule of
+  [`apply_gradients`](#applying-gradients).
 - Every pull-back that remains reads a value of a library on a cell, possibly
-  at the points of a cell of $E$ through $A_i$, such as the reference
+  at the points of a cell of $S$ through $A_i$, such as the reference
   gradient of a function on the cell at the points of a facet. A pull-back of
-  a function or of its gradient by a map other than a cell domain, such as by
-  a point of a mesh given by its coordinates, remains, because the library of
-  the function defines the function on the cells. A point of a mesh known in
-  advance is evaluated through a restriction instead, and other points are
-  located by a pass after the core (see [Points and point
-  evaluation](#points-and-point-evaluation)).
-- The rows create gradients on the reference cells, such as the Jacobian in
-  $K$, so $N_6$ is a delta of $N_4$ and not of $N_5$. In the second run,
-  every gradient is of a terminal, a `PullBack` or a `Gradient`, and every
-  pull-back by a cell already reads a value of a library, so the pass creates
-  no gradient that $G$ matches and $N_8$ is contained in $N_7$.
-- The pass leaves an expression of $N_6$ unchanged, because each pull-back of
-  $N_6$ matches a row that remains, so the second run rewrites only the
-  pull-backs that the second `apply_gradients` uncovers.
+  a field on a mesh by a map other than a cell, such as by a point of a mesh
+  given by its coordinates, remains, because the library defines the function
+  on the cells. A point of a mesh known in advance is evaluated through a
+  restriction instead, and other points are located by a pass after the core
+  (see [Points and point evaluation](#points-and-point-evaluation)).
 
 ### The core normal form
 
 Requires: [Grammars](#grammars), [Expanding pull-backs](#expanding-pull-backs).
 
-The core normal form is $N_8$, the output grammar of the second run of
-[`expand_pull_backs`](#expanding-pull-backs), the last pass of the core. Every
-expression node of an expression in the core normal form is an instance of a
-concrete class of the core or a terminal of a downstream library. The table
-gives every node class that the core normal form allows, with the condition
-on each, and no other node class occurs in the core normal form:
+The core normal form is $N_5 = N_4 \setminus (G \cup R)$, the output grammar of
+the lowering stage. Every expression node of an expression in the core normal
+form is an instance of a concrete class of the core or a terminal of a
+downstream library. The table gives every node class that the core normal
+form allows, with the condition on each, and no other node class occurs in
+the core normal form:
 
 | Chapter | Node class | Allowed in the core normal form |
 | ------- | ---------- | ------------------------------- |
@@ -3833,19 +3906,21 @@ on each, and no other node class occurs in the core normal form:
 | [Algebra](#algebra) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of a `ComponentTensor`, which the compiler rewrites (see [Evaluation](#evaluation)) |
 | [Algebra](#algebra) | `Inverse` | Always, for the compiler to evaluate |
 | [Calculus on a domain](#calculus-on-a-domain) | `Coordinate` | Always |
-| [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `PullBack` or a `Gradient`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
+| [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
+| [Calculus on a domain](#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
 | [Calculus on a domain](#calculus-on-a-domain) | `Integral` | Over a domain that is not a `DecomposedDomain`, such as a reference cell or `RD(0)` |
-| [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap`, or by a domain map of a terminal, of a `PullBack` by a `SideMap`, a `cell_domain` or a `gathered_cell_domain`, or of a `Gradient` by a domain map that is not a `cell_domain` or a `gathered_cell_domain` |
+| [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
 | [Decomposed domains](#decomposed-domains) | `Normal` | Always |
+| [Decomposed domains](#decomposed-domains) | `PushForward` | Under no pull-back by a cell |
 | [Function spaces](#function-spaces) | `Function` | Always |
 | [Variational forms](#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](#form)) |
 | [Variational forms](#variational-forms) | `Action` | A pairing, an `Action` whose form is a `Function` in a dual space |
 | | A terminal of a downstream library | Always |
 
 The objects of an expression that are not expressions, such as an `Index`, an
-`EllipsisIndex`, a `GatheredIndex`, a domain, a `DomainMap`, a `SideMap` and a
-space, occur as in any expression, because a grammar restricts only the
-expression nodes.
+`EllipsisIndex`, a `GatheredIndex`, a domain, a `DomainMap`, a `SideMap`, a
+`CellMap` and a space, occur as in any expression, because a grammar restricts
+only the expression nodes.
 
 The code that assembles receives the form layer (see [Grammars](#grammars)):
 sums and products of forms, `Zero`, forms whose expression may be a form,
@@ -3875,10 +3950,10 @@ In particular, the core normal form may still contain:
 - A pull-back by a `SideMap` that no pull-back by a cell encloses, such as a
   restriction that is not integrated.
 - A `Gradient` of the coordinates of a decomposed domain of lower dimension
-  than its ambient coordinate domain, the projection $\Pi$, and a `Gradient`
-  of a function on a decomposed domain, both under a pull-back by points or
-  by another map that is not a cell, such as the coordinates of another
-  mesh.
+  than its ambient coordinate domain, the projection $\Pi$, and a
+  `Gradient`, a `PushForward` or a node of the identity of Piola on a mesh,
+  each under a pull-back by points or by another map that is not a cell,
+  such as the coordinates of another mesh.
 
 ## Extending the core
 
@@ -3896,7 +3971,7 @@ The core supports five kinds of extension:
   or linearity checks.
 - [New subclasses](#new-subclasses), such as the elements and functions of
   Basix, or new coordinate domains.
-- [New operations](#new-operations), such as the trace or the divergence.
+- [New operations](#new-operations), such as the trace or the cross product.
 - [New transformations](#new-transformations), such as the Gateaux
   derivative.
 - [Language extensions](#language-extensions), such as external operators.
@@ -3959,9 +4034,9 @@ extension gives a table of rules or the lowering table. A rule of an extension
 may match a pattern that a rule of the core also matches, and the earlier
 table wins. Every rule keeps the value of the node, and a rule must agree with
 the lowering followed by the pass, up to mathematical equality. An identity
-that holds for a composition of the core, such as a cancellation in the
-divergence of a Piola map, needs node classes of an extension for the
-composition (see [A Piola extension](#a-piola-extension)).
+that holds for a composition, such as the identity of Piola, needs node
+classes for the composition, as `Divergence` and `Curl` are in the core (see
+[`PushForward`](#pushforward)).
 
 #### Examples
 
@@ -3979,13 +4054,8 @@ composition (see [A Piola extension](#a-piola-extension)).
   `dual_space(V)` is the adjoint interpolation of that function, and the
   action at position 1 on a function in `U` is the interpolant. The table of
   the extension for a pass that evaluates actions gives both.
-- A language extension for shape derivatives adds a node class for the
-  derivative of an expression when the coordinates of the vertices of a mesh
-  move in a direction. After the integrals and the pull-backs are expanded,
-  the coordinates occur explicitly in the parameterisations of the cells, and
-  the table of the extension lowers the node to a `DirectionalDerivative` with
-  respect to the coordinates, which holds the domains fixed. A function keeps
-  its values on the reference cell, so the function moves with the mesh.
+- A language extension for shape derivatives (see [Shape
+  derivatives](#shape-derivatives)).
 - A named composition that must survive a pass, or print as written, is a node
   class of a language extension whose lowering is the composition. A
   `Transpose` node class lowers to `component_tensor(A[k, l], (l, k))`. The
@@ -4039,8 +4109,7 @@ the operands, such as a value shape, to choose the composition (see
 `tensor((a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]))`,
 so `cross(a, b)` requires the value shape `(3,)`. `trace(A)` reads no extent,
 because `index_sum(A[k, k], (k,))`, with a derived index `k`, is the trace for
-every extent, and `divergence(u, P)` is
-`index_sum(gradient(u, P)[k, k], (k,))` for every extent. An operation that an `EllipsisIndex` expresses, such as
+every extent. An operation that an `EllipsisIndex` expresses, such as
 `outer(u, v)`, needs no value shape (see
 [`EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex)).
 
@@ -4080,50 +4149,26 @@ the [Gateaux derivative](#gateaux-derivative) rewrites the functions that the
 derivative is taken with respect to, so the Gateaux derivative needs a rule for
 the leaf classes of those functions.
 
-### A Piola extension
+### Shape derivatives
 
-Requires: [Language extensions](#language-extensions), [Jacobian and
-density](#jacobian-and-density), [`Gradient`](#gradient), [Representation on
-the reference cell](#representation-on-the-reference-cell).
+Requires: [Language extensions](#language-extensions),
+[`DirectionalDerivative`](#directionalderivative), [Evaluation](#evaluation),
+[`DecomposedDomain`](#decomposeddomain).
 
-> A sketch of an extension, not a rule of the core.
+> A language extension, not a rule of the core.
 
-On a cell that is not affine, the gradient of the contravariant Piola map
-$J \hat u / \det J$ contains the gradients of $J$ and of $\det J$, which are
-second derivatives of the parameterisation. In the divergence these terms
-cancel, because the contravariant Piola map preserves the divergence:
+`ShapeDerivative(f, x, h)` is the derivative of $f$ when the coordinate
+function $x$ of a mesh `image(x, Q)` moves in the direction $h$. The pass of
+the extension runs between two lowering stages, where $x$ occurs explicitly
+in the parameterisations of the cells, and lowers the node to
+`DirectionalDerivative(f, x, x, h)`, which holds the domains fixed. A function
+on the topology keeps its values on the reference cell, so the function moves
+with the mesh.
 
-$$
-\operatorname{div} \left( \frac{J \hat u}{\det J} \right) = \frac{\widehat{\operatorname{div}} \, \hat u}{\det J}.
-$$
-
-The core sees only the composition, so a pass that compares graphs
-structurally does not find the cancellation. A language extension makes the
-cancellation structural with node classes for the maps and the operators:
-
-| Node class                     | Lowering                                                               |
-| ------------------------------ | ---------------------------------------------------------------------- |
-| `ContravariantPiola(u_hat, D)` | $J \hat u / \det J$, with `jacobian(D)` and `determinant(jacobian(D))` |
-| `CovariantPiola(u_hat, D)`     | $K^T \hat u$, with $K$ = `inverse_jacobian(D)`                         |
-| `Divergence(u, P)`             | `index_sum(gradient(u, P)[k, k], (k,))`                                |
-| `Curl(u, P)`                   | The curl in $R^3$, a fixed composition of `gradient(u, P)`             |
-
-The library of a space with a Piola map gives the pull-back of a function by
-a cell as a `ContravariantPiola` or a `CovariantPiola` of the function
-$\hat u$ on the reference cell. The extension states the pull-backs, for a
-domain $D$ = `DomainMap(P, psi, Q)` with $k = n$:
-
-- If the pull-back of $u$ by $D$ is `ContravariantPiola(u_hat, D)`, the
-  pull-back of `Divergence(u, Q)` is
-  `Divergence(u_hat, P) / determinant(jacobian(D))`.
-- If the pull-back of $u$ by $D$ is `CovariantPiola(u_hat, D)` and $n = 3$, the
-  pull-back of `Curl(u, Q)` is `ContravariantPiola(Curl(u_hat, P), D)`.
-- Otherwise the pull-back lowers `Divergence` or `Curl`.
-
-The table of the extension for the pull-back holds these rules (see [Rule
-tables](#rule-tables)). Each rule applies the pass to `pull_back(u, D)`, which
-the library of the space evaluates, and reads the class of the result, a node
-class of the extension.
+The direction is any direction that the core derivatives allow, an expression
+on the topology of value shape `(n,)` or a constant. With an argument as the
+direction, the Gateaux derivative gives the shape gradient. An ALE mesh is
+`image(x0 + d, Q)`.
 
 ## Appendix: Class hierarchy
 
@@ -4174,6 +4219,8 @@ Base
 AbstractExpression
 ├── Coordinate
 ├── Gradient
+├── Divergence
+├── Curl
 ├── DirectionalDerivative
 └── Integral
 
@@ -4191,13 +4238,17 @@ Base
 # Reference cells
 AbstractCoordinateDomain, AbstractCellType
 └── AbstractReferenceCell
+Base
+└── CellMap
 
 # Decomposed domains
 AbstractDomain
 └── DecomposedDomain
 Base
+├── TransformationLaw
 └── SideMap
 AbstractExpression
+├── PushForward
 └── Normal
 
 # Function spaces
@@ -4248,19 +4299,28 @@ AbstractExpression
 |                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                                                | The Leibniz formula for $\det A$                                                                                                                                                |
 | Calculus on a domain        | [`coordinate(P)`](#coordinate)                                           |                               | `P: AbstractDomain`                                                                                                    | `Coordinate`                                                                                                                                                                    |
 |                             | [`gradient(f, P)`](#gradient)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                           | `Gradient`                                                                                                                                                                      |
+|                             | [`divergence(u, P)`](#divergence-and-curl)                               |                               | `u: AbstractExpression`, `P: AbstractDomain`                                                                           | `Divergence`                                                                                                                                                                    |
+|                             | [`curl(u, P)`](#divergence-and-curl)                                     |                               | `u: AbstractExpression`, `P: AbstractDomain`                                                                           | `Curl`                                                                                                                                                                          |
 |                             | [`directional_derivative(f, x, a, h)`](#directionalderivative)           |                               | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple`                                   | `DirectionalDerivative(f, x, a, h)`                                                                                                                                             |
 |                             | [`integral(f, P)`](#integral)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                           | `Integral`                                                                                                                                                                      |
-| Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractDomain`, `psi: AbstractExpression`, `Q: AbstractDomain`                                                    | `DomainMap`                                                                                                                                                                     |
-|                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap`                                                                     | `PullBack`                                                                                                                                                                      |
+| Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractDomain`                      | `DomainMap`                                                                                                                                                                     |
+|                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap`                                                          | `PullBack`                                                                                                                                                                      |
 |                             | [`jacobian(D)`](#jacobian-and-density)                                   |                               | `D: DomainMap`                                                                                                         | `gradient(D.parameterisation, D.parameter_domain)`                                                                                                                              |
-|                             | [`inverse_jacobian(D)`](#jacobian-and-density)                           |                               | `D: DomainMap`                                                                                                         | The matrix $K$ below                                                                                                                                                            |
+|                             | [`inverse_jacobian(D)`](#jacobian-and-density)                           |                               | `D: DomainMap`                                                                                                         | `inverse(jacobian(D))`                                                                                                                                                          |
 |                             | [`density(D)`](#jacobian-and-density)                                    |                               | `D: DomainMap`                                                                                                         | The density $\rho$ below                                                                                                                                                        |
 | Topology                    | [`cell_index(T, j)`](#abstracttopology)                                  |                               | `T: AbstractTopology`, `j: int`                                                                                        | `Index`                                                                                                                                                                         |
+| Reference cells             | [`cell_map(T, j, e)`](#cellmap)                                          |                               | `T: AbstractTopology`, `j: int`, `e: Index \| GatheredIndex`                                                           | `CellMap(T, j, e)`                                                                                                                                                              |
+|                             | [`cell_map(T, j)`](#cellmap)                                             |                               | `T: AbstractTopology`, `j: int`                                                                                        | `CellMap(T, j, cell_index(T, j))`                                                                                                                                               |
 | Decomposed domains          | [`decomposed_domain(pieces)`](#decomposeddomain)                         |                               | `pieces: tuple[DomainMap, ...]`                                                                                        | `DecomposedDomain`                                                                                                                                                              |
+|                             | [`image(x, Q)`](#meshes)                                                 |                               | `x: AbstractExpression`, `Q: AbstractDomain`                                                                           | `DecomposedDomain` with the pieces `domain_map(K_j, pull_back(x, cell_map(T, j)), Q)`                                                                                           |
 |                             | [`cell_domain(D, j)`](#cell-domains)                                     |                               | `D: DecomposedDomain`, `j: int`                                                                                        | `DomainMap` of the cells of type `j`                                                                                                                                            |
-|                             | [`gathered_cell_domain(D, j, g)`](#gathered-cell-domains)                |                               | `D: DecomposedDomain`, `j: int`, `g: GatheredIndex`                                                                    | `DomainMap` of the cells of type `j` selected by `g`                                                                                                                            |
-|                             | [`side_domain(D, S)`](#restriction)                                      |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                                           | The decomposed domain of the cells of $S$, with the geometry of the first side of each group on the topology of $D$                                                             |
-|                             | [`side_map(D, E, s)`](#sidemap)                                          |                               | `D, E: DecomposedDomain`, `s: str`                                                                                     | `SideMap`                                                                                                                                                                       |
+|                             | [`cell_domain(D, j, e)`](#cell-domains)                                  |                               | `D: DecomposedDomain`, `j: int`, `e: Index \| GatheredIndex`                                                           | `DomainMap` of the cells of type `j` selected by `e`                                                                                                                            |
+|                             | [`transformation_law(variances, weight)`](#transformationlaw)            |                               | `variances: tuple[str, ...]`, `weight: int`                                                                            | `TransformationLaw`                                                                                                                                                             |
+|                             | [`push_forward(f, D, m)`](#pushforward)                                  |                               | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw`                                                 | `PushForward(f, D, m)`                                                                                                                                                          |
+|                             | [`push_forward(u, D)`](#pushforward)                                     |                               | `u: Function`, `D: DecomposedDomain`                                                                                   | `PushForward(u, D, u.space.transformation_law)`                                                                                                                                 |
+|                             | [`side_map(X, P, s)`](#sidemap)                                          |                               | `X, P: AbstractTopology \| DecomposedDomain`, `s: str`                                                                 | `SideMap(X, P, s)`                                                                                                                                                              |
+|                             | [`side_map(X, P)`](#sidemap)                                             |                               | `X, P: AbstractTopology \| DecomposedDomain`                                                                           | `SideMap(X, P, None)`, the first side of each group on $T$                                                                                                                      |
+|                             | [`side_domain(D, S)`](#side-domains)                                     |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                                           | `image(pull_back(x, side_map(T, S)), Q)`                                                                                                                                        |
 |                             | [`normal(sm)`](#normal)                                                  |                               | `sm: SideMap`                                                                                                          | `Normal`                                                                                                                                                                        |
 | Function spaces             | [`function(V, label)`](#function)                                        |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                                      | `Function`                                                                                                                                                                      |
 | Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                               | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, and `ConjugateSpace(V)` for a complex `V`                                                                                                                   |
@@ -4300,7 +4360,8 @@ the argument spaces column must have the argument spaces `()`.
 | `Function`                               | Those of the space                                             |
 | `Form`                                   | Those of the expression, followed by the space of each entry, conjugated for a `conjugate(v)` entry |
 | `Action`                                 | Those of the form without the entry at `position`              |
-| `Gradient`                               | Those of the operand                                           |
+| `Gradient`, `Divergence`, `Curl`         | Those of the operand                                           |
+| `PushForward`                            | Those of the expression                                        |
 | `DirectionalDerivative`                  | Those of the expression                                        |
 | `GateauxDerivative`                      | Those of the expression, followed by the space of the entry $w$ |
 | `Integral`                               | Those of the integrand                                         |
@@ -4316,13 +4377,14 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 | `Zero`                   | None                               | Real                              |
 | `Absolute`               | The default                        | Real                              |
 | `RealPart`, `ImaginaryPart` | The default                     | Real                              |
-| `Coordinate`, `Gradient` | The domain $P$                     | The default                       |
+| `Coordinate`, `Gradient`, `Divergence`, `Curl` | The domain $P$               | The default                       |
 | `DirectionalDerivative`  | The default                        | The scalar type of $f$            |
 | `GateauxDerivative`      | The default                        | The scalar type of $F$ for a real $x$, and complex otherwise |
 | `Integral`               | None                               | The default                       |
 | `PullBack`               | The parameter domain of the domain | The default                       |
 | `Normal`                 | $E$                                | Real                              |
 | `Function`               | The domain of the space, or none   | The scalar type of the space      |
+| `PushForward`            | The mesh $D$                       | The default                       |
 | `Form`                   | The support of the expression      | The scalar type of the expression |
 | `Action`                 | The support of the form            | The scalar type of the form       |
 
@@ -4333,10 +4395,10 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 48    |
+| Classes                         | 53    |
 | Abstract classes                | 10    |
-| Concrete classes                | 38    |
-| Expression node classes         | 29    |
-| Free functions                  | 46    |
+| Concrete classes                | 43    |
+| Expression node classes         | 32    |
+| Free functions                  | 55    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->
