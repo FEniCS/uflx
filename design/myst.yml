@@ -20,6 +20,7 @@ project:
     - DESIGN_CHOICES.md
     - FINAL_TODOS.md
     - PASSES_DRAFT.md
+    - COORDINATE_FUNCTIONS_DRAFT.md
 site:
   template: book-theme
   options:

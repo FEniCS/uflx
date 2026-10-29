@@ -25,11 +25,43 @@ Nothing. Integrals over cells and facets use the induced density in
    and the pull-backs are expanded to a `DirectionalDerivative` with respect to
    the coordinates (see PASSES_DRAFT.md). ALE needs the same extension, with
    the parameterisation of the pieces built from a displacement function.
+   COORDINATE_FUNCTIONS_DRAFT.md proposes the coordinates as a function on the
+   topology, which makes the variable of the extension a function.
 1. **Static real types.** A complex function that appears only in real-valued
    combinations gives a misleading derivative.
 1. **Literals in derivatives.** The derivative pass produces many `Zero` and
    `Integer(1)` terms. State whether a later pass or the form compiler folds
    them.
+
+## Geometry
+
+1. **One transformation law for the geometry.** The maps of the table
+   "Representation on the reference cell" are instances of the transformation
+   law of a tensor density, `TransformationLaw(variances, weight)` (see
+   COORDINATE_FUNCTIONS_DRAFT.md). The rows of the core that use the Jacobian
+   are instances of the same law: the pull-back of a gradient by a cell adds a
+   covariant axis, the normal of a side normalises the covariant push-forward
+   of the reference normal, the density of `expand_integrals` transforms the
+   reference measure with the weight -1, and the coordinates are the
+   push-forward of the coordinate function by the identity. Restate these rows,
+   the table and the Piola extension through the law, so that the Jacobian,
+   its inverse, its determinant and the density occur only in the lowering of
+   the law.
+1. **Cancellations of the law.** With the weight explicit, a pass can see
+   cancellations that a structural comparison of graphs misses: the
+   divergence of a contravariant field of weight 1 is the reference divergence
+   over the determinant, the integral of a density of weight 1 is the integral
+   on the reference cell, and the flux of a contravariant field through a
+   facet is the reference flux, with no geometry. State whether the core, a
+   language extension or the form compiler finds them.
+1. **The density of a point.** The row $m = 0$ of `density` gives
+   `Integer(1)`, which the general row already gives: the determinant of a
+   matrix of value shape `(0, 0)` is `Integer(1)` by the Leibniz formula, with
+   the one empty permutation, so the row only spares a `square_root` of 1 that
+   a compiler folds. Remove the row, or keep it and say why.
+1. **Hellan–Herrmann–Johnson.** The table "Representation on the reference
+   cell" stops at Regge. Add the double contravariant map of Basix,
+   J û Jᵀ / (det J)² for k = n, and with the density squared for k < n.
 
 ## Tensors
 

@@ -148,8 +148,8 @@ facets of one cell. `boundary` and `diagonal` have the numbers of cells `(4,)`
 and `(1,)`.
 
 `StaticTopology` does not check the sides. A `StaticTopology` has no
-coordinates. The positions of the vertices come from the
-[coordinates of a decomposed domain](LANGUAGE.md#decomposeddomain).
+coordinates. The positions of the vertices come from the coordinate function
+of a [mesh](LANGUAGE.md#meshes).
 
 #### Side tables of a static topology
 
@@ -618,32 +618,34 @@ into its components, and each component is a scalar integral over the cells.
 ### An interior facet integral
 
 Requires: [Sides of a topology](LANGUAGE.md#sides-of-a-topology),
-[Restriction](LANGUAGE.md#restriction), [`Integral` over a decomposed
-domain](LANGUAGE.md#integral-over-a-decomposed-domain), [`Normal`](LANGUAGE.md#normal),
-[`Form`](LANGUAGE.md#form), [Evaluation](LANGUAGE.md#evaluation).
+[Restriction](LANGUAGE.md#restriction), [`PushForward`](LANGUAGE.md#pushforward),
+[`Integral` over a decomposed domain](LANGUAGE.md#integral-over-a-decomposed-domain),
+[`Normal`](LANGUAGE.md#normal), [`Form`](LANGUAGE.md#form),
+[Evaluation](LANGUAGE.md#evaluation).
 
 The interior facet terms of the symmetric interior penalty method for the
 Poisson problem, the legacy UFL `dS` integral, on the square divided into two
-triangles. The example uses `D`, `square`, `K`, `X`, `y` and `cell_vertices`
-of the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, `I = ReferenceSimplex(1)`
+triangles. The example uses `D`, `x`, `square` and `K` of the
+[`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, `I = ReferenceSimplex(1)`
 and the `diagonal` topology of the [Restriction](LANGUAGE.md#restriction) example, a
-space `V` on `D` of the value shape `()`, and functions `u` and `v` in
-`V`. `runtime_array` is the language extension of the [cut cell example](#integrating-over-a-cut-cell).
+Lagrange space `V` on `square` of the value shape `()`, and functions `u` and
+`v` in `V`. `runtime_array` is the language extension of the [cut cell
+example](#integrating-over-a-cut-cell).
 
 ```python
 # The interior facets, seen from the sides "+" and "-", with the free index e.
 E = side_domain(D, diagonal)
 e = cell_index(diagonal, 0)
 
-# The gradients on D, in the frame of RD(2).
+# The fields on D and their gradients, in the frame of RD(2).
 i = index("i")
-grad_u = gradient(u, D)
-grad_v = gradient(v, D)
+u_D, v_D = push_forward(u, D), push_forward(v, D)
+grad_u, grad_v = gradient(u_D, D), gradient(v_D, D)
 
 # The restrictions from each side, pull-backs by the side maps, expressions on E.
 plus, minus = side_map(D, E, "+"), side_map(D, E, "-")
-u_p, u_m = pull_back(u, plus), pull_back(u, minus)
-v_p, v_m = pull_back(v, plus), pull_back(v, minus)
+u_p, u_m = pull_back(u_D, plus), pull_back(u_D, minus)
+v_p, v_m = pull_back(v_D, plus), pull_back(v_D, minus)
 du_p, du_m = pull_back(grad_u, plus), pull_back(grad_u, minus)
 dv_p, dv_m = pull_back(grad_v, plus), pull_back(grad_v, minus)
 
@@ -662,10 +664,10 @@ f = -avg_dn_u * jump_v - jump_u * avg_dn_v + alpha[e] * jump_u * jump_v
 a_facet = form(integral(f, E), (v, u))
 ```
 
-- `u_p` is `pull_back(u, side_map(D, E, "+"))`, an expression with the
-  support `E` and no free index. `jump_u` is the
-  difference of two expressions on `E`, and `f` has the support `E` and the
-  free index `e`, from `alpha[e]`.
+- `u_p` is `pull_back(u_D, side_map(D, E, "+"))`, an expression with the
+  support `E` and no free index. `jump_u` is the difference of two
+  expressions on `E`, and `f` has the support `E` and the free index `e`,
+  from `alpha[e]`. The form binds `v` and `u`, the functions on `square`.
 - `n` points out of the cell on the side `"+"`, the triangle `(0, 1, 2)`, so
   `jump_u * n` is the jump of `u` with a fixed sign convention. Swapping the
   two sides in `diagonal` negates `n` and every jump, and leaves `f`
@@ -678,55 +680,51 @@ a_facet = form(integral(f, E), (v, u))
   density](LANGUAGE.md#jacobian-and-density)), and a per-cell array `h` of the
   solver is read as `h[gathered_index(cells_p, (e,))]`.
 
-The draft passes rewrite `a_facet` as follows. With $B_\pm$ =
-`gathered_cell_domain(D, 0, gathered_index(cells_pm, (e,)))` the cell on each
-side and $A_\pm$ the inclusion of the facet into that cell, both of
-[Restriction](LANGUAGE.md#restriction), from the side tables of each side. A
-`StaticTopology` builds $A_\pm$ = `domain_map(I, affine_map(I, points_pm), K)`
-from the positions `positions_pm` of the facet vertices (see [Side tables of a
-static topology](#side-tables-of-a-static-topology)):
+The passes rewrite `a_facet` as follows. $B_\pm$ =
+`cell_domain(D, 0, g_pm)` is the cell on each side, with
+`g_pm = gathered_index(cells_pm, (e,))`, and $A_\pm$ is the inclusion of the
+facet into that cell, both of [Restriction](LANGUAGE.md#restriction), from
+the side tables of each side. A `StaticTopology` builds $A_\pm$ =
+`domain_map(I, affine_map(I, points_pm), K)` from the positions
+`positions_pm` of the facet vertices (see [Side tables of a static
+topology](#side-tables-of-a-static-topology)):
 
 1. `expand_integrals` rewrites `integral(f, E)` as
    `index_sum(integral(pull_back(f, cell_domain(E, 0)) * density(cell_domain(E, 0)), I), (e,))`,
    with the density the length of the facet, from the Jacobian of the
-   parameterisation `pull_back(pull_back(coordinate(D), B_+), A_+)` of the
-   piece.
-2. `expand_pull_backs` moves the pull-back by `cell_domain(E, 0)` into `f`.
-   On `u_p` the rule for `SideMap` gives `pull_back(pull_back(u, B_+), A_+)`.
-   The inner pull-back remains, for the library of `V`, as `u` on the cell
-   `cells_p[e]` (see [`AbstractFunctionSpace`](LANGUAGE.md#abstractfunctionspace)), and
-   the outer pull-back remains outside the inner one, by the rule that
-   pull-backs nest.
-   On `du_p` the same rule gives the pull-back of `gradient(u, D)` by
-   $B_+$, which the rule for `Gradient` rewrites as
-   $K^T \hat g$, with $K$ = `inverse(J_+)` the inverse Jacobian of the cell and
-   $\hat g$ = `gradient(pull_back(u, B_+), K)` the
-   reference gradient, and then pulled back by $A_+$, which remains on
-   $\hat g$ and on $J_+$, because `I` has lower dimension than `K`: the
-   reference gradient and the cell Jacobian are read at the points of the
-   facet. On `n` the rule for `Normal` gives $K^T \hat m / \lvert K^T \hat m \rvert$,
-   with $\hat m$ the reference normal of the side tables, the normal of the
-   edge `(1, 2)` of `K` pointing out of `K`. On `alpha[e]`, an expression with no support whose free
-   index `e` is free in `cell_domain(E, 0)`, the pull-back is `alpha[e]`.
-3. The gradients pass leaves `gradient(pull_back(u, B_+), K)` on
-   the function, and `reduce_component_tensors` reduces the gathers of the
-   vertex positions inside $J_+$ to `Indexed`s with gathered indices, nested
-   through the cell on the side, and `points_pm` to `Indexed`s of
-   `positions_pm`.
+   parameterisation `pull_back(pull_back(x, cell_map(square, 0, g_p)), A_+)`
+   of the piece.
+2. The lowering stage moves the pull-back by `cell_domain(E, 0)` into `f`. On
+   `u_p` the rule for `SideMap` gives `pull_back(pull_back(u_D, B_+), A_+)`,
+   and the rule for `PushForward` gives
+   `pull_back(pull_back(u, cell_map(square, 0, g_p)), A_+)`, the value of `u`
+   on the cell `cells_p[e]` for the library of `V`, at the points of the
+   facet. On `du_p` the rule for `Gradient` gives $K^T \hat g$, with $K$ =
+   `inverse(J_+)` the inverse Jacobian of the cell and $\hat g$ =
+   `gradient(pull_back(u, cell_map(square, 0, g_p)), K)` the reference
+   gradient, both pulled back by $A_+$, because `I` has lower dimension than
+   `K`. $J_+$ is the reference gradient of `x` on the cell, which the library
+   of the space of `x` gives. On `n` the rule for `Normal` gives
+   $K^T \hat m / \lvert K^T \hat m \rvert$, with $\hat m$ the reference normal
+   of the side tables, the normal of the edge `(1, 2)` of `K` pointing out of
+   `K`. On `alpha[e]`, an expression with no support whose free index `e` is
+   free in `cell_domain(E, 0)`, the pull-back is `alpha[e]`.
+3. `reduce_component_tensors`, a pass of the compiler, reduces `points_pm` to
+   `Indexed`s of `positions_pm`.
 
 After the passes, `a_facet` is `form(index_sum(integral(g, I), (e,)), (v, u))`
 with `g` an expression on `I` with the free index `e`. The `IndexSum` over `e`
 is the loop of the assembler over the interior facets. The gathered indices in
 `g` read, for the facet `e`, the two cells `cells_p[e]` and `cells_m[e]`, the
-vertex positions of each through `cell_vertices`, the positions
-`positions_p[e, v, k]` and `positions_m[e, v, k]`, and `alpha[e]`, which the assembler
-packs for a kernel. The kernel is `g` without `e`: an expression on the
-reference facet `I` that reads the reference basis of `u` and `v` on the two
-cells, through the library of `V`, at the points of the facet in each cell's
-reference coordinates $A_\pm(t)$, and the two cell Jacobians at those points.
-This is the interface of a legacy interior facet kernel, with the local facet
-numbers replaced by the positions of the facet vertices, which also fix the
-direction of the facet from each side.
+coefficients of `x` on each, the positions `positions_p[e, v, k]` and
+`positions_m[e, v, k]`, and `alpha[e]`, which the assembler packs for a
+kernel. The kernel is `g` without `e`: an expression on the reference facet
+`I` that reads the reference basis of `u`, `v` and `x` on the two cells,
+through the libraries of their spaces, at the points of the facet in each
+cell's reference coordinates $A_\pm(t)$. This is the interface of a legacy
+interior facet kernel, with the local facet numbers replaced by the positions
+of the facet vertices, which also fix the direction of the facet from each
+side.
 
 - In the example, $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$ (see
   [Restriction](LANGUAGE.md#restriction)), $J_+$ is the identity and $J_-$ is
@@ -736,9 +734,12 @@ direction of the facet from each side.
 - `u_m` on the same `t` reads `u` on triangle 1 at
   $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
   is a difference at one point.
+- The values alone need no mesh. `pull_back(u, side_map(square, diagonal, "+"))`
+  is the restriction of `u` on the topology, and pushes forward to `E` with
+  the identity law.
 
 ```{dropdown} Legacy UFL
-The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal and the facet domain are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
+The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal, the facet domain and the push-forward to the mesh are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
 ```
 
 ### A Bank-Weiser error estimator
@@ -769,40 +770,42 @@ assembler may form them cell by cell without a global array.
 The example uses `D`, `square`, `K`, `I` and the interior facet domain `E`
 with the sides `"+"` and `"-"` of the [interior facet
 example](#an-interior-facet-integral), the boundary facet domain `B`
-with the side `"inside"`, a Lagrange space `V` of polynomial degree 1 on `D`,
-a space `F` on `D` for the data, and the Bank-Weiser space `W` on `D`, a
-discontinuous space whose pull-back by each cell is the space of quadratic
-functions on `K` with zero vertex values, a representation of the library:
+with the side `"inside"`, a Lagrange space `V` of polynomial degree 1 on
+`square`, a space `F` on `square` for the data, and the Bank-Weiser space `W`
+on `square`, a discontinuous space whose pull-back by each cell is the space
+of quadratic functions on `K` with zero vertex values, a representation of the
+library:
 
 ```python
 u_h, f, g = function(V, "u_h"), function(F, "f"), function(F, "g")
 e, v = function(W, "e"), function(W, "v")
+f_D, g_D, v_D = push_forward(f, D), push_forward(g, D), push_forward(v, D)
 i = index("i")
 half = Integer(1) / Integer(2)
 
 # The local bilinear form, one block for each cell because W is discontinuous.
-grad_e = gradient(e, D)
-grad_v = gradient(v, D)
+grad_e = gradient(push_forward(e, D), D)
+grad_v = gradient(v_D, D)
 a = form(integral(index_sum(grad_e[i] * grad_v[i], (i,)), D), (v, e))
 
 # The interior residual. The Laplacian of u_h is zero for degree 1, and is kept
 # for higher degrees.
-grad_u = gradient(u_h, D)
-lap_u = index_sum(gradient(grad_u, D)[i, i], (i,))
-r_cell = integral((f + lap_u) * v, D)
+grad_u = gradient(push_forward(u_h, D), D)
+lap_u = divergence(grad_u, D)
+r_cell = integral((f_D + lap_u) * v_D, D)
 
 # The jump of the normal derivative with the normal of "+". From "-" the normal
 # and the jump both change sign, so the same scalar serves both cells.
 plus, minus = side_map(D, E, "+"), side_map(D, E, "-")
 n = normal(plus)
 jump_n = index_sum((pull_back(grad_u, plus)[i] - pull_back(grad_u, minus)[i]) * n[i], (i,))
-r_facets = integral(-half * jump_n * (pull_back(v, plus) + pull_back(v, minus)), E)
+r_facets = integral(-half * jump_n * (pull_back(v_D, plus) + pull_back(v_D, minus)), E)
 
 # The Neumann residual on the boundary.
 inside = side_map(D, B, "inside")
 n_B = normal(inside)
 dn_u = index_sum(pull_back(grad_u, inside)[i] * n_B[i], (i,))
-r_boundary = integral((g - dn_u) * pull_back(v, inside), B)
+r_boundary = integral((pull_back(g_D, inside) - dn_u) * pull_back(v_D, inside), B)
 
 r = form(r_cell + r_facets + r_boundary, (v,))
 ```
@@ -825,7 +828,7 @@ r = form(r_cell + r_facets + r_boundary, (v,))
   basis to the functions with zero vertex values, as Bulle et al. do. That
   choice stays behind the pull-back and is invisible to the form.
 
-The draft passes rewrite `a` and `r` as in the [interior facet
+The passes rewrite `a` and `r` as in the [interior facet
 example](#an-interior-facet-integral). After the passes `a` is one
 `IndexSum` over the cells, `r_cell` and `r_boundary` are an `IndexSum` over
 the cells and over the boundary facets, and `r_facets` is an `IndexSum` over
@@ -850,7 +853,7 @@ with the two kernels of the global form in place of hand-written code.
 - With a topology of the pairs (cell, local facet) in place of `E`, with the
   sides `"self"` and `"other"` and `v` restricted from `"self"` only, the
   facet kernel returns the rows of the one cell and the pairs come packed by
-  cell. The form is the same with `pull_back(v, side_map(D, E, "self"))` in place of the
+  cell. The form is the same with `pull_back(v_D, side_map(D, E, "self"))` in place of the
   sum of the two restrictions.
 - The per-cell estimator $\eta_K^2 = \int_K \lvert \nabla e \rvert^2$ is
   `integral(pull_back(index_sum(grad_e[i] * grad_e[i], (i,)), cell_domain(D, 0)) * density(cell_domain(D, 0)), K)`,
@@ -877,16 +880,15 @@ problem. The example uses `D`, `square`, `K` and
 example](#integrating-over-a-cut-cell).
 
 A marked set of entities is a topology with sides, and a marker value is the
-identity of the topology. A submesh is the decomposed domain of such a
-topology, and the entity map of the submesh is the side table into the
-parent:
+identity of the topology. A submesh is the side domain of such a topology, and
+the entity map of the submesh is the side table into the parent:
 
 ```python
 # dx(1) and dx(2): the fluid cells and the solid cells, each seen as itself in square.
 fluid_cells = StaticTopology((K,), (((0, 1, 2),),), ((("inside", square, 0),),))
 solid_cells = StaticTopology((K,), (((1, 3, 2),),), ((("inside", square, 0),),))
 
-# The fluid and the solid, each a decomposed domain with its own topology.
+# The fluid and the solid, each a mesh with its own topology.
 F = side_domain(D, fluid_cells)
 S = side_domain(D, solid_cells)
 
@@ -918,15 +920,21 @@ in the [interior facet example](#an-interior-facet-integral).
 
 The problem is Stokes flow in the fluid and linear elasticity in the solid,
 coupled by a multiplier on the interface that equates the fluid velocity to
-the velocity of the solid over a time step. With spaces of a library, `V` and
-`Q` on `F`, `W` on `S` and `L` on `G`, with `V`, `W` and `L` of the value
-shape `(2,)` and `Q` of the value shape `()`:
+the velocity of the solid over a time step. With Lagrange spaces of a library,
+`V` and `Q` on `fluid_cells`, `W` on `solid_cells` and `L` on `interface`,
+with `V`, `W` and `L` of the value shape `(2,)` and `Q` of the value shape
+`()`:
 
 ```python
 u, v = function(V, "u"), function(V, "v")
 p, q = function(Q, "p"), function(Q, "q")
 d, w, d_old = function(W, "d"), function(W, "w"), function(W, "d_old")
 lam, mu = function(L, "lam"), function(L, "mu")
+
+# The fields on the meshes.
+u_F, v_F, p_F, q_F = (push_forward(f, F) for f in (u, v, p, q))
+d_S, w_S, d_old_S = (push_forward(f, S) for f in (d, w, d_old))
+lam_G, mu_G = push_forward(lam, G), push_forward(mu, G)
 
 # Material constants, the time step and the inlet traction, arrays of the solver.
 nu, mu_s, lam_s = runtime_array("nu", ()), runtime_array("mu_s", ()), runtime_array("lam_s", ())
@@ -935,45 +943,45 @@ i, j = index("i"), index("j")
 half, two = Integer(1) / Integer(2), Integer(2)
 
 # Stokes flow on F.
-grad_u = gradient(u, F)
-grad_v = gradient(v, F)
-div_u, div_v = index_sum(grad_u[i, i], (i,)), index_sum(grad_v[i, i], (i,))
+grad_u = gradient(u_F, F)
+grad_v = gradient(v_F, F)
+div_u, div_v = divergence(u_F, F), divergence(v_F, F)
 fluid = integral(
-    nu * index_sum(grad_u[i, j] * grad_v[i, j], (i, j)) - p * div_v - q * div_u, F
+    nu * index_sum(grad_u[i, j] * grad_v[i, j], (i, j)) - p_F * div_v - q_F * div_u, F
 )
 
 # Linear elasticity on S.
-grad_d = gradient(d, S)
-grad_w = gradient(w, S)
+grad_d = gradient(d_S, S)
+grad_w = gradient(w_S, S)
 eps_d, eps_w = half * (grad_d[i, j] + grad_d[j, i]), half * (grad_w[i, j] + grad_w[j, i])
-div_d, div_w = index_sum(grad_d[i, i], (i,)), index_sum(grad_w[i, i], (i,))
+div_d, div_w = divergence(d_S, S), divergence(w_S, S)
 solid = integral(two * mu_s * index_sum(eps_d * eps_w, (i, j)) + lam_s * div_d * div_w, S)
 
 # The restrictions to the interface, pull-backs by the side maps, expressions on G.
 from_fluid, from_solid = side_map(F, G, "fluid"), side_map(S, G, "solid")
-u_G, v_G = pull_back(u, from_fluid), pull_back(v, from_fluid)
-d_G, w_G = pull_back(d, from_solid), pull_back(w, from_solid)
-d_old_G = pull_back(d_old, from_solid)
+u_G, v_G = pull_back(u_F, from_fluid), pull_back(v_F, from_fluid)
+d_G, w_G = pull_back(d_S, from_solid), pull_back(w_S, from_solid)
+d_old_G = pull_back(d_old_S, from_solid)
 
 # The coupling: lam is the traction on both parts, and mu enforces u = (d - d_old) / dt.
 coupling = integral(
-    index_sum(lam[i] * (w_G[i] / dt - v_G[i]) + mu[i] * (d_G[i] / dt - u_G[i]), (i,)), G
+    index_sum(lam_G[i] * (w_G[i] / dt - v_G[i]) + mu_G[i] * (d_G[i] / dt - u_G[i]), (i,)), G
 )
 a = form(fluid + solid + coupling, ((v, q, w, mu), (u, p, d, lam)))
 
 # The right-hand side: the inlet traction and the old displacement.
-traction = integral(index_sum(g[i] * pull_back(v, side_map(F, G_in, "fluid"))[i], (i,)), G_in)
-l = form(traction + integral(index_sum(mu[i] * d_old_G[i], (i,)) / dt, G), ((v, q, w, mu),))
+traction = integral(index_sum(g[i] * pull_back(v_F, side_map(F, G_in, "fluid"))[i], (i,)), G_in)
+l = form(traction + integral(index_sum(mu_G[i] * d_old_G[i], (i,)) / dt, G), ((v, q, w, mu),))
 ```
 
-- `u` has the support `F` and `d` the support `S`, two decomposed domains with
-  different topologies, so `u` and `d` do not combine. They meet only on `G`,
-  through the restrictions, as two expressions on `G` at the same points of
-  the reference facet `I`. Every integral has no support, so `fluid`, `solid`
-  and `coupling` add into one expression, and the arguments of `a` are tuples
-  of functions on three domains (see [`Form`](LANGUAGE.md#form)).
-- `side_domain(F, interface)` takes the geometry of the side on the topology
-  of `F`, `fluid_cells`. `normal(from_fluid)`
+- `u` has the support `fluid_cells` and `d` the support `solid_cells`, so `u`
+  and `d` do not combine, and neither do `u_F` and `d_S`. They meet only on
+  `G`, through the restrictions, as two expressions on `G` at the same points
+  of the reference facet `I`. Every integral has no support, so `fluid`,
+  `solid` and `coupling` add into one expression, and the arguments of `a` are
+  tuples of functions on three topologies (see [`Form`](LANGUAGE.md#form)).
+- `side_domain(F, interface)` is the image of the trace of the coordinate
+  function of `F` on `interface`. `normal(from_fluid)`
   is the normal out of the fluid, and `normal(from_solid)` is the negative
   of it.
 - An integral is over the smallest domain, and the fields of the larger domains
@@ -987,29 +995,27 @@ l = form(traction + integral(index_sum(mu[i] * d_old_G[i], (i,)) / dt, G), ((v, 
   kernel after renaming, because the two topologies become the same
   placeholder.
 - A material coefficient that differs between the fluid and the solid needs no
-  submeshes when the fields live on `D`. With `c = cell_index(square, 0)`, an
+  submeshes when the fields live on `square`. With `c = cell_index(square, 0)`, an
   array `nu[c]` under `integral(..., D)` takes the value of the cell (see
   [`Integral` over a decomposed domain](LANGUAGE.md#integral-over-a-decomposed-domain)).
-- A fluid domain that moves with the solid is not covered. The moved domain is
-  a decomposed domain with the topology `fluid_cells` and new coordinates, so a
-  function in a space on `F` has a different support from an expression on the
-  moved domain, and the two do not combine. A map between two decomposed
-  domains with the same topology, the identity in the reference coordinates of
-  each cell, is a fixed composition that a later version may add.
+- A fluid domain that moves with the solid is the ALE mesh
+  `image(x_F + m, RD(2))`, with `x_F = F.coordinate_function` and a mesh
+  displacement `m` on `fluid_cells` that extends `d` across the interface. The
+  functions on `fluid_cells` push forward to the moved mesh unchanged.
 
-The draft passes rewrite `a` as in the [interior facet
+The passes rewrite `a` as in the [interior facet
 example](#an-interior-facet-integral). `expand_integrals` gives one
 `IndexSum` for each of `F`, `S` and `G`, over the cell index of its topology.
 On `G`, with `e = cell_index(interface, 0)`, the restriction `u_G` lowers to
-the pull-back of `u` by the fluid cell `cells_fluid[e]` and then by the
-inclusion of the facet into that cell, and `d_G` to the pull-back of `d` by
-the solid cell `cells_solid[e]`. The kernel of `coupling` is an expression on
+the pull-back of `u` by the cell map of the fluid cell `cells_fluid[e]` and
+then by the inclusion of the facet into that cell, and `d_G` to the pull-back
+of `d` by the cell map of the solid cell `cells_solid[e]`. The kernel of `coupling` is an expression on
 `I` that reads the reference basis of `V` on one fluid cell, of `W` on one
 solid cell and of `L` on the facet, and the assembler packs the two cells
 through the two side tables, the entity maps of the two submeshes.
 
 ```{dropdown} Legacy UFL
-The legacy UFL `dx(1)`, `ds(3)` and `ds((3, 4))` are integrals over the decomposed domains of marked topologies, one topology for each marker value. A DOLFINx submesh is the decomposed domain of a marked topology, and its entity map is the side table into the parent.
+The legacy UFL `dx(1)`, `ds(3)` and `ds((3, 4))` are integrals over the side domains of marked topologies, one topology for each marker value. A DOLFINx submesh is the side domain of a marked topology, and its entity map is the side table into the parent.
 ```
 
 ### Constants on a domain
@@ -1018,18 +1024,19 @@ Requires: [A fluid and a solid](#a-fluid-and-a-solid), [Spaces of
 constants](LANGUAGE.md#spaces-of-constants).
 
 With the names of the [fluid and solid example](#a-fluid-and-a-solid), `R` a
-space of constants of value shape `()`, and `R_S` a space of a library on `S`
-whose functions are constant on `S`:
+space of constants of value shape `()`, and `R_S` a space of a library on
+`solid_cells` whose functions are constant on `solid_cells`:
 
 ```python
 # Multipliers for the mean pressure of the fluid and the mean volume change of the solid.
 r, s = function(R, "r"), function(R, "s")
 k, z = function(R_S, "k"), function(R_S, "z")
-means = integral(p * s + q * r, F) + integral(k * div_w + z * div_d, S)
+k_S, z_S = push_forward(k, S), push_forward(z, S)
+means = integral(p_F * s + q_F * r, F) + integral(k_S * div_w + z_S * div_d, S)
 ```
 
 - `r` and `s` have no support, so the integrals decide where `r` and `s` act.
-  `k` and `z` have the support `S`, so `k * q` raises `ValueError`.
+  `k_S` and `z_S` have the support `S`, so `k_S * q_F` raises `ValueError`.
 - The multipliers join the `tuple` arguments, as in
   `((v, q, w, s, z), (u, p, d, r, k))`.
 - A value for each cell marker is a function in a space of a library that is
@@ -1043,7 +1050,7 @@ nu, h = function(R, "nu"), function(R, "h")
 mu_s = function(R_S, "mu_s")
 
 # The sensitivity of the solid form to mu_s.
-e = integral(two * mu_s * index_sum(eps_d * eps_w, (i, j)), S)
+e = integral(two * push_forward(mu_s, S) * index_sum(eps_d * eps_w, (i, j)), S)
 de_dmu = form(directional_derivative(e, mu_s, mu_s, Integer(1)), (w, d))
 
 # The gradient of the dissipation with respect to nu.
@@ -1071,19 +1078,18 @@ as the interface of the [fluid and solid example](#a-fluid-and-a-solid)
 has a side into each part, and the restriction of the tissue pressure to the
 network is a pull-back by that side.
 
-With `K3 = ReferenceSimplex(3)` and `I = ReferenceSimplex(1)`, the
-coordinates `x3` of the tetrahedra with the free index `cell_index(T3, 0)`,
-built as in the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, the
-topology `T1` of the segments with the cell type `I` and the side
-`(("tissue", T3, 0),)`, spaces of a library `V3` on `D3` and `V1` on `D1` of
-the value shape `()`, and `runtime_extent` and
-`runtime_array` of the [cut cell
+With `K3 = ReferenceSimplex(3)` and `I = ReferenceSimplex(1)`, a topology
+`T3` of tetrahedra and its coordinate function `x3`, the topology `T1` of the
+segments with the cell type `I` and the side `(("tissue", T3, 0),)`, Lagrange
+spaces of a library `V3` on `T3` and `V1` on `T1` of the value shape `()`,
+and `runtime_extent` and `runtime_array` of the [cut cell
 example](#integrating-over-a-cut-cell):
 
 ```python
 # The tissue, of dimension 3, and the network, of dimension 1, both in RD(3).
-D3 = decomposed_domain((domain_map(K3, x3, RD(3)),))
+D3 = image(x3, RD(3))
 D1 = side_domain(D3, T1)
+identity = transformation_law((), 0)
 
 p3, q3 = function(V3, "p3"), function(V3, "q3")
 p1, q1 = function(V1, "p1"), function(V1, "q1")
@@ -1092,17 +1098,19 @@ m = index("m")
 
 # The Laplacian of each part on its own mesh. On D1 the gradient is the
 # derivative along the segment, in the frame of RD(3).
-grad_p3 = gradient(p3, D3)
-grad_q3 = gradient(q3, D3)
-grad_p1 = gradient(p1, D1)
-grad_q1 = gradient(q1, D1)
+grad_p3 = gradient(push_forward(p3, D3), D3)
+grad_q3 = gradient(push_forward(q3, D3), D3)
+grad_p1 = gradient(push_forward(p1, D1), D1)
+grad_q1 = gradient(push_forward(q1, D1), D1)
 tissue = integral(index_sum(grad_p3[m] * grad_q3[m], (m,)), D3)
 vessel = integral(index_sum(grad_p1[m] * grad_q1[m], (m,)), D1)
 
-# The tissue pressure on the network, and the exchange between the two.
-from_tissue = side_map(D3, D1, "tissue")
+# The tissue pressure on the network, a restriction on the topologies, and the
+# exchange between the two, pushed forward to D1.
+from_tissue = side_map(T3, T1, "tissue")
 p3_1, q3_1 = pull_back(p3, from_tissue), pull_back(q3, from_tissue)
-coupling = integral(beta * (p1 - p3_1) * (q1 - q3_1), D1)
+exchange = push_forward(beta * (p1 - p3_1) * (q1 - q3_1), D1, identity)
+coupling = integral(exchange, D1)
 a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
 ```
 
@@ -1114,18 +1122,19 @@ a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
   from the connectivity of the mesh, and a segment and its tetrahedron share
   vertices, so the partition of `T3` gives the partition of `T1`.
 - `p3_1` is `pull_back(pull_back(p3, B_t), A_t)` on each segment, with
-  $B_t$ the tetrahedron of each segment and $A_t$ the inclusion of the side
-  tables, the edge, by
-  [Restriction](LANGUAGE.md#restriction), an expression on `D1` that combines
-  with `p1`. `p3` is continuous, so the restriction is the same from every
+  $B_t$ the cell map of the tetrahedron of each segment and $A_t$ the
+  inclusion of the side tables, the edge, by
+  [Restriction](LANGUAGE.md#restriction), an expression on `T1` that combines
+  with `p1`. The exchange is an expression on `T1`, which pushes forward to
+  `D1` with the identity law. `p3` is continuous, so the restriction is the same from every
   tetrahedron that shares the edge, and the choice of the library does not
   change the form.
-- `side_domain(D3, T1)` takes its geometry from the tissue side, the edge of
-  the tetrahedron, so the integrals over `D1` use the length element of the
+- `side_domain(D3, T1)` is the image of the trace of `x3` on `T1`, the edges
+  of the tetrahedra, so the integrals over `D1` use the length element of the
   edge.
-- `p3` and `p1` have the supports `D3` and `D1` and never combine directly.
+- `p3` and `p1` have the supports `T3` and `T1` and never combine directly.
   Every integral has no support, so the three terms add, and the arguments of
-  `a` are tuples of functions on the two meshes.
+  `a` are tuples of functions on the two topologies.
 - The positions take one of twelve values, an edge of `K3` in one of two
   directions. A library may write the table as a gather from the twelve by
   a `RuntimeIndex` of the [cut cell
@@ -1142,13 +1151,13 @@ a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
   network side, and the kernel evaluates the basis of `V3` at run time, as for
   a cut cell.
 
-The draft passes rewrite `a` as in the [interior facet
+The passes rewrite `a` as in the [interior facet
 example](#an-interior-facet-integral). `expand_integrals` gives one
 `IndexSum` for `tissue`, over `cell_index(T3, 0)`, and one for `vessel` and
 one for `coupling`, over `cell_index(T1, 0)`. On `coupling`,
-`expand_pull_backs` lowers the two restrictions to pull-backs by one
-tetrahedron, selected through the side table, and then by the affine map
-through the positions. The kernel of `coupling` for a segment reads the
+`expand_pull_backs` lowers the two restrictions to pull-backs by the cell map
+of one tetrahedron, selected through the side table, and then by the affine
+map through the positions. The kernel of `coupling` for a segment reads the
 reference basis of `V1` on the segment and of `V3` on one tetrahedron, at the
 points of the edge in the reference coordinates of each: the interface of a
 facet kernel, with the cells of two meshes and of two dimensions. The local
@@ -1159,9 +1168,9 @@ maps of degrees of freedom of both.
 The trace of a function in $H^1(\Omega)$ on a curve is not defined, so a
 model may replace `p3` on the network by its average over a ring of radius
 $R$ around each point of the network, in the plane of two unit normals `n1`
-and `n2` of the segment, functions in a space `N` on `D1` of the value shape
+and `n2` of the segment, functions in a space `N` on `T1` of the value shape
 `(3,)` that the solver provides. The ring points are not on the edges, so
-the average is a family of maps from `D1` into `D3` and point evaluation,
+the average is a family of maps from `T1` into `D3` and point evaluation,
 with the cosines and sines of the angles and the weights as tables, because
 the core has no `cos`:
 
@@ -1171,28 +1180,30 @@ l = index("l")
 R = runtime_array("R", ())
 n1, n2 = function(N, "n1"), function(N, "n2")
 cs, w = runtime_array("cs", (L, 2)), runtime_array("w", (L,))
-X1 = coordinate(D1)
+x1 = D1.coordinate_function
 
 # The ring of L points around each point of the network, a family of maps into D3.
 ring = domain_map(
-    D1, component_tensor(X1[m] + R * (cs[l, 0] * n1[m] + cs[l, 1] * n2[m]), (m,)), D3
+    T1, component_tensor(x1[m] + R * (cs[l, 0] * n1[m] + cs[l, 1] * n2[m]), (m,)), D3
 )
-p3_avg = index_sum(w[l] * pull_back(p3, ring), (l,))
-q3_avg = index_sum(w[l] * pull_back(q3, ring), (l,))
+p3_avg = index_sum(w[l] * pull_back(push_forward(p3, D3), ring), (l,))
+q3_avg = index_sum(w[l] * pull_back(push_forward(q3, D3), ring), (l,))
 
-coupling_avg = integral(beta * (p1 - p3_avg) * (q1 - q3_avg), D1)
+exchange_avg = push_forward(beta * (p1 - p3_avg) * (q1 - q3_avg), D1, identity)
+coupling_avg = integral(exchange_avg, D1)
 ```
 
-- `ring` is a `DomainMap` with the parameter domain `D1`, a family with the
-  free index `l`, and the ambient domain `D3`, a decomposed domain.
-  `pull_back(p3, ring)` has the support `D1` and the free index `l`, so
-  `p3_avg` is an expression on `D1`. With `R = 0`, `pull_back(p3, ring)` is
-  the trace of `p3` on the network, `pull_back(p3, domain_map(D1, X1, D3))`,
-  equal to `p3_1` for a conforming network.
-- The pull-back of `p3` by `ring` remains after `expand_pull_backs`, and the
-  pass of [Points and point evaluation](LANGUAGE.md#points-and-point-evaluation)
-  lowers it after a quadrature pass on `I` as in the [quadrature example](#quadrature). The maps below `p3` are then `ring`,
-  `cell_domain(D1, 0)` and the quadrature points, a chain with the free
+- `ring` is a `DomainMap` with the parameter domain `T1`, a family with the
+  free index `l`, and the ambient domain `D3`, a mesh.
+  `pull_back(push_forward(p3, D3), ring)` has the support `T1` and the free
+  index `l`, so `p3_avg` is an expression on `T1`. With `R = 0`, the
+  pull-back is the trace of `p3` on the network, equal to `p3_1` for a
+  conforming network.
+- The pull-back by `ring` remains after the lowering stage, and the pass of
+  [Points and point evaluation](LANGUAGE.md#points-and-point-evaluation)
+  lowers it after a quadrature pass on `I` as in the [quadrature
+  example](#quadrature). The maps below the push-forward are then `ring`,
+  `cell_map(T1, 0)` and the quadrature points, a chain with the free
   indices of the segment, the quadrature point and the ring point, which the
   pass reads as one family of points. The side tables of that family hold
   the tetrahedron that contains each point and its position, and the kernel
@@ -1203,59 +1214,50 @@ coupling_avg = integral(beta * (p1 - p3_avg) * (q1 - q3_avg), D1)
 ### The Laplace-Beltrami operator
 
 Requires: [`DecomposedDomain`](LANGUAGE.md#decomposeddomain),
-[`Gradient`](LANGUAGE.md#gradient), [`Integral` over a decomposed
-domain](LANGUAGE.md#integral-over-a-decomposed-domain), [`Form`](LANGUAGE.md#form).
+[`Gradient`](LANGUAGE.md#gradient), [`PushForward`](LANGUAGE.md#pushforward),
+[`Integral` over a decomposed domain](LANGUAGE.md#integral-over-a-decomposed-domain),
+[`Form`](LANGUAGE.md#form).
 
 See also: [`Inverse`](LANGUAGE.md#inverse).
 
 The Poisson forms on a surface in $R^3$ are the forms of the Laplace–Beltrami
-operator. The mesh is built as the mesh of the
-[`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, with the vertex
-positions in $R^3$. A mesh library gives a topology `T` of $N$ triangles with
-the cell type `K = ReferenceSimplex(2)`, the vertex positions `y` of value
-shape `(m, 3)` and the table `cell_vertices` of the shape `(N, 3)` and the
-extent $m$, the vertices of each triangle. The ambient coordinate domain is `RD(3)`, and `V`
-is a space of a library on `M`:
+operator. A mesh library gives a topology `T` of $N$ triangles with the cell
+type `K = ReferenceSimplex(2)`, and the coordinate function `x` in a vector
+Lagrange space of degree 1 on `T` of the value shape `(3,)`. `V` is a Lagrange
+space of a library on `T`:
 
 ```python
-# The affine map x of each triangle, gathered from the vertex positions y.
-X = coordinate(K)
-c = cell_index(T, 0)
-k, w = index("k"), index("w")
-p = component_tensor(y[gathered_index(cell_vertices, (c, w)), k], (c, w, k))
-x = component_tensor(
-    p[c, 0, k] + (p[c, 1, k] - p[c, 0, k]) * X[0] + (p[c, 2, k] - p[c, 0, k]) * X[1],
-    (k,),
-)
-M = decomposed_domain((domain_map(K, x, RD(3)),))
+M = image(x, RD(3))
 
-# Functions in a space of a library on M.
+# Functions on T, and their fields on M.
 u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
+u_M, v_M, f_M = push_forward(u, M), push_forward(v, M), push_forward(f, M)
 
 # The surface gradients, of value shape (3,) in the frame of RD(3).
 i = index("i")
-grad_u = gradient(u, M)
-grad_v = gradient(v, M)
+grad_u = gradient(u_M, M)
+grad_v = gradient(v_M, M)
 
 a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), M), (v, u))
-L = form(integral(f * v, M), (v,))
+L = form(integral(f_M * v_M, M), (v,))
 ```
 
 - `M` has the dimension 2 and the ambient coordinate domain `RD(3)`, so
   [`Gradient`](LANGUAGE.md#gradient) on `M` is the tangential gradient, and
-  `grad_u` is the surface gradient of `u`.
+  `grad_u` is the surface gradient of `u_M`.
 - `integral(..., M)` multiplies the integrand on `K` by the density
-  $\rho = \sqrt{\det(J^T J)}$, with $J$ the Jacobian matrix of `x`, of value
-  shape `(3, 2)`. The forms need no orientation of `M`.
+  $\rho = \sqrt{\det(J^T J)}$, with $J$ the reference gradient of `x` on each
+  cell, of value shape `(3, 2)`. The forms need no orientation of `M`.
 - `expand_pull_backs` rewrites the pull-back of `grad_u` by the cells as
-  $K^T \hat g$, with $K$ = `inverse_jacobian` of the cells, here `inverse(J)`, the pseudo-inverse, of value shape
-  `(2, 3)`, and $\hat g$ the gradient of the pull-back of `u` on `K`. The integrand of `a` on `K` is then
+  $K^T \hat g$, with $K$ = `inverse_jacobian` of the cells, the pseudo-inverse
+  `inverse(J)` of value shape `(2, 3)`, and $\hat g$ the gradient of the
+  pull-back of `u` on `K`. The integrand of `a` on `K` is then
   $\hat g_u^T K K^T \hat g_v \, \rho$, and $K K^T = (J^T J)^{-1}$ is the
   inverse of the metric that `x` induces.
 - With `P = gradient(coordinate(M), M)`, the projection onto the tangent
-  plane, `gradient(grad_u, M)` is the tangential
-  derivative $H$ of the surface gradient, which is not symmetric in general.
-  The covariant Hessian of `u` is $P H P$.
+  plane, `gradient(grad_u, M)` is the tangential derivative $H$ of the surface
+  gradient, which is not symmetric in general. The covariant Hessian of `u_M`
+  is $P H P$.
 
 ```{dropdown} Legacy UFL
 Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimension 2 in $R^3$, and `grad` is the surface gradient because of the dimensions of the mesh. In UFLx, the same rule of `Gradient` gives the gradient in every dimension.
@@ -1264,84 +1266,84 @@ Legacy UFL writes `inner(grad(u), grad(v)) * dx` on a mesh of topological dimens
 ### A deformed domain
 
 Requires: [`DecomposedDomain`](LANGUAGE.md#decomposeddomain),
-[`DomainMap`](LANGUAGE.md#domainmap), [Jacobian and
+[`PushForward`](LANGUAGE.md#pushforward), [Jacobian and
 density](LANGUAGE.md#jacobian-and-density), [`Gradient`](LANGUAGE.md#gradient),
-[`Form`](LANGUAGE.md#form), [The Laplace-Beltrami
-operator](#the-laplace-beltrami-operator).
+[`Form`](LANGUAGE.md#form), [Shape derivatives](LANGUAGE.md#shape-derivatives),
+[The Laplace-Beltrami operator](#the-laplace-beltrami-operator).
 
 Shape optimisation and updated Lagrangian mechanics write a form on the image
-of the mesh under a deformation, and assemble on the mesh. The deformation is
-a domain map with the mesh as parameter domain. With `D` the square mesh of
-the [`DecomposedDomain`](LANGUAGE.md#decomposeddomain) examples, `W` a vector
-space of a library on `D`, and `V_s` a space of a library on the deformed
-mesh:
+of the mesh under a deformation, and assemble on the mesh. The deformed mesh
+is the image of moved coordinates. With `D`, `x` and `square` of the
+[`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, a displacement `s`
+in a vector space `W` of a library on `square`, and a Lagrange space `V` on
+`square`:
 
 ```python
-k, i = index("k"), index("i")
+i = index("i")
 s = function(W, "s")
-phi = component_tensor(coordinate(D)[k] + s[k], (k,))
 
-# The deformed square, the image of the mesh under phi.
-D_s = decomposed_domain((domain_map(D, phi, RD(2)),))
+# The deformed square, the image of the topology under the moved coordinates.
+D_s = image(x + s, RD(2))
 
 # The volume of the deformed square, a functional of s.
 volume = integral(Integer(1), D_s)
 
 # The Poisson stiffness form on the deformed square.
-u, v = function(V_s, "u"), function(V_s, "v")
-a = form(integral(index_sum(gradient(u, D_s)[i] * gradient(v, D_s)[i], (i,)), D_s), (v, u))
+u, v = function(V, "u"), function(V, "v")
+grad_u, grad_v = gradient(push_forward(u, D_s), D_s), gradient(push_forward(v, D_s), D_s)
+a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D_s), (v, u))
 ```
 
-- `expand_integrals` rewrites `volume` as the integral over `D` of
-  `density(T)`, with `T = cell_domain(D_s, 0)`, and then, because `D` is
-  itself decomposed, over the cells of `D`. `jacobian(T)` is
-  `gradient(phi, D)`, which the gradients pass rewrites
-  as $I + \nabla s$, so `density(T)` is $|\det(I + \nabla s)|$, the Jacobian
-  determinant of shape calculus.
-- `expand_pull_backs` rewrites the pull-back of `gradient(u, D_s)` by `T` as
-  $K^T \nabla(u \circ \phi)$ with $K$ = `inverse_jacobian(T)`, here `inverse(jacobian(T))`, the
-  $(I + \nabla s)^{-T}$ of shape calculus. The library represents `V_s` on
-  `D`, so `u` has the degrees of freedom of a space on `D` and the geometry of
-  `D_s`.
-- The shape derivative of `volume` is the Gateaux derivative with respect to
-  `s` (see [Gateaux derivative](LANGUAGE.md#gateaux-derivative)).
+- `expand_integrals` rewrites `volume` as the sum over the cells of
+  `integral(density(C), K)`, with `C = cell_domain(D_s, 0)`. `jacobian(C)` is
+  the reference gradient of `pull_back(x + s, cell_map(square, 0))`, $J + \hat\nabla s$,
+  so `density(C)` is $|\det(J + \hat\nabla s)|$, the Jacobian determinant of
+  shape calculus with respect to the reference cell.
+- `expand_pull_backs` rewrites the pull-back of `grad_u` by `C` as
+  $K^T \hat\nabla \hat u$ with $K$ = `inverse(jacobian(C))`, the
+  $(J + \hat\nabla s)^{-T}$ of shape calculus. `u` is a function on `square`,
+  so `u` has the degrees of freedom of the topology and moves with the mesh.
+- The derivatives of the core hold the domains fixed, so the shape derivative
+  of `volume` in a direction `h` on `square` is `ShapeDerivative(volume, s, h)`
+  of the [extension](LANGUAGE.md#shape-derivatives). After a lowering stage,
+  `s` occurs explicitly in the Jacobians and the densities, and the node
+  lowers to `DirectionalDerivative(volume, s, s, h)`. With an argument as `h`,
+  the Gateaux derivative gives the shape gradient.
 
-A surface deforms in the same way. With `M` the surface mesh of the
+A surface deforms in the same way. With `M`, `x` and `T` of the
 [Laplace-Beltrami example](#the-laplace-beltrami-operator) and `w` a
-displacement in a vector space on `M`:
+displacement in a vector space on `T` of the value shape `(3,)`:
 
 ```python
-w = function(W_M, "w")
-phi_M = component_tensor(coordinate(M)[k] + w[k], (k,))
-M_w = decomposed_domain((domain_map(M, phi_M, RD(3)),))
+w = function(W_T, "w")
+M_w = image(x + w, RD(3))
 
 # The area of the deformed surface.
 area = integral(Integer(1), M_w)
 ```
 
-`M` has dimension 2 in `RD(3)`, so `jacobian(cell_domain(M_w, 0))` is
-$\Pi + \nabla_M w$, with $\Pi$ the projection onto the tangent plane and
-$\nabla_M w$ the surface gradient, a `(3, 3)` matrix of rank 2, and the density
-is $\sqrt{\det(J^T J + I - \Pi)}$ (see [Jacobian and
-density](LANGUAGE.md#jacobian-and-density)). The cells of `M` then contribute
-their own density $\sqrt{\det(J_c^T J_c)}$ as in the Laplace-Beltrami example.
+`jacobian(cell_domain(M_w, 0))` is the reference gradient of `x + w`, of value
+shape `(3, 2)`, and the density is $\sqrt{\det(J^T J)}$ (see [Jacobian and
+density](LANGUAGE.md#jacobian-and-density)).
 
 ```{dropdown} Isogeometric analysis
 Isogeometric analysis by extraction, as in tIGAr, builds a mesh of the
 parametric knot spans, stores the NURBS map $F$ as a function in the spline
 space on that mesh, and inserts $\det DF$ and $DF^{-T}$ into every form by
-hand. Here the physical patch is `domain_map(parametric_mesh, F, RD(3))`, a
-multi-patch geometry is a decomposed domain with one piece per patch, and the
-passes insert the factors.
+hand. Here the physical patch is `image(F, RD(3))`, with $F$ a function on
+the topology of the knot spans, a multi-patch geometry is the image of the
+topology of the knot spans of all the patches, and the passes insert the
+factors.
 ```
 
 ```{dropdown} Shells
 A shell code such as FEniCS-Shells defines the midsurface as a map $\phi_0$
 from a flat parametric mesh into $R^3$ and forms the fundamental forms from
-$\nabla \phi_0$ by hand. Here the midsurface is `domain_map(flat_mesh, phi_0, RD(3))`
-with $k = m = 2 < n = 3$, `jacobian(T)` is $\nabla \phi_0$, its Gram matrix
-$J^T J$ is the first fundamental form, and `density(T)` is
-$\sqrt{\det(J^T J)}$, the area element of the midsurface.
+$\nabla \phi_0$ by hand. Here the midsurface is `image(phi_0, RD(3))`, with
+$\phi_0$ a function on the topology of the flat mesh, $k = 2 < n = 3$,
+`jacobian(C)` is the reference gradient of $\phi_0$, its Gram matrix $J^T J$
+is the first fundamental form in the reference coordinates, and `density(C)`
+is $\sqrt{\det(J^T J)}$, the area element of the midsurface.
 ```
 
 ### The flux through a surface
@@ -1349,17 +1351,18 @@ $\sqrt{\det(J^T J)}$, the area element of the midsurface.
 Requires: [The Laplace-Beltrami
 operator](#the-laplace-beltrami-operator), [Concept: integral over a
 domain](LANGUAGE.md#concept-integral-over-a-domain), [Jacobian and
-density](LANGUAGE.md#jacobian-and-density).
+density](LANGUAGE.md#jacobian-and-density),
+[`AbstractTopology`](LANGUAGE.md#abstracttopology).
 
 The flux of a vector field through a surface depends on which side of the
 surface is out, so the flux needs a consistent orientation of the cells. With
-`K`, `T`, `c` and `x` of the [Laplace-Beltrami
+`K`, `T`, `x` and `M` of the [Laplace-Beltrami
 example](#the-laplace-beltrami-operator), where `M` is a closed surface such
 as a triangulated sphere:
 
 ```python
-# The triangles of M, a family with the free index c.
-cells = domain_map(K, x, RD(3))
+# The triangles of M, a family with the free index cell_index(T, 0).
+cells = cell_domain(M, 0)
 J = jacobian(cells)
 r, l = index("r"), index("l")
 
@@ -1369,15 +1372,14 @@ def cross(a, b):
 # The normal of each triangle, with the length of the density.
 nu = cross(component_tensor(J[r, 0], (r,)), component_tensor(J[r, 1], (r,)))
 
-# The sign of each triangle from the mesh library, +1 where the order of the
-# vertices of the triangle agrees with the outward orientation of M.
-N = T.num_cells[0]
-o = runtime_array("o", (N,))
+# The sign of each triangle, +1 where the order of the vertices of the
+# triangle agrees with the outward orientation of M.
+o = pull_back(T.orientation, cell_map(T, 0))
 
 # The outward flux of the position field, 3 times the volume inside M.
-Y = coordinate(RD(3))
 flux = index_sum(
-    integral(o[c] * index_sum(pull_back(Y, cells)[l] * nu[l], (l,)), K), (c,)
+    integral(o * index_sum(pull_back(coordinate(M), cells)[l] * nu[l], (l,)), K),
+    (cell_index(T, 0),),
 )
 
 # The area of M, with no orientation.
@@ -1390,14 +1392,14 @@ area = integral(Integer(1), M)
   vertices of the triangle in `T`. If the mesh library numbers some triangles
   clockwise and others anticlockwise, seen from outside, the contributions of
   the two groups have opposite signs, and the sum is not the flux.
-- `o[c]` has the free index `c` of the triangles, so each triangle takes the
-  sign of that triangle. With the signs, every contribution uses the outward
-  normal. A mesh library may instead number the vertices of every triangle
-  consistently, and then the flux needs no `o`.
+- `o` is the orientation of `T` on each triangle (see
+  [`AbstractTopology`](LANGUAGE.md#abstracttopology)). With the signs, every
+  contribution uses the outward normal. A mesh library may instead number the
+  vertices of every triangle consistently, and then the flux needs no `o`.
 - `area` integrates against the density $\sqrt{\det(J^T J)}$, which does not
   depend on the order of the vertices, so `area` needs no signs.
-- A surface with no consistent orientation, such as a Möbius strip, has no
-  signs `o`. The area of the surface is defined, and the flux is not.
+- A surface with no consistent orientation, such as a Möbius strip, has the
+  orientation `None`. The area of the surface is defined, and the flux is not.
 
 ### Helmholtz with a perfectly matched layer
 
@@ -1413,26 +1415,28 @@ coordinate into the complex plane by a factor $s_x = 1 + i \sigma_x / k_0$,
 and the stretched equation is
 $-\nabla \cdot (A \nabla u) - k_0^2 s_x s_y u = f$ with
 $A = \mathrm{diag}(s_y / s_x, s_x / s_y)$. `V` is a complex Lagrange space on
-`D`, `F` a real space on `D` for the data, and `C` a real space of
-constants. The solver sets `sigma_x` and `sigma_y` to zero outside the layer:
+`square`, `F` a real Lagrange space on `square` for the data, and `C` a real
+space of constants. The solver sets `sigma_x` and `sigma_y` to zero outside
+the layer:
 
 ```python
 k0 = function(C, "k0")
-sigma_x, sigma_y = function(F, "sigma_x"), function(F, "sigma_y")
+sigma_x, sigma_y = push_forward(function(F, "sigma_x"), D), push_forward(function(F, "sigma_y"), D)
 one, i_unit = Integer(1), ImaginaryUnit()
 s_x = one + i_unit * sigma_x / k0
 s_y = one + i_unit * sigma_y / k0
 
 u, v, f = function(V, "u"), function(V, "v"), function(F, "f")
-grad_u, grad_v = gradient(u, D), gradient(v, D)
+u_D, v_D, f_D = push_forward(u, D), push_forward(v, D), push_forward(f, D)
+grad_u, grad_v = gradient(u_D, D), gradient(v_D, D)
 j = index("j")
 
 # The stretched Laplacian and the stretched mass, sesquilinear in u and v.
 A = tensor((s_y / s_x, s_x / s_y))
 stiffness = index_sum(A[j] * grad_u[j] * conjugate(grad_v[j]), (j,))
-mass = k0 * k0 * s_x * s_y * u * conjugate(v)
+mass = k0 * k0 * s_x * s_y * u_D * conjugate(v_D)
 a = form(integral(stiffness - mass, D), (conjugate(v), u))
-L = form(integral(f * conjugate(v), D), (conjugate(v),))
+L = form(integral(f_D * conjugate(v_D), D), (conjugate(v),))
 ```
 
 - `a` is antilinear in `v` and linear in `u`, which the entries state, so
@@ -1455,49 +1459,48 @@ L = form(integral(f * conjugate(v), D), (conjugate(v),))
 
 ### Mixed Poisson with Raviart-Thomas elements
 
-Requires: [Representation on the reference
-cell](LANGUAGE.md#representation-on-the-reference-cell),
-[`Form`](LANGUAGE.md#form).
-
-See also: [A Piola extension](LANGUAGE.md#a-piola-extension).
+Requires: [`TransformationLaw`](LANGUAGE.md#transformationlaw),
+[`PushForward`](LANGUAGE.md#pushforward), [`Divergence` and
+`Curl`](LANGUAGE.md#divergence-and-curl), [`Form`](LANGUAGE.md#form).
 
 The mixed form of the Poisson problem seeks a flux $\sigma$ and a potential
 $u$ with $\sigma = \nabla u$ and $\mathrm{div}\, \sigma = -f$. `RT` is a
-Raviart-Thomas space on the square mesh `D` of the
+Raviart-Thomas space on the topology `square` of the
 [`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, of value shape
-`(2,)`, and `DG` a discontinuous space of degree 0:
+`(2,)`, and `DG` a discontinuous Lagrange space of degree 0 on `square`:
 
 ```python
 sigma, tau = function(RT, "sigma"), function(RT, "tau")
 u, v, f = function(DG, "u"), function(DG, "v"), function(DG, "f")
+sigma_D, tau_D = push_forward(sigma, D), push_forward(tau, D)
+u_D, v_D, f_D = push_forward(u, D), push_forward(v, D), push_forward(f, D)
 i = index("i")
 
-def divergence(w):
-    return index_sum(gradient(w, D)[i, i], (i,))
-
-e = index_sum(sigma[i] * tau[i], (i,)) + u * divergence(tau) + divergence(sigma) * v
+e = (
+    index_sum(sigma_D[i] * tau_D[i], (i,))
+    + u_D * divergence(tau_D, D)
+    + divergence(sigma_D, D) * v_D
+)
 a = form(integral(e, D), ((tau, v), (sigma, u)))
-L = form(integral(-f * v, D), ((tau, v),))
+L = form(integral(-f_D * v_D, D), ((tau, v),))
 ```
 
 - There is no mixed space. Each argument is a `tuple` of a function in `RT`
   and a function in `DG`, so the argument spaces are `((RT, DG), (RT, DG))`
   and `((RT, DG),)`. The block of `a` for `tau` and `u` is `a` with `v` and
-  `sigma` replaced by `Zero`, the term `u * divergence(tau)`. `L` depends on
-  `v` only, which a `tuple` argument allows.
-- The library of `RT` represents a function on the reference cell with the
-  contravariant Piola map, so `pull_back(sigma, cell_domain(D, 0))` is
-  $J \hat\sigma / \det J$ with $\hat\sigma$ the function on `K`, and the
-  library of `DG` uses the identity. The core sees only the compositions.
-- `expand_pull_backs` rewrites the pull-back of `gradient(sigma, D)` as
-  $K^T \nabla(J \hat\sigma / \det J)$, and `divergence` is its trace. On the
-  affine cells of `D`, the gradients pass finds the derivatives of $J$ and
-  $\det J$ to be zero, and the trace reduces to
-  $\widehat{\mathrm{div}}\, \hat\sigma / \det J$. On a curved cell the extra
-  terms cancel only in value, which [A Piola
-  extension](LANGUAGE.md#a-piola-extension) makes structural.
-- A Nédélec space differs only in the map, $K^T \hat u$, with the curl in
-  place of the divergence as a free function.
+  `sigma` replaced by `Zero`, the term `u_D * divergence(tau_D, D)`. `L`
+  depends on `v` only, which a `tuple` argument allows.
+- The law of `RT` is `transformation_law(("contravariant",), 1)`, so
+  `pull_back(sigma_D, cell_domain(D, 0))` is $J \hat\sigma / \det J$ with
+  $\hat\sigma$ = `pull_back(sigma, cell_map(square, 0))`. The law of `DG` is
+  `transformation_law((), 0)`.
+- `expand_pull_backs` applies the identity of Piola to
+  `divergence(sigma_D, D)`, which gives
+  $\widehat{\mathrm{div}}\, \hat\sigma / \det J$ on every cell, affine or
+  curved, with no derivative of $J$.
+- A Nédélec space has the law `transformation_law(("covariant",), 0)`, and
+  `curl` of its push-forward is the reference curl carried by the
+  contravariant law of weight 1.
 
 ### Dual-weighted residual error estimation
 
@@ -1509,24 +1512,28 @@ The dual-weighted residual method estimates the error in a goal functional
 $J(u)$ by the residual of the Galerkin solution weighted by the solution $z$
 of the adjoint problem, $J(u) - J(u_h) = R(z) = R(z - z_h)$ for any $z_h$ in
 the trial space. The example takes an advection-diffusion problem on the
-square mesh `D`, with `V` a Lagrange space of degree 1, `W` a Lagrange space
-of degree 2 in which the adjoint solution is computed, `F` a space for the
-data and `B` a vector space for the advection field:
+square mesh `D`, with `V` a Lagrange space of degree 1 on `square`, `W` a
+Lagrange space of degree 2 on `square` in which the adjoint solution is
+computed, `F` a space on `square` for the data and `B` a vector space on
+`square` for the advection field:
 
 ```python
 u, v, u_h, z_h = function(V, "u"), function(V, "v"), function(V, "u_h"), function(V, "z_h")
 z = function(W, "z")
-f, psi, b = function(F, "f"), function(F, "psi"), function(B, "b")
+f, psi = push_forward(function(F, "f"), D), push_forward(function(F, "psi"), D)
+b = push_forward(function(B, "b"), D)
 i = index("i")
 
 def a_expr(w, y):
-    grad_w, grad_y = gradient(w, D), gradient(y, D)
-    return index_sum(grad_w[i] * grad_y[i], (i,)) + index_sum(b[i] * grad_w[i], (i,)) * y
+    w_D, y_D = push_forward(w, D), push_forward(y, D)
+    grad_w, grad_y = gradient(w_D, D), gradient(y_D, D)
+    return index_sum(grad_w[i] * grad_y[i], (i,)) + index_sum(b[i] * grad_w[i], (i,)) * y_D
 
 # The primal problem, the goal, and the adjoint problem with the arguments swapped.
+v_D = push_forward(v, D)
 a = form(integral(a_expr(u, v), D), (v, u))
-L = form(integral(f * v, D), (v,))
-goal = form(integral(psi * v, D), (v,))
+L = form(integral(f * v_D, D), (v,))
+goal = form(integral(psi * v_D, D), (v,))
 a_adjoint = form(integral(a_expr(u, v), D), (u, v))
 
 # The residual at u_h, a linear form, and the error in the goal.
@@ -1547,7 +1554,9 @@ R_h = l - action(a, 1, u_h)
   functional, with the argument spaces `()` and no support, one number after
   assembly.
 - The argument of an action needs only the static type of a function in `V`,
-  so `z` from the richer space `W` is accepted, and so is `z - z_h`. Galerkin
+  so `z` from the richer space `W` is accepted, and so is `z - z_h`. The
+  action substitutes `z - z_h` for `v` in `push_forward(v, D)`, which gives
+  the push-forward of an expression by the law of `V`. Galerkin
   orthogonality gives `action(R, 0, z_h) == 0` in value, which is why the
   interpolant is subtracted.
 - `R_h` is the residual as the solver holds it, with `l` the assembled load,
@@ -1568,8 +1577,9 @@ arithmetic](LANGUAGE.md#tensor-arithmetic), [Transpose](#transpose).
 See also: [Symmetric tensors](#symmetric-tensors).
 
 A Saint Venant–Kirchhoff material on the square mesh `D`, with a real vector
-space `V` and a real space `M` for the Lamé parameters, both of a library on
-`D`, and a real space `R` of constants of value shape `(2, 2)`. The stress is
+Lagrange space `V` and a real space `M` for the Lamé parameters, both of a
+library on `square`, and a real space `R` of constants of value shape
+`(2, 2)`. The stress is
 $S = 2 \operatorname{sym}(\partial \psi / \partial C)$:
 
 ```python
@@ -1578,13 +1588,13 @@ I = tensor((tensor((one, zero)), tensor((zero, one))))
 i, j, k, l, a = index("i"), index("j"), index("k"), index("l"), index("a")
 
 u, v, w = function(V, "u"), function(V, "v"), function(V, "w")
-mu, lmbda = function(M, "mu"), function(M, "lambda")
+mu, lmbda = push_forward(function(M, "mu"), D), push_forward(function(M, "lambda"), D)
 
 def strain_energy(C):
     E = (C - I) / two
     return lmbda / two * index_sum(E[a, a], (a,)) ** two + mu * index_sum(E[i, j] * E[i, j], (i, j))
 
-F = I + gradient(u, D)
+F = I + gradient(push_forward(u, D), D)
 C = transpose(F) @ F
 psi = strain_energy(C)
 
@@ -1623,8 +1633,9 @@ extent 6 with the position of each entry in `c`:
 c = function(K, "c")
 stiffness = component_tensor(c[gathered_index(packed, (i, j, k, l))], (i, j, k, l))
 
-eps_u = (gradient(u, D) + transpose(gradient(u, D))) / two
-eps_v = (gradient(v, D) + transpose(gradient(v, D))) / two
+grad_u, grad_v = gradient(push_forward(u, D), D), gradient(push_forward(v, D), D)
+eps_u = (grad_u + transpose(grad_u)) / two
+eps_v = (grad_v + transpose(grad_v)) / two
 elastic = form(integral(index_sum(stiffness[i, j, k, l] * eps_u[k, l] * eps_v[i, j], (i, j, k, l)), D), (v, u))
 ```
 
@@ -1648,23 +1659,25 @@ the diagonal.
 ### A classic FEniCS layer for the Poisson problem
 
 Requires: [The base object `Base`](LANGUAGE.md#the-base-object-base),
-[`Function`](LANGUAGE.md#function), [`Form`](LANGUAGE.md#form),
+[`Function`](LANGUAGE.md#function), [`PushForward`](LANGUAGE.md#pushforward),
+[`Form`](LANGUAGE.md#form),
 [Restriction](LANGUAGE.md#restriction), [`Normal`](LANGUAGE.md#normal),
 [`Integral` over a decomposed
 domain](LANGUAGE.md#integral-over-a-decomposed-domain).
 
 The Poisson problem, written as classic FEniCS writes it:
 `inner(grad(u), grad(v)) * dx`. The layer is a module `uflx.legacy`, which
-does not exist, of a page of free functions and two plain Python classes over
-the core. Nothing in the module subclasses a core class, so the forms that the
-module produces are ordinary core graphs, the same graphs as the core free
-functions build by hand. The example shows what the core leaves to a layer: the argument
-numbers of test and trial functions, measures that find or hold their domain,
-restrict the integrand and bind the arguments, a facet normal that belongs to
-the mesh, and `grad`, `div` and `curl` that read the domain from the function.
-`Lagrange`, `Constants` and `Fields` stand for spaces of a library: Lagrange
-elements of a value shape, constants with no domain, and fields of a value
-shape with no element.
+does not exist, of a page of free functions and three plain Python classes
+over the core. Nothing in the module subclasses a core class, so the forms
+that the module produces are ordinary core graphs, the same graphs as the core
+free functions build by hand. The example shows what the core leaves to a
+layer: the argument numbers of test and trial functions, one name for a
+function and its push-forward to the mesh, measures that find or hold their
+domain, restrict the integrand and bind the arguments, a facet normal that
+belongs to the mesh, and `grad`, `div` and `curl` that read the domain from
+the function. `Lagrange`, `Constants` and `Fields` stand for spaces of a
+library: Lagrange elements of a value shape on a topology, constants with no
+domain, and fields of a value shape on a mesh with no element.
 
 ```python
 # uflx/legacy.py
@@ -1673,6 +1686,8 @@ from uflx import (
     Base,
     Function,
     conjugate,
+    curl as core_curl,
+    divergence,
     form,
     function,
     gradient,
@@ -1681,34 +1696,37 @@ from uflx import (
     integral,
     normal,
     pull_back,
+    push_forward,
     side_domain,
     side_map,
-    tensor,
 )
 
 
-def TestFunction(V):
-    return function(V, ("argument", 0))
-
-
-def TrialFunction(V):
-    return function(V, ("argument", 1))
-
-
-def Coefficient(V, name):
-    return function(V, name)
-
-
-def Constant(name, shape=()):
-    return function(Constants(shape), name)
-
-
-def FunctionSpace(mesh, family, degree, shape=()):
-    return Lagrange(mesh.domain, degree, shape)
+class FunctionSpace:
+    # A space on the topology of the mesh, with the mesh that its functions are pushed to.
+    def __init__(self, mesh, family, degree, shape=()):
+        self.mesh = mesh
+        self.space = Lagrange(mesh.domain.topology, degree, shape)
 
 
 def VectorFunctionSpace(mesh, family, degree):
     return FunctionSpace(mesh, family, degree, (mesh.domain.ambient_domain.dimension,))
+
+
+def TestFunction(V):
+    return push_forward(function(V.space, ("argument", 0)), V.mesh.domain)
+
+
+def TrialFunction(V):
+    return push_forward(function(V.space, ("argument", 1)), V.mesh.domain)
+
+
+def Coefficient(V, name):
+    return push_forward(function(V.space, name), V.mesh.domain)
+
+
+def Constant(name, shape=()):
+    return function(Constants(shape), name)
 
 
 def FacetNormal(mesh):
@@ -1726,16 +1744,11 @@ def grad(f):
 
 
 def div(w):
-    i = index("div")
-    return index_sum(grad(w)[i, i], (i,))
+    return divergence(w, w.support)
 
 
 def curl(w):
-    # grad(w)[i, j] is the derivative of w[i] along x[j], as in legacy UFL.
-    G = grad(w)
-    if w.value_shape == (2,):
-        return G[1, 0] - G[0, 1]
-    return tensor((G[2, 1] - G[1, 2], G[0, 2] - G[2, 0], G[1, 0] - G[0, 1]))
+    return core_curl(w, w.support)
 
 
 def inner(a, b):
@@ -1757,7 +1770,8 @@ def contains(obj, predicate):
 
 
 def arguments(expression):
-    # The legacy extract_arguments: the functions labelled ("argument", n), by n.
+    # The legacy extract_arguments: the functions labelled ("argument", n), by n,
+    # which the walk finds inside the push-forwards.
     found = {}
 
     def visit(obj):
@@ -1877,25 +1891,28 @@ a = kappa * inner(grad(u), grad(v)) * dx
 L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
 ```
 
-- For a real `V`, `a` is `kappa` times the Poisson bilinear form
-  `form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))`, with
-  `grad_u = gradient(u, D)`, `grad_v = gradient(v, D)` and `i = index("i")`,
-  up to the labels of `u`, `v` and `i` and the conjugates, which change nothing in
-  real arithmetic: `conjugate_space(V)` is `V`, so the argument spaces are
-  `(V, V)`. `L` is a sum of three forms with the argument spaces `(V,)`.
+- `u` and `v` of the script are push-forwards to `D` of the functions `u_T`
+  and `v_T` on the topology of `D`, so a user script has one name for each.
+  For a real `V`, `a` is `kappa` times the Poisson bilinear form
+  `form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v_T, u_T))`,
+  with `grad_u = gradient(push_forward(u_T, D), D)`, `grad_v` likewise and
+  `i = index("i")`, up to the labels of `u_T`, `v_T` and `i` and the
+  conjugates, which change nothing in real arithmetic: with `S = V.space`,
+  `conjugate_space(S)` is `S`, so the argument spaces are `(S, S)`. `L` is a
+  sum of three forms with the argument spaces `(S,)`.
   `f * dx` with no argument stays an `Integral`, a functional.
 - For a complex `V`, the same lines give the sesquilinear forms of a
   complex-mode legacy demo. `inner` conjugates the second operand, as the
-  legacy `inner` does, and the measure binds `conjugate(v)` at position 0, so
-  `a` has the argument spaces `(conjugate_space(V), V)` and is antilinear in
-  `v`, and `L` has `(conjugate_space(V),)`. The convention is the module's,
+  legacy `inner` does, and the measure binds `conjugate(v_T)` at position 0,
+  so `a` has the argument spaces `(conjugate_space(S), S)` and is antilinear
+  in `v_T`, and `L` has `(conjugate_space(S),)`. The convention is the module's,
   not the core's: the core records the linearity that the form states (see
   [`Form`](LANGUAGE.md#form)). `f * v * dx` in complex mode is linear in `v`
   but bound as antilinear, which a pass that checks the linearity rejects, as
   legacy UFL rejects an unconjugated test function in complex mode.
 - The argument numbers of legacy UFL live in the labels of the module. The
-  core has none: `u` and `v` are functions, and the measure states the
-  arguments. `arguments` is the legacy `extract_arguments`, a walk of the
+  core has none: `u_T` and `v_T` are functions, and the measure states the
+  arguments, the functions on the topology. `arguments` is the legacy `extract_arguments`, a walk of the
   construction arguments, which rule 5 of [`Base`](LANGUAGE.md#the-base-object-base)
   makes possible for every expression. A module with `MixedElement` and
   `split` would collect the members of a mixed space into a `tuple` argument.
@@ -1931,8 +1948,9 @@ L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
   rather than restricted, because the normal has no meaning on the mesh.
 - `grad` reads the domain from the support of the function, as the legacy
   `grad` reads the mesh from the coefficient, and `grad(w)[i, j]` is the
-  derivative of `w[i]` along `x[j]`, as in legacy UFL, so `div` is the trace
-  and `curl` reads off the antisymmetric part. On the surface mesh of
+  derivative of `w[i]` along `x[j]`, as in legacy UFL. `div` and `curl` are
+  `Divergence` and `Curl` of the core, so a Raviart–Thomas or a Nédélec
+  coefficient gets the identity of Piola. On the surface mesh of
   the [Laplace-Beltrami example](#the-laplace-beltrami-operator)
   the same `grad` is the surface gradient. The legacy `grad` of a `Constant`
   is the zero of the shape of the mesh. `kappa` has no support, so `grad(kappa)`
