@@ -3448,8 +3448,21 @@ one before, from $N_0$ (see [Grammars](#grammars)):
 | [`apply_actions`](#applying-actions) | `Action`, except a pairing | $N_2$ |
 | [`apply_derivatives`](#applying-derivatives) | `DirectionalDerivative` | $N_3$ |
 | [`expand_integrals`](#expanding-integrals) | `Integral` over a decomposed domain | $N_4$ |
-| [`expand_pull_backs`](#expanding-pull-backs) | `PullBack`, except one that reads a value of a library | $N_5$ |
-| [`apply_gradients`](#applying-gradients) | `Gradient`, except of a terminal, a `PullBack` or a `Gradient` | $N_6$, [the core normal form](#the-core-normal-form) |
+| [`apply_gradients`](#applying-gradients) | `Gradient`, except of a terminal, a `PullBack` or a `Gradient` | $N_5$ |
+| [`expand_pull_backs`](#expanding-pull-backs) | `PullBack`, except one that reads a value of a library | $N_6$ |
+| [`apply_gradients`](#applying-gradients) | The gradients that `expand_pull_backs` creates, such as the Jacobian of a cell | $N_7$ |
+| [`expand_pull_backs`](#expanding-pull-backs) | The pull-backs that the second `apply_gradients` uncovers | $N_8$, [the core normal form](#the-core-normal-form) |
+
+The first `apply_gradients` evaluates each gradient on the domain on which the
+form states the gradient, before a pull-back by a cell moves the gradient to
+the reference cell. A gradient of an expression of the coordinates of a
+decomposed domain $D$ is therefore evaluated on $D$, such as
+`gradient(coordinate(D), D)`, which is the identity matrix for $D$ of the
+dimension of its ambient coordinate domain, and not on the reference cell as
+the product of the Jacobian $J$ and its inverse $K$. The
+second `apply_gradients` evaluates the gradients that the pull-backs create on
+the reference cells, and the second `expand_pull_backs` moves to the leaves
+the pull-backs that enclosed those gradients.
 
 A rewrite of index notation that keeps the value, such as the reduction of an
 `Indexed` of a `ComponentTensor`, is a pass of the compiler, not of the core.
@@ -3679,17 +3692,68 @@ such as for a family of points, whose density is `Integer(1)`.
 - The integrals that remain are over coordinate domains, which a form compiler
   integrates by quadrature.
 
+### Applying gradients
+
+Requires: [Expanding integrals](#expanding-integrals),
+[`Gradient`](#gradient), [Derivatives of the node
+classes](#derivatives-of-the-node-classes).
+
+| `apply_gradients(f)` |  |
+| -------------------- | - |
+| Evaluates            | `Gradient` |
+| Input grammar        | $N_4$, and $N_6$ in the second run |
+| Output grammar       | $N_5 = N_4 \setminus G$, and $N_7 = N_6 \setminus G$ in the second run, with $G = \{$a `Gradient(f, P)` whose expression $f$ is not a terminal, a `PullBack` or a `Gradient`, or is `Coordinate(P)` with $P$ of the dimension of its ambient coordinate domain$\}$ |
+
+The pass rewrites every `Gradient(f, P)` that $G$ matches, inner
+gradients first, as
+`component_tensor(∂_j f[a_1, …, a_r], (a_1, …, a_r, j))`, with $r$ the rank
+of $f$ and derived indices $a_1, \ldots, a_r$ and $j$. $\partial_j b$, entry
+$j$ of the last axis of the gradient of $b$ on $P$, has the value shape of
+$b$ and the free index $j$ of the extent $n$, the dimension of the ambient
+coordinate domain of $P$. $\partial_j$ applies the first row that matches:
+
+| Expression $b$ | $\partial_j b$ |
+| -------------- | -------------- |
+| $b$ with no support | `Zero`, with the value shape and the argument spaces of $b$, and the free indices of $b$ followed by $j$ |
+| `Coordinate(P)`, $P$ of the dimension of its ambient coordinate domain | `component_tensor(I[i, j], (i,))`, with $I$ the identity matrix of value shape `(n, n)` and a derived index $i$ |
+| A terminal, a `PullBack` or a `Gradient` | `component_tensor(gradient(b, P)[a_1, …, a_s, j], (a_1, …, a_s))`, with $s$ the rank of $b$, so the gradient remains |
+| Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \partial_j b$ |
+
+- An operand is constant for the pass if the operand has no support.
+- The gradient of a terminal remains for the library of the terminal, so the
+  Hessian of a function is a gradient of a gradient.
+- On a decomposed domain $P$ of lower dimension than its ambient coordinate
+  domain, `Gradient` is the tangential gradient (see [`Gradient`](#gradient)),
+  which obeys the same rows. The `Coordinate` row does not match, so
+  `gradient(coordinate(P), P)`, the projection $\Pi$, remains, and a
+  pull-back by a cell, such as through a restriction to points, evaluates
+  it.
+- In the first run, a gradient that $G$ does not match remains, such as the
+  gradient of a function on a decomposed domain, and
+  [`expand_pull_backs`](#expanding-pull-backs) rewrites the gradient on the
+  reference cell. In the second run, the gradients that $G$ matches are the
+  gradients that `expand_pull_backs` creates on the reference cells, such as
+  the Jacobian of a cell in the inverse Jacobian and, in a Hessian, the
+  gradient of the pulled-back gradient.
+- A gradient on a cell under a pull-back to the points of a facet, or of
+  another cell through the inclusion of a side, remains in $N_6$, because
+  the gradient does not commute with that pull-back (see [Expanding
+  pull-backs](#expanding-pull-backs)). Once the second run rewrites the
+  gradient, the pull-back is pointwise again, as in the inverse Jacobian of
+  the cell on a side and in the inverse Jacobian of [`Normal`](#normal), and
+  the second `expand_pull_backs` moves the pull-back to the leaves.
+
 ### Expanding pull-backs
 
-Requires: [Expanding integrals](#expanding-integrals), [`PullBack`](#pullback),
+Requires: [Applying gradients](#applying-gradients), [`PullBack`](#pullback),
 [Restriction](#restriction), [`Normal`](#normal), [Jacobian and
 density](#jacobian-and-density), [`Inverse`](#inverse).
 
 | `expand_pull_backs(f)` |  |
 | ---------------------- | - |
 | Evaluates              | `PullBack` |
-| Input grammar          | $N_4$ |
-| Output grammar         | $N_5 = N_4 \setminus \{$a `PullBack` by a domain map whose expression is not a terminal, a `PullBack` or a `Gradient`, and a `PullBack` of a `Gradient` by a `cell_domain` or a `gathered_cell_domain`$\}$ |
+| Input grammar          | $N_5$, and $N_7$ in the second run |
+| Output grammar         | $N_6 = N_4 \setminus R$, and $N_8 = N_7 \setminus R$ in the second run, with $R = \{$a `PullBack` by a domain map whose expression is not a terminal, a `PullBack` or a `Gradient`, a `PullBack` of a `Gradient` by a `cell_domain` or a `gathered_cell_domain`, and a `PullBack` by a domain map of a `PullBack` by a domain map that is not a `cell_domain` or a `gathered_cell_domain`$\}$ |
 
 The pass rewrites every `PullBack(f, ψ)`, inner pull-backs first, with the
 first row that matches, and applies the rows again to each `PullBack` that a
@@ -3704,7 +3768,8 @@ into it (see [Restriction](#restriction)).
 | $f$ with no support | $f$, or `f + Zero(…)` with the free indices of $\psi$ that $f$ lacks |
 | `Coordinate(Q)` | $\psi$ |
 | `PullBack(g, SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
-| `PullBack(g, φ)` | Remains, so pull-backs nest |
+| `PullBack(g, φ)`, φ a `SideMap`, a `cell_domain` or a `gathered_cell_domain` | Remains, so a pull-back nests only inside a read on a cell |
+| `PullBack(g, φ)` | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](#pullback)) |
 | `Gradient(g, Q)`, $\psi$ = `cell_domain(Q, j)` or a `gathered_cell_domain` of $Q$ | $K^T \nabla_P(\psi^* g)$, with $K$ = `inverse_jacobian(ψ)` |
 | `Gradient(g, Q)` | Remains, the gradient on $Q$ read at the points of $P$ |
 | `Normal(SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | $K^T \hat m / \lvert K^T \hat m \rvert$ of [`Normal`](#normal) |
@@ -3728,6 +3793,10 @@ into it (see [Restriction](#restriction)).
   $A_i$ of a cell of a submesh into a cell of the same dimension therefore
   leaves the reference gradient at the points of the cell of $E$, as the
   inclusion of a facet does.
+- A pull-back by any other map composes with the pull-back that it encloses,
+  so a value that a library reads on a cell is under at most one further
+  domain map, such as the inclusion $A_i$, the points of a quadrature rule,
+  or the two composed.
 - Every pull-back that remains reads a value of a library on a cell, possibly
   at the points of a cell of $E$ through $A_i$, such as the reference
   gradient of a function on the cell at the points of a facet. A pull-back of
@@ -3737,63 +3806,21 @@ into it (see [Restriction](#restriction)).
   advance is evaluated through a restriction instead, and other points are
   located by a pass after the core (see [Points and point
   evaluation](#points-and-point-evaluation)).
-
-### Applying gradients
-
-Requires: [Expanding pull-backs](#expanding-pull-backs),
-[`Gradient`](#gradient), [Derivatives of the node
-classes](#derivatives-of-the-node-classes).
-
-| `apply_gradients(f)` |  |
-| -------------------- | - |
-| Evaluates            | `Gradient` |
-| Input grammar        | $N_5$ |
-| Output grammar       | $N_6 = N_5 \setminus \{$a `Gradient(f, P)` whose expression $f$ is not a terminal, a `PullBack` or a `Gradient`, or is `Coordinate(P)` with $P$ of the dimension of its ambient coordinate domain$\}$ |
-
-The pass rewrites every `Gradient(f, P)` that $N_6$ excludes, inner
-gradients first, as
-`component_tensor(∂_j f[a_1, …, a_r], (a_1, …, a_r, j))`, with $r$ the rank
-of $f$ and derived indices $a_1, \ldots, a_r$ and $j$. $\partial_j b$, entry
-$j$ of the last axis of the gradient of $b$ on $P$, has the value shape of
-$b$ and the free index $j$ of the extent $n$, the dimension of the ambient
-coordinate domain of $P$. $\partial_j$ applies the first row that matches:
-
-| Expression $b$ | $\partial_j b$ |
-| -------------- | -------------- |
-| $b$ with no support | `Zero`, with the value shape and the argument spaces of $b$, and the free indices of $b$ followed by $j$ |
-| `Coordinate(P)`, $P$ of the dimension of its ambient coordinate domain | `component_tensor(I[i, j], (i,))`, with $I$ the identity matrix of value shape `(n, n)` and a derived index $i$ |
-| A terminal, a `PullBack` or a `Gradient` | `component_tensor(gradient(b, P)[a_1, …, a_s, j], (a_1, …, a_s))`, with $s$ the rank of $b$, so the gradient remains |
-| Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \partial_j b$ |
-
-The pass then applies [`expand_pull_backs`](#expanding-pull-backs) to the
-result.
-
-- An operand is constant for the pass if the operand has no support.
-- The gradient of a terminal remains for the library of the terminal, so the
-  Hessian of a function is a gradient of a gradient.
-- On a decomposed domain $P$ of lower dimension than its ambient coordinate
-  domain, `Gradient` is the tangential gradient (see [`Gradient`](#gradient)),
-  which obeys the same rows. The `Coordinate` row does not match, so
-  `gradient(coordinate(P), P)`, the projection $\Pi$, remains, and a
-  pull-back by a cell, such as through a restriction to points, evaluates
-  it.
-- `expand_pull_backs` leaves the pull-back of a gradient on a cell to the
-  points of a facet or of another cell through $A_i$, because the gradient
-  does not commute with that pull-back. Once the gradient is rewritten, the
-  pull-back is pointwise again, as in the restriction of `gradient(u * w, D)` and in the $K$ of
-  [`Normal`](#normal), and the final `expand_pull_backs` moves the pull-back
-  to the leaves, so the output stays in $N_5$.
-- `expand_pull_backs` leaves an expression of $N_5$ unchanged, because each
-  pull-back of $N_5$ matches a row that remains, so the final
-  `expand_pull_backs` rewrites only the pull-backs that the rewrite of the
-  gradients uncovers.
+- The rows create gradients on the reference cells, such as the Jacobian in
+  $K$, so $N_6$ is a delta of $N_4$ and not of $N_5$. In the second run,
+  every gradient is of a terminal, a `PullBack` or a `Gradient`, and every
+  pull-back by a cell already reads a value of a library, so the pass creates
+  no gradient that $G$ matches and $N_8$ is contained in $N_7$.
+- The pass leaves an expression of $N_6$ unchanged, because each pull-back of
+  $N_6$ matches a row that remains, so the second run rewrites only the
+  pull-backs that the second `apply_gradients` uncovers.
 
 ### The core normal form
 
-Requires: [Grammars](#grammars), [Applying gradients](#applying-gradients).
+Requires: [Grammars](#grammars), [Expanding pull-backs](#expanding-pull-backs).
 
-The core normal form is $N_6$, the output grammar of
-[`apply_gradients`](#applying-gradients), the last pass of the core. Every
+The core normal form is $N_8$, the output grammar of the second run of
+[`expand_pull_backs`](#expanding-pull-backs), the last pass of the core. Every
 expression node of an expression in the core normal form is an instance of a
 concrete class of the core or a terminal of a downstream library. The table
 gives every node class that the core normal form allows, with the condition
@@ -3808,7 +3835,7 @@ on each, and no other node class occurs in the core normal form:
 | [Calculus on a domain](#calculus-on-a-domain) | `Coordinate` | Always |
 | [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `PullBack` or a `Gradient`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
 | [Calculus on a domain](#calculus-on-a-domain) | `Integral` | Over a domain that is not a `DecomposedDomain`, such as a reference cell or `RD(0)` |
-| [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap`, by a domain map of a terminal or a `PullBack`, or of a `Gradient` by a domain map that is not a `cell_domain` or a `gathered_cell_domain` |
+| [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap`, or by a domain map of a terminal, of a `PullBack` by a `SideMap`, a `cell_domain` or a `gathered_cell_domain`, or of a `Gradient` by a domain map that is not a `cell_domain` or a `gathered_cell_domain` |
 | [Decomposed domains](#decomposed-domains) | `Normal` | Always |
 | [Function spaces](#function-spaces) | `Function` | Always |
 | [Variational forms](#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](#form)) |
