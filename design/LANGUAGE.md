@@ -1996,6 +1996,9 @@ of a small region of $P$:
 | $0 < k = n$ | `absolute(determinant(J))` |
 | $0 < k < n$ | `square_root(determinant(G))`, with $G = J^T J$ |
 
+The row $k = 0$ gives the value of the other rows, and keeps the Jacobian, of
+value shape `(n, 0)`, out of an integral over points.
+
 $J^T J$ is `component_tensor(index_sum(J[l, a] * J[l, b], (l,)), (a, b))`, with
 derived indices.
 
@@ -2600,6 +2603,11 @@ axis by $K^T$ and each contravariant axis by $J$, and divides by
 $(\det J)^w$ for $k = n$ and by $\rho^w$ for $k < n$. Each transformed axis
 has the extent $k$ in $\hat f$ and $n$ in $m_\psi(\hat f)$.
 
+The pull-back of a gradient by a cell and the normal of a side use the
+covariant law of weight 0 (see [Expanding pull-backs](#expanding-pull-backs)).
+The density of an integral is not an instance, because a measure uses
+$\lvert \det J \rvert$ and the law uses $\det J$.
+
 The maps of Basix are instances. The core names no instances:
 
 | Space                             | Law                                       | Legacy UFL map         |
@@ -2830,7 +2838,7 @@ index_sum(integral(pull_back(f, D_j) * density(D_j), P_j), indices_j)
 - A piece with no free indices has no `IndexSum`.
 - An array-valued $f$ integrates component by component, with the density
   written into each component in index notation.
-- For a parameter domain $P_j$ of dimension $m = 0$, the density is
+- For a parameter domain $P_j$ of dimension $k = 0$, the density is
   `Integer(1)`, so the integral over a set of points is the sum of the values.
 
 The density needs no orientation, so an integral of a positive $f$ is
@@ -2868,7 +2876,7 @@ Examples:
 ### `Normal`
 
 Requires: [Restriction](#restriction), [Reference cell](#reference-cell),
-[Jacobian and density](#jacobian-and-density).
+[`TransformationLaw`](#transformationlaw).
 
 A concrete subclass of `AbstractExpression` for the unit outward normal of the
 cell on a side, on the cells of a topology with sides.
@@ -2896,25 +2904,15 @@ Notation, for `sm` = `SideMap(D, E, s)` and the piece $i$ of $E$:
 #### The pull-back of `Normal`
 
 The pull-back of `Normal(SideMap(D, E, s))` by `cell_domain(E, i)` is
+$\nu = w / \lvert w \rvert$, with $w = m_{B_i}(\hat m)$, where:
 
-$$
-\nu = \frac{K^T \hat m}{\lvert K^T \hat m \rvert},
-$$
-
-where:
-
-- $K$ is `pull_back(inverse_jacobian(B_i), A_i)`, the inverse Jacobian of
-  the cell on the side at the points of $A_i$ (see [Jacobian and
-  density](#jacobian-and-density)).
+- $m$ is `transformation_law(("covariant",), 0)`, applied with the Jacobian
+  of the cell $B_i$ on the side at the points of $A_i$ (see
+  [`TransformationLaw`](#transformationlaw)).
 - $\hat m$ is `reference_normal` of the side tables of the side $s$ of group
   $i$ (see [Side tables](#side-tables)), a normal of the cell of $E$ in $K_j$.
 
-The composition is
-
-```python
-w = transpose(K) @ m_hat
-nu = w / square_root(w @ w)
-```
+The composition is `w / square_root(w @ w)`.
 
 The core needs no numbering of the facets and no vertices of $K_j$, because
 the library of the topology gives $\hat m$.
@@ -3854,9 +3852,9 @@ $A_i$ are the maps of [Restriction](#restriction).
 | `Divergence(PushForward(f, D, m), D)` of the identity of Piola, $\psi$ a cell of $D$ | $m'_\psi$ of `divergence(f̂, K_j)`, with $m'$ = `transformation_law((), 1)` |
 | `Curl(PushForward(f, D, m), D)` of the identity of Piola, $\psi$ a cell of $D$ | $m'_\psi$ of `curl(f̂, K_j)`, with $m'$ = `transformation_law(("contravariant",), 1)` for $n = 3$ and `transformation_law((), 1)` for $n = 2$ |
 | `PushForward`, `Divergence` or `Curl` | Remains, read at the points of $P$ |
-| `Gradient(g, Q)`, $\psi$ a cell of $Q$ | $K^T \nabla_P(\psi^* g)$, with $K$ = `inverse_jacobian(ψ)` |
+| `Gradient(g, Q)`, $\psi$ a cell of $Q$ | $m_\psi(\nabla_P(\psi^* g))$, with $m$ = `transformation_law(("covariant",), 0)` |
 | `Gradient(g, Q)` | Remains, the gradient on $Q$ read at the points of $P$ |
-| `Normal(SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | $K^T \hat m / \lvert K^T \hat m \rvert$ of [`Normal`](#normal) |
+| `Normal(SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | $w / \lvert w \rvert$ of [`Normal`](#normal) |
 | A terminal | Remains, for the library of the terminal |
 | Any other node class | The node of the pull-backs of the operands that are expressions |
 
