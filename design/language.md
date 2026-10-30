@@ -3,7 +3,7 @@
 This note describes the smallest core language behind UFLx. The note leaves
 out implementation details, compiler algorithms and broad redesign ideas.
 The library classes of the examples and further worked examples are in
-[EXAMPLES.md](EXAMPLES.md). The note assumes knowledge of differential
+[examples/index.md](examples/index.md). The note assumes knowledge of differential
 geometry and functional analysis, and explains some advanced concepts of
 differential geometry in more detail.
 
@@ -308,7 +308,7 @@ Examples:
 | Properties | `dimension`, an `int` $n \ge 0$                                 |
 | Raises     | `TypeError` if $n$ is not an `int`, and `ValueError` if $n < 0$ |
 
-Worked examples for this chapter: [the unit simplex](EXAMPLES_LIBRARY.md#the-unit-simplex).
+Worked examples for this chapter: [the unit simplex](examples/library.md#the-unit-simplex).
 
 ## Expressions and static type
 
@@ -332,7 +332,7 @@ index. An extent is an `int` $n \ge 0$ or an `AbstractExtent`.
 `AbstractExtent` represents an extent whose value is not known during
 construction. An `AbstractExtent` is not an expression. A concrete
 `AbstractExtent` is a subclass outside the core, such as `RuntimeExtent` in the
-[cut cell example](EXAMPLES_INTEGRATION.md#integrating-over-a-cut-cell).
+[cut cell example](examples/integration.md#integrating-over-a-cut-cell).
 
 | `AbstractExtent` |                                      |
 | ---------------- | ------------------------------------ |
@@ -466,7 +466,7 @@ as an overload, such as `matrix_product` for `@` (see [Operator
 overloads](#operator-overloads)). `transpose` is in the core because the rule
 for `Inverse` of [Applying derivatives](#applying-derivatives) uses it. Every
 other construction free function belongs to a library, such as the operations
-of [Tensor algebra with `EllipsisIndex`](EXAMPLES_TENSORS.md#tensor-algebra-with-ellipsisindex).
+of [Tensor algebra with `EllipsisIndex`](examples/tensors.md#tensor-algebra-with-ellipsisindex).
 
 A construction free function that builds a fixed composition is a definition,
 not a simplification. It does not read operand structure, so it never removes
@@ -1057,7 +1057,7 @@ operand of rank 3 or more as a stack of matrices, so the core rejects such an
 operand and does not give `@` a second meaning. A contraction of higher rank
 is written in index notation, or with a free function of a library, such as
 `dot` (see [Tensor algebra with
-`EllipsisIndex`](EXAMPLES_TENSORS.md#tensor-algebra-with-ellipsisindex)).
+`EllipsisIndex`](examples/tensors.md#tensor-algebra-with-ellipsisindex)).
 
 Examples, with a scalar `a`, vectors `x` and `y` of value shape `(3,)`,
 a matrix `A` of value shape `(2, 3)` and `i = index("i")`:
@@ -1170,7 +1170,7 @@ With `X = coordinate(RD(2))`, `X[0]**Integer(2)` is accepted, but `X[0]**2`
 raises `TypeError`. The same rule applies inside containers:
 `tensor((Integer(1), Integer(2)))` is accepted, but `tensor((1, 2))` is not.
 
-Worked examples for this chapter: [transpose](EXAMPLES_TENSORS.md#transpose), [tensor algebra with `EllipsisIndex`](EXAMPLES_TENSORS.md#tensor-algebra-with-ellipsisindex).
+Worked examples for this chapter: [transpose](examples/tensors.md#transpose), [tensor algebra with `EllipsisIndex`](examples/tensors.md#tensor-algebra-with-ellipsisindex).
 
 ## Calculus on a domain
 
@@ -1620,7 +1620,7 @@ and the circulation changes sign when $\psi$ runs the other way. Where the
 cells of a decomposed domain must be oriented consistently, such as for the
 flux through a surface in $R^3$, the orientation of the topology gives a
 sign $+1$ or $-1$ for each cell (see [`AbstractTopology`](#abstracttopology)
-and [The flux through a surface](EXAMPLES_SURFACES.md#the-flux-through-a-surface)).
+and [The flux through a surface](examples/surfaces.md#the-flux-through-a-surface)).
 
 ### Points and point evaluation
 
@@ -1654,7 +1654,7 @@ c = domain_map(RD(0), tensor((third, third)), T)
 fc = integral(pull_back(f, c), RD(0))
 ```
 
-Worked examples for this chapter: [an affinely mapped triangle](EXAMPLES_INTEGRATION.md#an-affinely-mapped-triangle), [circulation along an edge](EXAMPLES_INTEGRATION.md#circulation-along-an-edge), [integrating over an edge](EXAMPLES_INTEGRATION.md#integrating-over-an-edge), [integrating over the boundary of a triangle](EXAMPLES_INTEGRATION.md#integrating-over-the-boundary-of-a-triangle), [quadrature](EXAMPLES_INTEGRATION.md#quadrature), [integrating over a cut cell](EXAMPLES_INTEGRATION.md#integrating-over-a-cut-cell), [the centroid of a triangle](EXAMPLES_INTEGRATION.md#the-centroid-of-a-triangle).
+Worked examples for this chapter: [an affinely mapped triangle](examples/integration.md#an-affinely-mapped-triangle), [circulation along an edge](examples/integration.md#circulation-along-an-edge), [integrating over an edge](examples/integration.md#integrating-over-an-edge), [integrating over the boundary of a triangle](examples/integration.md#integrating-over-the-boundary-of-a-triangle), [quadrature](examples/integration.md#quadrature), [integrating over a cut cell](examples/integration.md#integrating-over-a-cut-cell), [the centroid of a triangle](examples/integration.md#the-centroid-of-a-triangle).
 
 ## Topology
 
@@ -1775,7 +1775,7 @@ of group $i$ under the inclusion of the side tables, a map into $K_j$ (see
 The concrete mesh gives the inclusion of each cell of $S$ into the cell on
 each side. A mesh library may build the inclusion as the affine map through
 the positions of the vertices of the cell in $K_j$ (see [A static
-topology](EXAMPLES_LIBRARY.md#a-static-topology)):
+topology](examples/library.md#a-static-topology)):
 
 - For a matching facet, the position is that of the same vertex.
 - For a periodic boundary, the position is that of the vertex one period away.
@@ -1845,7 +1845,7 @@ entity meets several cells:
 - For a line through the cells of a 3D mesh, the cells of $S$ are the segments
   of the line inside one cell each. Each segment is seen from the cell of the
   line and from the cell of the mesh (see [A 1D network in a 3D
-  mesh](EXAMPLES_COUPLING.md#a-1d-network-in-a-3d-mesh)).
+  mesh](examples/coupling.md#a-1d-network-in-a-3d-mesh)).
 
 The concrete mesh computes which parts of an entity meet which cells, outside
 the language, as the concrete mesh locates the cell that contains a point (see
@@ -1882,7 +1882,7 @@ instead, such as `ReferenceSimplex(1)` for `I`.
 The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
 ```
 
-Worked examples for this chapter: [the simplex as a cell type](EXAMPLES_LIBRARY.md#the-simplex-as-a-cell-type), [a static topology](EXAMPLES_LIBRARY.md#a-static-topology).
+Worked examples for this chapter: [the simplex as a cell type](examples/library.md#the-simplex-as-a-cell-type), [a static topology](examples/library.md#a-static-topology).
 
 ## Reference cells
 
@@ -1893,12 +1893,12 @@ for a reference cell `AbstractReferenceCell`, a cell type that is also a
 coordinate domain. The core reads no vertices of a reference cell. A library
 that builds inclusions, such as from vertex positions, keeps the vertices of
 its reference cells (see [The unit simplex as a reference
-cell](EXAMPLES_LIBRARY.md#the-unit-simplex-as-a-reference-cell)).
+cell](examples/library.md#the-unit-simplex-as-a-reference-cell)).
 
 | `AbstractReferenceCell` |                                                                                                                                                            |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                 | `AbstractCoordinateDomain`, `AbstractCellType` |
-| Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](EXAMPLES_LIBRARY.md#the-unit-simplex-as-a-reference-cell)                                                   |
+| Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](examples/library.md#the-unit-simplex-as-a-reference-cell)                                                   |
 
 ### `CellMap`
 
@@ -1925,7 +1925,7 @@ library of the space of $f$ gives the value (see [Functions in a
 space](#functions-in-a-space)). Any other expression on $T$ is built from
 functions and constants, and the pull-back moves to them.
 
-Worked examples for this chapter: [the unit simplex as a reference cell](EXAMPLES_LIBRARY.md#the-unit-simplex-as-a-reference-cell).
+Worked examples for this chapter: [the unit simplex as a reference cell](examples/library.md#the-unit-simplex-as-a-reference-cell).
 
 ## Decomposed domains
 
@@ -1997,7 +1997,7 @@ on each domain of piece $j$. The pull-back of `coordinate(D)` is $\psi_j$.
 #### Examples
 
 Use the two-triangle topology of the [static topology
-example](EXAMPLES_LIBRARY.md#a-static-topology), on reference cells:
+example](examples/library.md#a-static-topology), on reference cells:
 
 ```python
 K = ReferenceSimplex(2)
@@ -2104,7 +2104,7 @@ $x$ of $D$ by `transformation_law((), 0)` is `coordinate(D)`.
 The core keeps the push-forward explicit. The arguments of a form, the
 variable and the direction of a derivative, and the keys of the data are the
 functions on $T$. A library may wrap `push_forward`, as the
-[classic FEniCS layer](EXAMPLES_FORMS.md#a-classic-fenics-layer-for-the-poisson-problem) does.
+[classic FEniCS layer](examples/forms.md#a-classic-fenics-layer-for-the-poisson-problem) does.
 
 The identity of Piola holds on each cell of $D$, with no derivative of $J$:
 
@@ -2321,7 +2321,7 @@ space. The maps below `f` may be a chain, such as a family of maps from a
 decomposed domain, pulled back by a cell of that domain and then by the
 quadrature points of the reference cell. The pass reads the chain as one
 family with all of its free indices (see [A 1D network in a 3D
-mesh](EXAMPLES_COUPLING.md#a-1d-network-in-a-3d-mesh)).
+mesh](examples/coupling.md#a-1d-network-in-a-3d-mesh)).
 
 A family whose points lie in cells of several types is not yet covered,
 because the family would need one piece for each cell type.
@@ -2466,7 +2466,7 @@ jump = pull_back(grad_f, plus)[i] - pull_back(grad_f, minus)[i]
 penalty = integral(index_sum(jump * n_E[i], (i,)) ** Integer(2), E)
 ```
 
-Worked examples for this chapter: [an interior facet integral](EXAMPLES_COUPLING.md#an-interior-facet-integral), [a Bank-Weiser error estimator](EXAMPLES_ESTIMATION.md#a-bank-weiser-error-estimator), [a fluid and a solid](EXAMPLES_COUPLING.md#a-fluid-and-a-solid), [a 1D network in a 3D mesh](EXAMPLES_COUPLING.md#a-1d-network-in-a-3d-mesh), [a deformed domain](EXAMPLES_SURFACES.md#a-deformed-domain).
+Worked examples for this chapter: [an interior facet integral](examples/coupling.md#an-interior-facet-integral), [a Bank-Weiser error estimator](examples/estimation.md#a-bank-weiser-error-estimator), [a fluid and a solid](examples/coupling.md#a-fluid-and-a-solid), [a 1D network in a 3D mesh](examples/coupling.md#a-1d-network-in-a-3d-mesh), [a deformed domain](examples/surfaces.md#a-deformed-domain).
 
 ## Function spaces
 
@@ -2949,7 +2949,7 @@ residual = action(stokes, 1, (w, r))
 Legacy UFL operations are actions and rebindings. The action on the last argument of a bilinear form is `action(f, 1, w)`. The adjoint of `form(e, (conjugate(v), u))` is `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in `v` and antilinear in `u`. The Gateaux derivative with respect to a function adds an argument (see [Gateaux derivative](#gateaux-derivative)).
 ```
 
-Worked examples for this chapter: [the Laplace-Beltrami operator](EXAMPLES_SURFACES.md#the-laplace-beltrami-operator), [the flux through a surface](EXAMPLES_SURFACES.md#the-flux-through-a-surface), [Helmholtz with a perfectly matched layer](EXAMPLES_FORMS.md#helmholtz-with-a-perfectly-matched-layer), [mixed Poisson with Raviart-Thomas elements](EXAMPLES_FORMS.md#mixed-poisson-with-raviart-thomas-elements), [dual-weighted residual error estimation](EXAMPLES_ESTIMATION.md#dual-weighted-residual-error-estimation), [a classic FEniCS layer for the Poisson problem](EXAMPLES_FORMS.md#a-classic-fenics-layer-for-the-poisson-problem).
+Worked examples for this chapter: [the Laplace-Beltrami operator](examples/surfaces.md#the-laplace-beltrami-operator), [the flux through a surface](examples/surfaces.md#the-flux-through-a-surface), [Helmholtz with a perfectly matched layer](examples/forms.md#helmholtz-with-a-perfectly-matched-layer), [mixed Poisson with Raviart-Thomas elements](examples/forms.md#mixed-poisson-with-raviart-thomas-elements), [dual-weighted residual error estimation](examples/estimation.md#dual-weighted-residual-error-estimation), [a classic FEniCS layer for the Poisson problem](examples/forms.md#a-classic-fenics-layer-for-the-poisson-problem).
 
 ### Gateaux derivative
 
@@ -3673,7 +3673,7 @@ tensor((
 because `index_sum(A[k, k], (k,))`, with a derived index `k`, is the trace for
 every extent. An operation that an `EllipsisIndex` expresses, such as
 `outer(u, v)`, needs no value shape (see
-[`EllipsisIndex`](EXAMPLES_TENSORS.md#tensor-algebra-with-ellipsisindex)).
+[`EllipsisIndex`](examples/tensors.md#tensor-algebra-with-ellipsisindex)).
 
 ### New subclasses
 
@@ -3681,7 +3681,7 @@ An abstract class states the contract that downstream subclasses fulfil
 without changing the core. Passes handle them through that contract, which
 belongs to the class, never a global registry. For example, a downstream
 `AbstractCoordinateDomain`, such as
-[`UnitSimplex`](EXAMPLES_LIBRARY.md#the-unit-simplex), provides the dimension; passes
+[`UnitSimplex`](examples/library.md#the-unit-simplex), provides the dimension; passes
 handle its coordinate function through `Coordinate`.
 
 Information that a downstream library attaches to the graph goes in one of two
@@ -3708,7 +3708,7 @@ the terminal classes of those functions.
 
 `ShapeDerivative(f, x, h)` is the derivative of $f$ when the coordinate function
 $x$ of a mesh `image(x, Q)` moves in the direction $h$ (see [A shape
-derivative](EXAMPLES_SURFACES.md#a-shape-derivative)). The pass of the extension runs
+derivative](examples/surfaces.md#a-shape-derivative)). The pass of the extension runs
 between two lowering stages, where $x$ occurs explicitly in the
 parameterisations of the cells, and lowers the node to `DirectionalDerivative(f,
 x, x, h)`, which holds the domains fixed. A function on the topology keeps its

@@ -1,10 +1,10 @@
 # The design of the UFLx core
 
-This note is the argument behind [LANGUAGE.md](LANGUAGE.md). LANGUAGE.md is the
+This note is the argument behind [language.md](language.md). language.md is the
 specification and is normative. This note explains the eight ideas the
 specification is built on, the decisions that shape every section of it, and
-what is deliberately left out. Read this note first, then use LANGUAGE.md as a
-reference. Every heading below names the sections of LANGUAGE.md that carry
+what is deliberately left out. Read this note first, then use language.md as a
+reference. Every heading below names the sections of language.md that carry
 the rules.
 
 ## AI usage statement
@@ -16,7 +16,7 @@ Firedrake, DOLFINx, UFL, FFCx, TSFC, GEM and many other packages. That said,
 Claude Code was instructed not to read any of those materials or source code
 directly. In the judgement of the authors, the quality of the notes and of
 the resulting design is substantially higher than the authors could have
-reached without an LLM. Sections of LANGUAGE.md generated entirely by the
+reached without an LLM. Sections of language.md generated entirely by the
 LLM are marked.
 
 ## In one sentence
@@ -31,14 +31,14 @@ in the graph.
 
 ## Reading guide
 
-| If you want to                               | Read in LANGUAGE.md                                   |
+| If you want to                               | Read in language.md                                   |
 | -------------------------------------------- | ----------------------------------------------------- |
 | See a whole problem written in the language  | [The tour](#the-tour) in this note                    |
 | Know what an object may and may not do       | Rules of the language                                 |
 | Look up one node class                       | The section named after the class, and the appendices |
 | Follow a form from the user to a kernel      | Core transformations, then [Kernels](#kernels) here   |
 | Add something without changing the core      | Extending the core                                    |
-| See the core exercised on small problems     | EXAMPLES.md                                           |
+| See the core exercised on small problems     | examples/index.md                                           |
 
 ## Idea 1: the graph is the form, and only passes change it
 
@@ -269,7 +269,7 @@ into that cell through the vertex positions (Restriction). Two restrictions of
 one field land on the same reference facet with the same parameter, so a jump
 is a subtraction. The outward normal of the cell on a side is the inverse
 Jacobian applied to the reference facet normal, which the vertex positions
-determine (`Normal`). The interior facet example in EXAMPLES.md follows one
+determine (`Normal`). The interior facet example in examples/index.md follows one
 `dS` form through all of this to a kernel.
 
 ## Idea 7: a function is a terminal, and a form binds it
@@ -417,13 +417,13 @@ does the following:
 
 One compiled kernel then serves every mesh with the same cell types and
 spaces, and every naming of the arguments and of the indices. Equality is
-structural ([rule 7](LANGUAGE.md#the-base-object-base)). Without the
+structural ([rule 7](language.md#the-base-object-base)). Without the
 renaming, two kernels that differ only in the names of indices would compile
 twice.
 
 ## The decisions that shape everything
 
-Each of these is argued in the named section of LANGUAGE.md. They are listed
+Each of these is argued in the named section of language.md. They are listed
 here so that a reader knows which choices are load-bearing.
 
 - **No simplification at construction**, so the graph keeps what the user

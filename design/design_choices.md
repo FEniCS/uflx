@@ -29,7 +29,7 @@ to initialise the class with defaults should be defined.
 
 ## Enforcement of the rules of the language
 
-The rules of the base object in LANGUAGE.md must be enforced to help library
+The rules of the base object in language.md must be enforced to help library
 developers. Candidate tools are `dataclass`, deterministic hashing,
 hash-consing, `WeakValueDictionary`, `ruff` and
 [`semgrep`](https://github.com/semgrep/semgrep).

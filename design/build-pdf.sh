@@ -22,14 +22,14 @@ if [[ $# -gt 0 ]]; then
   notes=("$@")
 else
   notes=(
-    LANGUAGE.md EXAMPLES.md
-    EXAMPLES_TENSORS.md
-    EXAMPLES_INTEGRATION.md
-    EXAMPLES_COUPLING.md
-    EXAMPLES_FORMS.md
-    EXAMPLES_SURFACES.md
-    EXAMPLES_ESTIMATION.md
-    EXAMPLES_LIBRARY.md
+    language.md examples/index.md
+    examples/tensors.md
+    examples/integration.md
+    examples/coupling.md
+    examples/forms.md
+    examples/surfaces.md
+    examples/estimation.md
+    examples/library.md
   )
 fi
 
@@ -75,8 +75,9 @@ fi
 for note in "${notes[@]}"; do
   name="${note%.md}$suffix"
   source="$here/$note"
+  mkdir -p "$out/$(dirname "$name")"
   contents=(--toc --toc-depth=2)
-  if [[ "$note" == EXAMPLES.md ]]; then
+  if [[ "$note" == examples/index.md ]]; then
     # The examples landing page is itself a short contents guide.
     contents=()
   fi
@@ -91,7 +92,7 @@ for note in "${notes[@]}"; do
     source="$rendered"
   fi
   pandoc "$source" \
-    --resource-path "$out:$here" \
+    --resource-path "$(dirname "$source"):$out:$here" \
     --from "$reader" \
     --standalone \
     --shift-heading-level-by=-1 \

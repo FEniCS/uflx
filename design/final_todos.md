@@ -1,4 +1,4 @@
-# Final TODOs for variational forms in LANGUAGE.md
+# Final TODOs for variational forms in language.md
 
 What the core language cannot yet express when defining variational forms, in
 the suggested order of work.
@@ -50,7 +50,7 @@ Nothing. Integrals over cells and facets use the induced density in
 1. **Rows applied again.** Decide whether `expand_pull_backs` still applies
    its rows again to each `PullBack` that a rewrite creates, now that the
    lowering stage runs to a fixed point.
-1. **Supports in the prose.** Find the prose of LANGUAGE.md that says domain
+1. **Supports in the prose.** Find the prose of language.md that says domain
    for the support of an expression, now that a support may be a topology.
 
 ## Implementation
@@ -67,8 +67,8 @@ Nothing. Integrals over cells and facets use the induced density in
    of the core.
 1. **Generated content.** Decide whether the new sections need the marker
    for LLM generated content.
-1. **Formatting.** mdformat escapes the math of EXAMPLES.md, as for
-   LANGUAGE.md.
+1. **Formatting.** mdformat escapes the math of examples/index.md, as for
+   language.md.
 
 ## Already expressible
 

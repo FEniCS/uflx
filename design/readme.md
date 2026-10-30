@@ -7,10 +7,10 @@ for variational forms, such as UFL.
 
 ## Contents
 
-Readers may want to start with the **[Worked examples](EXAMPLES.md)**.
+Readers may want to start with the **[Worked examples](examples/index.md)**.
 
-- **[Core UFLx language definition](LANGUAGE.md).**
-- **[Worked examples](EXAMPLES.md)**.
+- **[Core UFLx language definition](language.md).**
+- **[Worked examples](examples/index.md)**.
 
 ## AI usage statement
 
@@ -33,6 +33,6 @@ The site builds with [Jupyter Book](https://jupyterbook.org) into
 cd design && jupyter-book build --html   # the site
 cd design && jupyter-book start          # serve the site locally
 design/build-pdf.sh                      # every PDF
-design/build-pdf.sh LANGUAGE.md
-design/build-pdf.sh --proof LANGUAGE.md  # a copy for proofreading
+design/build-pdf.sh language.md
+design/build-pdf.sh --proof language.md  # a copy for proofreading
 ```

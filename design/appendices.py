@@ -1,4 +1,4 @@
-"""Generate the appendices of LANGUAGE.md from the sections.
+"""Generate the appendices of language.md from the sections.
 
 Run ``python3 design/appendices.py`` to rewrite the generated regions, or
 ``python3 design/appendices.py --check`` to fail when a region is stale or a
@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-LANGUAGE = HERE / "LANGUAGE.md"
+LANGUAGE = HERE / "language.md"
 
 # Classes of a language extension are not part of the core appendices.
 EXCLUDED_CHAPTERS = {"Extending the core"}
@@ -330,7 +330,7 @@ def fill(text: str, regions: dict[str, str]) -> str:
         end = rf"<!-- end generated: {re.escape(name)} -->"
         pattern = re.compile(f"({start})(.*?)({end})", re.S)
         if not pattern.search(text):
-            raise SystemExit(f"LANGUAGE.md has no generated region {name}")
+            raise SystemExit(f"language.md has no generated region {name}")
         text = pattern.sub(lambda m: m.group(1) + body + m.group(3), text)
     return text
 
@@ -357,7 +357,7 @@ def main() -> int:
         return 1 if problems else 0
     if new != text:
         LANGUAGE.write_text(new)
-        print("updated the appendices of LANGUAGE.md")
+        print("updated the appendices of language.md")
     return 0
 
 

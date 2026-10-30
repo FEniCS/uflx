@@ -6,31 +6,32 @@ project:
     - name: Matthew Scroggs
   github: https://github.com/FEniCS/uflx
   toc:
-    - file: README.md
-    - file: LANGUAGE.md
-    - file: EXAMPLES.md
+    - file: readme.md
+    - file: language.md
+    - file: examples/index.md
       children:
-        - file: EXAMPLES_TENSORS.md
-        - file: EXAMPLES_INTEGRATION.md
-        - file: EXAMPLES_COUPLING.md
-        - file: EXAMPLES_FORMS.md
-        - file: EXAMPLES_SURFACES.md
-        - file: EXAMPLES_ESTIMATION.md
-        - file: EXAMPLES_LIBRARY.md
+        - file: examples/tensors.md
+        - file: examples/integration.md
+        - file: examples/coupling.md
+        - file: examples/forms.md
+        - file: examples/surfaces.md
+        - file: examples/estimation.md
+        - file: examples/library.md
   error_rules:
     - rule: reference-target-explicit
       severity: ignore
   exclude:
     - build/**
-    - OPEN_ISSUES.md
+    - open_issues.md
     - gaps.md
-    - DESIGN.md
-    - DESIGN_CHOICES.md
-    - FINAL_TODOS.md
-    - PASSES_DRAFT.md
-    - COORDINATE_FUNCTIONS_DRAFT.md
+    - design.md
+    - design_choices.md
+    - final_todos.md
+    - passes_draft.md
+    - coordinate_functions_draft.md
 site:
   template: book-theme
   options:
+    folders: true
     logo_text: UFLx design notes
     outline_maxdepth: 2
