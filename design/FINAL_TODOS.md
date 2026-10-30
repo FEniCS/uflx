@@ -24,12 +24,6 @@ Nothing. Integrals over cells and facets use the induced density in
    such as Hermite, is read through `cell_domain(D, j, e)`, which neither the
    lowering nor the substitution of a derivative enters. Its dependence on the
    coordinate function is therefore not differentiated by `ShapeDerivative`.
-1. **Static real types.** A complex function that appears only in real-valued
-   combinations gives a misleading derivative.
-1. **Literals in derivatives.** The derivative pass produces many `Zero` and
-   `Integer(1)` terms. State whether a later pass or the form compiler folds
-   them.
-
 ## Tensors
 
 1. **`Inverse` with an `AbstractExtent`.** The requirement that $k$ is at most $n$ cannot be
