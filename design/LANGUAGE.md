@@ -12,21 +12,32 @@ languages for variational forms, such as UFL and ngsolve.
 
 ## Conventions
 
-The note uses "must" for a rule that an implementation or a library has to
-satisfy, "should" for a rule that an implementation or a library satisfies
-unless the note states a reason not to, and "may" for a choice that the note
-leaves open. A statement in the present tense, such as "the value shape is a
-`tuple`", is a rule of the language. "Not yet covered" marks a decided gap, a
-part of the language that the authors intend to specify later. "Open" marks a
-question that the authors have not decided. A "Legacy UFL" dropdown relates a
-section to legacy UFL and is not a rule.
+### Normative wording
 
-The class and free-function tables are normative. A free function or operator
-overload accepts only the types in its "Takes" column. A "Returns" entry naming
-only a node class `C` means `C(...)` of the arguments; any other entry gives the
-composition returned. The [static type table](#appendix-static-type-table) is
-also normative: it supplies the argument-space rules and the exceptions to the
-default support and scalar-type rules.
+| Wording | Meaning |
+| ------- | ------- |
+| **Must** | An implementation or library has to satisfy the rule. |
+| **Should** | An implementation or library satisfies the rule unless the note states a reason not to. |
+| **May** | A choice left open to the implementation or library. |
+| **Present tense**, such as “the value shape is a `tuple`” | A rule of the language. |
+| **Not yet covered** | A decided gap that the authors intend to specify later. |
+| **Open** | A question the authors have not decided. |
+| **Legacy UFL** dropdown | A comparison with legacy UFL, not a rule. |
+
+### Glossary
+
+| Term | Meaning |
+| ---- | ------- |
+| [Leaf](#leaves-and-subclassing) | A primitive object rather than an operation; it may have graph dependencies. |
+| [Terminal](#leaves-and-subclassing) | A leaf that is an expression, such as a literal, `Coordinate`, `Function` or `Normal`. |
+| [Construction free function](#node-class-or-free-function) | A pure free function that builds objects using static properties, without inspecting operand structure or performing validation. |
+| [Pass](#passes) | A pure free function that walks a graph after construction to compute a result or rewrite the graph. |
+| [Grammar pattern](#grammars) | A structural condition on a node and objects within a bounded number of edges, independent of pass results. |
+| [Rule pattern](#rule-tables) | A condition selecting a rewrite rule; it may inspect a pass result on an operand. |
+| [Array rank](#abstractexpression), or **rank** | The number of axes in an expression's value shape. |
+| [Arity](#argument-spaces) | The number of argument spaces of a form, counting a product-space argument once. |
+| [Structurally equal](#the-base-object-base) | Objects with the same class and equal construction arguments, as tested by `==`. |
+| [Mathematically equal](#the-base-object-base) | Expressions denoting the same value, whether or not their graphs are structurally equal. |
 
 ## Scope
 
@@ -127,13 +138,13 @@ Objects must satisfy the following rules:
 7. Equality (`==`) must be structural and return a `bool`. Whether `is` is
    structural is implementation dependent. An implementation in which `is` is
    structural must intern objects, so that equal objects are the same object.
-   Equality does not decide mathematical equivalence, so $a + b$ and $b + a$
-   are not equal. Mathematical equivalencies are applied in later graph
-   algorithms.
-8. All validation happens in the object's constructor. A free function only
-   reads derived properties and constructs objects; it never validates or
-   converts arguments. The first constructor made invalid by an argument
-   rejects it. Unless a class states otherwise, an unacceptable type or class
+   Structural equality does not decide mathematical equality: $a + b$ and
+   $b + a$ are not structurally equal. Mathematical equalities are applied
+   in later graph algorithms.
+8. All validation happens in the object's constructor. A construction free
+   function only reads derived properties and constructs objects; it never
+   validates or converts arguments. The first constructor made invalid by an
+   argument rejects it. Unless a class states otherwise, an unacceptable type or class
    raises `TypeError`, and an unacceptable value of an accepted type or class
    raises `ValueError`.
 9. A constructor has no default values, so every construction argument is
@@ -155,13 +166,16 @@ construction. Every object that exists is therefore valid.
 
 ### Leaves and subclassing
 
-Only leaves are subclassed. A leaf is an object that the core cannot build from
-other objects, such as the coordinate domain `RD(n)` or a function whose values
-an external library supplies. A terminal is a leaf that is an expression, such
-as `Coordinate`, `Function` and `Normal` of the core, or a leaf expression of a
-downstream library. An object built from other objects is a single class of the
-core or a free function that returns objects of the core, never a subclass. For
-example, a free function builds the map of an affinely mapped triangle as a
+Only leaves are subclassed. A leaf is a primitive object rather than an
+operation, such as the coordinate domain `RD(n)` or a function whose values an
+external library supplies. Leaves may have graph dependencies: a `Function`
+depends on its space, and a `Coordinate` on its domain. A terminal is a leaf
+that is an expression, such as a literal, `Coordinate`, `Function` or `Normal`
+of the core, or a terminal of a downstream library.
+
+An operation is represented by a single core class or a construction free
+function returning core objects, never a subclass. For example, a construction
+free function builds the map of an affinely mapped triangle as a
 `DomainMap`, rather than a subclass of `DomainMap`. A language extension is the
 one exception (see [Language extensions](#language-extensions)).
 
@@ -171,8 +185,8 @@ existing subclass instances. A subclass may narrow a property's return type.
 
 ### Properties and free functions
 
-A property reads and a free function builds. Properties expose stored or
-derived data, such as `value_shape` or `parameter_domain`, and never construct
+A property reads and a construction free function builds. Properties expose
+stored or derived data, such as `value_shape` or `parameter_domain`, and never construct
 objects. Operations that construct objects are pure free functions, such as
 `coordinate(P)` or `density(D)`. A class method immediately calls a free
 function.
@@ -201,7 +215,7 @@ the root (see [The base object](#the-base-object-base)). An object depends on a
 replaced node through any edge, so a pass that replaces an object also
 reconstructs an [`Index`](#index) whose label contains the object, other than
 a renamed name (see [Derived indices](#derived-indices)). Hence a
-replacement commutes with the free functions: replacing `A` by `B` in
+replacement commutes with construction free functions: replacing `A` by `B` in
 `transpose(A)` gives `transpose(B)`, with the derived indices of `B`. A pass
 may cache results for each object, because objects are immutable.
 
@@ -307,7 +321,8 @@ Worked examples for this chapter in EXAMPLES.md: [the unit simplex](EXAMPLES.md#
 
 These five derived properties form the static type (see
 [Argument spaces](#argument-spaces)). The value shape is a `tuple` of
-[extents](#extents), one per axis; `()` denotes a scalar.
+[extents](#extents), one per axis; `()` denotes a scalar. The array rank,
+written simply as rank, is the number of axes.
 
 ### Extents
 
@@ -421,14 +436,14 @@ forms](#variational-forms)).
 
 ### Node class or free function
 
-A concept must be a free function, not a node class, if the free function can
+A concept must be a construction free function, not a node class, if it can
 build the concept as one fixed composition of existing node classes for each
 static type of the arguments. The static type of an expression is the value
 shape, the free indices, the scalar type, the support and the argument
 spaces. The static type of a domain is the stored and the derived
 properties of the domain, such as the dimension of a coordinate domain or the pieces of a
-decomposed domain. A free function may read the static type to choose the
-composition, and never reads the structure of an argument, such as the class,
+decomposed domain. A construction free function may read the static type to
+choose the composition, and never reads argument structure, such as the class,
 the edges or the values. Otherwise the concept gets its own node class. A
 concept that is evaluated by a numerical algorithm that the user supplies also
 gets its own node class, even if a fixed composition exists, because the
@@ -443,19 +458,19 @@ For example, the transpose is always `component_tensor(A[k, l], (l, k))`, and
 `determinant(A)` is the Leibniz formula for each extent $n$ of a square matrix
 `A`, so both are free functions.
 
-A free function is part of the core only if a definition or a rule of the
-core uses the free function, such as `density` in [`Integral` over a
+A construction free function is part of the core only if a definition or a
+rule of the core uses it, such as `density` in [`Integral` over a
 decomposed domain](#integral-over-a-decomposed-domain) and `cell_domain` in
 [Restriction](#restriction), or if a Python operator calls the free function
 as an overload, such as `matrix_product` for `@` (see [Operator
 overloads](#operator-overloads)). `transpose` is in the core because the rule
 for `Inverse` of [Applying derivatives](#applying-derivatives) uses it. Every
-other free function belongs to a library, such as the operations of [Tensor
-algebra with `EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex).
+other construction free function belongs to a library, such as the operations
+of [Tensor algebra with `EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex).
 
-A free function that builds a fixed composition is a definition, not a
-simplification. The free function does not read the structure of the
-operands, so the free function never removes structure that the user built.
+A construction free function that builds a fixed composition is a definition,
+not a simplification. It does not read operand structure, so it never removes
+structure that the user built.
 
 A node class is part of the core only if a definition or a rule of the core
 needs the node class, or if the node class is an operation of the scalar
@@ -1067,9 +1082,9 @@ with more rows than columns.
 | Raises        | `ValueError` if a requirement fails                                                     |
 
 `Inverse(A)` is the pseudo-inverse $A^+ = (A^T A)^{-1} A^T$ of a matrix $A$
-of rank $k$, the left inverse of $A$ with $A^+ A$ the identity. For $k = n$,
-$A^+$ is the inverse matrix $A^{-1}$. If $A$ has rank less than $k$,
-`Inverse(A)` is undefined. Construction does not check the rank of $A$.
+of matrix rank $k$, the left inverse of $A$ with $A^+ A$ the identity. For
+$k = n$, $A^+$ is the inverse matrix $A^{-1}$. If $A$ has matrix rank less
+than $k$, `Inverse(A)` is undefined. Construction does not check matrix rank.
 
 A pass chooses how to evaluate `Inverse`, in closed form for a small matrix or
 by a factorisation. The definition fixes the value and not the algorithm: the
@@ -2233,7 +2248,7 @@ u_-(t) &= a_{1,0} + a_{1,2}t.
 \end{aligned}
 $$
 
-The two are equal for all $t$ if `u` is continuous at vertices 1 and 2.
+The two are mathematically equal for all $t$ if `u` is continuous at vertices 1 and 2.
 
 Listing the diagonal as `(2, 1)` changes the inclusion from `"+"` to
 $A_+(t) = (t, 1 - t)$. Both restrictions then run the other way along the
@@ -2580,7 +2595,7 @@ has arity 0, a linear form 1 and a bilinear form 2.
 A node passes on the argument spaces of an operand in which the node is linear
 or antilinear, and every other operand must have the argument spaces `()`, or
 construction raises `ValueError`. The [static type
-table](#appendix-static-type-table) gives the rule of each node class. A leaf
+table](#appendix-static-type-table) gives the rule of each node class. A terminal
 class states the argument spaces as part of the contract of the class, as the
 value shape.
 
@@ -2660,7 +2675,7 @@ is in the product.
 `(conjugate_space(dual_space(V)),)`. `dual_space(dual_space(V))` is not `V`,
 because `V` has the argument spaces `()`.
 
-A function in `dual_space(dual_space(V))` is a leaf, such as data of a library.
+A function in `dual_space(dual_space(V))` is a terminal, such as data of a library.
 A form never binds a function in a dual space (see [`Form`](#form)), so the
 canonical map from `V` is not a form of the core.
 
@@ -2848,7 +2863,7 @@ substitute `conjugate(g)` for `v`: $g$ is the value of the entry, making the
 action linear in $g$ at every position. For a tuple entry, substitute the
 members of $g$ simultaneously for the matching members.
 
-Actions on other forms follow by linearity. An action on a leaf is the pairing
+Actions on other forms follow by linearity. An action on a terminal is the pairing
 defined by its library, with one pairing per value of the free indices of $g$.
 
 #### Examples
@@ -3160,15 +3175,15 @@ questions](#new-questions)), built from rule tables as any other pass (see
 - A pass maps a source grammar into a target grammar if, for every
   expression of the source grammar, the result of the pass belongs to the
   target grammar.
-- A pattern is a condition on one expression node that reads only the node
-  and the objects within a bounded number of edges of the node. A pattern
-  never reads the result of a pass.
-- For a grammar $N$ and a set of patterns $P$, the delta $N \setminus P$ is
+- A grammar pattern is a condition on one expression node that reads only
+  the node and the objects within a bounded number of edges. It never reads
+  the result of a pass.
+- For a grammar $N$ and a set of grammar patterns $P$, the delta $N \setminus P$ is
   the set of the expressions of $N$ with no expression node that matches a
   pattern of $P$. An intermediate grammar is written as a delta of an earlier
   grammar.
 - The core normal form is the last grammar of the passes of the core, written
-  as a list of the node classes and the patterns that the grammar allows. A
+  as a list of the node classes and the grammar patterns that it allows. A
   form compiler receives the integrand layer of an expression in the core
   normal form and continues with passes of its own, and the code that
   assembles receives the form layer.
@@ -3253,7 +3268,7 @@ The passes that differentiate share one table, the derivative of each node
 class in terms of the derivatives of its operands. In the table, $\delta b$ is
 the derivative of the operand $b$ in the pass, and an operand is constant for
 the pass if the first row of the pass matches the operand. Each pass matches
-its own rows first, for the leaves of the expression, and then the rows below.
+its own rows first, for the terminals of the expression, and then the rows below.
 
 | Expression | Derivative |
 | ---------- | ---------- |
@@ -3351,7 +3366,7 @@ such as for a family of points, whose density is `Integer(1)`.
 | -------------------- | - |
 | Evaluates            | `Gradient`, `Divergence` and `Curl` |
 | Input grammar        | $N_4$, in the lowering stage |
-| Output grammar       | $N_4 \setminus G$, with $G$ the patterns of the rows below that rewrite |
+| Output grammar       | $N_4 \setminus G$, with $G$ the grammar patterns of the rows below that rewrite |
 
 A cell is a `CellMap` or a `cell_domain(D, j, e)`. The identity of Piola
 matches `Divergence(PushForward(f, D, m), D)` with $m$ =
@@ -3395,7 +3410,7 @@ coordinate domain of $P$. $\partial_j$ applies the first row that matches:
 | ---------------------- | - |
 | Evaluates              | `PullBack` |
 | Input grammar          | $N_4$, in the lowering stage |
-| Output grammar         | $N_4 \setminus R$, with $R$ the patterns of the rows below that rewrite |
+| Output grammar         | $N_4 \setminus R$, with $R$ the grammar patterns of the rows below that rewrite |
 
 The pass rewrites every `PullBack(f, ψ)`, inner pull-backs first, with the
 first row that matches, and applies the rows again to each `PullBack` that a
@@ -3550,8 +3565,8 @@ classes. Each extends `AbstractExpression`, never a concrete core class
 
 - the value of the node, as the section of a lazy node class of the core
   states the value (see [Evaluation](#evaluation)), and
-- a lowering to an equal expression of node classes of the core, if such an
-  expression exists.
+- a lowering to a mathematically equal expression of core node classes, if
+  such an expression exists.
 
 An extension node may state argument spaces, making it an operator with
 arguments. These may include dual spaces, which a core `Form` never binds.
@@ -3559,11 +3574,12 @@ The extension's action-evaluation table defines the action on each argument.
 
 #### Rule tables
 
-A pass is built from an ordered `tuple` of rule tables, each a list of
-pattern–rewrite pairs. A pattern may match the node class, operand classes,
-a condition on the static type, or the pass result on an operand. The first
-matching rule wins, in table order and then rule order. Each rule receives
-the whole pass, including every table, to apply to operands.
+A pass is built from an ordered `tuple` of rule tables, each a list of rules
+pairing a rule pattern with a rewrite. A rule pattern may match the node
+class, operand classes, a condition on the static type, or the pass result
+on an operand. The first matching rule wins, in table order and then rule
+order. Each rule receives the whole pass, including every table, to apply to
+operands.
 
 - A table of a language extension may match only some nodes. The table of
   the core comes last, and has a rule for every node class of the core.
@@ -3616,7 +3632,7 @@ pass runs between two lowering stages.
 ### New questions
 
 A downstream library asks a new question of an expression with a pass. The pass
-has a rule table for the node classes of the core and the leaf classes of the
+has a rule table for the node classes of the core and the terminal classes of the
 library. A pass that meets a node class of a language extension also has a
 table for that class before the table of the core, such as the lowering table
 (see [Rule tables](#rule-tables)).
@@ -3624,13 +3640,13 @@ table for that class before the table of the core, such as the lowering table
 For example, a library that checks physical units, such as the work of Habera
 et al.:
 
-1. Assigns a unit to leaves in a table of the library. For example, with
+1. Assigns a unit to terminals in a table of the library. For example, with
    `X = coordinate(RD(2))`, the table `{X: "m"}` states that the coordinates
-   are in metres. A leaf that is not in the table, such as a literal, is
+   are in metres. A terminal that is not in the table, such as a literal, is
    dimensionless.
 2. Writes passes, such as `units(expression, table)`, which returns the unit of
    any expression. `units` derives the unit of an expression from the units of
-   the leaves, in the same way as the core derives the value shape.
+   the terminals, in the same way as the core derives the value shape.
    `X[0] * X[1]` is in square metres. The gradient
    `gradient(X[0], RD(2))` is in metres divided
    by metres, so the gradient is dimensionless.
@@ -3640,7 +3656,7 @@ et al.:
 ### New operations
 
 A downstream library builds a new operation from existing node classes, as a
-free function. As in the core, the free function may read the static type of
+construction free function. As in the core, it may read the static type of
 the operands, such as a value shape, to choose the composition (see
 [Node class or free function](#node-class-or-free-function)). For example,
 `cross(a, b)` requires both operands to have value shape `(3,)` and returns:
@@ -3681,10 +3697,10 @@ places:
 ### New transformations
 
 A new transformation is a pass with one rule for each node class of the core
-and one rule for each leaf class that the transformation rewrites. For example,
+and one rule for each terminal class that the transformation rewrites. For example,
 the [Gateaux derivative](#gateaux-derivative) rewrites the functions that the
 derivative is taken with respect to, so the Gateaux derivative needs a rule for
-the leaf classes of those functions.
+the terminal classes of those functions.
 
 ### Shape derivatives
 
@@ -3712,7 +3728,7 @@ composition:
 
 | Node class                                       | Why a node class                                                                                              |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `Integer`, `Float`, `ImaginaryUnit`              | A number written down is a leaf                                                                               |
+| `Integer`, `Float`, `ImaginaryUnit`              | A number written down is a terminal                                                                               |
 | `Zero`                                           | No composition gives a zero with free indices without edges to other expressions                              |
 | `Sum`, `Product`, `Power`, `Absolute`             | Operations of the scalar field, which nothing else composes                                                 |
 | `Conjugate`                                      | An operation of the scalar field, and `Form` meets `conjugate(v)` of a function of any value shape as written |
@@ -3726,7 +3742,7 @@ composition:
 | `Coordinate`, `Function`, `Normal`               | Terminals: the coordinate function of a domain, a member of a space, the outward normal of a cell on a side   |
 | `Gradient`                                       | Nothing composes to differentiate                                                                             |
 | `DirectionalDerivative`                          | Nothing composes to differentiate with respect to an expression                                               |
-| `GateauxDerivative`                              | The value depends on the forms in the expression, which a free function cannot read                           |
+| `GateauxDerivative`                              | The value depends on the forms in the expression, which a construction free function cannot read                           |
 | `Integral`                                       | Nothing composes to integrate over a coordinate domain, and over a decomposed domain a pass must meet the integral as written |
 | `PullBack`                                       | Nothing composes to move an expression between domains                                                        |
 | `Form`, `Action`                                 | Binding arguments and giving an expression to an argument are not compositions                                |
