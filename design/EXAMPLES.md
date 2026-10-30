@@ -5,10 +5,11 @@ library-supplied inputs locally and uses core names without import lists.
 The code constructs symbolic expressions; numerical results require later
 passes or a solver.
 
-For an introduction to the core constructions, start with the
-[affinely mapped triangle](EXAMPLES_INTEGRATION.md#an-affinely-mapped-triangle).
-For a familiar entry point from UFL, start with the
-[FEniCS layer](EXAMPLES_FORMS.md#a-classic-fenics-layer-for-the-poisson-problem).
+Start with [Poisson](EXAMPLES_FORMS.md#poisson) for variational forms or the
+[affinely mapped triangle](EXAMPLES_INTEGRATION.md#an-affinely-mapped-triangle)
+for geometry. The
+[FEniCS layer](EXAMPLES_FORMS.md#a-classic-fenics-layer-for-the-poisson-problem)
+shows the familiar UFL syntax.
 
 ## Topics
 
