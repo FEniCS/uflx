@@ -2778,6 +2778,20 @@ actions never substitute forms into pairings. An operator with a dual-space
 argument, such as adjoint interpolation, belongs to a
 [language extension](#language-extensions) that states its argument spaces.
 
+```{dropdown} Open: operator composition for preconditioning
+A linear preconditioner maps residuals in $V^\star$ to corrections in $V$.
+An auxiliary-space construction is $P B_W P^\star$, with $P: W \to V$ and
+$B_W: W^\star \to W$. Dual arguments and typed operator composition could
+express this construction. It is open whether arbitrary operator-valued
+arguments are also useful, or composition belongs in the solver layer.
+
+A concrete finite element implementation should establish how the symbolic
+operations connect to assembly, matrix-free application and auxiliary solves
+before extending `Form` further. Preconditioner construction need not be
+linear in its operator inputs, even when its residual-to-correction action is
+linear.
+```
+
 Tuple arguments express mixed problems without mixed spaces. Their members may
 have different value shapes and domains, such as a Raviart–Thomas field and a
 discontinuous field, or a boundary Lagrange multiplier. A library may assemble
