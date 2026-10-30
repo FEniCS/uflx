@@ -32,9 +32,7 @@ default support and scalar-type rules.
 
 ### What UFLx is and isn't
 
-In one sentence:
-
-> UFLx is a typed symbolic language for writing variational forms.
+UFLx is a typed symbolic language for writing variational forms.
 
 The UFLx core language, henceforth the core, should not use finite element or
 numerical analysis terminology. Differential geometry and functional analysis
@@ -53,9 +51,8 @@ analysis or differential geometry. The core should therefore contain only the
 concepts and relations needed to write variational forms as code for later
 algorithmic transformation.
 
-A UFLx program is ordinary Python code that constructs symbolic objects and
-connects them through a graph. The result is usually a variational form, such
-as a bilinear form, a linear form or a functional.
+A UFLx program is ordinary Python code that builds a graph of symbolic objects,
+usually a bilinear form, linear form or functional.
 
 UFLx does not handle concrete data or numerical algorithms, such as meshes,
 boundary markers, values of coefficients or assembly procedures. Those belong
@@ -74,11 +71,10 @@ provides the concrete data behind each leaf node.
 - The mathematical fields state variational problems uniformly across
   geometric dimensions. Special cases for particular dimensions do not exist
   in the mathematics, so they should not exist in the core.
-- The core does not contain algorithms for the convenience of a form
-  compiler. A form compiler states the forms that the form compiler accepts.
-  A pass outside the core must lower a form to those forms and must produce
-  only node classes of the core and of the
-  [language extensions](#language-extensions) that the form compiler accepts.
+- The core contains no algorithms solely for a form compiler's convenience.
+  Each compiler states the forms it accepts. A pass outside the core must
+  lower to those forms, using only core node classes and
+  [language extensions](#language-extensions) accepted by that compiler.
   For example, a basic form compiler might only accept integrals over a
   reference cell, such as a unit simplex, as in each cell term of a legacy UFL
   `dx` integral.
@@ -91,13 +87,10 @@ TSFC lowers a UFL form to GEM, which repeats much of the algebra of UFL, partly 
 
 ### The base object `Base`
 
-The base object in UFLx must be extended by all objects that are included in
-the graph. The graph is a directed acyclic graph (DAG). An edge of the graph
-means "is defined from". The note writes "edge" for an edge of the graph, and
-"edge of a triangle" or "edge of a cell" for the geometric edge.
-
-Everything needed to define the variational problem must be recoverable from
-the graph. No information is held outside of the graph.
+Every object in the directed acyclic graph (DAG) must extend `Base`. A graph
+edge means "is defined from"; geometric edges are explicitly called edges of
+a triangle or cell. Everything defining the variational problem must be
+recoverable from the graph.
 
 | `Base`     |                                                                    |
 | ---------- | ------------------------------------------------------------------ |
@@ -137,14 +130,12 @@ Objects must satisfy the following rules:
    Equality does not decide mathematical equivalence, so $a + b$ and $b + a$
    are not equal. Mathematical equivalencies are applied in later graph
    algorithms.
-8. All validation happens in the object's constructor. A free function never
-   validates or converts arguments. A free function only reads derived properties of
-   arguments and constructs objects. An invalid argument is rejected by the
-   constructor of the first object that the argument makes invalid. Unless the
-   section of a class states otherwise, the constructor raises `TypeError` for
-   an argument of a type or a class that the constructor does not accept, and
-   `ValueError` for an argument of an accepted type or class with a value that
-   the constructor does not accept.
+8. All validation happens in the object's constructor. A free function only
+   reads derived properties and constructs objects; it never validates or
+   converts arguments. The first constructor made invalid by an argument
+   rejects it. Unless a class states otherwise, an unacceptable type or class
+   raises `TypeError`, and an unacceptable value of an accepted type or class
+   raises `ValueError`.
 9. A constructor has no default values, so every construction argument is
    written at construction.
 10. A concrete class states an `identifier`, a `str` with the public name of
@@ -174,34 +165,24 @@ example, a free function builds the map of an affinely mapped triangle as a
 `DomainMap`, rather than a subclass of `DomainMap`. A language extension is the
 one exception (see [Language extensions](#language-extensions)).
 
-A concrete class of the core is final. A library subclasses only an abstract
-class of the core, such as `AbstractCoordinateDomain`, so a pass that
-dispatches on a concrete class of the core never meets a subclass of the
-class.
-
-A parent class never constructs a subclass. A property of a parent class may
-return an object whose class is a subclass, because the property only
-returns an object that already exists. A subclass may narrow the return
-type of a property.
+Concrete core classes are final; libraries subclass only abstract classes.
+A parent class never constructs a subclass, though its properties may return
+existing subclass instances. A subclass may narrow a property's return type.
 
 ### Properties and free functions
 
-A property reads and a free function builds. Data that an object stores, or
-derives from the class and the construction arguments of the object, is a
-property of the object, such as `value_shape` of an expression or
-`parameter_domain` of a domain. A property never constructs an object. Any
-operation that constructs objects is a pure free function, such as
-`coordinate(P)` or `density(D)`. A class method, where
-needed, immediately calls a free function.
+A property reads and a free function builds. Properties expose stored or
+derived data, such as `value_shape` or `parameter_domain`, and never construct
+objects. Operations that construct objects are pure free functions, such as
+`coordinate(P)` or `density(D)`. A class method immediately calls a free
+function.
 
-A constructor takes the construction arguments by position only, in order, and
-raises `TypeError` for an argument by name. So an object has one `tuple` of
-construction arguments. A free function may take arguments by name, such as
-`domain_map(P=T, psi=psi, Q=RD(2))`.
+Constructor arguments are positional only; a named argument raises `TypeError`.
+Free functions may take named arguments, such as `domain_map(P=T, psi=psi, Q=RD(2))`.
 
-A stored property returns a construction argument. A derived property returns
-data derived from the class and the construction arguments. A concrete class
-has the derived properties of the abstract classes of the concrete class.
+A stored property returns a construction argument; a derived property depends
+on the class and those arguments. Concrete classes inherit the derived
+properties of their abstract classes.
 
 ### No simplification during construction
 
@@ -213,12 +194,10 @@ later, the user may need `(a + b)` evaluated before `c` is added.
 
 ### Passes
 
-A pass is a pure free function that walks a graph after construction of the
-graph. The result of a pass depends only on the arguments of the pass. A pass
-returns a value, such as a unit, or a new graph. A pass builds a new graph by
-constructing an object for each node that the pass replaces, and by
-reconstructing every object that depends on a replaced node, up to the root
-(see [The base object](#the-base-object-base)). An object depends on a
+A pass is a pure free function that walks a graph after construction and
+returns a value, such as a unit, or a new graph. To build a new graph, it
+constructs replacement nodes and reconstructs every dependent object up to
+the root (see [The base object](#the-base-object-base)). An object depends on a
 replaced node through any edge, so a pass that replaces an object also
 reconstructs an [`Index`](#index) whose label contains the object, other than
 a renamed name (see [Derived indices](#derived-indices)). Hence a
@@ -252,13 +231,10 @@ units.
 
 ## Domains
 
-The function spaces and operators of UFLx are defined on a domain and need the
-topological structure of the domain, which is the dimension, boundary and
-decomposition into cells of the domain. The core needs no metric beyond the
-Euclidean metric of the ambient coordinate domain, which gives the gradient on
-a domain of lower dimension (see [`Gradient`](#gradient)), the density of an
-integral (see [Jacobian and density](#jacobian-and-density)) and the unit
-normal (see [`Normal`](#normal)).
+Function spaces and operators use a domain's dimension, boundary and cell
+decomposition. The only metric is the ambient Euclidean metric, which defines
+the tangential [gradient](#gradient), integration [density](#jacobian-and-density)
+and unit [normal](#normal).
 
 ### `AbstractDomain`
 
@@ -266,9 +242,9 @@ normal (see [`Normal`](#normal)).
 A domain is a coordinate domain, a leaf that a library supplies (see
 [`AbstractCoordinateDomain`](#abstractcoordinatedomain)), or a decomposed
 domain, the union of the images of families of domain maps that the core builds
-(see [`DecomposedDomain`](#decomposeddomain)). Every node class that takes a
-domain accepts either kind, and the section of the node class gives the meaning
-of the node on a decomposed domain through the pieces of the decomposed domain.
+(see [`DecomposedDomain`](#decomposeddomain)). Every node class taking a
+domain accepts either kind; its section defines its value on a decomposed
+domain through the pieces.
 
 | `AbstractDomain` |                                                                             |
 | ---------------- | --------------------------------------------------------------------------- |
@@ -276,12 +252,10 @@ of the node on a decomposed domain through the pieces of the decomposed domain.
 | Provides         | `dimension`, an `int` $k \ge 0$, and `ambient_domain`, an `AbstractDomain` |
 | Defined by       | `AbstractCoordinateDomain` and `DecomposedDomain`                           |
 
-The ambient domain of a domain $D$ is the domain whose coordinates name the
-points of $D$. The ambient domain of a coordinate domain is the coordinate
-domain itself. The ambient domains of $D$ are `D.ambient_domain`, the ambient
-domain of `D.ambient_domain`, and so on. The *ambient coordinate domain* of
-$D$ is the first coordinate domain among the ambient domains of $D$, with the
-dimension $n \ge k$.
+The ambient domain of $D$ supplies the coordinates naming its points. The
+first coordinate domain reached by following `ambient_domain` repeatedly is
+the *ambient coordinate domain*, of dimension $n \ge k$. A coordinate domain
+is its own ambient domain.
 
 ### `AbstractCoordinateDomain`
 
@@ -331,11 +305,9 @@ Worked examples for this chapter in EXAMPLES.md: [the unit simplex](EXAMPLES.md#
 | Extends              | `Base`                                                                               |
 | Provides             | `value_shape`, `free_indices`, `scalar_type`, `support`, `argument_spaces` |
 
-Every `AbstractExpression` derives the value shape, the free indices, the
-scalar type, the support and the [argument spaces](#argument-spaces) of the
-expression. The value shape is
-a `tuple` of [extents](#extents), one for each axis. An expression with value
-shape `()` is a scalar.
+These five derived properties form the static type (see
+[Argument spaces](#argument-spaces)). The value shape is a `tuple` of
+[extents](#extents), one per axis; `()` denotes a scalar.
 
 ### Extents
 
@@ -387,8 +359,7 @@ tensor, as `i` and `j` in `A[i, j]` (see [Index notation](#index-notation)).
 | Properties     | `label`, a `str` for a user index, or a `tuple` that contains graph objects for a derived index |
 | Raises         | `TypeError` if the label is neither a `str` nor a `tuple`                                       |
 
-An `Index` has no extent of its own. An `Index` takes the extent of the axis
-that the `Index` indexes.
+An `Index` takes its extent from the indexed axis; it has no extent of its own.
 
 A user index has a `str` label, which the user chooses. Two free occurrences
 of one `Index` in one scope are the same index, so an index that the user
@@ -1353,12 +1324,9 @@ binding](#substitution-and-binding)).
 | ------------- | -------- | ----- | ------- |
 | `directional_derivative(f, x, a, h)` | | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple` | `DirectionalDerivative(f, x, a, h)` |
 
-The variable is a function, and the point is any expression of the value shape
-of the function, so the derivative of an expression of a symbol $x$ at a point
-$a$ is the derivative of a function of $x$ at $a$. The substitution replaces only the occurrences of $x$, so
-`DirectionalDerivative` is a partial derivative. A `tuple` variable gives the
-derivative in all of its members at once, at the point $a$ of all the
-members, such as for the unknowns of a mixed problem.
+This is a partial derivative: substitution replaces only occurrences of $x$.
+The point $a$ need not be a function. A `tuple` variable differentiates jointly
+in its members, as for the unknowns of a mixed problem.
 
 The substitution does not enter domains, so the derivative holds the geometry
 fixed. A shape derivative, with respect to the coordinates of a mesh, is a
@@ -1427,10 +1395,8 @@ $$
 
 For $n = 0$, the integral is the value of $f$ at the single point of $R^0$.
 
-For a decomposed domain $P$, `Integral(f, P)` is the integral of $f$ against
-the density that the pieces induce, as the sum of the integrals over the
-pieces (see [`Integral` over a decomposed
-domain](#integral-over-a-decomposed-domain)).
+On a decomposed domain, the integral sums the integrals over its pieces with
+their induced densities (see [the expansion](#integral-over-a-decomposed-domain)).
 
 An array-valued $f$ integrates component by component. A later pass might
 evaluate an `Integral` over a coordinate domain, for example by quadrature.
@@ -1491,6 +1457,7 @@ Examples:
   and $n = 2$. $P$ is the unit interval in $R^1$, and
   $\psi(X) = (1 - X_0, X_0)$. $Q$ is `RD(2)` for the hypotenuse in the plane,
   and `UnitSimplex(2)` for the hypotenuse in the unit triangle.
+
 A curved example is the paraboloid, with $k = 2$ and $n = 3$:
 
 ```python
@@ -1567,6 +1534,7 @@ E = domain_map(S, pull_back(psi, e), RD(2))
 
 - A later pass evaluates `fe` to $(1 - t) t$, and the parameterisation of `E`
   to $(3 - t, 1 + 2 t)$.
+
 Changing the ambient domain makes this pull-back invalid: `f` has support
 `T`, not `RD(2)`.
 
@@ -1606,12 +1574,9 @@ value shape `(n, 0)`, out of an integral over points.
 $J^T J$ is `component_tensor(index_sum(J[l, a] * J[l, b], (l,)), (a, b))`, with
 derived indices.
 
-The core writes $\det J$ only as `determinant(jacobian(D))` and $K$ only as
-`inverse_jacobian(D)`, so every use of $\det J$ or $K$ for one $D$ is one
-expression, and a pass that computes the geometry of a cell once computes
-each once. A pass or a library that needs $J$, $\det J$ or $K$, such as for
-a [transformation law](#transformationlaw), uses `jacobian(D)`,
-`determinant(jacobian(D))` and `inverse_jacobian(D)`.
+The core, passes and libraries use `jacobian(D)`, `determinant(jacobian(D))`
+and `inverse_jacobian(D)` for $J$, $\det J$ and $K$. These fixed constructions
+let a pass identify and evaluate each geometric quantity once per $D$.
 
 ### Concept: integral over a domain
 
@@ -1729,9 +1694,8 @@ expression and the domain of a space, as the cell complex of its cells (see
 [`CellMap`](#cellmap)). A topology is not an `AbstractDomain`, so
 `Coordinate`, `Gradient` and `Integral` reject a topology.
 
-Two topologies are the same topology only if the two topologies are equal as
-base objects, so a concrete `AbstractTopology` stores the arguments that
-identify the topology, such as a label.
+Topology identity is structural: a concrete `AbstractTopology` stores its
+identifying arguments, such as a label.
 
 The free function `cell_index(T, j)` returns the derived index
 `Index(("uflx.cell_index", T, j, 0))` for the cells of type $j$, numbered from
@@ -1742,8 +1706,8 @@ and between topologies, even if the numbers of cells are equal.
 | ------------- | -------- | ----- | ------- |
 | `cell_index(T, j)` | | `T: AbstractTopology`, `j: int` | `Index` |
 
-By the rules of [free indices](#free-indices), an expression with the free
-index `cell_index(T, j)` has one value for each cell of type $j$.
+An expression with the free index `cell_index(T, j)` has one value per cell of
+type $j$.
 
 Examples:
 
@@ -1987,13 +1951,11 @@ in which a family of points lies.
 | ------------- | -------- | ----- | ------- |
 | `image(x, Q)` | | `x: AbstractExpression`, `Q: AbstractDomain` | `DecomposedDomain` with the pieces `domain_map(K_j, pull_back(x, cell_map(T, j)), Q)` |
 
-A mesh is `image(x, Q)`, the image of a topology $T$ under $x$, with $x$ any
-expression on $T$ of value shape `(n,)` for the dimension $n$ of the ambient
-coordinate domain of $Q$. Piece $j$ is
-`domain_map(K_j, pull_back(x, cell_map(T, j)), Q)`, for every cell type $K_j$
-of $T$. The `topology` of `image(x, Q)` is $T$ and the `coordinate_function`
-is $x$. Every other decomposed domain has the `topology` and the
-`coordinate_function` `None`.
+A mesh is `image(x, Q)`, where $x$ is an expression on a topology $T$ with
+value shape `(n,)` for the ambient coordinate dimension of $Q$. The construction
+above gives one piece per cell type $K_j$. Its `topology` is $T$ and its
+`coordinate_function` is $x$; both properties are `None` for every other
+decomposed domain.
 
 Deformed surfaces, isogeometric patches and analytic maps are meshes of
 coordinate functions. Continuity across groups is a property of the space of
@@ -2173,12 +2135,10 @@ The restriction of $f$ to group $i$ from the side $s$ is
 `pull_back(pull_back(f, B_i), A_i)`, an expression on $F_i$ with the free index
 `e`.
 
-The inclusions of all sides parameterise the cell $e$ in the same way (see
-[Side tables](#side-tables)). The restrictions from two sides are therefore
-expressions on the same $F_i$, with the same coordinates, and the difference
-of the two restrictions is the jump. A cell of $S$ with more
-than two sides, such as an edge where three triangles meet, has no jump, and a
-form uses the restriction from each side.
+All sides parameterise cell $e$ in the same way (see [Side tables](#side-tables)).
+Two restrictions therefore share $F_i$ and its coordinates, and their difference
+is the jump. A cell with more than two sides has no jump; a form uses each
+side's restriction separately.
 
 #### `SideMap`
 
@@ -2533,11 +2493,9 @@ The pull-back of a function on a mesh by any other domain map into the mesh,
 such as a family of points, is rewritten through these (see [A family of points
 in a mesh](#a-family-of-points-in-a-mesh)).
 
-The core does not represent the polynomials, the degrees of freedom or the
-basis of $V$, which belong to the concrete subclass. Two spaces are the same
-space only if the two spaces are equal as base objects. A concrete
-`AbstractFunctionSpace` therefore stores the arguments that identify the
-space, such as the finite element.
+The concrete subclass owns the polynomials, degrees of freedom and basis of
+$V$, and stores the arguments identifying the space, such as the finite
+element. Space identity is structural.
 
 #### Spaces of constants
 
@@ -2547,10 +2505,9 @@ single array with the value shape and the scalar type of $V$.
 
 The integrals of a form decide the cells on which a constant acts.
 
-A space of constants is needed for a constant unknown, such as a Lagrange
-multiplier, because an argument comes from a space. Constant data needs no
-space. An expression with no support, such as a literal or an array that a
-kernel receives, is already a constant.
+A constant unknown, such as a Lagrange multiplier, needs a space because form
+arguments come from spaces. Constant data needs none: a literal or kernel-input
+array with no support is already a constant.
 
 #### Mixed and Sobolev spaces
 
@@ -2594,8 +2551,8 @@ The label identifies the function, so two functions are the same only if the
 spaces and the labels are equal. A function in a [dual space](#dualspace) is an
 antilinear form, such as a known load.
 
-A function is not an argument or a coefficient by itself. Whether a function is
-an argument of a form is stated by the form (see [`Form`](#form)).
+The [form](#form), rather than the function, decides whether a function is an
+argument or fixed data.
 
 For a scalar space `V` on a topology `T`, `u = function(V, "u")` has support
 `T` and value shape `()`.
@@ -2606,22 +2563,19 @@ The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functio
 
 ## Variational forms
 
-A variational form is an expression that is abstracted over some functions, the
-arguments, as a multilinear map is over the arguments of the map. A form binds
-the arguments, as a [`ComponentTensor`](#componenttensor-and-indexsum) binds
-indices, and an action gives a function to an argument of a form, as an
-[`Indexed`](#indexed) gives an index to an axis.
+A variational form abstracts an expression over functions to make a multilinear
+map. It binds functions as [`ComponentTensor`](#componenttensor-and-indexsum)
+binds indices; an action supplies an argument as [`Indexed`](#indexed) supplies
+an index to an axis.
 
 ### Argument spaces
 
-Every `AbstractExpression` derives the argument spaces, a `tuple` with the
-space of each argument of a form, in order of position, and `()` for an
-expression that is not a form. The space of an argument is an
-`AbstractFunctionSpace` for an argument of one function, or a `tuple` of at
-least two spaces for an argument of a `tuple` of functions, the product of the
-spaces. The arity is the number of
-argument spaces. A functional has the arity 0, a linear form the arity 1 and a
-bilinear form the arity 2, whatever the number of functions in each argument.
+Every expression derives a `tuple` of argument spaces in position order, or
+`()` for a non-form. Each entry is an `AbstractFunctionSpace` for one function,
+or a `tuple` of at least two spaces for a product-space argument.
+
+Arity counts argument spaces, not functions within each argument: a functional
+has arity 0, a linear form 1 and a bilinear form 2.
 
 A node passes on the argument spaces of an operand in which the node is linear
 or antilinear, and every other operand must have the argument spaces `()`, or
@@ -2630,14 +2584,11 @@ table](#appendix-static-type-table) gives the rule of each node class. A leaf
 class states the argument spaces as part of the contract of the class, as the
 value shape.
 
-A form is linear in an argument with the space $V$, and antilinear in an
-argument with the space `conjugate_space(V)` (see
-[`ConjugateSpace`](#conjugatespace)). The form states the linearity when the
-form binds the argument (see [`Form`](#form)).
+Binding an argument declares linearity in $V$ or antilinearity in
+`conjugate_space(V)` (see [`Form`](#form)).
 
-The argument spaces are static, as the value shape is, so a form with a
-wrong arity is rejected during construction, and a load that is antilinear in
-`v` and a form that is linear in `v` do not add.
+Static argument spaces let construction reject incompatible arities and sums
+of linear and antilinear forms.
 
 ### `ConjugateSpace`
 
@@ -2683,22 +2634,18 @@ of an argument space is `conjugate_space(V)` for a space $V$ and $V$ for
 
 #### Antilinear forms
 
-A function in `dual_space(S)` is an antilinear form on $S$, a linear form on
-`conjugate_space(S)` (see [`ConjugateSpace`](#conjugatespace)). A form is
-antilinear in the same way in an argument bound as `conjugate(v)`, such as the
-argument $v$ of $\int u \bar v$. A residual bound as `(conjugate(v),)` and an
-assembled load therefore have the same argument spaces, and the difference of
-the two is a form.
+A function in `dual_space(S)` is antilinear on $S$ and linear on its conjugate
+space. A residual bound as `(conjugate(v),)` and an assembled load therefore
+have the same argument spaces and can be subtracted.
 
 The space of linear forms on a complex $S$ is
 `dual_space(conjugate_space(S))`, with the argument spaces `(S,)`. The core
 therefore fixes no convention on the argument in which a form is antilinear.
 
-The pairing of a function `l` in `dual_space(S)` with a function `w` in $S$ is
-`action(l, 0, conjugate(w))`, because the argument of `l` is in
-`conjugate_space(S)` and every action is linear in its argument (see
-[`Action`](#action)). The library that provides the values of `l` evaluates
-the pairing.
+For `l` in `dual_space(S)` and `w` in $S$, the pairing is
+`action(l, 0, conjugate(w))`: the argument space of `l` is conjugated, and
+[actions](#action) are linear in their arguments.
+The library supplying `l` evaluates the pairing.
 
 #### The dual of a product
 
@@ -2762,44 +2709,37 @@ The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in
 | Static type                   | That of the expression, with the argument spaces of the expression followed by the space $V$ of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
 | Raises                        | `TypeError` for an entry that is not a `Function`, a `Conjugate` of a `Function` or a `tuple` of these, and `ValueError` for a repeated function, a function with argument spaces or a `tuple` of fewer than two members |
 
-The position
-of an argument is the index of the entry in `arguments`. The entry states the
-linearity: for an entry `v`, the expression is linear in `v`, and for an entry
-`conjugate(v)`, the expression is linear in $\bar v$, so antilinear in `v`,
-as in $\int u \bar v$ (see [`ConjugateSpace`](#conjugatespace)). For a real
-space, the two entries give the same argument space.
-For a `tuple` entry, the expression is linear in the members jointly, so a term
-may depend on one member only. Construction does not check the linearity, and
-a pass may check the linearity (see [Checking linearity](#checking-linearity)).
-Every other function in the expression is fixed, so one function may be an argument
-of one form and fixed in another. The expression may itself be a form, and the
-form then binds more arguments, after the arguments of the expression, as the
-[Gateaux derivative](#gateaux-derivative) does. No pass of the core flattens
-`Form(Form(e, a), b)` into `Form(e, a + b)`, because a product of forms would
-need a reordering of the arguments, so the code that assembles reads the
-order of the arguments from the static type. A form never binds a function in a dual space,
-so forms are first order, and an action never substitutes a form into a pairing.
-An operator with an argument in a dual space, such as the adjoint of an
-interpolation, is a node class of a language extension that states the
-argument spaces (see [Language extensions](#language-extensions)). The scope of a bound function is lexical, as
-the scope of an index is (see [`ComponentTensor` and
-`IndexSum`](#componenttensor-and-indexsum)): an occurrence of a function refers
-to the innermost enclosing `Form` that binds the function, and is fixed
-otherwise.
+An argument's position is its index in `arguments`. An entry `v` declares
+linearity in `v`; `conjugate(v)` declares linearity in $\bar v$, hence
+antilinearity in `v`. They give the same argument space for a real space.
+A `tuple` entry declares joint linearity in its members, so a term may depend
+on only one member. Construction does not check these declarations; a
+[linearity pass](#checking-linearity) may do so.
 
-An argument that is a `tuple` of functions gives the forms of mixed problems
-with no mixed space. Each member is a function in an ordinary space, so the
-members may have different value shapes, such as a Raviart–Thomas and a
-discontinuous function, and different domains, such as a Lagrange multiplier
-on the boundary. A library may assemble the arguments as one system or in
-blocks. The block of a member of each argument is the form of the expression
-with the other members replaced by `Zero`.
+Binding is lexical: an occurrence refers to the innermost enclosing `Form`
+that binds the function, and is fixed otherwise. Thus a function may be an
+argument in one form and fixed in another. Substitution renames bound functions
+to avoid capture (see [Substitution and binding](#substitution-and-binding)).
 
-The expression may have any value shape and support. A form whose expression is
-a field is a linear operator. The support is that of the expression, so a form
-of integrals has no support, although the arguments have one. A substitution
-renames a bound argument to avoid capture, as for indices (see [Substitution and
-binding](#substitution-and-binding)).
+The expression may itself be a form; new arguments follow its existing
+arguments, as in a [Gateaux derivative](#gateaux-derivative). No core pass
+flattens `Form(Form(e, a), b)` into `Form(e, a + b)`, because products of forms
+would require argument reordering. Assembly reads argument order from the
+static type.
+
+Core forms are first order: they never bind a function in a dual space, and
+actions never substitute forms into pairings. An operator with a dual-space
+argument, such as adjoint interpolation, belongs to a
+[language extension](#language-extensions) that states its argument spaces.
+
+Tuple arguments express mixed problems without mixed spaces. Their members may
+have different value shapes and domains, such as a Raviart–Thomas field and a
+discontinuous field, or a boundary Lagrange multiplier. A library may assemble
+one system or separate blocks. A block retains one member of each argument
+and replaces the other members by `Zero`.
+
+The expression may have any value shape and support. A form of a field is a
+linear operator; a form of integrals has no support, even if its arguments do.
 
 Let `u` and `v` be scalar functions in a space `V` on `D`:
 
@@ -2891,27 +2831,25 @@ Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
 - For a `tuple` of spaces, $g$ is a `tuple` with one such member per space.
 - An `Index` free in both $f$ and $g$ has the same extent in both.
 
-$g$ may have free indices, and is then a family of arguments, one for each
-value of the free indices, as a domain map with free indices is a family of
-domains (see [`DomainMap`](#domainmap)). The action is then the family of
-actions. The free indices of $g$ are the free indices of the members of a
-`tuple`.
+Free indices in $g$ give a family of actions, one per index value. For a
+`tuple` $g$, its free indices are those of its members.
 
-For a `position` below the arity $n$ of $e$, the value of `Action(Form(e,
-arguments), position, g)` is `Form(Action(e, position, g), arguments)`.
-Otherwise, with the entry at `position` the entry at `position - n` of
-`arguments`, the value of `Action(Form(e, arguments), position, g)` is `Form(e,
-others)`, with `others` the entries other than the entry at `position`, and with
-$g$ substituted for the argument at `position` (see [Substitution and
-binding](#substitution-and-binding)). A function of `others` that is free in $g$
-is therefore renamed. If no entries remain, the value is $e$ with $g$
-substituted. For an entry `conjugate(v)`, `conjugate(g)` is substituted for `v`,
-so $g$ is the value of the entry and the action is linear in $g$ at every
-position. For a `tuple` entry, the members of $g$ are substituted simultaneously
-for the matching members. The action of any other form is defined by linearity,
-and the action on a leaf, such as a function in a dual space, is the pairing,
-which the library of the leaf states, with one pairing for each value of the
-free indices of $g$.
+Let $p$ be `position` and $n$ the arity of $e$. The value of
+`Action(Form(e, arguments), p, g)` is determined by the argument's position:
+
+- For $p < n$, it is `Form(Action(e, p, g), arguments)`.
+- Otherwise, remove entry $p - n$ of `arguments` and substitute $g$ for that
+  argument in $e$. Bind the remaining entries in a `Form`, or return the
+  substituted $e$ if none remain.
+
+Substitution renames a remaining bound function if it is free in $g$ (see
+[Substitution and binding](#substitution-and-binding)). For `conjugate(v)`,
+substitute `conjugate(g)` for `v`: $g$ is the value of the entry, making the
+action linear in $g$ at every position. For a tuple entry, substitute the
+members of $g$ simultaneously for the matching members.
+
+Actions on other forms follow by linearity. An action on a leaf is the pairing
+defined by its library, with one pairing per value of the free indices of $g$.
 
 #### Examples
 
@@ -3061,25 +2999,24 @@ symmetry.
 
 ## Evaluation
 
-A lazy node class is a node class whose section states the value of the node,
-and which a pass may rewrite as an expression of other node classes with that
-value. The lazy node classes of the core are `GateauxDerivative`, `Action`,
+A lazy node class states its value in its section. A pass may rewrite it as
+an expression of other node classes with that value. The lazy classes are
+`GateauxDerivative`, `Action`,
 `DirectionalDerivative`, `Integral` over a decomposed domain, `PullBack`,
 `Gradient`, `Divergence`, `Curl` and `PushForward`.
 
-A pass that rewrites a node keeps the value of the node and the static type of
-the node, with the free indices possibly in another order, never simplifies, and
-substitutes with the renaming of [Substitution and
-binding](#substitution-and-binding). The one exception to the static type is
-`Zero`, which is real and has no support: where a rewrite produces `Zero`, the
-scalar type of the result may be real for a complex node, and the result may
-have no support for a node with a support. The value is the same, because real
-arithmetic embeds in complex arithmetic and a constant is a field on every
-support. Because the pass never simplifies, a term that is zero stays in the
-graph, and zero times an undefined value is undefined. So a rule never
-multiplies a term that may be zero by an expression that may be undefined where
-the rewritten node is defined, such as the logarithm in the derivative of a
-power (see [Derivatives of the node classes](#derivatives-of-the-node-classes)).
+A rewrite preserves value and static type, except for free-index order, and
+uses the renaming of [Substitution and binding](#substitution-and-binding).
+The static-type exception is `Zero`: a rewrite that produces `Zero` may
+replace a complex scalar type by real, or remove support. This preserves
+value because real arithmetic embeds in complex arithmetic and a constant
+is a field on every support.
+
+Passes never simplify, so zero terms remain in the graph, and zero times an
+undefined value is undefined. A rule must not introduce a product whose
+factor may be undefined where the original node is defined, even if another
+factor may be zero. The logarithm in a power derivative is one such case
+(see [Derivatives of the node classes](#derivatives-of-the-node-classes)).
 
 `Action` and `DirectionalDerivative` are real-linear, and each commutes with
 the following node classes in the listed operands, when the other operands do
@@ -3518,11 +3455,9 @@ $A_i$ are the maps of [Restriction](#restriction).
 ### The core normal form
 
 The core normal form is $N_5 = N_4 \setminus (G \cup R)$, the output grammar of
-the lowering stage. Every expression node of an expression in the core normal
-form is an instance of a concrete class of the core or a terminal of a
-downstream library. The table gives every node class that the core normal
-form allows, with the condition on each, and no other node class occurs in
-the core normal form:
+the lowering stage. Its expression nodes are instances of concrete core
+classes or downstream terminals. The following table lists all allowed node
+classes and their conditions:
 
 | Chapter | Node class | Allowed in the core normal form |
 | ------- | ---------- | ------------------------------- |
@@ -3609,53 +3544,43 @@ In legacy UFL, properties are stored on the node classes, and the set of propert
 
 ### Language extensions
 
-A language extension adds node classes that are not leaves, in a package
-outside the core. A node class of a language extension subclasses
-`AbstractExpression`, never a concrete class of the core (see [Leaves and
-subclassing](#leaves-and-subclassing)). Each node class of a language
-extension provides, as part of the class:
+A language extension is a package outside the core that adds non-leaf node
+classes. Each extends `AbstractExpression`, never a concrete core class
+(see [Leaves and subclassing](#leaves-and-subclassing)), and provides:
 
 - the value of the node, as the section of a lazy node class of the core
   states the value (see [Evaluation](#evaluation)), and
 - a lowering to an equal expression of node classes of the core, if such an
   expression exists.
 
-A node class of a language extension may state argument spaces, as a function
-in a dual space does, so that the node is an operator with arguments. The
-argument spaces may include a dual space, which a `Form` of the core never
-binds. The table of the extension for a pass that evaluates actions gives the
-action on each argument.
+An extension node may state argument spaces, making it an operator with
+arguments. These may include dual spaces, which a core `Form` never binds.
+The extension's action-evaluation table defines the action on each argument.
 
 #### Rule tables
 
-A pass is built from an ordered `tuple` of rule tables. A rule table is a list
-of rules, each a pattern and a rewrite. A pattern may match the class of a
-node, the classes of the operands, a condition on the static type, or the
-result of the pass on an operand. The pass applies to a node the first rule,
-in the order of the tables and of the rules in each table, whose pattern
-matches the node. Each rule receives the pass, so a rule applies the whole
-pass, with every table, to the operands.
+A pass is built from an ordered `tuple` of rule tables, each a list of
+pattern–rewrite pairs. A pattern may match the node class, operand classes,
+a condition on the static type, or the pass result on an operand. The first
+matching rule wins, in table order and then rule order. Each rule receives
+the whole pass, including every table, to apply to operands.
 
 - A table of a language extension may match only some nodes. The table of
   the core comes last, and has a rule for every node class of the core.
 - A pass applied to a node that no rule matches raises `TypeError`.
 - The lowering table of a node class with a lowering matches the nodes of the
   class, lowers the node and applies the pass to the lowering.
-- No global registry holds the tables. The code that builds a pass, such as a
-  solver library, chooses the tables and the order, including the tables for
-  the language extensions that the code loads. The pass is a function of the
-  ordered tables, so the result does not depend on the order in which the
-  extensions are loaded.
+- The caller chooses the tables and their order, including extension tables;
+  there is no global registry. The result depends on this order, not on the
+  order in which extensions are loaded.
 
-A language extension gives a rule table for each pass that the extension
-supports. For a pass of the core or of another library, such as `units`, the
-extension gives a table of rules or the lowering table. A rule of an extension
-may match a pattern that a rule of the core also matches, and the earlier
-table wins. Every rule keeps the value of the node, and a rule must agree with
-the lowering followed by the pass, up to mathematical equality. An identity
-that holds for a composition, such as the identity of Piola, needs node
-classes for the composition, as `Divergence` and `Curl` are in the core (see
-[`PushForward`](#pushforward)).
+An extension supplies its own rules or its lowering table for each supported
+pass, whether from the core or another library, such as `units`. Earlier
+extension tables may override core rules. Every rule preserves value and
+must agree, up to mathematical equality, with lowering followed by the pass.
+An identity of a composition, such as the identity of Piola, needs node
+classes for that composition, as with `Divergence` and `Curl` in the core
+(see [`PushForward`](#pushforward)).
 
 #### Examples
 
@@ -3736,14 +3661,12 @@ every extent. An operation that an `EllipsisIndex` expresses, such as
 
 ### New subclasses
 
-Every abstract class is a contract. The contract states what a subclass
-provides, so that every pass handles the subclass through the abstract class
-alone. A downstream library may subclass an abstract class by
-fulfilling the contract, without changing the core. A contract is part of the
-class, never a global registry. For example, a downstream subclass of
+An abstract class states the contract that downstream subclasses fulfil
+without changing the core. Passes handle them through that contract, which
+belongs to the class, never a global registry. For example, a downstream
 `AbstractCoordinateDomain`, such as
-[`UnitSimplex`](EXAMPLES.md#the-unit-simplex), provides the dimension, and every
-pass handles the coordinate function of the subclass through `Coordinate`.
+[`UnitSimplex`](EXAMPLES.md#the-unit-simplex), provides the dimension; passes
+handle its coordinate function through `Coordinate`.
 
 Information that a downstream library attaches to the graph goes in one of two
 places:
