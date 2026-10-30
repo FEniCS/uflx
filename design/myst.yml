@@ -9,6 +9,14 @@ project:
     - file: README.md
     - file: LANGUAGE.md
     - file: EXAMPLES.md
+      children:
+        - file: EXAMPLES_TENSORS.md
+        - file: EXAMPLES_INTEGRATION.md
+        - file: EXAMPLES_COUPLING.md
+        - file: EXAMPLES_FORMS.md
+        - file: EXAMPLES_SURFACES.md
+        - file: EXAMPLES_ESTIMATION.md
+        - file: EXAMPLES_LIBRARY.md
   error_rules:
     - rule: reference-target-explicit
       severity: ignore

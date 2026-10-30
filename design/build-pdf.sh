@@ -21,7 +21,16 @@ fi
 if [[ $# -gt 0 ]]; then
   notes=("$@")
 else
-  notes=(LANGUAGE.md EXAMPLES.md)
+  notes=(
+    LANGUAGE.md EXAMPLES.md
+    EXAMPLES_TENSORS.md
+    EXAMPLES_INTEGRATION.md
+    EXAMPLES_COUPLING.md
+    EXAMPLES_FORMS.md
+    EXAMPLES_SURFACES.md
+    EXAMPLES_ESTIMATION.md
+    EXAMPLES_LIBRARY.md
+  )
 fi
 
 # The generated appendices must match the sections before a build.
@@ -66,6 +75,11 @@ fi
 for note in "${notes[@]}"; do
   name="${note%.md}$suffix"
   source="$here/$note"
+  contents=(--toc --toc-depth=2)
+  if [[ "$note" == EXAMPLES.md ]]; then
+    # The examples landing page is itself a short contents guide.
+    contents=()
+  fi
   if grep -q '^```mermaid' "$source"; then
     renderer="${MMDC:-mmdc}"
     if ! command -v "$renderer" >/dev/null 2>&1; then
@@ -81,7 +95,7 @@ for note in "${notes[@]}"; do
     --from "$reader" \
     --standalone \
     --shift-heading-level-by=-1 \
-    --toc --toc-depth=2 \
+    "${contents[@]}" \
     --pdf-engine=xelatex \
     "${layout[@]}" \
     --include-in-header "$here/pandoc/pdf-header.tex" \
