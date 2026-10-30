@@ -287,8 +287,8 @@ dimension $n \ge k$.
 
 A coordinate domain is a subset of $R^n$ with non-empty interior in $R^n$ whose
 points are named by the coordinates of the points themselves. The core cannot
-build the set from smaller objects, so a new coordinate domain, such as a
-reference cell, is a subclass of `AbstractCoordinateDomain`. On a coordinate
+build the set from smaller objects. A library defines a new coordinate domain,
+such as a reference cell, by extending this abstract class. On a coordinate
 domain the coordinates are canonical: the coordinate function is the identity
 (see [`Coordinate`](#coordinate)), and the integral is the Lebesgue integral in
 the coordinates (see [`Integral`](#integral)). Every other domain gets these by
@@ -501,11 +501,9 @@ individual choices.
 
 ### Literals
 
-A literal is a number written down in an expression, such as
-`Integer(2) * u`. Every literal has value shape
-`()`, no free indices and no support.
-
-The literals are concrete subclasses of `AbstractExpression`:
+A literal is a number written in an expression, such as `Integer(2) * u`.
+The three concrete literal classes have value shape `()`, no free indices
+and no support:
 
 | `Integer(v)` |                       |
 | ------------ | --------------------- |
@@ -542,24 +540,20 @@ core has no rational literal. A complex number is a composition such as
 | Static type                                        | The stored properties, with no support                                                                                         |
 | Raises                                             | `TypeError` for an argument of another type, and `ValueError` for a negative extent or an index that occurs twice             |
 
-A `Zero` is real and has no support, and is also the zero of a complex
-expression and of an expression with a support (see
-[Evaluation](#evaluation)). The derivative of an expression with no support is
-a `Zero`. For example, `Zero((3,), (), ())` is the
-zero array of value shape `(3,)`, and `Zero((), (), (V,))` is the zero linear
-form on a space `V`.
+`Zero` is real and also represents zero for complex expressions and expressions
+with support (see [Evaluation](#evaluation)). Differentiating an expression
+with no support gives `Zero`. For example, `Zero((3,), (), ())` is a zero
+vector, and `Zero((), (), (V,))` is the zero linear form on `V`.
 
 ### Arithmetic
 
 `Sum`, `Product`, `Division` and `Power` denote the sum, product, quotient and
-power of two scalar expressions. They are concrete subclasses of
-`AbstractExpression`, each storing `first` and `second`. Both operands must have
-value shape `()`, or construction raises `ValueError`, and the result has value
-shape `()`. Free indices pass through arithmetic (see [Free
-indices](#free-indices)). On scalars, the free functions `add`, `multiply` and
-`divide` construct `Sum`, `Product` and `Division`. On tensors, the free
-functions build compositions of the node classes (see [Tensor
-arithmetic](#tensor-arithmetic)), so `A + B` and `a * T` are tensor arithmetic.
+power of two scalar expressions. Both operands must have value shape `()`, or
+construction raises `ValueError`; the result has value shape `()`. Free indices
+follow the [default rule](#free-indices).
+
+The free functions below construct these nodes for scalar operands. `add`,
+`multiply` and `divide` also support [tensor arithmetic](#tensor-arithmetic).
 
 | Class      | Free function | Overload |
 | ---------- | ------------- | -------- |
@@ -590,8 +584,6 @@ arithmetic](#tensor-arithmetic)), so `A + B` and `a * T` are tensor arithmetic.
 | Requires                 | The operands of [Arithmetic](#arithmetic)        |
 | Raises                   | `ValueError` if a requirement fails              |
 
-`Product` preserves operand order; a later pass may apply commutativity.
-
 ### `Power`
 
 | `Power(first, second)` |                                                                             |
@@ -603,10 +595,8 @@ arithmetic](#tensor-arithmetic)), so `A + B` and `a * T` are tensor arithmetic.
 | Requires               | The operands of [Arithmetic](#arithmetic)                                   |
 | Raises                 | `ValueError` if a requirement fails                                         |
 
-The exponent may have a support. The derivative of a power $a^b$ whose
-exponent has a support is $a^b (\log(a) \, \mathrm{d}b + b \, \mathrm{d}a / a)$,
-with `Logarithm` (see [Elementary
-functions](#elementary-functions-very-incomplete)).
+The exponent may have support. The [derivative rules](#derivatives-of-the-node-classes)
+distinguish constant and variable exponents.
 
 ### Negation and subtraction
 
@@ -617,10 +607,8 @@ Negation and subtraction are free functions, not node classes:
 | `negate(f)` | `-f` | `f: AbstractExpression` | `multiply(Integer(-1), f)` |
 | `subtract(f, g)` | `f - g` | `f, g: AbstractExpression` | `add(f, negate(g))` |
 
-Both compositions are exact in floating-point arithmetic, so neither
-composition changes the arithmetic that the user wrote. On tensors, `negate`
-and `subtract` follow `multiply` and `add` (see [Tensor
-arithmetic](#tensor-arithmetic)).
+These compositions preserve floating-point arithmetic and inherit the tensor
+behaviour of `multiply` and `add` (see [Tensor arithmetic](#tensor-arithmetic)).
 
 ### `Division`
 
@@ -660,14 +648,9 @@ by entry.
 | Properties     | `operand` $f$ |
 | Static type    | The value shape and the free indices of $f$, and the argument spaces of $f$ with each space conjugated (see [`ConjugateSpace`](#conjugatespace)) |
 
-A sesquilinear variational form, such as the $L^2$ inner product
-$\int u \bar{v}$, needs `Conjugate`. `Conjugate` is the one operation of the
-scalar field that takes an operand of any value shape. A form binds an
-argument as `conjugate(v)` (see [`Form`](#form)), and `v` may be a vector,
-such as the argument of $\int \operatorname{curl} u \cdot \overline{\operatorname{curl} v}$.
-`conjugate(f)[e]` has the value of `conjugate(f[e])`, so the entries of a
-tensor are conjugated as scalars.
-
+`Conjugate` is the only scalar-field node that accepts any value shape, because
+[`Form`](#form) binds `conjugate(v)` even for a vector argument. Its entrywise
+meaning is `conjugate(f)[e]` = `conjugate(f[e])` in value.
 
 ### `RealPart` and `ImaginaryPart`
 
@@ -683,14 +666,12 @@ tensor are conjugated as scalars.
 | Static type                       | Value shape `()`, real                |
 | Raises                            | `ValueError` if a requirement fails   |
 
-Apart from `Absolute`, `RealPart` and `ImaginaryPart` are the only node
-classes that take a complex operand to a real expression. A real quantity of
-a complex field, such as $\operatorname{Re} \int u \bar{v}$, needs
-`RealPart`. `(f + conjugate(f)) / Integer(2)` has the value of the real part,
-but is complex by the rule of [Scalar type](#scalar-type).
+These nodes and `Absolute` are the only nodes that take a complex operand to
+a real expression. The composition `(f + conjugate(f)) / Integer(2)` has the
+value of the real part but remains complex by the [scalar-type rule](#scalar-type).
 
-The free functions `real_part` and `imaginary_part` take a tensor and apply
-the node class entry by entry (see [Tensor arithmetic](#tensor-arithmetic)).
+Their free functions apply entrywise to tensors (see
+[Tensor arithmetic](#tensor-arithmetic)).
 
 The operand may be real. Construction does not simplify, so `real_part(f)`
 of a real $f$ is not $f$, and `imaginary_part(f)` of a real $f$ is not
@@ -738,10 +719,9 @@ rounded power, so the result of `power` depends on the math library.
 
 A matrix is a `Tensor` of `Tensor`s.
 
-A value shape may contain the extent 0, for example the value shape `(0,)` of
-the coordinate function of `RD(0)`. `Tensor` cannot build an expression with
-the extent 0, because an empty `tuple` has no entry to give `s`. An array with
-an extent 0 has no entries, so the array is the `Zero` of that value shape.
+Value shapes may contain extent 0, as in `coordinate(RD(0))`. An empty
+`Tensor` cannot provide the entry shape `s`; use `Zero` for an array with an
+extent 0, which has no entries.
 
 Examples, with `one, two = Integer(1), Integer(2)`:
 
@@ -780,9 +760,8 @@ indices](#derived-indices)).
 
 > LLM generated content.
 
-`Indexed` selects one component of a tensor-valued expression. `X[0]` and `A[0,
-1]` are `indexed(X, (0,))` and `indexed(A, (0, 1))`, through the free function
-`component` below.
+`Indexed` selects one component of a tensor. The overload `[]` calls
+[`component`](#partial-indexing), which also supports partial indexing.
 
 | `Indexed(expression, indices)` |                                                                                   |
 | ------------------------------ | --------------------------------------------------------------------------------- |
@@ -852,9 +831,7 @@ row = component_tensor(entry, (k,))
 
 ### `ComponentTensor` and `IndexSum`
 
-`ComponentTensor` and `IndexSum` bind free indices. `ComponentTensor(expression,
-indices)` turns the indices into tensor axes. `IndexSum(expression, indices)`
-sums over the indices.
+`ComponentTensor` binds free indices as tensor axes; `IndexSum` sums over them.
 
 | `ComponentTensor(expression, indices)`, `IndexSum(expression, indices)` |                                                                                                                                                                                                                   |
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -865,12 +842,10 @@ sums over the indices.
 | Static type                                                             | The free indices of the expression without the indices. `ComponentTensor` has the value shape of the extents of the indices in order, with every extent of an `EllipsisIndex`, and `IndexSum` the value shape `()` |
 | Raises                                                                  | `ValueError` if a requirement fails                                                                                                                                                                               |
 
-Scope is lexical. An occurrence of an `Index` refers to the innermost
-`ComponentTensor` or `IndexSum` that encloses the occurrence and binds the
-index. An occurrence that no such binder encloses is free. A bound index is
-not free in the binding node, so the binding is closed, and a binder may bind
-an index that a binder inside the expression of the binder also binds. For
-example, with a vector `a`:
+Scope is lexical. An index occurrence refers to the innermost enclosing
+`ComponentTensor` or `IndexSum` that binds it; otherwise it is free. A bound
+index is not free in the binding node. Nested binders may bind the same index.
+For example, with a vector `a`:
 
 ```python
 i = index("i")
@@ -908,12 +883,10 @@ axis (see [Derived indices](#derived-indices)).
 | Properties             | `label`, with the rules of the label of an `Index`        |
 | Raises                 | `TypeError` if the label is neither a `str` nor a `tuple` |
 
-As an entry of an `Indexed`, an `EllipsisIndex` covers every axis that the
-other entries do not cover, so an `EllipsisIndex` may cover no axis. The
-extent of an `EllipsisIndex` is the `tuple` of the extents of the covered
-axes. A `ComponentTensor` that binds an `EllipsisIndex` gets one axis for
-each extent of the `EllipsisIndex`. In every other rule of index notation, an
-`EllipsisIndex` behaves as an `Index`.
+As specified by [`Indexed`](#indexed), an `EllipsisIndex` covers the remaining
+axes, possibly none, and takes their extents as a `tuple`. Binding it with
+`ComponentTensor` produces one axis per extent. In all other index-notation
+rules it behaves as an `Index`.
 
 ### `AbstractIndexValue`
 
@@ -936,10 +909,8 @@ value. An expression reads the table only through a
 
 ### `GatheredIndex`
 
-`GatheredIndex` reads an index value from a table. A `GatheredIndex` is not an
-expression and not a free index. With `cells` the table of the cell of each
-facet, `a[gathered_index(cells, (e,))]` is the value of `a` on the cell of facet
-`e`, with the free index `e`.
+`GatheredIndex` reads an index value from a table. It is neither an expression
+nor a free index; its table indices determine its free indices.
 
 | `GatheredIndex(table, indices)` |                                                                                                                                    |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -950,13 +921,11 @@ facet, `a[gathered_index(cells, (e,))]` is the value of `a` on the cell of facet
 | Derived                         | `extent` and `free_indices`, below |
 | Raises                          | The errors of the entries of an [`Indexed`](#indexed)                                                                              |
 
-The value of a `GatheredIndex` is the entry of the table at the indices. The
-indices follow the rules and raise the errors of the entries of an
-[`Indexed`](#indexed), without an `EllipsisIndex` entry. A `GatheredIndex`
-entry reads through another table, so gathers nest. The extent of the
-`GatheredIndex` is the extent of the table. The free indices are the `Index`
-entries, each with the extent of the axis, followed by the free indices of
-the `GatheredIndex` entries, with each `Index` taken once.
+The entries follow the rules and errors of [`Indexed`](#indexed), except that
+`EllipsisIndex` is not accepted. Gathers may nest. The result has the table's
+extent, and its free indices are the `Index` entries with their axis extents,
+followed by the free indices of the `GatheredIndex` entries, taking each index
+once.
 
 #### Examples
 
@@ -1026,12 +995,8 @@ reduces against every binder.
 
 ### Tensor arithmetic
 
-The node classes of [Arithmetic](#arithmetic) are scalar. The free functions
-`add`, `multiply`, `divide`, `real_part` and `imaginary_part` read the ranks
-of the operands, and on tensors build the fixed compositions below. The free function `matrix_product`
-contracts one axis, and `transpose` swaps the two axes of a matrix. `add`, `multiply`, `divide` and `matrix_product` are the
-overloads `+`, `*`, `/` and `@` (see [Operator overloads](#operator-overloads)),
-so tensor arithmetic is written as `A + B`, `a * T`, `T / a` and `A @ x`.
+Tensor arithmetic uses fixed compositions of scalar nodes and index notation.
+The free functions read operand ranks to choose the compositions below.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -1063,16 +1028,9 @@ broadcasting, and no product of two tensors other than `@`:
 - `A * B` for two tensors raises `ValueError` from `Product`, and `a / T`
   raises `ValueError` from `Division`.
 
-`negate` and `subtract` compose `multiply` and `add` (see [Negation and
-subtraction](#negation-and-subtraction)), so `-T` is
-`component_tensor(Integer(-1) * T[K], K)` and `A - B` is
-`add(A, negate(B))` on tensors.
-
-A free function of a scalar operation takes a tensor only if the operation
-has no other meaning on a tensor. `conjugate`, `real_part` and
-`imaginary_part` have one meaning on a tensor, entry by entry. `Conjugate` itself takes
-any value shape (see [`Conjugate`](#conjugate)). The following stay scalar,
-and raise `ValueError` for a tensor, because the tensor has a second meaning:
+A scalar operation's free function accepts tensors only when the operation has
+no competing tensor meaning. Thus `conjugate`, `real_part` and `imaginary_part`
+apply entrywise. The following remain scalar and raise `ValueError` for tensors:
 
 | Free function | Second meaning on a tensor |
 | ------------- | -------------------------- |
@@ -1145,9 +1103,7 @@ $A^+$ is the inverse matrix $A^{-1}$. If $A$ has rank less than $k$,
 A pass chooses how to evaluate `Inverse`, in closed form for a small matrix or
 by a factorisation. The definition fixes the value and not the algorithm: the
 normal equations square the condition number of $A$, and a factorisation such
-as QR does not. The core writes the determinant as the free function
-[`determinant`](#determinant), so the core has no node class for the
-determinant.
+as QR does not. The determinant is instead a fixed composition (see [Determinant](#determinant)).
 
 Examples:
 
@@ -1175,10 +1131,9 @@ of a square matrix $A$.
 | `determinant(A)` | | `A: AbstractExpression` | The Leibniz formula for $\det A$ |
 
 `determinant(A)` requires $A$ with value shape `(n, n)` and an `int` extent
-$n$ (see [Extents](#extents)), and reads $n$ to choose the composition. A free
-function does not validate, so construction does not check the requirement,
-and `determinant(A)` of another $A$ is undefined, as `Inverse` of a matrix of
-lower rank is. The Leibniz formula is
+$n$ (see [Extents](#extents)), which selects the composition. This requirement is
+not checked during construction; the result for any other operand is undefined.
+The Leibniz formula is
 
 $$
 \det A = \sum_\sigma \operatorname{sgn}(\sigma) \prod_{i=0}^{n-1} A_{i, \sigma(i)},
@@ -1196,16 +1151,11 @@ This fixed composition lets a pass find every use of $\det A$ as one expression.
 
 ### Operator overloads
 
-Every overload in the [table of free functions](#appendix-free-functions) is
-a method of `AbstractExpression` (see
-[`AbstractExpression`](#abstractexpression)). No other class defines
-arithmetic or indexing overloads. On
-tensors, `+`, `-`, `*`, `/` and `@` are the free functions of [Tensor
-arithmetic](#tensor-arithmetic).
+Only `AbstractExpression` defines arithmetic and indexing overloads, listed in
+the [table of free functions](#appendix-free-functions).
 
-An operator overload calls the free function with the operands unchanged, and
-the constructor validates (see [Numbers in expressions](#numbers-in-expressions)).
-`AbstractExpression` defines no reflected overloads, such as `__radd__`.
+An overload passes operands unchanged to its free function, except for the
+indexing syntax below. There are no reflected overloads, such as `__radd__`.
 
 An overload applies one free function to the operands, so the graph follows
 the grouping and the precedence of Python, and construction never regroups
@@ -1215,11 +1165,9 @@ construction](#no-simplification-during-construction)). For example,
 and the two are not equal. `a ** b ** c` is `power(a, power(b, c))`, and
 `-a ** b` is `negate(power(a, b))`.
 
-`__getitem__` is the one exception. Python passes `f[i]` to `__getitem__` as the
-single entry `i`, and passes `f[i, j]` as the `tuple` `(i, j)`. `__getitem__`
-converts a single entry into a `tuple` of one entry and calls `component` (see
-[Partial indexing](#partial-indexing)). The
-conversion exists because of Python indexing syntax.
+Python passes `f[i]` to `__getitem__` as `i`, but `f[i, j]` as `(i, j)`.
+`__getitem__` wraps a single entry in a `tuple` and calls `component` (see
+[Partial indexing](#partial-indexing)).
 
 `AbstractExpression` defines `__iter__` to raise `TypeError`, because
 expressions are not iterable and Python otherwise iterates through
@@ -1230,8 +1178,7 @@ expressions are not iterable and Python otherwise iterates through
 Every number in an expression is written with literals, such as `Integer(2)`,
 `Float(0.5)`, `Integer(1) / Integer(3)` or `ImaginaryUnit()`. A Python `int`, `float`,
 `complex`, `Fraction` or NumPy scalar is never converted and is rejected with
-`TypeError`. The type of every literal is a choice that the user makes
-explicitly.
+`TypeError`.
 
 With `X = coordinate(RD(2))`, `X[0]**Integer(2)` is accepted, but `X[0]**2`
 raises `TypeError`. The same rule applies inside containers:
@@ -2304,11 +2251,12 @@ jump = pull_back(u, plus) - pull_back(u, minus)
 E = side_domain(D, diagonal)
 ```
 
-- From `"+"`, the side tables are the cells `(0,)` and the inclusion
-  $A_+(t) = (1 - t, t)$, through the local vertices 1 and 2 of `K`. From
-  `"-"`, the side tables are the cells `(1,)` and the inclusion
-  $A_-(t) = (0, t)$, through the local vertices 0 and 2. The coordinates of
-  `E` are $(1 - t, t)$.
+From `"+"`, the side tables are the cells `(0,)` and the inclusion
+$A_+(t) = (1 - t, t)$, through the local vertices 1 and 2 of `K`. From
+`"-"`, the side tables are the cells `(1,)` and the inclusion
+$A_-(t) = (0, t)$, through the local vertices 0 and 2. The coordinates of
+`E` are $(1 - t, t)$.
+
 Suppose the reference-cell value `pull_back(u, cell_map(square, 0))` is:
 
 ```python
@@ -4015,7 +3963,7 @@ AbstractExpression
 | Function spaces             | [`function(V, label)`](#function)                                        |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                                      | `Function`                                                                                                                                                                      |
 | Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                               | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, and `ConjugateSpace(V)` for a complex `V`                                                                                                                   |
 |                             | [`dual_space(S)`](#dualspace)                                            |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                        | `DualSpace`                                                                                                                                                                     |
-|                             | [`form(expression, arguments)`](#form)                                   |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`                            | `Form`                                                                                                                                                                          |
+|                             | [`form(expression, arguments)`](#form)                                   |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`  | `Form`                                                                                                                                                                          |
 |                             | [`action(f, position, g)`](#action)                                      |                               | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                                                                                                        |
 |                             | [`gateaux_derivative(F, x, a, w)`](#gateaux-derivative)                  |                               | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | `GateauxDerivative(F, x, a, w)`                                                                                                                                                 |
 <!-- end generated: free-functions -->
