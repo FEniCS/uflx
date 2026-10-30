@@ -303,10 +303,9 @@ pull-back.
 
 Examples:
 
-- A face of codimension 1 of the unit simplex in $R^n$ is *not* a coordinate
-  domain, because the face has empty interior in $R^n$. The face is the image
-  of the unit simplex in $R^{n-1}$ under a map, so the face is the image of a
-  domain map (defined below).
+- The unit simplex in $R^n$ is a coordinate domain. A codimension-1 face is
+  not: it has empty interior in $R^n$ and is instead the image of a domain map
+  from the unit simplex in $R^{n-1}$.
 - A mesh of triangles is *not* a coordinate domain, because the core builds the
   mesh from the reference triangle and the maps of the cells. The mesh is a
   decomposed domain.
@@ -697,12 +696,8 @@ The operand may be real. Construction does not simplify, so `real_part(f)`
 of a real $f$ is not $f$, and `imaginary_part(f)` of a real $f$ is not
 `Zero`.
 
-Examples, with `one, two = Integer(1), Integer(2)`:
-
-- `real_part(one + ImaginaryUnit() * two)` is real, and a later pass
-  evaluates the expression to 1.
-- `imaginary_part(one + ImaginaryUnit() * two)` is real, and a later pass
-  evaluates the expression to 2.
+For `z = Integer(1) + ImaginaryUnit() * Integer(2)`, `real_part(z)` and
+`imaginary_part(z)` are real expressions with the values 1 and 2, respectively.
 
 ### Elementary functions (very incomplete)
 
@@ -748,13 +743,11 @@ the coordinate function of `RD(0)`. `Tensor` cannot build an expression with
 the extent 0, because an empty `tuple` has no entry to give `s`. An array with
 an extent 0 has no entries, so the array is the `Zero` of that value shape.
 
-Examples, with `zero, one, two = Integer(0), Integer(1), Integer(2)`:
+Examples, with `one, two = Integer(1), Integer(2)`:
 
-- With `r0 = Float(0.0)` and `r1 = Float(1.0)`,
-  `tensor((tensor((r1, r0)), tensor((r0, r1))))` has `Float` entries, so the
-  matrix is not equal to `tensor((tensor((one, zero)), tensor((zero, one))))`.
-- `tensor((one, tensor((one, two))))` raises `ValueError`, because the value
-  shapes of the entries differ.
+- `tensor((one, two))` is a vector of value shape `(2,)`.
+- `tensor((one, tensor((one, two))))` raises `ValueError`, because the entries
+  have different value shapes.
 
 ### Index notation
 
@@ -820,19 +813,15 @@ each index taken once.
 An `Index` may occur in two or more entries, or may already be free in the
 expression. All the occurrences are the same index and must have the same
 extent, so the indexed axes take the same value. `A[i, i]` is the diagonal
-entry of a matrix `A`, and `index_sum(A[i, i], (i,))` is the trace.
+entry of a matrix `A`.
 
 Construction also raises `TypeError` for an entry of another kind,
 `ValueError` for no entries or for an index with two extents, in two entries
 or in an entry and the expression, and `IndexError` if the entries do not
 cover exactly the rank. An expression with value shape `()` has rank 0.
 
-Examples:
-
-- For a matrix `A` of value shape `(2, 2)`, `A[1, 0]` has value shape `()`,
-  and `indexed(A, (1,))` raises `IndexError`.
-- `tensor((Integer(1) - X[0], X[0]))` has value shape `(2,)` and the support
-  `RD(2)`.
+For a matrix `A` of value shape `(2, 2)`, `A[1, 0]` has value shape `()`,
+whereas `indexed(A, (1,))` raises `IndexError` because one axis is unindexed.
 
 #### Partial indexing
 
@@ -853,7 +842,7 @@ A free function of the core calls `indexed`, never `component`, so a
 composition in this document that writes `f[K]` is `indexed(f, K)`, and an
 operand of the wrong rank raises from `Indexed`.
 
-For the matrix `A` of the examples, `A[1]` is row 1 of `A`, the composition
+For the same matrix `A`, `A[1]` is row 1 of `A`, the composition
 `component_tensor(indexed(A, (1, k)), (k,))` of value shape `(2,)`, with `k`
 the derived index.
 
@@ -877,23 +866,17 @@ Scope is lexical. An occurrence of an `Index` refers to the innermost
 index. An occurrence that no such binder encloses is free. A bound index is
 not free in the binding node, so the binding is closed, and a binder may bind
 an index that a binder inside the expression of the binder also binds. For
-example, with
-`p = component_tensor(y[gathered_index(cells, (c, w)), k], (c, w, k))`, `p`
-has no free index, and `p[c, 0, k]` has the free indices `c` and `k`, which
-refer to nothing inside `p`.
+example, with a vector `a` and `i = index("i")`,
+`p = component_tensor(a[i], (i,))` has no free index. In `p[i]`, the outer
+`i` is free and does not refer to the bound `i` inside `p`.
 
 A pass that substitutes into the expression of a binder renames the bound
 indices that would capture a free index of the substituted expression (see
 [Substitution and binding](#substitution-and-binding)).
 
-Examples, with `i, j = index("i"), index("j")`, two vectors `a` and `b` of value
-shape `(3,)`, and a matrix `A` of value shape `(2, 2)`:
-
-- `index_sum(a[i] * b[i], (i,))` is the inner product of `a` and `b`, with no
-  free indices.
-- `index_sum(A[i, i], (i,))` is the trace of `A`, and
-  `component_tensor(A[i, i], (i,))` is the diagonal of `A`, for every extent of
-  `A`, including an `AbstractExtent`.
+For a square matrix `A`, `index_sum(A[i, i], (i,))` is its trace, and
+`component_tensor(A[i, i], (i,))` is its diagonal. Both work when the extent is
+an `AbstractExtent`, without knowing its value during construction.
 
 ### `EllipsisIndex`
 
@@ -982,9 +965,6 @@ a_e = a[g]
 
 # The array (a[0], a[1], a[1], a[0]) of value shape (4,).
 b = component_tensor(a_e, (e,))
-
-# The sum over the edges, 2 * (a[0] + a[1]) after evaluation.
-total = index_sum(a_e, (e,))
 ```
 
 - Let `cell_vertices` be a table of the vertices of each triangle, of the shape
@@ -1124,17 +1104,12 @@ is written in index notation, or with a free function of a library, such as
 `dot` (see [Tensor algebra with
 `EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex)).
 
-Examples, with `i = index("i")`, a scalar `a`, vectors `x` and `y` of value
-shape `(3,)`, a matrix `A` of value shape `(2, 3)` and a matrix `B` of value
-shape `(3, 3)`:
+Examples, with a scalar `a`, vectors `x` and `y` of value shape `(3,)`,
+a matrix `A` of value shape `(2, 3)` and `i = index("i")`:
 
-- `A + A` has value shape `(2, 3)`, and `A + B` raises `ValueError`.
-- `a * x - x / a` has value shape `(3,)`.
-- `x[i] * y` has value shape `(3,)` and the free index `i`.
-- `A @ x` has value shape `(2,)`, `x @ y` has value shape `()`, and `A @ B`
-  has value shape `(2, 3)`.
-- `B @ A` raises `ValueError`, because the inner extents 3 and 2 differ, and
-  `A * B` raises `ValueError`.
+- `a * x` scales the vector and has value shape `(3,)`.
+- `x[i] * y` also has value shape `(3,)`, but retains the free index `i`.
+- `A @ x` contracts the last axis of `A`, giving value shape `(2,)`.
 
 ### `Inverse`
 
@@ -1165,17 +1140,14 @@ determinant.
 
 Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
 
-- With the Jacobian matrix
-  `J = tensor((tensor((two, one)), tensor((one, three))))` of the [affinely
-  mapped triangle](EXAMPLES.md#an-affinely-mapped-triangle), `inverse(J)` has
-  value shape `(2, 2)`, and a later pass evaluates `inverse(J)` to
+- For `A = tensor((tensor((two, one)), tensor((one, three))))`, `inverse(A)`
+  has value shape `(2, 2)` and value
   $\frac{1}{5} \begin{pmatrix} 3 & -1 \\ -1 & 2 \end{pmatrix}$.
-- With the Jacobian matrix `Je = tensor((tensor((one,)), tensor((one,))))` of
-  value shape `(2, 1)`, of the edge from $(0, 0)$ to $(1, 1)$, `inverse(Je)`
-  has value shape `(1, 2)`, and a later pass evaluates `inverse(Je)` to
-  $\begin{pmatrix} 1/2 & 1/2 \end{pmatrix}$.
-- `inverse(transpose(Je))` with value shape `(1, 2)` raises `ValueError`,
-  because $k > n$.
+- For `J = tensor((tensor((one,)), tensor((one,))))`, of value shape `(2, 1)`,
+  `inverse(J)` has value shape `(1, 2)` and value
+  $\begin{pmatrix} 1/2 & 1/2 \end{pmatrix}$. This is a left inverse.
+- `inverse(transpose(J))` raises `ValueError`: the operand has more columns
+  than rows.
 
 ### Determinant
 
@@ -1245,12 +1217,9 @@ Every number in an expression is written with literals, such as `Integer(2)`,
 `TypeError`. The type of every literal is a choice that the user makes
 explicitly.
 
-Examples, with `X = coordinate(RD(2))`:
-
-- `X[0]**Integer(2)`, `Integer(2) * X[0]`, `Integer(1) - X[0]` and
-  `tensor((Integer(1), Integer(2)))` are accepted.
-- `X[0]**2`, `2 * X[0]`, `1 - X[0]`, `0.5 * X[0]`, `2 + X[0]` and
-  `tensor((1, 2))` raise `TypeError`.
+With `X = coordinate(RD(2))`, `X[0]**Integer(2)` is accepted, but `X[0]**2`
+raises `TypeError`. The same rule applies inside containers:
+`tensor((Integer(1), Integer(2)))` is accepted, but `tensor((1, 2))` is not.
 
 Worked examples for this chapter in EXAMPLES.md: [transpose](EXAMPLES.md#transpose), [tensor algebra with `EllipsisIndex`](EXAMPLES.md#tensor-algebra-with-ellipsisindex).
 
@@ -1281,10 +1250,7 @@ parameterisation of the piece (see [`DecomposedDomain`](#decomposeddomain)).
 For a mesh `image(x, Q)`, the pull-back by `cell_domain(D, j, e)` is
 `pull_back(x, cell_map(T, j, e))`.
 
-Examples:
-
-- `coordinate(RD(3))` is `Coordinate(RD(3))`, with value shape `(3,)` and the
-  support `RD(3)`.
+For example, `coordinate(RD(3))` has value shape `(3,)` and support `RD(3)`.
 
 ### Valid pair
 
@@ -1342,21 +1308,14 @@ on $Q$, evaluated at $\psi(p)$.
 #### Examples
 
 The examples use `P = RD(3)`, `X = coordinate(P)`, `x, y, z = X[0], X[1], X[2]`,
-`f = x * y * z`, a function `u` on `P` of value shape `(3,)`, and
-`i = index("i")`:
+and `f = x * y * z`:
 
 | Expression                              | Value shape | Meaning                                       |
 | --------------------------------------- | ----------- | --------------------------------------------- |
 | `gradient(f, P)`                        | `(3,)`      | The gradient $(yz, xz, xy)$, after evaluation |
 | `gradient(gradient(f, P), P)`           | `(3, 3)`    | The Hessian of $f$                            |
 | `gradient(X, P)`                        | `(3, 3)`    | The identity matrix, after evaluation         |
-| `index_sum(gradient(u, P)[i, i], (i,))` | `()`        | The divergence of `u`                         |
 
-- For a domain map $D$ with the parameter domain $P$,
-  `gradient(D.parameterisation, P)` is the Jacobian matrix of value shape
-  `(n, m)`, with $n$ the dimension of the ambient coordinate domain of
-  `D.ambient_domain` and $m$ the dimension of the ambient coordinate domain of
-  $P$ (see [Jacobian and density](#jacobian-and-density)).
 - Let `M` be a decomposed domain of dimension 2 in `RD(3)`, and `w` a field
   on `M`. `gradient(w, M)` is the surface gradient of `w`, with value shape
   `(3,)`. `gradient(coordinate(M), M)` is the orthogonal projection onto the
@@ -1441,6 +1400,10 @@ support is zero, so the derivative with respect to a function `u` in a constant
 direction holds `gradient(u, P)` fixed. A direction that is a function in the
 space of `u` gives the Gateaux derivative (see [Gateaux
 derivative](#gateaux-derivative)).
+
+For `u`, `a` and `h` in a real scalar space of constants,
+`directional_derivative(u * u, u, a, h)` has the value $2 a h$. The variable
+is `u`, the evaluation point is `a`, and the direction is `h`.
 
 The derivative with respect to a tensor is a composition over unit
 directions. The direction states the symmetry, and the core has none. With a
@@ -1717,10 +1680,6 @@ c = domain_map(RD(0), tensor((third, third)), T)
 fc = integral(pull_back(f, c), RD(0))
 ```
 
-- Let `d = domain_map(RD(0), tensor((third, Integer(2) / Integer(3))), T)` be
-  a second point. `integral(pull_back(f, c), RD(0)) + integral(pull_back(f, d), RD(0))`
-  is the action of a sum of two Dirac measures on $f$.
-
 Worked examples for this chapter in EXAMPLES.md: [an affinely mapped triangle](EXAMPLES.md#an-affinely-mapped-triangle), [circulation along an edge](EXAMPLES.md#circulation-along-an-edge), [integrating over an edge](EXAMPLES.md#integrating-over-an-edge), [integrating over the boundary of a triangle](EXAMPLES.md#integrating-over-the-boundary-of-a-triangle), [quadrature](EXAMPLES.md#quadrature), [integrating over a cut cell](EXAMPLES.md#integrating-over-a-cut-cell), [the centroid of a triangle](EXAMPLES.md#the-centroid-of-a-triangle).
 
 ## Topology
@@ -1924,36 +1883,27 @@ side.
 
 #### Examples
 
-The examples use a topology `T` of triangles with the cell types `(K,)`,
-`I = Simplex(1)` and `P = Simplex(0)`. The examples show the topology only. A
-topology of sub-entities that an expression is restricted to needs reference
-cells as cell types, such as `ReferenceSimplex(1)` in place of `I` (see
-[Restriction](#restriction)).
+The examples use a triangle topology `T` with cell types `(K,)`,
+`I = Simplex(1)` and `P = Simplex(0)`. For restriction, use reference cells
+instead, such as `ReferenceSimplex(1)` for `I`.
 
-- A topology `B` of the boundary facets of `T` has the cell types `(I,)` and
-  the sides `((("inside", T, 0),),)`. `cell_index(B, 0)` is the index of the
-  facets.
-- A topology of the facets shared by two triangles has the cell types `(I,)`
-  and the sides `((("+", T, 0), ("-", T, 0)),)`.
-- A topology of the corners of the boundary has the cell types `(P,)` and the
-  sides `((("+", B, 0), ("-", B, 0)),)`, since each corner is seen from two
-  facets of `B`.
-- Let `M` be a submesh of the boundary facets of `T`, with the cell types
-  `(I,)`. A topology of the facets has the sides
-  `((("mesh", T, 0), ("submesh", M, 0)),)`, and each facet is a cell of `M`.
-- A topology of the left boundary facets of a periodic `T` has the sides
-  `((("left", T, 0), ("right", T, 0)),)`. From `"right"`, the position of each
-  vertex is that of the vertex one period to the right.
-- Let `M` be a topology of triangles and quadrilaterals with the cell types
-  `(Kt, Kq)`. A topology of all the facets shared by two cells has three groups
-  of the cell type `I`, with the cell types `(I, I, I)` and the sides
+- A boundary topology `B` has cell types `(I,)` and one side,
+  `((("inside", T, 0),),)`. Its facet index is `cell_index(B, 0)`.
+- Interior facets have two sides: `((("+", T, 0), ("-", T, 0)),)`.
+- Corners of the boundary have cell types `(P,)` and sides
+  `((("+", B, 0), ("-", B, 0)),)`: a side topology can itself have sides.
+- For a boundary submesh `M` with cell types `(I,)`, the sides
+  `((("mesh", T, 0), ("submesh", M, 0)),)` refer to different topologies.
+- A periodic left boundary has sides `((("left", T, 0), ("right", T, 0)),)`.
+  From `"right"`, each vertex is located one period to the right.
+- For a topology `M` of triangles and quadrilaterals, interior facets have
+  cell types `(I, I, I)` and sides
   `((("+", M, 0), ("-", M, 0)), (("+", M, 0), ("-", M, 1)), (("+", M, 1), ("-", M, 1)))`.
-  The three groups are the facets between two triangles, between a triangle
-  and a quadrilateral, and between two quadrilaterals. An integral over the
-  topology has one term for each group.
-- For a topology `U3` of prisms with the cell types `(W,)`, a topology of the
-  boundary facets has the cell types `(K, Q)`, with the quadrilateral cell type
-  `Q`, and the sides `((("inside", U3, 0),), (("inside", U3, 0),))`.
+  The same facet type occurs in three groups, distinguished by the adjacent
+  cell types. An integral has one term per group.
+- For a prism topology `U3` with cell types `(W,)`, the boundary has two
+  different facet types `(K, Q)`, triangular and quadrilateral, with sides
+  `((("inside", U3, 0),), (("inside", U3, 0),))`.
 
 ```{dropdown} Legacy UFL
 The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
@@ -2292,7 +2242,7 @@ The outward normal of the cell on a side is [`normal(side_map(D, E, s))`](#norma
 
 #### Example
 
-The example uses `D`, `x` and `square` of the
+The example uses `D` and `square` of the
 [`DecomposedDomain`](#decomposeddomain) example, `I = ReferenceSimplex(1)`, a
 function `u` on `square`, and the diagonal of `square`:
 
@@ -2318,9 +2268,6 @@ E = side_domain(D, diagonal)
   $A_+(t) = (t, 1 - t)$. Both sides use the vertex numbering of the diagonal, so the restrictions from both sides run the
   other way along the diagonal, and the jump at each point of the diagonal is
   unchanged.
-- For the facets `S` of a triangle and quadrilateral topology, with the three
-  groups of [Sides of a topology](#sides-of-a-topology), the same line with
-  `S` gives one jump for all three groups.
 
 ```{dropdown} Legacy UFL
 The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on the topology $S$ of the interior facets, whose sides are named `'+'` and `'-'`.
@@ -2442,12 +2389,10 @@ The examples use the following objects:
 - The decomposed domain `B` of the boundary facets of `D`, with the side
   `"inside"`.
 
-Examples:
-
 - `integral(Integer(1), D)` is the area 1 of the square, the sum of two
   integrals over `K`.
-- `integral(Integer(1), B)` is the perimeter 4.
-- `integral(pull_back(f, side_map(D, B, "inside")), B)` integrates `f` over the boundary.
+- `integral(pull_back(f, side_map(D, B, "inside")), B)` restricts `f` to the
+  boundary before integrating it.
 
 ```{dropdown} Legacy UFL
 `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the decomposed domain of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
@@ -2642,10 +2587,8 @@ antilinear form, such as a known load.
 A function is not an argument or a coefficient by itself. Whether a function is
 an argument of a form is stated by the form (see [`Form`](#form)).
 
-Examples, with a topology `T` and a space `V` on `T` of the value shape `()`:
-
-- `u = function(V, "u")` has the support `T` and the value shape `()`, and
-  `function(V, "u") == u` is `True`.
+For a scalar space `V` on a topology `T`, `u = function(V, "u")` has support
+`T` and value shape `()`.
 
 ```{dropdown} Legacy UFL
 The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functions. A test function and a trial function are the functions that a form states as the arguments at the positions 0 and 1.
@@ -2766,8 +2709,7 @@ canonical map from `V` is not a form of the core.
 
 #### Examples
 
-The examples use the spaces `V` and `Q` and the functions `v` in `V` and `q`
-in `Q` of the [`Form`](#form) examples.
+Let `v` and `q` be functions in spaces `V` and `Q`, respectively.
 
 - `l = function(dual_space(V), "l")` has the argument spaces
   `(conjugate_space(V),)`. `action(l, 0, conjugate(v))` is the pairing
@@ -2776,8 +2718,8 @@ in `Q` of the [`Form`](#form) examples.
   `((conjugate_space(V), conjugate_space(Q)),)`.
   `action(m, 0, (conjugate(v), conjugate(q)))` is the pairing of `m` with
   `(v, q)`.
-- With `l` in `dual_space(V)`, `form(conjugate(action(l, 0, conjugate(v))), (conjugate(l),))`
-  raises `ValueError`, because `l` has argument spaces.
+- `form(action(l, 0, conjugate(v)), (l,))` raises `ValueError`: a form cannot
+  bind `l`, because `l` already has argument spaces.
 
 ```{dropdown} Legacy UFL
 The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual_space(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the spaces keep distinct argument spaces. A form of the core binds no `Coargument`, and an operator with a `Coargument` is a node class of a language extension.
@@ -2836,11 +2778,11 @@ of integrals has no support, although the arguments have one. A substitution
 renames a bound argument to avoid capture, as for indices (see [Substitution and
 binding](#substitution-and-binding)).
 
-Examples, with `u`, `v` and a fixed `w` in a space `V` on `D`, and an
-expression `a` linear in `u` and `v`:
+Examples, with scalar functions `u`, `v` and a fixed `w` in a space `V` on
+`D`, and `a = integral(u * v, D)`:
 
-- `form(a, (v, u))` is a bilinear form with the argument spaces `(V, V)`.
-- `form(a, (v,))` is a linear form in `v`.
+- `form(a, (v,))` binds `v` and keeps `u` fixed, giving a linear form.
+  `form(a, (v, u))` binds both, giving argument spaces `(V, V)`.
 - `form(a, (v, u)) + form(a, (v,))` raises `ValueError`.
 - With `m = integral(u * conjugate(v), D)`, `form(m, (conjugate(v), u))` is
   the sesquilinear mass form, with the argument spaces
@@ -2921,20 +2863,19 @@ free indices of $g$.
 
 #### Examples
 
-The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples, and
-`l = function(dual_space(V), "l")`.
+The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples.
 
 - `action(form(a, (v, u)), 1, w)` is a linear form in `v`, with the value
   `form(b, (v,))`, with `b` the expression `a` with `u` replaced by `w`.
-- `action(action(form(a, (v, u)), 1, w), 0, w)` is a functional.
 - `action(form(a, (v, u)), 1, v)` is a linear form in a renamed function, with
   the fixed `v` in place of `u`, because the form binds `v`.
-- `action(l, 0, conjugate(w))` is the pairing of `l` with `w`, with no support.
-- `action(form(a, (conjugate(v), u)), 0, conjugate(w))` is the linear form `a`
-  with `w` in place of `v`.
-- `action(form(a, (v, u)) + Integer(2) * form(a, (v, u)), 1, w)` is, by linearity,
-  the sum of the actions on both operands, with `2` times the action on the
-  form of the product.
+- With `m = integral(u * conjugate(v), D)`,
+  `action(form(m, (conjugate(v), u)), 0, conjugate(w))` has the value
+  `form(integral(u * conjugate(w), D), (u,))`. Giving `conjugate(w)` to the
+  conjugated entry substitutes `w` for `v`.
+- For bilinear forms `F` and `G` with the same argument spaces,
+  `action(F + G, 1, w)` has the value
+  `action(F, 1, w) + action(G, 1, w)`: actions distribute over sums.
 - With fixed functions `w0` and `w1` in `V` and an index `k`,
   `action(form(a, (v, u)), 1, tensor((w0, w1))[k])` is a family of two linear
   forms in `v`, with the free index `k`, the actions on `w0` and on `w1`.
@@ -3596,8 +3537,6 @@ classes for the composition, as `Divergence` and `Curl` are in the core (see
   `dual_space(V)` is the adjoint interpolation of that function, and the
   action at position 1 on a function in `U` is the interpolant. The table of
   the extension for a pass that evaluates actions gives both.
-- A language extension for shape derivatives (see [Shape
-  derivatives](#shape-derivatives)).
 - A named composition that must survive a pass, or print as written, is a node
   class of a language extension whose lowering is the composition. A
   `Transpose` node class lowers to `component_tensor(A[k, l], (l, k))`. The
@@ -3609,6 +3548,9 @@ classes for the composition, as `Divergence` and `Curl` are in the core (see
   the `Transpose` extension matches an `Indexed` of a `Transpose`, and
   rewrites `Transpose(A)[i, j]` as `A[j, i]`. The table comes before the table
   of the core, which has a rule for every `Indexed`.
+
+[Shape derivatives](#shape-derivatives) give an example of an extension whose
+pass runs between two lowering stages.
 
 ### New questions
 
