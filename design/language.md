@@ -1414,7 +1414,8 @@ On a decomposed domain, the integral sums the integrals over its pieces with
 their induced densities (see [the expansion](#integral-over-a-decomposed-domain)).
 
 An array-valued $f$ integrates component by component. A later pass might
-evaluate an `Integral` over a coordinate domain, for example by quadrature.
+approximate an `Integral` over a coordinate domain by
+[quadrature](#quadrature), or evaluate it exactly when the rule is exact.
 
 #### Examples
 
@@ -1631,12 +1632,39 @@ needs no node class and no free function for a point.
 
 #### Point evaluation
 
-The value of an expression $f$ of any value shape at a point $p$ is
-`integral(pull_back(f, p), RD(0))` (see [`Integral`](#integral)). The integral
-has no support, so the integral combines with any expression.
+The value of an expression `f` at a point or indexed family of points `p` is:
+
+```python
+integral(pull_back(f, p), RD(0))
+```
+
+`p` has parameter domain `RD(0)`, and `f` is defined at its points. The
+result has no support, preserves the value shape, scalar type and argument
+spaces of `f`, and carries the free indices of `f` followed by those of `p`,
+each taken once. Point indices are retained, not summed.
+
+Evaluation preserves symbolic dependence on the expression and the points.
+Derivatives and value transformations are applied to the expression before
+sampling; sampling `gradient(f, Q)` gives the gradient on `Q` at the points.
+Basis tabulation and point observations use the same evaluation. The sampled
+values alone define no field between the points.
 
 For points in a mesh, see [A family of points in a
 mesh](#a-family-of-points-in-a-mesh).
+
+#### Quadrature
+
+A quadrature rule on a coordinate domain is a weighted sum of point
+evaluations. For a family `p` with index `i` and weights `w`:
+
+```python
+index_sum(w[i] * integral(pull_back(f, p), RD(0)), (i,))
+```
+
+`integral(f, Q)` denotes the integral; this sum approximates it and is
+mathematically equal when the rule is exact for `f`. A quadrature pass
+applies a supplied rule. On a mapped domain, the integrand includes the density
+from [integral expansion](#integral-over-a-decomposed-domain).
 
 #### Examples
 
@@ -1649,8 +1677,7 @@ third = Integer(1) / Integer(3)
 # DomainMap: the centroid of T, as a point in T.
 c = domain_map(RD(0), tensor((third, third)), T)
 
-# Integral: the value of f at the centroid, with no support and value shape ().
-# A later pass evaluates the integral to 1/9.
+# The value at the centroid: 1/9, with no support and value shape ().
 fc = integral(pull_back(f, c), RD(0))
 ```
 
@@ -2511,6 +2538,10 @@ in a mesh](#a-family-of-points-in-a-mesh)).
 The concrete subclass owns the polynomials, degrees of freedom and basis of
 $V$, and stores the arguments identifying the space, such as the finite
 element. Space identity is structural.
+
+A library may provide [cell-local interpolation](#cell-local-interpolation)
+using the sampling rule and basis of the target space. These are library
+data, not additional properties required by `AbstractFunctionSpace`.
 
 #### Spaces of constants
 
@@ -3607,13 +3638,10 @@ classes for that composition, as with `Divergence` and `Curl` in the core
   pull-back gives the node of the pulled-back operands, because the operation
   is pointwise. A pass with no table of the extension raises `TypeError` for
   the node.
-- A language extension for interpolation adds a node class for the
-  interpolation of functions of a space `U` into a space `V`, with the
-  argument spaces `(conjugate_space(dual_space(V)), U)`, the operator from
-  `U` to `V` as a form. The action at position 0 on a function in
-  `dual_space(V)` is the adjoint interpolation of that function, and the
-  action at position 1 on a function in `U` is the interpolant. The table of
-  the extension for a pass that evaluates actions gives both.
+- An interpolation node may retain the target space or delay expansion into
+  sampling and basis reconstruction. Its lowering is the library operation
+  of [Cell-local interpolation](#cell-local-interpolation). Forward
+  interpolation itself needs no new node class.
 - A named composition that must survive a pass, or print as written, is a node
   class of a language extension whose lowering is the composition. A
   `Transpose` node class lowers to `component_tensor(A[k, l], (l, k))`. The
@@ -3674,6 +3702,37 @@ because `index_sum(A[k, k], (k,))`, with a derived index `k`, is the trace for
 every extent. An operation that an `EllipsisIndex` expresses, such as
 `outer(u, v)`, needs no value shape (see
 [`EllipsisIndex`](examples/tensors.md#tensor-algebra-with-ellipsisindex)).
+
+#### Cell-local interpolation
+
+`interpolate(f, V)` is a library construction free function. Its value is the
+field in `V` whose degrees of freedom are given by applying the target's
+sampling rule to `f`.
+
+| `interpolate(f, V)` | |
+| ------------------- | --- |
+| Takes | `f: AbstractExpression`, `V: AbstractFunctionSpace` |
+| Requires | `V` a finite element space on a reference cell, `f` with that support or no support and the value shape and scalar type of `V`, both with argument spaces `()`, and `f` defined at every sampling point |
+| Static type | The support, value shape and scalar type of `V`, the free indices of `f`, and argument spaces `()` |
+
+The library of `V` defines each degree of freedom as a weighted combination
+of [point evaluations](#point-evaluation), including any quadrature for
+moments. The supplied rule defines interpolation even when the moments are
+not exact. Interpolation is linear for a fixed rule and geometry.
+
+On a physical cell, interpolation applies the target's inverse
+[transformation law](#transformationlaw) to the pulled-back input, then
+maps the reference interpolant to the physical cell by the target's law.
+A `PullBack` alone does not transform value components.
+
+Only value sampling and affine, invertible cell maps between equal dimensions
+are covered. Derivative sampling and adjoint interpolation are not yet
+covered.
+
+```{dropdown} Open: an interpolation node
+Whether a language extension node should retain membership of `V` or delay
+expansion is open.
+```
 
 ### New subclasses
 
