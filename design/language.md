@@ -2506,8 +2506,8 @@ argument of a variational form.
 
 ### `AbstractFunctionSpace`
 
-`AbstractFunctionSpace` describes a space of functions on a domain or a
-topology.
+`AbstractFunctionSpace` describes a space of fields or multilinear maps,
+with or without a domain or topology.
 
 | `AbstractFunctionSpace` |                                                                                                                                                       |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2520,8 +2520,8 @@ A space with the domain `None` has functions that do not depend on a domain.
 #### Functions in a space
 
 A function in $V$ is an expression with the support of the domain of $V$ and
-with the value shape and the scalar type of $V$. The concrete subclass defines
-the function on the cells:
+with the value shape, scalar type and argument spaces of $V$. For a field,
+the concrete subclass defines the function on the cells:
 
 - A space whose values on the reference cell do not depend on the geometry is
   on a topology $T$. The concrete subclass defines
@@ -2586,7 +2586,9 @@ In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element st
 
 ### `Function`
 
-`Function` is a member of a function space.
+`Function` is an externally supplied member of a function space. It is a
+field when its argument spaces are `()`, and otherwise a multilinear map
+with those argument spaces.
 
 | `Function(V, label)` |                                                                                                                              |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -2594,18 +2596,35 @@ In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element st
 | Free function        | `function(V, label)`                                                                                                         |
 | Takes                | `V: AbstractFunctionSpace`, `label: str \| tuple` |
 | Properties           | `space` $V$, an `AbstractFunctionSpace`, and `label`, a `str` or a `tuple` with the rules of the label of an [`Index`](#index) |
-| Static type          | The value shape of $V$, and no free indices                                                                                  |
+| Static type          | The value shape, scalar type and argument spaces of $V$, the support of its domain or none, and no free indices |
 | Raises               | `TypeError` if a requirement fails                                                                                           |
 
 The label identifies the function, so two functions are the same only if the
 spaces and the labels are equal. A function in a [dual space](#dualspace) is an
 antilinear form, such as a known load.
 
+Multilinearity applies to the argument slots, not to spatial dependence.
+The supplying library defines how actions on the function are evaluated.
+
 The [form](#form), rather than the function, decides whether a function is an
 argument or fixed data.
 
 For a scalar space `V` on a topology `T`, `u = function(V, "u")` has support
 `T` and value shape `()`.
+
+For a matrix, a library may provide `matrix_space(V, U)` with argument
+spaces `(conjugate_space(V), U)`, no domain, scalar value shape, and the
+common scalar type of `V` and `U`. For fields `u` in `U` and `v` in `V`:
+
+```python
+A = function(matrix_space(V, U), "A")
+load = action(A, 1, u)
+value = action(load, 0, conjugate(v))
+```
+
+`load` has argument spaces `(conjugate_space(V),)`; `value` has none and
+represents $v^H A u$ in coefficient notation. No matrix entries are stored
+in the expression.
 
 ```{dropdown} Legacy UFL
 The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functions. A test function and a trial function are the functions that a form states as the arguments at the positions 0 and 1.
@@ -2912,8 +2931,7 @@ Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
 
 - For a space $V$, $g$ has the value shape and the argument spaces of a
   function in $V$, the scalar type of that function or the real scalar type,
-  and the support of that function or no support. The argument spaces are `()`, or `(S',)` for $V$ =
-  `dual_space(S)` (see [`DualSpace`](#dualspace)).
+  and the support of that function or no support.
 - For `ConjugateSpace(V)`, $g$ has the type of the conjugate of an admissible
   value for $V$, including conjugating its argument spaces. It supplies the
   value of an entry `conjugate(v)`.
@@ -2937,8 +2955,11 @@ substitute `conjugate(g)` for `v`: $g$ is the value of the entry, making the
 action linear in $g$ at every position. For a tuple entry, substitute the
 members of $g$ simultaneously for the matching members.
 
-Actions on other forms follow by linearity. An action on a terminal is the pairing
-defined by its library, with one pairing per value of the free indices of $g$.
+Actions on other forms follow by linearity. An action on a terminal is
+defined by its library, for each value of the free indices of $g$. It may
+leave argument slots open; further actions remain nested, with positions
+counted among the remaining slots. The library evaluates these partial or
+complete applications. A dual pairing is the one-slot case.
 
 A dual argument may receive a symbolic form. With `P` from the
 [`DualSpace`](#dualspace) example and scalar fields `f`, `w` in `V` on `D`:
@@ -3153,7 +3174,7 @@ one before, from $N_0$ (see [Grammars](#grammars)):
 | Pass | Evaluates | Output grammar |
 | ---- | --------- | -------------- |
 | [`apply_gateaux_derivatives`](#applying-gateaux-derivatives) | `GateauxDerivative` | $N_1$ |
-| [`apply_actions`](#applying-actions) | `Action`, except a pairing | $N_2$ |
+| [`apply_actions`](#applying-actions) | `Action`, except successive actions on a `Function` | $N_2$ |
 | [`apply_derivatives`](#applying-derivatives) | `DirectionalDerivative`, then any actions it creates | $N_3$ |
 | [`expand_integrals`](#expanding-integrals) | `Integral` over a decomposed domain | $N_4$ |
 | The lowering stage | `Gradient`, `Divergence`, `Curl`, `PushForward` and `PullBack` | $N_5$, [the core normal form](#the-core-normal-form) |
@@ -3332,7 +3353,7 @@ derivative](#gateaux-derivative):
 | ------------------ | - |
 | Evaluates          | `Action` |
 | Input grammar      | $N_1$ |
-| Output grammar     | $N_2 = N_1 \setminus \{$an `Action` whose form is not a `Function` in a dual space$\}$ |
+| Output grammar     | $N_2 = N_1 \setminus \{$an `Action` whose form is neither a `Function` nor an `Action`$\}$ |
 
 The pass rewrites every `Action(f, p, g)`, inner actions first, with the first
 row that matches the form $f$, and keeps the value of [`Action`](#action).
@@ -3346,8 +3367,8 @@ created by substituting a symbolic form for a dual function.
 | `Product(a, b)`, with $n$ the arity of $a$ | `Product(Action(a, p, g), b)` for $p < n$, otherwise `Product(a, Action(b, p - n, g))` |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the action moved into the listed operands |
 | `Zero` | `Zero` with the free indices of $g$ added and the entry at $p$ removed |
-| `Function` in a dual space | Remains, a pairing of $N_2$ |
-| `Action` | Cannot occur, because the inner action is rewritten first, and an action that remains has the argument spaces `()` |
+| `Function` | Remains, for the supplying library |
+| `Action` | Remains; after rewriting the inner actions, it is a further application of a `Function` |
 | Any other class of the core | Cannot occur, because the argument spaces are `()` |
 
 - `DirectionalDerivative` binds its variable, so moving the action into it
@@ -3355,7 +3376,8 @@ created by substituting a symbolic form for a dual function.
   not differentiated.
 - A substituted form is a value with its own binders. Substitution preserves
   their scope and the scope of the enclosing form. The pass finishes when
-  every remaining action is a pairing with a terminal dual function.
+  every remaining action applies a `Function`, directly or through further
+  actions on it.
 
 ### Derivatives of the node classes
 
@@ -3375,7 +3397,7 @@ its own rows first, for the terminals of the expression, and then the rows below
 | `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
 | `Logarithm(b)` | $\delta b / b$ |
 | `Inverse(A)` | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
-| `Action(l, 0, w)`, a pairing | `Action(δl, 0, w) + Action(l, 0, δw)` |
+| `Action(f, p, g)` | `Action(δf, p, g) + Action(f, p, δg)` |
 | `Conjugate(b)`, `RealPart(b)`, `ImaginaryPart(b)` | The same node applied to $\delta b$ |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the derivative moved into the listed operands |
 
@@ -3394,7 +3416,7 @@ its own rows first, for the terminals of the expression, and then the rows below
 - The derivative of each row is a composition of node classes of the core,
   with actions evaluated as in [Applying actions](#applying-actions).
 
-The pairing rule is linear in both operands of `Action`. For the antilinear
+The action rule is linear in both expression operands. For the antilinear
 pairing of `l` with a field `v`, `w` is `conjugate(v)` and its variation is
 `conjugate(δv)`. For a product-space argument, the variation is member by
 member.
@@ -3592,7 +3614,7 @@ classes and their conditions:
 | [Decomposed domains](#decomposed-domains) | `PushForward` | Under no pull-back by a cell |
 | [Function spaces](#function-spaces) | `Function` | Always |
 | [Variational forms](#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](#form)) |
-| [Variational forms](#variational-forms) | `Action` | A pairing, an `Action` whose form is a `Function` in a dual space |
+| [Variational forms](#variational-forms) | `Action` | Its form is a `Function` or another such `Action` |
 | | A terminal of a downstream library | Always |
 
 The objects of an expression that are not expressions, such as an `Index`, an
@@ -3603,7 +3625,7 @@ only the expression nodes.
 The code that assembles receives the form layer (see [Grammars](#grammars)):
 sums and products of forms, `Zero`, forms whose expression may be a form,
 with the order of the arguments from the static type (see [`Form`](#form)),
-and pairings, which the library of the function in the dual space evaluates.
+and actions on supplied functions, which their libraries evaluate.
 
 A form compiler receives the integrand layer: integrals over reference cells
 and over points, whose integrands are arithmetic and index notation of
