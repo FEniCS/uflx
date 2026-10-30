@@ -617,129 +617,154 @@ into its components, and each component is a scalar integral over the cells.
 
 ### An interior facet integral
 
-Requires: [Sides of a topology](LANGUAGE.md#sides-of-a-topology),
-[Restriction](LANGUAGE.md#restriction), [`PushForward`](LANGUAGE.md#pushforward),
-[`Integral` over a decomposed domain](LANGUAGE.md#integral-over-a-decomposed-domain),
-[`Normal`](LANGUAGE.md#normal), [`Form`](LANGUAGE.md#form),
-[Evaluation](LANGUAGE.md#evaluation).
+The interior-facet terms of the symmetric interior penalty method combine
+traces from two cells on their shared facet. Here the cells are two triangles
+forming a unit square, and the facet is their diagonal. Gradients are taken
+on the cells before restriction to the facet.
 
-The interior facet terms of the symmetric interior penalty method for the
-Poisson problem, the legacy UFL `dS` integral, on the square divided into two
-triangles. The example uses `D`, `x`, `square` and `K` of the
-[`DecomposedDomain`](LANGUAGE.md#decomposeddomain) example, `I = ReferenceSimplex(1)`
-and the `diagonal` topology of the [Restriction](LANGUAGE.md#restriction) example, a
-Lagrange space `V` on `square` of the value shape `()`, and functions `u` and
-`v` in `V`. `runtime_array` is the language extension of the [cut cell
-example](#integrating-over-a-cut-cell).
+#### Mesh and fields
+
+Use the library classes [ReferenceSimplex](#the-unit-simplex-as-a-reference-cell)
+and [StaticTopology](#a-static-topology):
 
 ```python
-# The interior facets, seen from the sides "+" and "-", with the free index e.
+K, I = ReferenceSimplex(2), ReferenceSimplex(1)
+square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+diagonal = StaticTopology(
+    (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
+)
+```
+
+The library supplies `X_space`, a vector Lagrange space of degree 1 and value
+shape `(2,)`, and `V`, a real scalar discontinuous Lagrange space, both on `square`.
+The solver gives the coordinate function `x` the vertex values
+`((0, 0), (1, 0), (0, 1), (1, 1))`, in vertex-number order.
+`runtime_array` supplies an array of solver data with no support (see
+[kernel inputs](#integrating-over-a-cut-cell)).
+
+```python
+x = function(X_space, "x")
+D = image(x, RD(2))
 E = side_domain(D, diagonal)
 e = cell_index(diagonal, 0)
 
-# The fields on D and their gradients, in the frame of RD(2).
-i = index("i")
+u, v = function(V, "u"), function(V, "v")
 u_D, v_D = push_forward(u, D), push_forward(v, D)
 grad_u, grad_v = gradient(u_D, D), gradient(v_D, D)
+```
 
-# The restrictions from each side, pull-backs by the side maps, expressions on E.
+#### Traces and the facet form
+
+The side names `"+"` and `"-"` select triangles `(0, 1, 2)` and `(1, 3, 2)`.
+Pulling back from either side gives an expression on `E`, so the traces can
+be subtracted at the same physical point:
+
+```python
 plus, minus = side_map(D, E, "+"), side_map(D, E, "-")
 u_p, u_m = pull_back(u_D, plus), pull_back(u_D, minus)
 v_p, v_m = pull_back(v_D, plus), pull_back(v_D, minus)
 du_p, du_m = pull_back(grad_u, plus), pull_back(grad_u, minus)
 dv_p, dv_m = pull_back(grad_v, plus), pull_back(grad_v, minus)
+```
 
-# The normal out of the cell on the side "+", and the jumps and averages.
+Use the normal out of the `"+"` cell for both averaged normal derivatives.
+`alpha[e]` is the penalty on facet `e`, including the usual cell-size factor
+$1/h$.
+
+```python
+i = index("i")
 n = normal(plus)
 half = Integer(1) / Integer(2)
 jump_u, jump_v = u_p - u_m, v_p - v_m
 avg_dn_u = half * index_sum((du_p[i] + du_m[i]) * n[i], (i,))
 avg_dn_v = half * index_sum((dv_p[i] + dv_m[i]) * n[i], (i,))
-
-# The penalty parameter of each facet, an array of the solver.
 alpha = runtime_array("alpha", (diagonal.num_cells[0],))
 
-# The facet terms of the symmetric interior penalty method.
 f = -avg_dn_u * jump_v - jump_u * avg_dn_v + alpha[e] * jump_u * jump_v
 a_facet = form(integral(f, E), (v, u))
 ```
 
-- `u_p` is `pull_back(u_D, side_map(D, E, "+"))`, an expression with the
-  support `E` and no free index. `jump_u` is the difference of two
-  expressions on `E`, and `f` has the support `E` and the free index `e`,
-  from `alpha[e]`. The form binds `v` and `u`, the functions on `square`.
-- `n` points out of the cell on the side `"+"`, the triangle `(0, 1, 2)`, so
-  `jump_u * n` is the jump of `u` with a fixed sign convention. Swapping the
-  two sides in `diagonal` negates `n` and every jump, and leaves `f`
-  unchanged, because every term of `f` has two jumps or a jump and a normal.
-- `alpha[e]` stands for the legacy $\alpha / h$. The array is a choice, not a
-  limitation. A size built from the two cells is a composition with the free
-  index `e`: the measure of the cell on the side `"+"` is
-  `integral(density(B_p), K)`, with `B_p` the map $B_+$ of
-  [Restriction](LANGUAGE.md#restriction) (see [Jacobian and
-  density](LANGUAGE.md#jacobian-and-density)), and a per-cell array `h` of the
-  solver is read as `h[gathered_index(cells_p, (e,))]`.
+`a_facet` binds the functions `v` and `u` on `square`. Its integrand has
+support `E` and the free index `e` from the penalty array; the traces themselves
+have no free index. Swapping the sides negates the normal and both jumps,
+leaving every term unchanged.
 
-The passes rewrite `a_facet` as follows. $B_\pm$ =
-`cell_domain(D, 0, g_pm)` is the cell on each side, with
-`g_pm = gathered_index(cells_pm, (e,))`, and $A_\pm$ is the inclusion of the
-facet into that cell, both of [Restriction](LANGUAGE.md#restriction), from
-the side tables of each side. A `StaticTopology` builds $A_\pm$ =
-`domain_map(I, affine_map(I, points_pm), K)` from the positions
-`positions_pm` of the facet vertices (see [Side tables of a static
-topology](#side-tables-of-a-static-topology)):
+For this square, the reference-facet inclusions are
+$A_+(t) = (1-t, t)$ and $A_-(t) = (0, t)$. Both select the physical point
+$(1-t, t)$. The cell Jacobians are $J_+ = I_2$ and
+$J_- = \begin{pmatrix}0 & -1 \\ 1 & 1\end{pmatrix}$, so the normal is
+$(1,1)/\sqrt{2}$ and the facet density is $\sqrt{2}$.
 
-1. `expand_integrals` rewrites `integral(f, E)` as
-   `index_sum(integral(pull_back(f, cell_domain(E, 0)) * density(cell_domain(E, 0)), I), (e,))`,
-   with the density the length of the facet, from the Jacobian of the
-   parameterisation `pull_back(pull_back(x, cell_map(square, 0, g_p)), A_+)`
-   of the piece.
-2. The lowering stage moves the pull-back by `cell_domain(E, 0)` into `f`. On
-   `u_p` the rule for `SideMap` gives `pull_back(pull_back(u_D, B_+), A_+)`,
-   and the rule for `PushForward` gives
-   `pull_back(pull_back(u, cell_map(square, 0, g_p)), A_+)`, the value of `u`
-   on the cell `cells_p[e]` for the library of `V`, at the points of the
-   facet. On `du_p` the rule for `Gradient` gives $K^T \hat g$, with $K$ =
-   `inverse(J_+)` the inverse Jacobian of the cell and $\hat g$ =
-   `gradient(pull_back(u, cell_map(square, 0, g_p)), K)` the reference
-   gradient, both pulled back by $A_+$, because `I` has lower dimension than
-   `K`. $J_+$ is the reference gradient of `x` on the cell, which the library
-   of the space of `x` gives. On `n` the rule for `Normal` gives
-   $K^T \hat m / \lvert K^T \hat m \rvert$, with $\hat m$ the reference normal
-   of the side tables, the normal of the edge `(1, 2)` of `K` pointing out of
-   `K`. On `alpha[e]`, an expression with no support whose free index `e` is
-   free in `cell_domain(E, 0)`, the pull-back is `alpha[e]`.
-3. `reduce_component_tensors`, a pass of the compiler, reduces `points_pm` to
-   `Indexed`s of `positions_pm`.
+#### From the facet integral to a kernel
 
-After the passes, `a_facet` is `form(index_sum(integral(g, I), (e,)), (v, u))`
-with `g` an expression on `I` with the free index `e`. The `IndexSum` over `e`
-is the loop of the assembler over the interior facets. The gathered indices in
-`g` read, for the facet `e`, the two cells `cells_p[e]` and `cells_m[e]`, the
-coefficients of `x` on each, the positions `positions_p[e, v, k]` and
-`positions_m[e, v, k]`, and `alpha[e]`, which the assembler packs for a
-kernel. The kernel is `g` without `e`: an expression on the reference facet
-`I` that reads the reference basis of `u`, `v` and `x` on the two cells,
-through the libraries of their spaces, at the points of the facet in each
-cell's reference coordinates $A_\pm(t)$. This is the interface of a legacy
-interior facet kernel, with the local facet numbers replaced by the positions
-of the facet vertices, which also fix the direction of the facet from each
-side.
+`expand_integrals` expresses the integral on the reference interval:
 
-- In the example, $A_+(t) = (1 - t, t)$ and $A_-(t) = (0, t)$ (see
-  [Restriction](LANGUAGE.md#restriction)), $J_+$ is the identity and $J_-$ is
-  $\begin{pmatrix} 0 & -1 \\ 1 & 1 \end{pmatrix}$, and $\hat m = (1, 1) / \sqrt 2$,
-  so `n` evaluates to $(1, 1) / \sqrt 2$ on the diagonal, pointing from
-  triangle 0 into triangle 1, and the density to $\sqrt 2$.
-- `u_m` on the same `t` reads `u` on triangle 1 at
-  $(0, t)$, the same physical point $(1 - t, t)$ as from `"+"`, so `jump_u`
-  is a difference at one point.
-- The values alone need no mesh. `pull_back(u, side_map(square, diagonal, "+"))`
-  is the restriction of `u` on the topology, and pushes forward to `E` with
-  the identity law.
+```python
+facet_cell = cell_domain(E, 0)
+form(
+    index_sum(integral(pull_back(f, facet_cell) * density(facet_cell), I), (e,)),
+    (v, u),
+)
+```
+
+The side tables supply the neighbouring cell numbers `cells_p`, `cells_m`
+and the reference coordinates of the facet vertices `positions_p`,
+`positions_m`. The latter define the affine inclusions $A_\pm$ through
+[affine_map](#side-tables-of-a-static-topology). For example, the `"+"` trace
+lowers to:
+
+```python
+g_p = gathered_index(cells_p, (e,))
+C_p = cell_map(square, 0, g_p)
+t = coordinate(I)[0]
+A_p = domain_map(I, tensor((Integer(1) - t, t)), K)
+pull_back(pull_back(u, C_p), A_p)
+```
+
+The coordinate trace follows the same route, so the facet parameterisation is `pull_back(pull_back(x, C_p), A_p)`;
+its Jacobian gives the facet density.
+
+At a reference-facet point $t$, let $\hat u_+$ be the reference-cell field,
+$J_+$ the cell Jacobian evaluated at $A_+(t)$, and $\hat m_+$ the outward
+reference normal supplied by the side tables. The lowering stage gives:
+
+| Expression on `E` | Value at the facet point |
+| ----------------- | ------------------------ |
+| `u_p` | $\hat u_+(A_+(t))$ |
+| `du_p` | $J_+^{-T}\widehat\nabla\hat u_+(A_+(t))$ |
+| `n` | $J_+^{-T}\hat m_+ / \lvert J_+^{-T}\hat m_+\rvert$ |
+| `alpha[e]` | Unchanged: it has no support and shares the facet index. |
+
+The `"-"` traces follow the same rules on the other cell. Here
+$\hat m_+ = (1,1)/\sqrt{2}$. The compiler's `reduce_component_tensors` pass
+then reduces the indexed vertex-coordinate expressions to reads from
+`positions_p` and `positions_m`. The resulting form has the structure:
+
+```python
+form(index_sum(integral(g, I), (e,)), (v, u))
+```
+
+`g` is the lowered integrand on `I`, with the facet index `e` free. The
+assembler loops over `e`, packing the two cell numbers, coordinate
+coefficients, facet-vertex positions and penalty. For a fixed `e`, the kernel
+reads the reference bases of `u`, `v` and `x` on both cells at $A_\pm(t)$.
+The vertex positions replace legacy local-facet numbers and determine the
+facet direction on each side.
+
+#### Variations
+
+- The penalty can use computed cell sizes instead of an array. With
+  `B_p = cell_domain(D, 0, g_p)`, `integral(density(B_p), K)` is the measure
+  of the `"+"` cell; a solver's per-cell size array `h` is read as `h[g_p]`.
+- Restricting values alone needs no mesh:
+  `pull_back(u, side_map(square, diagonal, "+"))` is a trace on the topology.
+  Pushing it forward to `E` with the identity law gives `u_p`.
 
 ```{dropdown} Legacy UFL
-The legacy UFL form is `-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`, with `n` the normal from `'+'` and `h` a cell size. In UFLx the side names, the normal, the facet domain and the push-forward to the mesh are explicit, `avg` and `jump` are ordinary arithmetic on restrictions, and the size is an array of the solver or a composition of integrals over the cells.
+This is the `dS` form
+`-avg(dot(grad(u), n)) * jump(v) * dS - jump(u) * avg(dot(grad(v), n)) * dS + alpha / h * jump(u) * jump(v) * dS`.
+Here the side maps make restriction explicit; jumps and averages are ordinary
+arithmetic on the traces.
 ```
 
 ### A Bank-Weiser error estimator
