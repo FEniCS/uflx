@@ -842,9 +842,13 @@ A free function of the core calls `indexed`, never `component`, so a
 composition in this document that writes `f[K]` is `indexed(f, K)`, and an
 operand of the wrong rank raises from `Indexed`.
 
-For the same matrix `A`, `A[1]` is row 1 of `A`, the composition
-`component_tensor(indexed(A, (1, k)), (k,))` of value shape `(2,)`, with `k`
-the derived index.
+For the same matrix `A`, `A[1]` is row 1, of value shape `(2,)`. With `k`
+the derived index, its construction is:
+
+```python
+entry = indexed(A, (1, k))
+row = component_tensor(entry, (k,))
+```
 
 ### `ComponentTensor` and `IndexSum`
 
@@ -866,9 +870,16 @@ Scope is lexical. An occurrence of an `Index` refers to the innermost
 index. An occurrence that no such binder encloses is free. A bound index is
 not free in the binding node, so the binding is closed, and a binder may bind
 an index that a binder inside the expression of the binder also binds. For
-example, with a vector `a` and `i = index("i")`,
-`p = component_tensor(a[i], (i,))` has no free index. In `p[i]`, the outer
-`i` is free and does not refer to the bound `i` inside `p`.
+example, with a vector `a`:
+
+```python
+i = index("i")
+p = component_tensor(a[i], (i,))
+entry = p[i]
+```
+
+`p` has no free index. In `entry`, the outer `i` is free and does not refer
+to the bound `i` inside `p`.
 
 A pass that substitutes into the expression of a binder renames the bound
 indices that would capture a free index of the substituted expression (see
@@ -1138,13 +1149,18 @@ as QR does not. The core writes the determinant as the free function
 [`determinant`](#determinant), so the core has no node class for the
 determinant.
 
-Examples, with `one, two, three = Integer(1), Integer(2), Integer(3)`:
+Examples:
 
-- For `A = tensor((tensor((two, one)), tensor((one, three))))`, `inverse(A)`
+```python
+one, two, three = Integer(1), Integer(2), Integer(3)
+A = tensor((tensor((two, one)), tensor((one, three))))
+J = tensor((tensor((one,)), tensor((one,))))
+```
+
+- `inverse(A)`
   has value shape `(2, 2)` and value
   $\frac{1}{5} \begin{pmatrix} 3 & -1 \\ -1 & 2 \end{pmatrix}$.
-- For `J = tensor((tensor((one,)), tensor((one,))))`, of value shape `(2, 1)`,
-  `inverse(J)` has value shape `(1, 2)` and value
+- `J` has value shape `(2, 1)`. `inverse(J)` has value shape `(1, 2)` and value
   $\begin{pmatrix} 1/2 & 1/2 \end{pmatrix}$. This is a left inverse.
 - `inverse(transpose(J))` raises `ValueError`: the operand has more columns
   than rows.
@@ -1307,8 +1323,14 @@ on $Q$, evaluated at $\psi(p)$.
 
 #### Examples
 
-The examples use `P = RD(3)`, `X = coordinate(P)`, `x, y, z = X[0], X[1], X[2]`,
-and `f = x * y * z`:
+Start with a scalar expression on `RD(3)`:
+
+```python
+P = RD(3)
+X = coordinate(P)
+x, y, z = X[0], X[1], X[2]
+f = x * y * z
+```
 
 | Expression                              | Value shape | Meaning                                       |
 | --------------------------------------- | ----------- | --------------------------------------------- |
@@ -1414,15 +1436,25 @@ constants of value shape `(3, 3)`, the identity matrix `I` of value shape
 
 ```python
 E = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / Integer(2), (i, j))
-S = Integer(2) * component_tensor(directional_derivative(strain_energy(C_), C_, C, E), (k, l))
+psi_symbol = strain_energy(C_)
+dpsi = directional_derivative(psi_symbol, C_, C, E)
+S = Integer(2) * component_tensor(dpsi, (k, l))
 ```
 
 `E` has the free indices `k` and `l`, and is symmetric for each value of `k` and
 `l`, so `S` is $2 \operatorname{sym}(\partial \psi / \partial C)$ at `C`, the
-second Piola–Kirchhoff stress. For a strain energy `psi` already built from `C`,
-`replace(psi, {C: C_})` gives the strain energy of the symbol (see [Substitution
-and binding](#substitution-and-binding)). The direction `component_tensor(I[i,
-k] * I[j, l], (i, j))` gives the full derivative, without `sym`.
+second Piola–Kirchhoff stress. If the strain energy `psi` is already built
+from `C`, construct the symbolic expression by substitution instead:
+
+```python
+psi_symbol = replace(psi, {C: C_})
+```
+
+For the full derivative without `sym`, use the direction:
+
+```python
+E_full = component_tensor(I[i, k] * I[j, l], (i, j))
+```
 
 ### `Integral`
 
@@ -1512,9 +1544,15 @@ Examples:
   and $n = 2$. $P$ is the unit interval in $R^1$, and
   $\psi(X) = (1 - X_0, X_0)$. $Q$ is `RD(2)` for the hypotenuse in the plane,
   and `UnitSimplex(2)` for the hypotenuse in the unit triangle.
-- With `X = coordinate(RD(2))` and `h = X[0]**Integer(2) + X[1]**Integer(2)`,
-  `domain_map(RD(2), tensor((X[0], X[1], h)), RD(3))` is the
-  paraboloid, with $k = 2$ and $n = 3$.
+A curved example is the paraboloid, with $k = 2$ and $n = 3$:
+
+```python
+P = RD(2)
+X = coordinate(P)
+h = X[0]**Integer(2) + X[1]**Integer(2)
+psi = tensor((X[0], X[1], h))
+paraboloid = domain_map(P, psi, RD(3))
+```
 
 ### `PullBack`
 
@@ -1556,11 +1594,15 @@ of $D$. The image is given by the domain map with the parameterisation
 `pull_back(D.parameterisation, E)` on the parameter domain of $E$, in the
 ambient domain of $D$, such as `E` in the example below.
 
-Example, with the unit triangle `T = UnitSimplex(2)`, `X = coordinate(T)`, `one
-= Integer(1)`, and the affine parameterisation `psi = tensor((one + Integer(2) *
-X[0] + X[1], one + Integer(2) * X[1]))` of a triangle `K` in `RD(2)`:
+This example maps an edge of the unit triangle `T` into a triangle `K` in
+`RD(2)`:
 
 ```python
+T = UnitSimplex(2)
+X = coordinate(T)
+one, two = Integer(1), Integer(2)
+psi = tensor((one + two * X[0] + X[1], one + two * X[1]))
+
 # The unit interval, the parameter domain of the edge, with coordinate t.
 S = UnitSimplex(1)
 t = coordinate(S)[0]
@@ -1578,8 +1620,13 @@ E = domain_map(S, pull_back(psi, e), RD(2))
 
 - A later pass evaluates `fe` to $(1 - t) t$, and the parameterisation of `E`
   to $(3 - t, 1 + 2 t)$.
-- `pull_back(f, domain_map(S, tensor((one - t, t)), RD(2)))`
-  raises `ValueError`, because that domain lies in `RD(2)`, not in `T`.
+Changing the ambient domain makes this pull-back invalid: `f` has support
+`T`, not `RD(2)`.
+
+```python
+edge_in_plane = domain_map(S, tensor((one - t, t)), RD(2))
+pull_back(f, edge_in_plane)  # Raises ValueError.
+```
 
 ### Jacobian and density
 
@@ -2025,16 +2072,17 @@ on each domain of piece $j$. The pull-back of `coordinate(D)` is $\psi_j$.
 
 #### Examples
 
-The examples use the following objects:
+Use the two-triangle topology of the [static topology
+example](EXAMPLES.md#a-static-topology), on reference cells:
 
-- `K = ReferenceSimplex(2)`.
-- The topology
-  `square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())` of the
-  [static topology example](EXAMPLES.md#a-static-topology), on
-  reference cells.
-- A function `x` on `square` in a space of vector Lagrange of degree 1 and
-  value shape `(2,)`, with the values $(0, 0)$, $(1, 0)$, $(0, 1)$ and
-  $(1, 1)$ at the vertices.
+```python
+K = ReferenceSimplex(2)
+square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+```
+
+Let `x` be a vector Lagrange function of degree 1 on `square`, of value shape
+`(2,)`, with vertex values $(0, 0)$, $(1, 0)$, $(0, 1)$ and $(1, 1)$.
+Its image is the square:
 
 ```python
 D = image(x, RD(2))
@@ -2250,7 +2298,9 @@ function `u` on `square`, and the diagonal of `square`:
 diagonal = StaticTopology(
     (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
 )
-jump = pull_back(u, side_map(square, diagonal, "+")) - pull_back(u, side_map(square, diagonal, "-"))
+plus = side_map(square, diagonal, "+")
+minus = side_map(square, diagonal, "-")
+jump = pull_back(u, plus) - pull_back(u, minus)
 E = side_domain(D, diagonal)
 ```
 
@@ -2259,15 +2309,27 @@ E = side_domain(D, diagonal)
   `"-"`, the side tables are the cells `(1,)` and the inclusion
   $A_-(t) = (0, t)$, through the local vertices 0 and 2. The coordinates of
   `E` are $(1 - t, t)$.
-- Let `pull_back(u, cell_map(square, 0))` be
-  `a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]`. The two restrictions pulled
-  back to the diagonal are $a_{0,0} + a_{0,1}(1 - t) + a_{0,2} t$ and
-  $a_{1,0} + a_{1,2} t$. The two are equal for all $t$ if `u` is continuous at
-  the vertices 1 and 2.
-- With the diagonal listed as `(2, 1)`, the inclusion from `"+"` is
-  $A_+(t) = (t, 1 - t)$. Both sides use the vertex numbering of the diagonal, so the restrictions from both sides run the
-  other way along the diagonal, and the jump at each point of the diagonal is
-  unchanged.
+Suppose the reference-cell value `pull_back(u, cell_map(square, 0))` is:
+
+```python
+a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]
+```
+
+Here `c = cell_index(square, 0)` and `X = coordinate(K)`. Substituting the cell
+number and inclusion from each side gives:
+
+$$
+\begin{aligned}
+u_+(t) &= a_{0,0} + a_{0,1}(1 - t) + a_{0,2}t, \\
+u_-(t) &= a_{1,0} + a_{1,2}t.
+\end{aligned}
+$$
+
+The two are equal for all $t$ if `u` is continuous at vertices 1 and 2.
+
+Listing the diagonal as `(2, 1)` changes the inclusion from `"+"` to
+$A_+(t) = (t, 1 - t)$. Both restrictions then run the other way along the
+diagonal, leaving the jump at each point unchanged.
 
 ```{dropdown} Legacy UFL
 The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on the topology $S$ of the interior facets, whose sides are named `'+'` and `'-'`.
@@ -2709,17 +2771,30 @@ canonical map from `V` is not a form of the core.
 
 #### Examples
 
-Let `v` and `q` be functions in spaces `V` and `Q`, respectively.
+Let `v` and `q` be functions in spaces `V` and `Q`, respectively. A function
+in a dual space pairs with a conjugated argument:
 
-- `l = function(dual_space(V), "l")` has the argument spaces
-  `(conjugate_space(V),)`. `action(l, 0, conjugate(v))` is the pairing
-  $\langle l, v \rangle$.
-- `m = function(dual_space((V, Q)), "m")` has the argument spaces
-  `((conjugate_space(V), conjugate_space(Q)),)`.
-  `action(m, 0, (conjugate(v), conjugate(q)))` is the pairing of `m` with
-  `(v, q)`.
-- `form(action(l, 0, conjugate(v)), (l,))` raises `ValueError`: a form cannot
-  bind `l`, because `l` already has argument spaces.
+```python
+l = function(dual_space(V), "l")
+pairing = action(l, 0, conjugate(v))
+```
+
+`l` has argument spaces `(conjugate_space(V),)`, and `pairing` is
+$\langle l, v \rangle$.
+
+For a product of spaces, the argument is a tuple:
+
+```python
+m = function(dual_space((V, Q)), "m")
+pairing_mixed = action(m, 0, (conjugate(v), conjugate(q)))
+```
+
+`m` has argument spaces `((conjugate_space(V), conjugate_space(Q)),)`.
+A form cannot bind `l`, because `l` already has argument spaces:
+
+```python
+form(pairing, (l,))  # Raises ValueError.
+```
 
 ```{dropdown} Legacy UFL
 The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual_space(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the spaces keep distinct argument spaces. A form of the core binds no `Coargument`, and an operator with a `Coargument` is a node class of a language extension.
@@ -2778,27 +2853,56 @@ of integrals has no support, although the arguments have one. A substitution
 renames a bound argument to avoid capture, as for indices (see [Substitution and
 binding](#substitution-and-binding)).
 
-Examples, with scalar functions `u`, `v` and a fixed `w` in a space `V` on
-`D`, and `a = integral(u * v, D)`:
+Let `u` and `v` be scalar functions in a space `V` on `D`:
 
-- `form(a, (v,))` binds `v` and keeps `u` fixed, giving a linear form.
-  `form(a, (v, u))` binds both, giving argument spaces `(V, V)`.
-- `form(a, (v, u)) + form(a, (v,))` raises `ValueError`.
-- With `m = integral(u * conjugate(v), D)`, `form(m, (conjugate(v), u))` is
-  the sesquilinear mass form, with the argument spaces
-  `(conjugate_space(V), V)`.
-- With `r = integral(f * conjugate(v), D)` and `l = function(dual_space(V), "l")`,
-  `form(r, (conjugate(v),)) - l` is a residual, with the argument spaces
-  `(conjugate_space(V),)`. For a complex `V`, `form(integral(f * v, D), (v,)) - l`
-  raises `ValueError`, because the argument spaces `(V,)` and
-  `(conjugate_space(V),)` differ.
-- With a velocity space `V` and a pressure space `Q`, functions `u`, `v` in `V`
-  and `p`, `q` in `Q`, and the Stokes expression `e` of the terms
-  $\nabla u : \nabla v$, $-p \, \mathrm{div}\, v$ and $-q \, \mathrm{div}\, u$,
-  `form(e, ((v, q), (u, p)))` is a bilinear form with the argument spaces
-  `((V, Q), (V, Q))`. `form(e, (v, q, u, p))` states a wrong form of arity
-  4, because no term of `e` is linear in all four functions. Construction
-  accepts the form, and a linearity check rejects the form.
+```python
+a = integral(u * v, D)
+L = form(a, (v,))
+B = form(a, (v, u))
+```
+
+`L` binds `v` and keeps `u` fixed. `B` binds both, giving argument spaces
+`(V, V)`. The sum `B + L` raises `ValueError` because their arities differ.
+
+A conjugated entry gives a sesquilinear form:
+
+```python
+m = integral(u * conjugate(v), D)
+M = form(m, (conjugate(v), u))
+```
+
+`M` has argument spaces `(conjugate_space(V), V)`.
+
+A form and an assembled load can have the same argument spaces. For a fixed
+scalar field `f` on `D`:
+
+```python
+r = integral(f * conjugate(v), D)
+R = form(r, (conjugate(v),))
+l = function(dual_space(V), "l")
+residual = R - l
+```
+
+`residual` has argument spaces `(conjugate_space(V),)`. For complex `V`,
+binding `v` linearly instead gives incompatible argument spaces:
+
+```python
+linear_load = form(integral(f * v, D), (v,))
+linear_load - l  # Raises ValueError.
+```
+
+For a mixed problem, let `u`, `v` belong to a velocity space `V`, and `p`, `q`
+to a pressure space `Q`. Let `e` be the Stokes expression with terms
+$\nabla u : \nabla v$, $-p \, \mathrm{div}\, v$ and $-q \, \mathrm{div}\, u$:
+
+```python
+stokes = form(e, ((v, q), (u, p)))
+wrong_arity = form(e, (v, q, u, p))
+```
+
+`stokes` has argument spaces `((V, Q), (V, Q))`. Construction also accepts
+`wrong_arity`, but a linearity check rejects it: no term is linear in all four
+functions.
 
 #### Checking linearity
 
@@ -2863,25 +2967,82 @@ free indices of $g$.
 
 #### Examples
 
-The examples use `a`, `u`, `v` and `w` of the [`Form`](#form) examples.
+Let `u`, `v` and `w` be scalar functions in a space `V` on `D`.
+An action supplies a value for one argument:
 
-- `action(form(a, (v, u)), 1, w)` is a linear form in `v`, with the value
-  `form(b, (v,))`, with `b` the expression `a` with `u` replaced by `w`.
-- `action(form(a, (v, u)), 1, v)` is a linear form in a renamed function, with
-  the fixed `v` in place of `u`, because the form binds `v`.
-- With `m = integral(u * conjugate(v), D)`,
-  `action(form(m, (conjugate(v), u)), 0, conjugate(w))` has the value
-  `form(integral(u * conjugate(w), D), (u,))`. Giving `conjugate(w)` to the
-  conjugated entry substitutes `w` for `v`.
-- For bilinear forms `F` and `G` with the same argument spaces,
-  `action(F + G, 1, w)` has the value
-  `action(F, 1, w) + action(G, 1, w)`: actions distribute over sums.
-- With fixed functions `w0` and `w1` in `V` and an index `k`,
-  `action(form(a, (v, u)), 1, tensor((w0, w1))[k])` is a family of two linear
-  forms in `v`, with the free index `k`, the actions on `w0` and on `w1`.
-- Let `w` in `V` and `r` in `Q` be fixed functions, with the Stokes form of the
-  [`Form`](#form) examples. `action(form(e, ((v, q), (u, p))), 1, (w, r))` is
-  a linear form in `(v, q)`, the residual at `(w, r)`.
+```python
+a = integral(u * v, D)
+F = form(a, (v, u))
+result = action(F, 1, w)
+```
+
+The result has the value:
+
+```python
+form(integral(w * v, D), (v,))
+```
+
+Supplying `v` instead requires renaming the bound argument to avoid capture:
+
+```python
+result = action(F, 1, v)
+```
+
+With `v_fresh` the renamed bound function, the result has the value:
+
+```python
+form(integral(v * v_fresh, D), (v_fresh,))
+```
+
+For a conjugated argument:
+
+```python
+m = integral(u * conjugate(v), D)
+M = form(m, (conjugate(v), u))
+result = action(M, 0, conjugate(w))
+```
+
+The result has the value:
+
+```python
+form(integral(u * conjugate(w), D), (u,))
+```
+
+Supplying `conjugate(w)` to the conjugated entry replaces `v` by `w`.
+
+Actions distribute over sums. For bilinear forms `F` and `G` with the same
+argument spaces:
+
+```python
+result = action(F + G, 1, w)
+```
+
+The result has the value:
+
+```python
+action(F, 1, w) + action(G, 1, w)
+```
+
+An argument with a free index gives a family of actions. With fixed functions
+`w0` and `w1` in `V`:
+
+```python
+k = index("k")
+directions = tensor((w0, w1))
+family = action(F, 1, directions[k])
+```
+
+`family` has the free index `k`: its members are the actions on `w0` and `w1`.
+
+For the Stokes expression `e` of the [`Form`](#form) examples, with fixed
+functions `w` in `V` and `r` in `Q`:
+
+```python
+stokes = form(e, ((v, q), (u, p)))
+residual = action(stokes, 1, (w, r))
+```
+
+`residual` is a linear form in `(v, q)`.
 
 ```{dropdown} Legacy UFL
 Legacy UFL operations are actions and rebindings. The action on the last argument of a bilinear form is `action(f, 1, w)`. The adjoint of `form(e, (conjugate(v), u))` is `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in `v` and antilinear in `u`. The Gateaux derivative with respect to a function adds an argument (see [Gateaux derivative](#gateaux-derivative)).
@@ -3054,19 +3215,46 @@ name of a bound function `v` in a space $V$ is
 `tuple` of the operands in which the names are bound. The label refers to
 `body` and to each $s_k$, so the new name occurs in neither (see [Derived
 indices](#derived-indices)). The bound names of a binding node are distinct,
-so the new names are distinct. For example, replacing
-`c` by `b[i]` in `index_sum(a[i] * c, (i,))` gives
-`index_sum(a[j] * b[i], (j,))`, with `j` the renamed index, and the result has
-the free index `i`. Without the renaming, the result would be
-`index_sum(a[i] * b[i], (i,))`, with no free index. Replacing `v` by `w` in
-`form(a, (v,))` gives `form(a, (v,))`, because the form binds `v`. Replacing
-`u` by `u0` in `DirectionalDerivative(f, u, u, h)` gives
-`DirectionalDerivative(f, u, u0, h)`, the derivative at `u0`, because the
-point is not bound.
+so the new names are distinct.
 
-The pass `replace(e, mapping)` of the core substitutes the value of each key of
-the `dict` `mapping` for the key in $e$, simultaneously and with the scope
-above.
+The core pass `replace(e, mapping)` performs this simultaneous substitution,
+replacing each key of the `dict` `mapping` with its value.
+
+For example, substituting an expression with a free index requires renaming:
+
+```python
+e = index_sum(a[i] * c, (i,))
+result = replace(e, {c: b[i]})
+```
+
+With `j` the renamed index, the result is:
+
+```python
+index_sum(a[j] * b[i], (j,))
+```
+
+The index `i` remains free. Without renaming, it would be captured by the sum.
+
+A bound function is not replaced:
+
+```python
+F = form(a, (v,))
+replace(F, {v: w})  # Leaves the bound v unchanged.
+```
+
+The point of a derivative is not bound, even when it is the same function as
+the variable:
+
+```python
+d = DirectionalDerivative(f, u, u, h)
+result = replace(d, {u: u0})
+```
+
+The result is the derivative at `u0`:
+
+```python
+DirectionalDerivative(f, u, u0, h)
+```
 
 ### Grammars
 
@@ -3582,9 +3770,17 @@ A downstream library builds a new operation from existing node classes, as a
 free function. As in the core, the free function may read the static type of
 the operands, such as a value shape, to choose the composition (see
 [Node class or free function](#node-class-or-free-function)). For example,
-`cross(a, b)` reads the value shape `(3,)` of `a` and `b` and returns
-`tensor((a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]))`,
-so `cross(a, b)` requires the value shape `(3,)`. `trace(A)` reads no extent,
+`cross(a, b)` requires both operands to have value shape `(3,)` and returns:
+
+```python
+tensor((
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+))
+```
+
+`trace(A)` reads no extent,
 because `index_sum(A[k, k], (k,))`, with a derived index `k`, is the trace for
 every extent. An operation that an `EllipsisIndex` expresses, such as
 `outer(u, v)`, needs no value shape (see
