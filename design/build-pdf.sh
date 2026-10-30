@@ -4,6 +4,8 @@
 # Usage: design/build-pdf.sh [--proof] [NOTE.md ...]
 # With no notes given, every note is built. --proof builds NOTE-proof.pdf, a
 # copy for proofreading with wide margins, line numbers and the commit.
+# Mermaid diagrams require Mermaid CLI 12+: npm install -g @mermaid-js/mermaid-cli
+# Set MMDC to use a CLI installed outside PATH.
 
 set -euo pipefail
 
@@ -63,7 +65,19 @@ fi
 
 for note in "${notes[@]}"; do
   name="${note%.md}$suffix"
-  pandoc "$here/$note" \
+  source="$here/$note"
+  if grep -q '^```mermaid' "$source"; then
+    renderer="${MMDC:-mmdc}"
+    if ! command -v "$renderer" >/dev/null 2>&1; then
+      echo "Mermaid diagrams require mmdc: npm install -g @mermaid-js/mermaid-cli" >&2
+      exit 1
+    fi
+    rendered="$out/$name-rendered.md"
+    "$renderer" --input "$source" --output "$rendered" --outputFormat pdf --quiet
+    source="$rendered"
+  fi
+  pandoc "$source" \
+    --resource-path "$out:$here" \
     --from "$reader" \
     --standalone \
     --shift-heading-level-by=-1 \

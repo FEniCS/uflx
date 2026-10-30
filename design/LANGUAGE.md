@@ -3749,99 +3749,262 @@ composition:
 
 ## Appendix: Class hierarchy
 
-Every object in the graph extends `Base`. Each tree gives the classes of a
-chapter under the classes that they extend.
+Every object in the graph extends `Base`. Diagrams are grouped by chapter;
+larger chapters span several diagrams. An arrow points from a subclass to its
+parent. A class with multiple parents has an arrow to each.
 
 <!-- generated: class-hierarchy, run design/appendices.py to update -->
+### Domains
+
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Domains class hierarchy
+    Base <|-- AbstractDomain
+    AbstractDomain <|-- AbstractCoordinateDomain
+    AbstractCoordinateDomain <|-- RD
 ```
-# Domains
-Base
-└── AbstractDomain
-    └── AbstractCoordinateDomain
-        └── RD
 
-# Expressions and static type
-Base
-├── AbstractExpression
-├── AbstractExtent
-└── Index
+### Expressions and static type
 
-# Algebra
-AbstractExpression
-├── Integer
-├── Float
-├── ImaginaryUnit
-├── Zero
-├── Sum
-├── Product
-├── Power
-├── Division
-├── Absolute
-├── Conjugate
-├── RealPart
-├── ImaginaryPart
-├── SquareRoot
-├── Logarithm
-├── Tensor
-├── Indexed
-├── ComponentTensor
-├── IndexSum
-└── Inverse
-Base
-├── EllipsisIndex
-├── AbstractIndexValue
-└── GatheredIndex
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Expressions and static type class hierarchy
+    Base <|-- AbstractExpression
+    Base <|-- AbstractExtent
+    Base <|-- Index
+```
 
-# Calculus on a domain
-AbstractExpression
-├── Coordinate
-├── Gradient
-├── Divergence
-├── Curl
-├── DirectionalDerivative
-└── Integral
+### Algebra
 
-# Maps between domains
-Base
-└── DomainMap
-AbstractExpression
-└── PullBack
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Algebra class hierarchy (1 of 3)
+    AbstractExpression <|-- Integer
+    AbstractExpression <|-- Float
+    AbstractExpression <|-- ImaginaryUnit
+    AbstractExpression <|-- Zero
+    AbstractExpression <|-- Sum
+    AbstractExpression <|-- Product
+    AbstractExpression <|-- Power
+    AbstractExpression <|-- Division
+```
 
-# Topology
-Base
-├── AbstractCellType
-└── AbstractTopology
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Algebra class hierarchy (2 of 3)
+    AbstractExpression <|-- Absolute
+    AbstractExpression <|-- Conjugate
+    AbstractExpression <|-- RealPart
+    AbstractExpression <|-- ImaginaryPart
+    AbstractExpression <|-- SquareRoot
+    AbstractExpression <|-- Logarithm
+    AbstractExpression <|-- Tensor
+    AbstractExpression <|-- Indexed
+```
 
-# Reference cells
-AbstractCoordinateDomain, AbstractCellType
-└── AbstractReferenceCell
-Base
-└── CellMap
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Algebra class hierarchy (3 of 3)
+    AbstractExpression <|-- ComponentTensor
+    AbstractExpression <|-- IndexSum
+    Base <|-- EllipsisIndex
+    Base <|-- AbstractIndexValue
+    Base <|-- GatheredIndex
+    AbstractExpression <|-- Inverse
+```
 
-# Decomposed domains
-AbstractDomain
-└── DecomposedDomain
-Base
-├── TransformationLaw
-└── SideMap
-AbstractExpression
-├── PushForward
-└── Normal
+### Calculus on a domain
 
-# Function spaces
-Base
-└── AbstractFunctionSpace
-AbstractExpression
-└── Function
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Calculus on a domain class hierarchy
+    AbstractExpression <|-- Coordinate
+    AbstractExpression <|-- Gradient
+    AbstractExpression <|-- Divergence
+    AbstractExpression <|-- Curl
+    AbstractExpression <|-- DirectionalDerivative
+    AbstractExpression <|-- Integral
+```
 
-# Variational forms
-AbstractFunctionSpace
-├── ConjugateSpace
-└── DualSpace
-AbstractExpression
-├── Form
-├── Action
-└── GateauxDerivative
+### Maps between domains
+
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Maps between domains class hierarchy
+    Base <|-- DomainMap
+    AbstractExpression <|-- PullBack
+```
+
+### Topology
+
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Topology class hierarchy
+    Base <|-- AbstractCellType
+    Base <|-- AbstractTopology
+```
+
+### Reference cells
+
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Reference cells class hierarchy
+    AbstractCoordinateDomain <|-- AbstractReferenceCell
+    AbstractCellType <|-- AbstractReferenceCell
+    Base <|-- CellMap
+```
+
+### Decomposed domains
+
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Decomposed domains class hierarchy
+    AbstractDomain <|-- DecomposedDomain
+    Base <|-- TransformationLaw
+    AbstractExpression <|-- PushForward
+    Base <|-- SideMap
+    AbstractExpression <|-- Normal
+```
+
+### Function spaces
+
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Function spaces class hierarchy
+    Base <|-- AbstractFunctionSpace
+    AbstractExpression <|-- Function
+```
+
+### Variational forms
+
+```mermaid
+---
+config:
+  theme: neutral
+  look: classic
+  class:
+    theme: neutral
+    look: classic
+    hideEmptyMembersBox: true
+---
+classDiagram
+    direction LR
+    accTitle: Variational forms class hierarchy
+    AbstractFunctionSpace <|-- ConjugateSpace
+    AbstractFunctionSpace <|-- DualSpace
+    AbstractExpression <|-- Form
+    AbstractExpression <|-- Action
+    AbstractExpression <|-- GateauxDerivative
 ```
 <!-- end generated: class-hierarchy -->
 

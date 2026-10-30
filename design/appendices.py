@@ -172,40 +172,44 @@ def core(classes: list[ClassEntry]) -> list[ClassEntry]:
 
 
 def class_hierarchy(classes: list[ClassEntry]) -> str:
-    """Render the class hierarchy, one tree per chapter."""
+    """Render Mermaid inheritance diagrams grouped by chapter."""
     out = []
     chapters = []
-    for c in core(classes):
+    entries = core(classes)
+    for c in entries:
         if c.extends and c.chapter not in chapters:
             chapters.append(c.chapter)
     for chapter in chapters:
-        members = [c for c in core(classes) if c.chapter == chapter and c.extends]
-        names = {c.name for c in members}
-        out.append(f"# {chapter}")
-        roots: list[tuple[str, list[ClassEntry]]] = []
-        for c in members:
-            if len(c.extends) == 1 and c.extends[0] in names:
-                continue
-            key = ", ".join(c.extends)
-            for root, group in roots:
-                if root == key:
-                    group.append(c)
-                    break
-            else:
-                roots.append((key, [c]))
-
-        def walk(group: list[ClassEntry], prefix: str) -> None:
-            for k, c in enumerate(group):
-                last = k == len(group) - 1
-                out.append(f"{prefix}{'└── ' if last else '├── '}{c.name}")
-                children = [m for m in members if m.extends == [c.name]]
-                walk(children, prefix + ("    " if last else "│   "))
-
-        for root, group in roots:
-            out.append(root)
-            walk(group, "")
-        out.append("")
-    return "```\n" + "\n".join(out).rstrip() + "\n```\n"
+        members = [c for c in entries if c.chapter == chapter and c.extends]
+        out.extend([f"### {chapter}", ""])
+        # Limit diagram height so names remain legible in the PDF.
+        groups = [members[i : i + 8] for i in range(0, len(members), 8)]
+        for number, group in enumerate(groups, 1):
+            title = f"{chapter} class hierarchy"
+            if len(groups) > 1:
+                title += f" ({number} of {len(groups)})"
+            out.extend(
+                [
+                    "```mermaid",
+                    "---",
+                    "config:",
+                    "  theme: neutral",
+                    "  look: classic",
+                    "  class:",
+                    "    theme: neutral",
+                    "    look: classic",
+                    "    hideEmptyMembersBox: true",
+                    "---",
+                    "classDiagram",
+                    "    direction LR",
+                    f"    accTitle: {title}",
+                ]
+            )
+            for c in group:
+                for parent in c.extends:
+                    out.append(f"    {parent} <|-- {c.name}")
+            out.extend(["```", ""])
+    return "\n".join(out)
 
 
 def table(header: list[str], rows: list[list[str]]) -> str:
