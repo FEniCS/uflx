@@ -1331,7 +1331,7 @@ binding](#substitution-and-binding)).
 | Extends                          | `AbstractExpression` |
 | Takes                            | `f: AbstractExpression`, `x: Function \| tuple[Function, ...]`, `a, h: AbstractExpression \| tuple[AbstractExpression, ...]` |
 | Properties                       | `expression` $f$, `variable` $x$, `point` $a$ and `direction` $h$ |
-| Requires                         | $x$ a `Function`, or a `tuple` of at least two distinct functions, each with the argument spaces `()`, and member by member: $a$ and $h$ with the value shape of the member of $x$ and the argument spaces `()`, $h$ with the support of the member of $x$ or no support, and $a$ and $h$ real for a real member of $x$ |
+| Requires                         | $x$ a [bindable function](#bindable-functions), or a `tuple` of at least two distinct bindable functions; member by member, $a$ and $h$ admissible values for the space of $x$ as in [`Action`](#action) |
 | Static type                      | The value shape of $f$, the free indices of $f$ followed by those of the members of $a$ and $h$, each `Index` taken once, and the argument spaces and the scalar type of $f$ |
 | Raises                           | `TypeError` for an $x$ that is not a `Function` or a `tuple` of functions, and `ValueError` if another requirement fails |
 
@@ -1342,6 +1342,10 @@ binding](#substitution-and-binding)).
 This is a partial derivative: substitution replaces only occurrences of $x$.
 The point $a$ need not be a function. A `tuple` variable differentiates jointly
 in its members, as for the unknowns of a mixed problem.
+
+A dual function may be a variable. Its point and direction may be symbolic
+forms with the same functional signature; differentiation preserves the
+argument spaces of the expression being differentiated.
 
 The substitution does not enter domains, so the derivative holds the geometry
 fixed. A shape derivative, with respect to the coordinates of a mesh, is a
@@ -2625,7 +2629,8 @@ has arity 0, a linear form 1 and a bilinear form 2.
 
 A node passes on the argument spaces of an operand in which the node is linear
 or antilinear, and every other operand must have the argument spaces `()`, or
-construction raises `ValueError`. The [static type
+construction raises `ValueError`, unless its contract accepts a functional
+value with a specified signature. The [static type
 table](#appendix-static-type-table) gives the rule of each node class. A terminal
 class states the argument spaces as part of the contract of the class, as the
 value shape.
@@ -2636,6 +2641,18 @@ Binding an argument declares linearity in $V$ or antilinearity in
 Static argument spaces let construction reject incompatible arities and sums
 of linear and antilinear forms.
 
+#### Bindable functions
+
+A `Function` is bindable if its argument spaces are `()` or its space is a
+`DualSpace`. `Form`, `DirectionalDerivative` and `GateauxDerivative` bind
+these functions. A dual of a product is one functional argument; a `tuple`
+of binders is one jointly linear product-space argument.
+
+The argument spaces of a functional describe the values it accepts. Binding
+that functional adds its space as one argument of the enclosing form, without
+adding its own argument spaces again. Arbitrary multilinear operator-valued
+arguments remain an open question.
+
 ### `ConjugateSpace`
 
 `ConjugateSpace` is the complex conjugate space $\bar V$ of a complex space $V$.
@@ -2645,9 +2662,9 @@ of linear and antilinear forms.
 | Extends             | `AbstractFunctionSpace` |
 | Free function       | `conjugate_space(V)` |
 | Takes               | `V: AbstractFunctionSpace` |
-| Returns             | `V` for a real `V`, and `ConjugateSpace(V)` for a complex `V` |
+| Returns             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise |
 | Properties          | `space` $V$, an `AbstractFunctionSpace` with the complex scalar type, not a `ConjugateSpace`       |
-| Derived             | `domain`, `value_shape`, `scalar_type` and `argument_spaces`, those of $V$ |
+| Derived             | `domain`, `value_shape` and `scalar_type`, those of $V$; `argument_spaces`, those of $V$ with each space conjugated, member by member for a `tuple` |
 | Raises              | `TypeError` for a $V$ that is not a space, and `ValueError` for a real $V$ or a `ConjugateSpace`  |
 
 $\bar V$ has the functions of $V$ with the conjugate scalar multiplication, so
@@ -2657,6 +2674,11 @@ an argument space, to record that a form is antilinear in an argument. The conju
 of an argument space is `conjugate_space(V)` for a space $V$ and $V$ for
 `ConjugateSpace(V)`, so conjugating twice gives the space back (see
 [`Conjugate`](#conjugate)).
+
+For `l` in `dual_space(V)`, `l` has argument spaces
+`(conjugate_space(V),)` and `conjugate(l)` has `(V,)`.
+`conjugate_space(dual_space(V))` and `dual_space(conjugate_space(V))` are
+not identified structurally.
 
 ### `DualSpace`
 
@@ -2706,9 +2728,9 @@ is in the product.
 `(conjugate_space(dual_space(V)),)`. `dual_space(dual_space(V))` is not `V`,
 because `V` has the argument spaces `()`.
 
-A function in `dual_space(dual_space(V))` is a terminal, such as data of a library.
-A form never binds a function in a dual space (see [`Form`](#form)), so the
-canonical map from `V` is not a form of the core.
+A functional on a dual space may be a terminal or a form binding a dual
+function. Partial application leaves that functional as a functional; the
+core does not convert it to a field in `V`.
 
 #### Examples
 
@@ -2731,14 +2753,17 @@ pairing_mixed = action(m, 0, (conjugate(v), conjugate(q)))
 ```
 
 `m` has argument spaces `((conjugate_space(V), conjugate_space(Q)),)`.
-A form cannot bind `l`, because `l` already has argument spaces:
+A form may bind both participants of the pairing:
 
 ```python
-form(pairing, (l,))  # Raises ValueError.
+P = form(pairing, (l, conjugate(v)))
 ```
 
+`P` has argument spaces `(dual_space(V), conjugate_space(V))`: the pairing
+is linear in `l` and antilinear in `v`.
+
 ```{dropdown} Legacy UFL
-The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual_space(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the spaces keep distinct argument spaces. A form of the core binds no `Coargument`, and an operator with a `Coargument` is a node class of a language extension.
+The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual_space(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the spaces keep distinct argument spaces, even when a form binds a dual function.
 ```
 
 ### `Form`
@@ -2751,9 +2776,9 @@ The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in
 | Free function                 | `form(expression, arguments)`                                                                                                                                                                      |
 | Takes                         | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]` |
 | Properties                    | `expression`, an expression, and `arguments`, a `tuple` of entries, each a [function](#function) `v`, the [conjugate](#conjugate) `conjugate(v)` of a function, or a `tuple` of at least two of these |
-| Requires                      | Every function in `arguments` distinct, with the argument spaces `()` |
+| Requires                      | Every function in `arguments` distinct and [bindable](#bindable-functions) |
 | Static type                   | That of the expression, with the argument spaces of the expression followed by the space $V$ of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
-| Raises                        | `TypeError` for an entry that is not a `Function`, a `Conjugate` of a `Function` or a `tuple` of these, and `ValueError` for a repeated function, a function with argument spaces or a `tuple` of fewer than two members |
+| Raises                        | `TypeError` for an entry that is not a `Function`, a `Conjugate` of a `Function` or a `tuple` of these, and `ValueError` for a repeated or non-bindable function or a `tuple` of fewer than two members |
 
 An argument's position is its index in `arguments`. An entry `v` declares
 linearity in `v`; `conjugate(v)` declares linearity in $\bar v$, hence
@@ -2773,10 +2798,9 @@ flattens `Form(Form(e, a), b)` into `Form(e, a + b)`, because products of forms
 would require argument reordering. Assembly reads argument order from the
 static type.
 
-Core forms are first order: they never bind a function in a dual space, and
-actions never substitute forms into pairings. An operator with a dual-space
-argument, such as adjoint interpolation, belongs to a
-[language extension](#language-extensions) that states its argument spaces.
+A dual argument accepts a terminal load or a symbolic form with the same
+functional signature. Substituting a symbolic form into a pairing creates
+an action on that form (see [Applying actions](#applying-actions)).
 
 ```{dropdown} Open: operator composition for preconditioning
 A linear preconditioner maps residuals in $V^\star$ to corrections in $V$.
@@ -2862,6 +2886,10 @@ one entry at a time. The expression of the `Form` must be linear or zero in
 `v` for an entry `v`, and antilinear or zero in `v` for an entry
 `conjugate(v)`.
 
+A pairing is linear in its functional operand and in the supplied argument
+of `Action`. The check considers dependence through both operands; a
+conjugated field argument makes the pairing antilinear in that field.
+
 ```{dropdown} Legacy UFL
 In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
 ```
@@ -2886,8 +2914,9 @@ Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
   function in $V$, the scalar type of that function or the real scalar type,
   and the support of that function or no support. The argument spaces are `()`, or `(S',)` for $V$ =
   `dual_space(S)` (see [`DualSpace`](#dualspace)).
-- For `ConjugateSpace(V)`, $g$ has the same static type, and $g$ is the value
-  of an entry `conjugate(v)`, such as `conjugate(w)` for a function `w` in $V$.
+- For `ConjugateSpace(V)`, $g$ has the type of the conjugate of an admissible
+  value for $V$, including conjugating its argument spaces. It supplies the
+  value of an entry `conjugate(v)`.
 - For a `tuple` of spaces, $g$ is a `tuple` with one such member per space.
 - An `Index` free in both $f$ and $g$ has the same extent in both.
 
@@ -2910,6 +2939,18 @@ members of $g$ simultaneously for the matching members.
 
 Actions on other forms follow by linearity. An action on a terminal is the pairing
 defined by its library, with one pairing per value of the free indices of $g$.
+
+A dual argument may receive a symbolic form. With `P` from the
+[`DualSpace`](#dualspace) example and scalar fields `f`, `w` in `V` on `D`:
+
+```python
+L = form(integral(f * conjugate(w), D), (conjugate(w),))
+transferred = action(P, 0, L)
+```
+
+Its value is `form(integral(f * conjugate(v), D), (conjugate(v),))`.
+For a conjugated dual binder, the same substitution rule applies: supplying
+`conjugate(L)` for `conjugate(l)` substitutes `L` for `l`, in value.
 
 #### Examples
 
@@ -3006,7 +3047,7 @@ $x$ at a point $a$, adding an argument $w$ after the arguments of $F$.
 | Extends     | `AbstractExpression` |
 | Takes       | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` |
 | Properties  | `expression` $F$, `variable` $x$, `point` $a$ and `argument` $w$, an entry as in [`Form`](#form) |
-| Requires    | $x$ a `Function` or a `tuple` of functions with the argument spaces `()`, $a$ and the functions of $w$ with the value shapes of $x$, member by member, the members of a `tuple` $w$ all functions or all conjugates, no function of $w$ free in $F$, the members of a `tuple` $x$ all real or all complex, and each member of $a$ real for a real $x$ |
+| Requires    | $x$ a [bindable function](#bindable-functions) or a `tuple` of at least two distinct bindable functions; member by member, $a$ an admissible value for the space of $x$ as in [`Action`](#action), and the function underlying each entry of $w$ in that space; the members of a `tuple` $w$ all functions or all conjugates, no function of $w$ free in $F$, and the members of a `tuple` $x$ all real or all complex |
 | Static type | The value shape of $F$, the free indices of $F$ followed by those of $a$, the argument spaces of $F$ followed by the space of the entry $w$, and the scalar type of $F$ for a real $x$, and complex for a complex $x$ |
 | Raises      | `TypeError` for an $x$ that is not a function, and `ValueError` if another requirement fails |
 
@@ -3078,28 +3119,33 @@ factor may be undefined where the original node is defined, even if another
 factor may be zero. The logarithm in a power derivative is one such case
 (see [Derivatives of the node classes](#derivatives-of-the-node-classes)).
 
-`Action` and `DirectionalDerivative` are real-linear, and each commutes with
-the following node classes in the listed operands, when the other operands do
-not depend on what the evaluated node changes:
+`Action` and `DirectionalDerivative` commute with the following node classes
+in the listed operands, when the other operands do not depend on what the
+evaluated node changes:
 
 | Node class | Operands |
 | ---------- | -------- |
 | `Sum`, `Tensor` | Every operand |
 | `Indexed`, `ComponentTensor`, `IndexSum`, `Form`, `DirectionalDerivative` | The expression |
-| `Conjugate`, `RealPart`, `ImaginaryPart` | The operand |
 | `Division` | The numerator |
 | `Gradient`, `Divergence`, `Curl`, `PushForward`, `PullBack`, `Integral` | The expression |
 
-The value of a commuting node is real-linear in the listed operands, and the
+`DirectionalDerivative` also commutes with `Conjugate`, `RealPart` and
+`ImaginaryPart`, because its parameter is real. `Action` has a separate rule
+for `Conjugate` (see [Applying actions](#applying-actions)); `RealPart` and
+`ImaginaryPart` have no argument spaces.
+
+The value of a commuting node is linear in the listed operands, and the
 evaluated node acts on the value of an operand alone: an action substitutes into
-a bound argument, which is a field like any other, and a directional derivative
+a bound field or functional, and a directional derivative
 differentiates in a real parameter with the domains fixed. Moving an evaluated
 node into a binding node first makes the binding node fresh for the other
 operands of the evaluated node (see [Substitution and
 binding](#substitution-and-binding)). The partial derivative of
 [`apply_gradients`](#applying-gradients) commutes with the same node classes
 except `Gradient`, `Divergence`, `Curl`, `PushForward`, `PullBack` and
-`Integral`, which the rows of that pass match first.
+`Integral`, which the rows of that pass match first; it also commutes with
+`Conjugate`, `RealPart` and `ImaginaryPart`.
 
 The passes of the core run in this order, each on the output grammar of the
 one before, from $N_0$ (see [Grammars](#grammars)):
@@ -3108,12 +3154,14 @@ one before, from $N_0$ (see [Grammars](#grammars)):
 | ---- | --------- | -------------- |
 | [`apply_gateaux_derivatives`](#applying-gateaux-derivatives) | `GateauxDerivative` | $N_1$ |
 | [`apply_actions`](#applying-actions) | `Action`, except a pairing | $N_2$ |
-| [`apply_derivatives`](#applying-derivatives) | `DirectionalDerivative` | $N_3$ |
+| [`apply_derivatives`](#applying-derivatives) | `DirectionalDerivative`, then any actions it creates | $N_3$ |
 | [`expand_integrals`](#expanding-integrals) | `Integral` over a decomposed domain | $N_4$ |
 | The lowering stage | `Gradient`, `Divergence`, `Curl`, `PushForward` and `PullBack` | $N_5$, [the core normal form](#the-core-normal-form) |
 
-The first four passes keep a fixed order, because the order is the meaning of
-the form. The lowering stage repeats [`apply_gradients`](#applying-gradients)
+The first four passes keep this order. `apply_actions` evaluates actions
+created by substitution, and `apply_derivatives` uses it to evaluate actions
+created by differentiation or substitution at the derivative's point.
+The lowering stage repeats [`apply_gradients`](#applying-gradients)
 and then [`expand_pull_backs`](#expanding-pull-backs) until neither rewrites.
 `apply_gradients` runs first, so a gradient is evaluated on the domain on
 which the form states the gradient, such as `gradient(coordinate(D), D)`, the
@@ -3266,9 +3314,8 @@ derivative](#gateaux-derivative):
 - $F$ is holomorphic in $x$ if no occurrence of a function of $x$ in $F$ is
   under a `Conjugate`, an `Absolute`, a `RealPart` or an `ImaginaryPart`. The
   rows for a holomorphic $F$ give $J_+$ and $J_-$ with no terms that cancel.
-  An action is linear in its argument (see [`Action`](#action)), so an
-  action never hides a conjugation, and the four node classes are the only
-  ones antilinear in an operand.
+  An action is linear in its functional operand and supplied argument (see
+  [`Action`](#action)); conjugation of either is explicit in the expression.
 - For a `tuple` $w$, `ImaginaryUnit() * w` is the `tuple` of the products of
   `ImaginaryUnit()` with each member.
 - The pass runs first, so the forms of $F$ may still be under actions, and
@@ -3289,10 +3336,13 @@ derivative](#gateaux-derivative):
 
 The pass rewrites every `Action(f, p, g)`, inner actions first, with the first
 row that matches the form $f$, and keeps the value of [`Action`](#action).
+It applies the rules again to actions created by a rewrite, including those
+created by substituting a symbolic form for a dual function.
 
 | Form $f$ | Rewrite of `Action(f, p, g)` |
 | -------- | ---------------------------- |
 | `Form(e, arguments)`, $p$ at least the arity $n$ of $e$ | The value of `Action`: `Form(e, others)` with $g$ substituted for the argument at $p - n$, or $e$ with $g$ substituted if no entries remain |
+| `Conjugate(e)` | `conjugate(action(e, p, conjugate(g)))`, with conjugation member by member for a `tuple` $g$ |
 | `Product(a, b)`, with $n$ the arity of $a$ | `Product(Action(a, p, g), b)` for $p < n$, otherwise `Product(a, Action(b, p - n, g))` |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the action moved into the listed operands |
 | `Zero` | `Zero` with the free indices of $g$ added and the entry at $p$ removed |
@@ -3303,9 +3353,9 @@ row that matches the form $f$, and keeps the value of [`Action`](#action).
 - `DirectionalDerivative` binds its variable, so moving the action into it
   renames the variable if the variable is free in $g$, and the $x$ in $g$ is
   not differentiated.
-- Forms are first order (see [`Form`](#form)), so a substitution never creates
-  an `Action` on a `Form`. Each rule removes the action from one node or moves
-  the action to operands that are smaller, so the pass terminates.
+- A substituted form is a value with its own binders. Substitution preserves
+  their scope and the scope of the enclosing form. The pass finishes when
+  every remaining action is a pairing with a terminal dual function.
 
 ### Derivatives of the node classes
 
@@ -3325,7 +3375,8 @@ its own rows first, for the terminals of the expression, and then the rows below
 | `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
 | `Logarithm(b)` | $\delta b / b$ |
 | `Inverse(A)` | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
-| `Action(l, 0, w)`, a pairing | `Action(l, 0, δw)` |
+| `Action(l, 0, w)`, a pairing | `Action(δl, 0, w) + Action(l, 0, δw)` |
+| `Conjugate(b)`, `RealPart(b)`, `ImaginaryPart(b)` | The same node applied to $\delta b$ |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the derivative moved into the listed operands |
 
 - `Power` has two rows. The general row multiplies by $\log(b)$, which is
@@ -3341,13 +3392,18 @@ its own rows first, for the terminals of the expression, and then the rows below
 - A language extension that adds a node class adds the derivative of the
   class to this table, and every pass that differentiates then uses the row.
 - The derivative of each row is a composition of node classes of the core,
-  so a pass that applies the table terminates.
+  with actions evaluated as in [Applying actions](#applying-actions).
+
+The pairing rule is linear in both operands of `Action`. For the antilinear
+pairing of `l` with a field `v`, `w` is `conjugate(v)` and its variation is
+`conjugate(δv)`. For a product-space argument, the variation is member by
+member.
 
 ### Applying derivatives
 
 | `apply_derivatives(f)` |  |
 | ---------------------- | - |
-| Evaluates              | `DirectionalDerivative` |
+| Evaluates              | `DirectionalDerivative` and actions created by its evaluation |
 | Input grammar          | $N_2$ |
 | Output grammar         | $N_3 = N_2 \setminus \{$a `DirectionalDerivative`$\}$ |
 
@@ -3355,7 +3411,8 @@ The pass rewrites every `DirectionalDerivative(f, x, a, h)`, inner derivatives
 first, with the first row that matches $f$. $\mathrm{D} b$ is short for
 `DirectionalDerivative(b, x, x, h)`. The rules give the derivative at $x$, and
 if $a$ is not $x$, the pass then substitutes $a$ for $x$ in the result, every
-member of a `tuple` at once.
+member of a `tuple` at once. It applies `apply_actions` to the result, so the
+output remains in $N_2$ and contains no `DirectionalDerivative`.
 
 | Expression $f$ | Rewrite of the derivative at $x$ |
 | -------------- | -------------------------------- |
@@ -3369,8 +3426,9 @@ member of a `tuple` at once.
   row. An operand is constant for the pass if no function of $x$ is free in
   the operand.
 - A `Form` that binds $x$ has no free $x$, so the first row gives `Zero`.
-- The variable has the argument spaces `()`, so the variable is never the
-  function $l$ of a pairing.
+- A dual variable can occur in the functional operand of a pairing. Its
+  direction and substitution point may be symbolic forms; their actions
+  are evaluated by `apply_actions`.
 
 ### Expanding integrals
 
@@ -3614,8 +3672,8 @@ classes. Each extends `AbstractExpression`, never a concrete core class
   such an expression exists.
 
 An extension node may state argument spaces, making it an operator with
-arguments. These may include dual spaces, which a core `Form` never binds.
-The extension's action-evaluation table defines the action on each argument.
+arguments. The extension's action-evaluation table defines the action on
+each argument; dual arguments alone do not require an extension node.
 
 #### Rule tables
 
@@ -3739,9 +3797,19 @@ On a physical cell, interpolation applies the target's inverse
 maps the reference interpolant to the physical cell by the target's law.
 A `PullBack` alone does not transform value components.
 
+For a source field `u` in `U` and `l` in `dual_space(V)`, the dual pairing is:
+
+```python
+B = form(action(l, 0, conjugate(interpolate(u, V))), (l, conjugate(u)))
+```
+
+`B` has argument spaces `(dual_space(V), conjugate_space(U))`. Supplying a
+target load at position 0 gives its dual transfer to `U`. Supplying
+`conjugate(u0)` at position 1 leaves a functional of the target load, not a
+field. Forward interpolation remains `interpolate(u0, V)`.
+
 Only value sampling and affine, invertible cell maps between equal dimensions
-are covered. Derivative sampling and adjoint interpolation are not yet
-covered.
+are covered. Derivative sampling is not yet covered.
 
 ```{dropdown} Open: an interpolation node
 Whether a language extension node should retain membership of `V` or delay
@@ -4136,7 +4204,7 @@ classDiagram
 |                             | [`side_domain(D, S)`](#side-domains)                                     |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                                           | `image(pull_back(x, side_map(T, S)), Q)`                                                                                                                                        |
 |                             | [`normal(sm)`](#normal)                                                  |                               | `sm: SideMap`                                                                                                          | `Normal`                                                                                                                                                                        |
 | Function spaces             | [`function(V, label)`](#function)                                        |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                                      | `Function`                                                                                                                                                                      |
-| Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                               | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, and `ConjugateSpace(V)` for a complex `V`                                                                                                                   |
+| Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                               | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise                                                                                         |
 |                             | [`dual_space(S)`](#dualspace)                                            |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                        | `DualSpace`                                                                                                                                                                     |
 |                             | [`form(expression, arguments)`](#form)                                   |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`  | `Form`                                                                                                                                                                          |
 |                             | [`action(f, position, g)`](#action)                                      |                               | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                                                                                                        |
@@ -4146,7 +4214,10 @@ classDiagram
 ## Appendix: Static type table
 
 This normative table gives the argument spaces of each node class. An operand
-not named in the argument spaces column must have the argument spaces `()`.
+not named in the argument spaces column must have the argument spaces `()`,
+except binders and functional values accepted by `Form`, `Action` and the
+derivatives. Their signatures are checked by the respective class contracts
+and are not added to the enclosing expression's argument spaces.
 
 | Class                                    | Argument spaces of the node                                    |
 | ---------------------------------------- | -------------------------------------------------------------- |
