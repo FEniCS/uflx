@@ -138,7 +138,7 @@ reference normal supplied by the side tables. The lowering stage gives:
 | `alpha[e]` | Unchanged: it has no support and shares the facet index. |
 
 The `"-"` traces follow the same rules on the other cell. Here
-$\hat m_+ = (1,1)/\sqrt{2}$. The compiler's `reduce_component_tensors` pass
+$\hat m_+ = (1,1)/\sqrt{2}$. The compiler's `reduce_indexed_families` pass
 then reduces the indexed vertex-coordinate expressions to reads from
 `positions_p` and `positions_m`. The resulting form has the structure:
 
@@ -391,7 +391,7 @@ cs, w = runtime_array("cs", (L, 2)), runtime_array("w", (L,))
 x1 = D1.coordinate_function
 
 ring = domain_map(
-    T1, component_tensor(x1[m] + R * (cs[l, 0] * n1[m] + cs[l, 1] * n2[m]), (m,)), D3
+    T1, indexed_family(x1[m] + R * (cs[l, 0] * n1[m] + cs[l, 1] * n2[m]), (m,)), D3
 )
 p3_avg = index_sum(w[l] * pull_back(push_forward(p3, D3), ring), (l,))
 q3_avg = index_sum(w[l] * pull_back(push_forward(q3, D3), ring), (l,))

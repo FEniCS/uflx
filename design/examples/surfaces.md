@@ -70,7 +70,7 @@ def cross(a, b):
         a[0] * b[1] - a[1] * b[0],
     ))
 
-nu = cross(component_tensor(J[r, 0], (r,)), component_tensor(J[r, 1], (r,)))
+nu = cross(indexed_family(J[r, 0], (r,)), indexed_family(J[r, 1], (r,)))
 
 o = T.orientations[0][e]
 

@@ -216,8 +216,8 @@ symmetric unit directions:
 
 ```python
 C_ = function(R, "C")
-N = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / two, (i, j))
-S = two * component_tensor(directional_derivative(strain_energy(C_), C_, C, N), (k, l))
+N = indexed_family((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / two, (i, j))
+S = two * indexed_family(directional_derivative(strain_energy(C_), C_, C, N), (k, l))
 sigma = F @ S @ transpose(F) / determinant(F)
 ```
 

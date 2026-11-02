@@ -100,7 +100,7 @@ i, k = index("i"), index("k")
 
 starts = tensor((tensor((zero, zero)), tensor((one, zero)), tensor((zero, one))))
 ends = tensor((tensor((one, zero)), tensor((zero, one)), tensor((zero, zero))))
-psi_edges = component_tensor(starts[i, k] + t * (ends[i, k] - starts[i, k]), (k,))
+psi_edges = indexed_family(starts[i, k] + t * (ends[i, k] - starts[i, k]), (k,))
 edges = domain_map(S, psi_edges, T)
 
 integrand = index_sum(pull_back(F, edges)[k] * jacobian(edges)[k, 0], (k,))
@@ -127,7 +127,7 @@ Y = coordinate(RD(2))
 k = index("k")
 
 area = integral(density(K), T)
-centroid = component_tensor(integral(pull_back(Y[k], K) * density(K), T) / area, (k,))
+centroid = indexed_family(integral(pull_back(Y[k], K) * density(K), T) / area, (k,))
 ```
 
 The density is $5$, the area is $5/2$ and the centroid is $(2,4/3)$.
@@ -157,7 +157,7 @@ i = index("i")
 
 points = tensor((tensor((half, zero)), tensor((half, half)), tensor((zero, half))))
 weights = tensor((sixth, sixth, sixth))
-xs = component_tensor(domain_map(RD(0), points[i], T), (i,))
+xs = indexed_family(domain_map(RD(0), points[i], T), (i,))
 q = index_sum(weights[i] * integral(pull_back(f, xs[i]), RD(0)), (i,))
 ```
 
@@ -169,7 +169,7 @@ as an argument.
 
 ### From quadrature to a loop
 
-After lowering, evaluating the point integrals and reducing component tensors,
+After lowering, evaluating the point integrals and reducing indexed families,
 the expression is:
 
 ```python
@@ -178,7 +178,7 @@ index_sum(weights[i] * (points[i, 0] * points[i, 1]), (i,))
 
 Map-family lowering moves the selection outside the pull-back.
 `expand_pull_backs` then substitutes the points for `X`; the integral over `RD(0)`
-returns its integrand. The compiler's `reduce_component_tensors` changes
+returns its integrand. The compiler's `reduce_indexed_families` changes
 `points[i][0]` to `points[i, 0]`, and similarly for component 1. A generated
 kernel could be:
 

@@ -147,13 +147,13 @@ def affine_map(F, points):
     l = Index(("library.affine_map", F, points, 0))
     k, V = F.dimension, F.vertices
     if k == 0:
-        return component_tensor(points[0, l], (l,))
+        return indexed_family(points[0, l], (l,))
     E = tensor(tuple(tensor(tuple(V[d + 1, r] - V[0, r] for d in range(k))) for r in range(k)))
     Y = inverse(E) @ (coordinate(F) - V[0])
     total = points[0, l]
     for d in range(k):
         total = total + (points[d + 1, l] - points[0, l]) * Y[d]
-    return component_tensor(total, (l,))
+    return indexed_family(total, (l,))
 ```
 
 Those $k+1$ vertices must be affinely independent; later rows of `points`
@@ -179,9 +179,9 @@ index as the family axis. Each side can choose its own internal index:
 e = Index(("library.side_tables", S, i, side, 0))
 v = Index(("library.side_tables", S, i, side, 1))
 r = Index(("library.side_tables", S, i, side, 2))
-points = component_tensor(positions[e, v, r], (v, r))
+points = indexed_family(positions[e, v, r], (v, r))
 inclusion = domain_map(F_i, affine_map(F_i, points), K_j)
-inclusions = component_tensor(inclusion, (e,))
+inclusions = indexed_family(inclusion, (e,))
 ```
 
 `inclusions` has shape `(S.num_cells[i],)`, endpoints `F_i` and `K_j`, and
@@ -202,7 +202,7 @@ m0 = tensor((determinant(C_0), ..., determinant(C_(k - 1))))
 centroid = (V[0] + V[1] + ... + V[m_j - 1]) / integer(m_j)
 away = m0 @ (points[0] - centroid)
 reference_normal = away / absolute(away) * m0
-reference_normals = component_tensor(reference_normal, (e,))
+reference_normals = indexed_family(reference_normal, (e,))
 ```
 
 Here `V = K_j.vertices`, $m_j$ is its vertex count, and the sums nest to the

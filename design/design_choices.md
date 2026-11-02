@@ -22,8 +22,9 @@ factories return immutable `Expression`, `Map`, or `IndexValue` views. A view
 stores only its node; graph construction unwraps views, and reconstruction
 derives the result interface again. Shape, indexing and binding are shared,
 while numerical properties, map endpoints and index bounds stay on their
-respective interfaces. `BroadcastTo` takes a complete target shape and
-preserves the operand's interface; zero-length target axes provide typed
+respective interfaces. `IndexedFamily` / `indexed_family` binds free indices
+as leading axes while preserving the operand's interface. `BroadcastTo` takes
+a complete target shape and preserves the operand's interface; zero-length target axes provide typed
 empty families without evaluating a member. Constant pull-backs retain
 selector indices through broadcast selection. See
 [language.md](language.md#graph-nodes-and-value-interfaces).

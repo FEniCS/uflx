@@ -12,7 +12,7 @@ A transpose is a fixed composition of index operations. For a matrix expression
 ```python
 k = Index(("uflx.transpose", A, 0))
 l = Index(("uflx.transpose", A, 1))
-component_tensor(A[k, l], (l, k))
+indexed_family(A[k, l], (l, k))
 ```
 
 The [derived indices](../language.md#derived-indices) keep the labels tied to `A`.
@@ -28,8 +28,8 @@ index `k`, the definitions are:
 
 | Operation | Fixed composition |
 | --------- | ----------------- |
-| `outer(u, v)` | `component_tensor(u[r] * v[s], (r, s))` |
-| `dot(u, v)` | `component_tensor(index_sum(u[r, k] * v[k, s], (k,)), (r, s))` |
+| `outer(u, v)` | `indexed_family(u[r] * v[s], (r, s))` |
+| `dot(u, v)` | `indexed_family(index_sum(u[r, k] * v[k, s], (k,)), (r, s))` |
 | `inner(A, B)` | `index_sum(A[r] * conjugate(B[r]), (r,))` |
 
 These are library operations. Core tensor arithmetic instead builds one index
@@ -55,7 +55,7 @@ u, v = function(V, "u"), function(V, "v")
 i, j, k, l = index("i"), index("j"), index("k"), index("l")
 two = integer(2)
 c = function(K, "c")
-stiffness = component_tensor(c[packed[i, j, k, l]], (i, j, k, l))
+stiffness = indexed_family(c[packed[i, j, k, l]], (i, j, k, l))
 
 grad_u, grad_v = gradient(push_forward(u, D), D), gradient(push_forward(v, D), D)
 eps_u = (grad_u + transpose(grad_u)) / two
