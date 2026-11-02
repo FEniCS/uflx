@@ -623,6 +623,7 @@ The free functions below construct these nodes for scalar operands. `add`,
 | Requires               | The operands of [Arithmetic](#arithmetic)                                   |
 | Raises                 | `ValueError` if a requirement fails                                         |
 
+Complex powers use the principal value, consistent with `Logarithm`.
 The exponent may have support. The [derivative rules](#derivatives-of-the-node-classes)
 distinguish constant and variable exponents.
 
@@ -3176,7 +3177,8 @@ $\Pi$ on a complex space, $J_-$ with the entry `conjugate(w)` is the
 Wirtinger derivative $\partial \Pi / \partial \bar u$, a function in
 `dual_space(V)` (see [Antilinear forms](#antilinear-forms)), so $J_-$ minus a
 load is a residual. If no occurrence of $x$ in $F$ is under a `Conjugate`, an
-`Absolute`, a `RealPart` or an `ImaginaryPart`, $F$ is holomorphic in $x$,
+`Absolute`, a `RealPart` or an `ImaginaryPart`, and the remaining operations
+are holomorphic in that dependence, $F$ is holomorphic in $x$:
 $J_+$ is $\delta F$ and $J_-$ is zero. The Jacobian of the residual of a
 sesquilinear problem, such as the Helmholtz equation, is such a $J_+$.
 Otherwise the Jacobian is the pair of forms $J_+$ and $J_-$, which do not add
@@ -3186,9 +3188,9 @@ solver chooses.
 
 The value is a form that binds $w$ after the arguments of $F$, so the
 derivative of a residual form is the tangent form, and an action on the new
-argument is the derivative in a fixed direction. The second derivative of a
-real functional is symmetric, or Hermitian, and the graph does not record the
-symmetry.
+argument is the derivative in a fixed direction. The real Hessian is symmetric.
+On a complex space, repeated Gateaux derivatives select its Wirtinger blocks.
+The graph does not record symmetry.
 
 ## Evaluation
 
@@ -3482,9 +3484,9 @@ derivative](#gateaux-derivative) and
 | A complex space, entry `w` | `Form(Integer(1) / Integer(2) * (δF[w] - i_unit * δF[i_unit * w]), (w,))` |
 | A complex space, entry `conjugate(w)` | `Form(Integer(1) / Integer(2) * (δF[w] + i_unit * δF[i_unit * w]), (conjugate(w),))` |
 
-- $F$ is holomorphic in $x$ if no occurrence of a function of $x$ in $F$ is
-  under a `Conjugate`, an `Absolute`, a `RealPart` or an `ImaginaryPart`. The
-  rows for a holomorphic $F$ give $J_+$ and $J_-$ with no terms that cancel.
+- The holomorphic shortcut follows the criterion in [Gateaux
+  derivative](#gateaux-derivative). Its rows give $J_+$ and $J_-$ with no terms
+  that cancel.
   An action is linear in its functional operand and supplied argument (see
   [`Action`](#action)); conjugation of either is explicit in the expression.
 - For a `tuple` $w$, `i_unit * w` is the `tuple` of the products of
