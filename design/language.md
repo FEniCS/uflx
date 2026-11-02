@@ -4282,8 +4282,8 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 | `Absolute`               | The default                        | Real                              |
 | `RealPart`, `ImaginaryPart` | The default                     | Real                              |
 | `Coordinate`, `Gradient`, `Divergence`, `Curl` | The domain $P$               | The default                       |
-| `DirectionalDerivative`  | The default                        | The scalar type of $f$            |
-| `GateauxDerivative`      | The default                        | The scalar type of $F$ for a real $x$, and complex otherwise |
+| `DirectionalDerivative`  | The support of $f$                 | The scalar type of $f$            |
+| `GateauxDerivative`      | The support of $F$                 | The scalar type of $F$ for a real $x$, and complex otherwise |
 | `Integral`               | None                               | The default                       |
 | `PullBack`               | The parameter domain of the domain | The default                       |
 | `Normal`                 | $E$                                | Real                              |
