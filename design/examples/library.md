@@ -174,8 +174,9 @@ points = component_tensor(positions[e, v, k], (v, k))
 inclusion = domain_map(F_i, affine_map(F_i, points), K_j)
 ```
 
-For a group of facets, the reference normal is the cofactor vector of the
-Jacobian of the inclusion, turned away from the centroid of $K_j$:
+For planar boundary facets of a full-dimensional convex $K_j$, with
+nondegenerate affine inclusions, the reference normal is the cofactor vector
+of the inclusion's Jacobian, turned away from the centroid of $K_j$:
 
 ```python
 J_A = jacobian(inclusion)  # value shape (k, k - 1)
@@ -190,7 +191,8 @@ reference_normal = away / absolute(away) * m0
 ```
 
 Here `V = K_j.vertices`, $m_j$ is its vertex count, and the sums nest to the
-left. All sides preserve the vertex order of cell `e`, so their inclusions
+left. Interior cuts instead require a supplier-chosen orientation. All sides
+preserve the vertex order of cell `e`, so their inclusions
 parameterise it in the same way.
 
 ## The unit simplex as a reference cell

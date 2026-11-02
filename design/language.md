@@ -1882,8 +1882,8 @@ group $i$, with the side `(side, T, j)`, the cell type $F_i$ of group $i$ and
   dimension $k_j - 1$, and `None` for any other group. A normal that varies
   along the cell, such as on a curved piece, has the support $F_i$. Member $e$ is a normal in $K_j$ of
   the image of the cell $e$. The normal points out of $K_j$ for an image on the
-  boundary of $K_j$, and away from the centroid of $K_j$ for an image inside
-  $K_j$.
+  boundary of $K_j$. For an image inside $K_j$, the supplying library chooses
+  its orientation.
 
 The inclusions of the sides of one group parameterise each cell $e$ in the same
 way: a point of $F_i$ is the same point of the cell $e$ from every side, so the
@@ -2291,7 +2291,8 @@ of $S$, from the side:
 - `gradient(pull_back(f, side_map(D, E, s)), E)` is the tangential gradient of
   the restriction along the cells of $E$.
 
-The outward normal of the cell on a side is [`normal(side_map(D, E, s))`](#normal).
+The unit side conormal is [`normal(side_map(D, E, s))`](#normal), outward on
+boundary pieces.
 
 #### Example
 
@@ -2473,8 +2474,9 @@ The examples use the following objects:
 
 ### `Normal`
 
-`Normal` is the unit outward normal of the cell on a side, on the cells of a
-topology with sides.
+`Normal` is the unit side conormal: tangent to the parent cell and orthogonal
+to the side cell, with the orientation supplied by `reference_normal`.
+It points outward on boundary pieces.
 
 | `Normal(sm)` |                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------- |
@@ -2519,13 +2521,12 @@ the library of the topology gives $\hat m$.
 - For a cell of $E$ on the boundary of $K_j$, such as a facet or a piece of a
   facet, $\hat m$ points out of $K_j$ (see [Side tables](#side-tables)).
 - For a cell of $E$ inside $K_j$, such as a cut through the cell, $\hat m$
-  points away from the centroid of $K_j$, by convention.
-- For $k = n$, the normals from two sides of one cell of $E$ are opposite.
-- For $k < n$, such as on the edges of a surface in $R^3$, $\nu$ is the unit
-  conormal. The conormal is tangent to the cell on the side and orthogonal to
-  the cell of $E$. The conormals from two sides are opposite only where the
-  cells on the two sides have the same tangent space. On a surface, a jump
-  therefore weights each side by the normal of that side, as in
+  has the orientation chosen by the supplying library.
+- For $k = n$, outward normals are opposite when the two regions adjoin on
+  opposite sides of the interface. Coincident geometry or side names alone
+  do not imply this relation.
+- For $k < n$, the same conclusion also requires matching tangent spaces.
+  On a surface, a jump therefore uses each side's conormal, as in
   `u_p * n_p + u_m * n_m`.
 
 `Normal` is the normal of a cell on a side, not the unit normal field of a
@@ -4073,7 +4074,7 @@ composition:
 | `Logarithm`                                      | An elementary function, which nothing else composes                                                           |
 | `Inverse`                                        | No one composition covers every $k \le n$, and a pass chooses the algorithm, as for `Division`                |
 | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | The primitives of index notation                                                                            |
-| `Coordinate`, `Function`, `Normal`               | Terminals: the coordinate function of a domain, a member of a space, the outward normal of a cell on a side   |
+| `Coordinate`, `Function`, `Normal`               | Terminals: the coordinate function of a domain, a member of a space, the unit side conormal |
 | `Gradient`                                       | Nothing composes to differentiate                                                                             |
 | `DirectionalDerivative`                          | Nothing composes to differentiate with respect to an expression                                               |
 | `GateauxDerivative`                              | The value depends on the forms in the expression, which a construction free function cannot read                           |
