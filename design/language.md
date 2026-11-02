@@ -261,10 +261,10 @@ and unit [normal](#normal).
 
 ### `AbstractDomain`
 
-`AbstractDomain` represents a domain, the set on which an expression is defined.
+`AbstractDomain` represents a domain on which an expression is defined.
 A domain is a coordinate domain, a leaf that a library supplies (see
 [`AbstractCoordinateDomain`](#abstractcoordinatedomain)), or a decomposed
-domain, the union of the images of families of domain maps that the core builds
+domain, represented by families of domain maps that the core builds
 (see [`DecomposedDomain`](#decomposeddomain)). Every node class taking a
 domain accepts either kind; its section defines its value on a decomposed
 domain through the pieces.
@@ -275,7 +275,9 @@ domain through the pieces.
 | Provides         | `dimension`, an `int` $k \ge 0$, and `ambient_domain`, an `AbstractDomain` |
 | Defined by       | `AbstractCoordinateDomain` and `DecomposedDomain`                           |
 
-The ambient domain of $D$ supplies the coordinates naming its points. The
+The ambient domain of $D$ supplies its geometric coordinates. Coordinates
+alone need not determine a field value: a mesh field may require a selected
+cell or side (see [Restriction](#restriction)). The
 first coordinate domain reached by following `ambient_domain` repeatedly is
 the *ambient coordinate domain*, of dimension $n \ge k$. A coordinate domain
 is its own ambient domain.
@@ -1677,11 +1679,16 @@ map and for the image of the domain map. A `DomainMap` is not an
 | Static type                      | Result interface `Map`, value shape `()`, endpoints $P$ and $Q$, and the free indices of $\psi$ |
 | Raises                           | `TypeError` for $P$ or $Q$, and `ValueError` if another requirement fails                                                                                                                                   |
 
-The coordinates of the ambient coordinate domain of $Q$ name the points of
-$D$. The 'topological dimension' of $D$ is $k$,
+The coordinates of the ambient coordinate domain of $Q$ describe the image
+of the map. The 'topological dimension' of $D$ is $k$,
 `D.parameter_domain.dimension`, and the 'geometric dimension' is $n$, the
 dimension of the ambient coordinate domain of $Q$. Construction does not check
 that $\psi(P)$ lies in $Q$.
+
+For a mesh $Q$, coordinates alone do not choose a cell when a field value
+depends on that choice. Evaluation uses a selected cell or side map, or
+externally supplied owner cells and reference points (see
+[A family of points in a mesh](#a-family-of-points-in-a-mesh)).
 
 $P$ is a coordinate domain, such as a reference cell, or a topology. With a
 topology $T$ as $P$, `pull_back(g, domain_map(T, x, D))` pulls a field $g$
@@ -2246,8 +2253,11 @@ Worked examples for this chapter: [the unit simplex as a reference cell](example
 
 ### `DecomposedDomain`
 
-`DecomposedDomain` is the union of the images of pieces, each a family of domain
-maps.
+`DecomposedDomain` stores a tuple of map families whose images describe
+its geometric extent and whose members contribute additively to integration.
+The image union alone does not determine domain identity or field values.
+Distinct cell values require topology and selected cell maps; repeating a
+member repeats its contribution without creating a new field location.
 
 | `DecomposedDomain(pieces)` |                                                                                                                         |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -2260,10 +2270,9 @@ maps.
 
 #### Pieces
 
-For piece $j$, let $M_j$ be its map family and $P_j$ its coordinate
-parameter domain. $D$ is the union of all member images, counted with
-multiplicity in integration. A scalar map contributes one member; a family
-contributes one per entry, and a zero-length axis contributes none.
+A piece is a map family with a coordinate parameter domain. A scalar map
+contributes one member; a family contributes one per entry, and a zero-length
+axis contributes none.
 
 Pieces may have different shapes and coordinate parameter domains of the
 same dimension. Their free indices must be bound with `IndexedFamily`
@@ -2274,6 +2283,9 @@ The parameter domains are coordinate domains, so decomposed parameter
 domains do not nest. The common ambient domain $Q$ may be decomposed. The
 core does not check whether member images overlap; repeated entries,
 including repeated points, contribute separately.
+
+Domain equality is structural. Equal image unions do not imply equal
+domains, and pieces are not deduplicated.
 
 #### Meshes
 
@@ -2313,7 +2325,9 @@ indices and endpoints $K_j$ and $D$. By shared indexing,
 `domain_map(K_j, pull_back(x, cell_maps(T, j)[e]), D)`.
 
 For $f$ supported on $D$, its pull-back is the value on the selected cell's
-reference domain $K_j$. In particular, the pull-back of `coordinate(D)` is
+reference domain $K_j$. The selected cell identifies the field read even
+when coordinates coincide; lowering must preserve that identity.
+In particular, the pull-back of `coordinate(D)` is
 `pull_back(x, cell_maps(T, j)[e])`. General decomposed domains use the
 selected piece maps of [integral expansion](#expansion-into-pieces).
 
@@ -2604,8 +2618,10 @@ cell $K_j$, the mesh library supplies two families:
 Both have no free indices and enumerate the same ordered points. Each
 reference point mapped through its owner cell must be the requested
 physical point. At a cell boundary, the chosen owner determines the value
-for a discontinuous field. Location and inversion of cell maps belong to
-the mesh library. Evaluation itself needs no point topology.
+for a discontinuous field. Coincident samples may choose different owners
+and obtain different values; repeating a coordinate alone does not choose
+an owner. Location and inversion of cell maps belong to the mesh library.
+Evaluation itself needs no point topology.
 
 #### Evaluation through the owner cells
 
