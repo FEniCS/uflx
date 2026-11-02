@@ -165,8 +165,9 @@ row `K.vertices[w_v]` for point $v$. For example:
 | Unit triangle | `(1, 2)` | Unit interval | $t\mapsto(1-t,t)$ |
 | Unit interval | `(1,)` | Reference point | The endpoint $1$ |
 
-For group $i$ with reference cell `F_i`, let `e` be its cell index and
-`positions[e, v]` the position of vertex `v` in the side's reference cell
+For group $i$ with reference cell `F_i`, the provider chooses an ordinary
+index `e` shared by its side tables. Let
+`positions[e, v]` be the position of vertex `v` in the side's reference cell
 `K_j`. With derived indices `v` and `k`, its inclusion is:
 
 ```python

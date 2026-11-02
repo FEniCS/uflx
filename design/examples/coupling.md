@@ -35,7 +35,7 @@ The solver gives the coordinate function `x` the vertex values
 x = function(X_space, "x")
 D = image(x, RD(2))
 E = side_domain(D, diagonal)
-e = cell_index(diagonal, 0)
+e = index("e")
 
 u, v = function(V, "u"), function(V, "v")
 u_D, v_D = push_forward(u, D), push_forward(v, D)
@@ -86,10 +86,11 @@ $(1,1)/\sqrt{2}$ and the facet density is $\sqrt{2}$.
 
 ### From the facet integral to a kernel
 
-`expand_integrals` expresses the integral on the reference interval:
+`expand_integrals` expresses the integral on the reference interval. Here
+its internal piece index has been renamed to `e`:
 
 ```python
-facet_cell = cell_domain(E, 0)
+facet_cell = cell_domains(E, 0)[e]
 form(
     index_sum(integral(pull_back(f, facet_cell) * density(facet_cell), I), (e,)),
     (v, u),
@@ -104,7 +105,7 @@ lowers to:
 
 ```python
 g_p = cells_p[e]
-C_p = cell_map(square, 0, g_p)
+C_p = cell_maps(square, 0)[g_p]
 t = coordinate(I)[0]
 A_p = domain_map(I, tensor((integer(1) - t, t)), K)
 pull_back(pull_back(u, C_p), A_p)
@@ -143,7 +144,7 @@ facet direction on each side.
 ### Variations
 
 - The penalty can use computed cell sizes instead of an array. With
-  `B_p = cell_domain(D, 0, g_p)`, `integral(density(B_p), K)` is the measure
+  `B_p = cell_domains(D, 0)[g_p]`, `integral(density(B_p), K)` is the measure
   of the `"+"` cell; a solver's per-cell size array `h` is read as `h[g_p]`.
 - Restricting values alone needs no mesh:
   `pull_back(u, side_map(square, diagonal, "+"))` is a trace on the topology.
@@ -285,8 +286,9 @@ tell the assembler which cells to pack.
   renaming the topology placeholders. Different cell types use separate
   topology groups.
 - A material coefficient varying by cell needs no submesh when all fields
-  live on `square`: supply a table `nu_cells` and use `nu_cells[c]`, with
-  `c = cell_index(square, 0)`, under an integral over `D`.
+  live on `square`: supply a table `nu_cells` and integrate on the reference cell with
+  `c = index("c")` and `C = cell_domains(D, 0)[c]`. Write the coefficient as
+  `nu_cells[c]` and explicitly sum the cell integrals over `c`.
 - For a moving fluid mesh, use `image(F.coordinate_function + m, RD(2))`,
   where the mesh displacement `m` on `fluid_cells` extends the solid motion.
   Functions on that topology push forward to the moved mesh unchanged.

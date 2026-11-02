@@ -117,7 +117,7 @@ rows, solves and computes the estimator, with no global array.
 After solving for `e`, the cell-wise squared estimator is:
 
 ```python
-cell = cell_domain(D, 0)
+cell = cell_domains(D, 0)[index("cell")]
 energy_density = index_sum(grad_e[i] * grad_e[i], (i,))
 eta_squared = integral(pull_back(energy_density, cell) * density(cell), K)
 ```

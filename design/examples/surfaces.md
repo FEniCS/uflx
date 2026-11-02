@@ -57,7 +57,8 @@ agrees with the outward orientation.
 ```python
 K = ReferenceSimplex(2)
 M = image(x, RD(3))
-cells = cell_domain(M, 0)
+e = index("e")
+cells = cell_domains(M, 0)[e]
 J = jacobian(cells)
 r, l = index("r"), index("l")
 
@@ -70,11 +71,11 @@ def cross(a, b):
 
 nu = cross(component_tensor(J[r, 0], (r,)), component_tensor(J[r, 1], (r,)))
 
-o = pull_back(T.orientation, cell_map(T, 0))
+o = pull_back(T.orientation, cell_maps(T, 0)[e])
 
 flux = index_sum(
     integral(o * index_sum(pull_back(coordinate(M), cells)[l] * nu[l], (l,)), K),
-    (cell_index(T, 0),),
+    (e,),
 )
 
 area = integral(integer(1), M)
@@ -116,7 +117,7 @@ grad_u, grad_v = gradient(push_forward(u, D_s), D_s), gradient(push_forward(v, D
 a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D_s), (v, u))
 ```
 
-For a cell `C = cell_domain(D_s, 0)`, the reference coordinate gradient is
+For a cell `C = cell_domains(D_s, 0)[e]`, the reference coordinate gradient is
 $J+\widehat\nabla s$. Lowering therefore inserts:
 
 | Quantity | Factor on the reference cell |
