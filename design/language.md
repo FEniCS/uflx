@@ -767,8 +767,8 @@ Examples, with `one, two = Integer(1), Integer(2)`:
 
 Index notation writes tensor algebra with four node classes. `Tensor` builds a
 tensor from scalars, `Indexed` selects one component, and `ComponentTensor`
-and `IndexSum` bind the free indices of a scalar, as axes or as a sum. Every
-other tensor operation is a fixed composition of the four, so `transpose`,
+and `IndexSum` bind the free indices of a scalar, as axes or as a sum. Tensor
+rearrangements and contractions are compositions of these, so `transpose`,
 `dot` and `inner` are free functions, not node classes (see [Node class or
 free function](#node-class-or-free-function)).
 
@@ -1126,6 +1126,8 @@ with more rows than columns.
 | Requires      | $A$ with value shape `(n, k)`, $k \le n$, and $A$ real for $k < n$                      |
 | Static type   | Value shape `(k, n)`                                                                    |
 | Raises        | `ValueError` if a requirement fails                                                     |
+
+Equal extents establish the square case even when they are symbolic.
 
 `Inverse(A)` is the pseudo-inverse $A^+ = (A^T A)^{-1} A^T$ of a matrix $A$
 of matrix rank $k$, the left inverse of $A$ with $A^+ A$ the identity. For
