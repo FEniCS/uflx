@@ -492,48 +492,80 @@ individual choices.
 ### Literals
 
 A literal is a number written in an expression, such as `Integer(2) * u`.
-The three concrete literal classes have value shape `()`, no free indices
-and no support:
+`Integer` and `Float` are real terminals with the abstract base
+`AbstractRealLiteral`:
+
+| `AbstractRealLiteral` | |
+| --------------------- | - |
+| Extends               | `AbstractExpression` |
+| Static type           | Value shape `()`, real, no free indices, no support and the argument spaces `()` |
 
 | `Integer(v)` |                       |
 | ------------ | --------------------- |
-| Extends      | `AbstractExpression`  |
+| Extends      | `AbstractRealLiteral` |
 | Properties   | `value` $v$, an `int` |
 
 | `Float(v)` |                               |
 | ---------- | ----------------------------- |
-| Extends    | `AbstractExpression`          |
+| Extends    | `AbstractRealLiteral`         |
 | Properties | `value` $v$, a finite `float` |
 
-| `ImaginaryUnit()` |                      |
-| ----------------- | -------------------- |
-| Extends           | `AbstractExpression` |
-
-Each literal constructor accepts only exact types, as in rule 1 of [the base
-object](#the-base-object-base). So `Integer(True)` raises `TypeError`, and
-`Float(-0.0) != Float(0.0)`. `ImaginaryUnit()` denotes $i$.
+`Integer` and `Float` accept only exact Python types, as in rule 1 of
+[the base object](#the-base-object-base). So `Integer(True)` raises
+`TypeError`, and `Float(-0.0) != Float(0.0)`.
 
 A rational number is the `Division` of two `Integer`s, such as
 `Integer(1) / Integer(3)`. In floating-point arithmetic, the division of two
 integers rounds once, the same as the conversion of a rational number, so the
-core has no rational literal. A complex number is a composition such as
-`a + ImaginaryUnit() * b`, so the core has no complex literal.
+core has no rational literal.
+
+### `Complex`
+
+`Complex` is a complex constant built from two real literals or
+[`Zero`](#zero) expressions. It is a terminal, and its value is
+`real` $+\,i\,$ `imag`.
+
+| `Complex(real, imag)` | |
+| --------------------- | - |
+| Extends               | `AbstractExpression` |
+| Takes                 | `real, imag: Integer \| Float \| Zero` |
+| Properties            | `real` and `imag`, the real and imaginary parts |
+| Requires              | The parts have equal value shapes and argument spaces, and equal extents for shared free indices |
+| Static type           | The common value shape and argument spaces, the free indices of `real` followed by those of `imag`, each index taken once, complex, and no support |
+| Raises                | `TypeError` for a part of another class, and `ValueError` if a requirement fails |
+
+```python
+Complex(Integer(0), Integer(1))  # The imaginary unit.
+Complex(Integer(-1), Integer(0))  # Minus one with complex scalar type.
+z = Zero((3,), ((i, m),), (V,))
+Complex(z, z)  # Complex zero: shape (3,), free index i, argument space V.
+```
+
+`Complex` retains its parts and stays complex even when the imaginary part
+is zero. Both parts must be `Zero` for a non-scalar shape or nonempty argument
+spaces. As a terminal, it has no evaluation operands (see
+[Evaluation traversal](#evaluation-traversal)).
+
+General real expressions `a` and `b` form a complex expression through
+`a + Complex(Integer(0), Integer(1)) * b`. A real expression `r` is embedded
+in complex arithmetic by `Complex(Integer(1), Integer(0)) * r`, preserving
+its value shape, free indices, support and argument spaces.
 
 ### `Zero`
 
-`Zero` is the zero of any static type.
+`Zero` represents real zero with a specified value shape, free indices and
+argument spaces.
 
 | `Zero(value_shape, free_indices, argument_spaces)` |                                                                                                                                |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Extends                                            | `AbstractExpression` |
 | Properties                                         | `value_shape`, `free_indices` and `argument_spaces`, as in [Extents](#extents), [Free indices](#free-indices) and [Argument spaces](#argument-spaces) |
-| Static type                                        | The stored properties, with no support                                                                                         |
-| Raises                                             | `TypeError` for an argument of another type, and `ValueError` for a negative extent or an index that occurs twice             |
+| Static type                                        | The stored properties, real, with no support                                                                                         |
+| Raises                                             | `TypeError` for an argument of another type, and `ValueError` for a negative extent or an index that occurs twice |
 
-`Zero` is real and also represents zero for complex expressions and expressions
-with support (see [Evaluation](#evaluation)). Differentiating an expression
-with no support gives `Zero`. For example, `Zero((3,), (), ())` is a zero
-vector, and `Zero((), (), (V,))` is the zero linear form on `V`.
+For example, `Zero((3,), (), ())` is a real zero vector and
+`Zero((), (), (V,))` is the real zero form on `V`. For either `z`,
+`Complex(z, z)` is the corresponding complex zero.
 
 ### Arithmetic
 
@@ -667,7 +699,7 @@ The operand may be real. Construction does not simplify, so `real_part(f)`
 of a real $f$ is not $f$, and `imaginary_part(f)` of a real $f$ is not
 `Zero`.
 
-For `z = Integer(1) + ImaginaryUnit() * Integer(2)`, `real_part(z)` and
+For `z = Complex(Integer(1), Integer(2))`, `real_part(z)` and
 `imaginary_part(z)` are real expressions with the values 1 and 2, respectively.
 
 ### Elementary functions (very incomplete)
@@ -1169,7 +1201,7 @@ expressions are not iterable and Python otherwise iterates through
 ### Numbers in expressions
 
 Every number in an expression is written with literals, such as `Integer(2)`,
-`Float(0.5)`, `Integer(1) / Integer(3)` or `ImaginaryUnit()`. A Python `int`, `float`,
+`Float(0.5)`, `Integer(1) / Integer(3)` or `Complex(Integer(0), Integer(1))`. A Python `int`, `float`,
 `complex`, `Fraction` or NumPy scalar is never converted and is rejected with
 `TypeError`.
 
@@ -1348,7 +1380,9 @@ binding](#substitution-and-binding)).
 
 This is a partial derivative: substitution replaces only occurrences of $x$.
 The point $a$ need not be a function. A `tuple` variable differentiates jointly
-in its members, as for the unknowns of a mixed problem.
+in its members, as for the unknowns of a mixed problem. Real points and
+directions for a complex variable use the complex embedding of
+[type compatibility](#type-compatibility-of-rewrites) before substitution.
 
 A dual function may be a variable. Its point and direction may be symbolic
 forms with the same functional signature; differentiation preserves the
@@ -2949,6 +2983,10 @@ Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
 Free indices in $g$ give a family of actions, one per index value. For a
 `tuple` $g$, its free indices are those of its members.
 
+An admissible real value for a complex argument is interpreted in that
+argument's complex scalar type. Evaluation makes this embedding explicit
+before substitution (see [Type compatibility of rewrites](#type-compatibility-of-rewrites)).
+
 Let $p$ be `position` and $n$ the arity of $e$. The value of
 `Action(Form(e, arguments), p, g)` is determined by the argument's position:
 
@@ -3146,12 +3184,8 @@ an expression of other node classes with that value. The lazy classes are
 `DirectionalDerivative`, `Integral` over a decomposed domain, `PullBack`,
 `Gradient`, `Divergence`, `Curl` and `PushForward`.
 
-A rewrite preserves value and static type, except for free-index order, and
-uses the renaming of [Substitution and binding](#substitution-and-binding).
-The static-type exception is `Zero`: a rewrite that produces `Zero` may
-replace a complex scalar type by real, or remove support. This preserves
-value because real arithmetic embeds in complex arithmetic and a constant
-is a field on every support.
+A rewrite preserves value and [type compatibility](#type-compatibility-of-rewrites),
+using the renaming of [Substitution and binding](#substitution-and-binding).
 
 Passes never simplify, so zero terms remain in the graph, and zero times an
 undefined value is undefined. A rule must not introduce a product whose
@@ -3221,49 +3255,77 @@ An extension pass with a precondition runs between two lowering stages
 A rewrite of index notation that keeps the value, such as the reduction of an
 `Indexed` of a `ComponentTensor`, is a pass of the compiler, not of the core.
 
+### Type compatibility of rewrites
+
+A replacement $r$ is type-compatible with the expression $e$ it replaces if:
+
+- Their value shapes, scalar types and ordered argument spaces are equal.
+- Their free indices have the same names and extents, up to order and the
+  consistent renaming of bound names.
+- Their supports are equal, or $r$ has no support. In the latter case,
+  $r$ represents a constant field on the support of $e$, for each assignment
+  of the free indices and form arguments.
+
+The replacement must preserve the value on the original support. A pull-back
+of `Integer(2)` may become `Integer(2)`, and the gradient of coordinates on a
+full-dimensional domain may become a literal identity matrix. These results
+lose support; a consumer needing the original domain must retain it.
+
+Before returning a table's result `r` or rebuilding its parent, complete its
+type against the replaced expression `e`. Let
+
+```python
+z = Zero(e.value_shape, e.free_indices, e.argument_spaces)
+```
+
+Apply these steps in order, using tensor arithmetic:
+
+- If `e` is complex and `r` is real, promote `r` to
+  `Complex(Integer(1), Integer(0)) * r`.
+- If `r` lacks any free index of `e`, replace `r` by `r + z`.
+
+The raw result must already have the required shape and argument spaces,
+matching extents for retained indices and no extra free indices. A real `e`
+requires a real result. A row giving zero uses `z` for a real `e` or
+`Complex(z, z)` for a complex `e`; this is what the tables mean by zero with
+the type of an expression.
+
+Evaluation of `Action` and `DirectionalDerivative` also promotes real values
+before substituting them for complex functions, member by member for tuples.
+General structural substitution with `replace` does not insert this promotion.
+For example, substituting a real negative point into `square_root(u)` for
+complex `u` must preserve complex arithmetic. Promotion after rebuilding the
+square root would be too late. Likewise, missing family indices must be
+restored before rebuilding an enclosing `ComponentTensor` or `IndexSum`.
+
 ### Evaluation traversal
 
-The complete dependency graph records what defines each object. Evaluation
-visits only expression operands:
+Evaluation visits the root expression and recursively visits its expression
+operands, in construction order:
 
 - A terminal has no expression operands, even if its construction arguments
   contain expressions, as a derived `Function` label may.
-- For every other core expression, the expression operands are the
-  `AbstractExpression` construction arguments, including those nested in
-  `tuple`s, in construction order. The traversal does not continue through
-  an argument that is a non-expression `Base` object.
-- Starting at the expression being evaluated, the traversal visits the root
-  and recursively visits these operands. For example, it visits the entries
-  of a `Tensor` and both expression arguments of an `Action`, including a
-  tuple argument. At `PullBack(f, D)` it visits `f`, but does not enter `D`;
-  at `Indexed(f, indices)` it visits `f`, but does not enter the indices.
+- Every other core expression has as operands its `AbstractExpression`
+  construction arguments, including those nested in `tuple`s. Traversal
+  stops at non-expression `Base` objects.
 
-Thus domains, domain maps, spaces, extents, index tables and labels remain
-dependencies without being traversed by evaluation. A rule may inspect them
-to select a rewrite, and may explicitly read an expression from them. For
-example, a pull-back of coordinates becomes the map's parameterisation, and
-an integral expansion builds a density from that parameterisation. Once such
-an expression is inserted as an expression operand or returned as the root,
-evaluation visits it. The stored geometry is unchanged.
+Thus evaluation visits both expression arguments of an `Action`, including
+a tuple argument, but does not enter domains, maps, spaces, indices or their
+labels. Rules may inspect these dependencies and expose expressions from
+them: a pull-back of coordinates returns a map's parameterisation, for
+example. Exposed expressions are visited; stored geometry is unchanged.
 
-The pass contracts below require each expression read from geometry into the
-evaluated expression to belong to $N_4$ when considered as a separate root.
-This is a precondition on supplied geometry, not a constructor restriction.
-The supplier prepares such expressions with the first four passes before
-building the geometry if necessary. They may still contain reducible
-gradients and pull-backs: the lowering stage evaluates those when exposed.
-This precondition prevents a late rewrite from introducing a Gateaux or
-directional derivative, a reducible action, or an integral over a decomposed
-domain after its pass has run. Rules that build new maps satisfy the same
-precondition for their parameterisations.
+Each expression exposed from geometry must belong to $N_4$ as a separate
+root. The supplier runs the first four passes before building the geometry
+if necessary. This is a pass precondition, not a constructor restriction;
+it also applies to parameterisations of maps that rewrites build. Reducible
+gradients and pull-backs may remain until the lowering stage exposes them.
 
-Expressions kept only in labels have no lowering-grammar requirement. Other
-expressions retained in geometry, spaces or library metadata are evaluated
-separately if a consumer needs their values; the normal form of an enclosing
-expression makes no promise about their normal form. Substitution and
-reconstruction still follow their own dependency and binding rules, including
-the rebuilding of derived labels. They do not apply evaluation rules to a
-label merely because it contains an expression.
+The enclosing expression's normal form makes no claim about expressions
+retained in geometry, spaces or metadata. Consumers evaluate these separately
+when needed. Labels have no lowering-grammar requirement. Substitution still
+follows its dependency and binding rules, including rebuilding derived labels
+without evaluating their contents.
 
 ### Substitution and binding
 
@@ -3400,23 +3462,24 @@ the enclosing expression out of $N_5$.
 The pass rewrites every `GateauxDerivative(F, x, a, w)`, inner derivatives
 first, as a `Form` that binds $w$ after the arguments of $F$, with
 $\delta F[v]$ the directional derivative of [Gateaux
-derivative](#gateaux-derivative):
+derivative](#gateaux-derivative) and
+`i_unit = Complex(Integer(0), Integer(1))`:
 
 | Space of $x$ and entry $w$ | Rewrite |
 | -------------------------- | ------- |
 | A real space | `Form(δF[w], (w,))` |
 | A complex space, $F$ holomorphic in $x$, entry `w` | `Form(δF[w], (w,))` |
 | A complex space, $F$ holomorphic in $x$, entry `conjugate(w)` | `Zero` with the static type of the derivative |
-| A complex space, entry `w` | `Form(Integer(1) / Integer(2) * (δF[w] - ImaginaryUnit() * δF[ImaginaryUnit() * w]), (w,))` |
-| A complex space, entry `conjugate(w)` | `Form(Integer(1) / Integer(2) * (δF[w] + ImaginaryUnit() * δF[ImaginaryUnit() * w]), (conjugate(w),))` |
+| A complex space, entry `w` | `Form(Integer(1) / Integer(2) * (δF[w] - i_unit * δF[i_unit * w]), (w,))` |
+| A complex space, entry `conjugate(w)` | `Form(Integer(1) / Integer(2) * (δF[w] + i_unit * δF[i_unit * w]), (conjugate(w),))` |
 
 - $F$ is holomorphic in $x$ if no occurrence of a function of $x$ in $F$ is
   under a `Conjugate`, an `Absolute`, a `RealPart` or an `ImaginaryPart`. The
   rows for a holomorphic $F$ give $J_+$ and $J_-$ with no terms that cancel.
   An action is linear in its functional operand and supplied argument (see
   [`Action`](#action)); conjugation of either is explicit in the expression.
-- For a `tuple` $w$, `ImaginaryUnit() * w` is the `tuple` of the products of
-  `ImaginaryUnit()` with each member.
+- For a `tuple` $w$, `i_unit * w` is the `tuple` of the products of
+  `i_unit` with each member.
 - The pass runs first, so the forms of $F$ may still be under actions, and
   [`apply_actions`](#applying-actions) substitutes an argument for $w$ like
   any other argument. An action on $w$ is then the derivative in a fixed
@@ -3436,7 +3499,10 @@ derivative](#gateaux-derivative):
 The pass rewrites every `Action(f, p, g)`, inner actions first, with the first
 row that matches the form $f$, and keeps the value of [`Action`](#action).
 It applies the rules again to actions created by a rewrite, including those
-created by substituting a symbolic form for a dual function.
+created by substituting a symbolic form for a dual function. Each replacement
+uses [type completion](#type-compatibility-of-rewrites), including when
+substitution removes dependence on an indexed argument or gives a real value
+for a complex form.
 
 | Form $f$ | Rewrite of `Action(f, p, g)` |
 | -------- | ---------------------------- |
@@ -3446,6 +3512,7 @@ created by substituting a symbolic form for a dual function.
 | `Gradient`, `PullBack` | Remains; the operation transforms the form's output |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the action moved into the listed operands |
 | `Zero` | `Zero` with the free indices of $g$ added and the entry at $p$ removed |
+| `Complex` | `Complex(z, z)`, with `z` the `Zero` with the value shape, free indices and remaining argument spaces of the action |
 | `Function` | Remains, for the supplying library |
 | `Action` | Remains, as a further application of a remaining action |
 | Any other class of the core | Cannot occur, because the argument spaces are `()` |
@@ -3515,7 +3582,7 @@ remains in $N_2$ and contains no `DirectionalDerivative`.
 | Expression $f$ | Rewrite of the derivative at $a$ |
 | -------------- | -------------------------------- |
 | No function of $x$ free in $f$ | `Zero`, with the value shape and the argument spaces of $f$, and the free indices of $f$ followed by those of the members of $a$ and $h$ |
-| $f$ equal to the member $x_k$ of $x$ | $h_k$, or $h$ for a function $x$ |
+| $f$ equal to the member $x_k$ of $x$ | $h_k$, or $h$ for a function $x$, with [type completion](#type-compatibility-of-rewrites) |
 | `Action(b, p, g)` | `Action(Db, p, g) + Action(b, p, Dg)`, with undifferentiated operands evaluated at $a$ |
 | Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \mathrm{D} b$ |
 | `DirectionalDerivative` | Cannot occur, because the inner derivative is rewritten first |
@@ -3533,6 +3600,18 @@ remains in $N_2$ and contains no `DirectionalDerivative`.
 
 For real scalar functions `u` and `a` in a space of constants,
 `directional_derivative(u * u, u, a, u)` rewrites to `u * a + a * u`.
+
+For a real scalar function `u` in a space of constants, a constant array `a`
+of shape `(m,)` and an index `i`, the identity derivative is:
+
+```python
+directional_derivative(u, u, a[i], Integer(1))
+```
+
+Its value is one for every `i`, so its lowered result is
+`Integer(1) + Zero((), ((i, m),), ())`. Returning `Integer(1)` alone would
+lose the family index supplied by the evaluation point. The same completion
+retains indices of unused members of a tuple point or direction.
 
 ### Expanding integrals
 
@@ -3634,7 +3713,7 @@ $A_i$ are the maps of [Restriction](#restriction).
 | ---------------- | ------- |
 | `Action(A, p, g)` | `Action(PullBack(A, ψ), p, g)`, with $g$ unchanged |
 | $\psi$ a `SideMap`, $f$ with a support | Remains until a pull-back by a cell of $P$ |
-| $f$ with no support | $f$, or `f + Zero(…)` with the free indices of $\psi$ that $f$ lacks |
+| $f$ with no support | $f$, with [type completion](#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
 | `Coordinate(Q)` | The parameterisation of $\psi$ |
 | `PullBack(g, SideMap(X, P, s))`, $\psi$ = `cell_map(S, i)` or `cell_domain(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
 | `PullBack(g, φ)`, φ a `SideMap` or a cell | Remains, so a pull-back nests only inside a read on a cell |
@@ -3652,8 +3731,10 @@ $A_i$ are the maps of [Restriction](#restriction).
 - The `Action` row transforms only the form's output. The last row moves the
   pull-back into the expression operands of the other unmatched node classes,
   with a binding node made fresh for $\psi$ first.
-- `Zero` is the one node class that carries free indices without operands, so
-  `f + Zero(…)` is $f$ for each member of the family $\psi$.
+- Type completion uses `Zero` to retain free indices without depending on
+  their values. Thus `f + Zero(…)` is $f$ for each member of the family
+  $\psi$, including when $f$ is nonzero. The result may have no support,
+  representing a constant field on $P$.
 - A restriction is a pull-back by a `SideMap` (see
   [Restriction](#restriction)), so this pass also lowers restrictions. A
   pull-back by a `SideMap` that no pull-back by a cell encloses, such as on an
@@ -3688,7 +3769,7 @@ The following table lists all allowed node classes and their conditions:
 
 | Chapter | Node class | Allowed in the core normal form |
 | ------- | ---------- | ------------------------------- |
-| [Algebra](#algebra) | `Integer`, `Float`, `ImaginaryUnit`, `Zero` | Always |
+| [Algebra](#algebra) | `Integer`, `Float`, `Complex`, `Zero` | Always |
 | [Algebra](#algebra) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
 | [Algebra](#algebra) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of a `ComponentTensor`, which the compiler rewrites (see [Evaluation](#evaluation)) |
 | [Algebra](#algebra) | `Inverse` | Always, for the compiler to evaluate |
@@ -3982,12 +4063,13 @@ composition:
 
 | Node class                                       | Why a node class                                                                                              |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `Integer`, `Float`, `ImaginaryUnit`              | A number written down is a terminal                                                                               |
+| `Integer`, `Float`                                | A number written down is a terminal |
+| `Complex`                                        | A complex constant, including a complex zero with shape, free indices or argument spaces, needs no arithmetic construction |
 | `Zero`                                           | No composition gives a zero with free indices without edges to other expressions                              |
 | `Sum`, `Product`, `Power`, `Absolute`             | Operations of the scalar field, which nothing else composes                                                 |
 | `Conjugate`                                      | An operation of the scalar field, and `Form` meets `conjugate(v)` of a function of any value shape as written |
 | `RealPart`                                       | `(f + conjugate(f)) / Integer(2)` has the value of the real part but is complex, and the real part is real    |
-| `ImaginaryPart`                                  | `real_part(ImaginaryUnit() * conjugate(f))` multiplies the real part by zero, which is NaN for an infinite real part |
+| `ImaginaryPart`                                  | `real_part(Complex(Integer(0), Integer(1)) * conjugate(f))` multiplies the real part by zero, which is NaN for an infinite real part |
 | `Division`                                       | `multiply(f, power(g, Integer(-1)))` rounds twice, and the quotient the user wrote rounds once                |
 | `SquareRoot`                                     | IEEE 754 rounds the square root correctly and the power not, so `power(f, Integer(1) / Integer(2))` differs   |
 | `Logarithm`                                      | An elementary function, which nothing else composes                                                           |
@@ -4063,14 +4145,14 @@ config:
 classDiagram
     direction LR
     accTitle: Algebra class hierarchy (1 of 3)
-    AbstractExpression <|-- Integer
-    AbstractExpression <|-- Float
-    AbstractExpression <|-- ImaginaryUnit
+    AbstractExpression <|-- AbstractRealLiteral
+    AbstractRealLiteral <|-- Integer
+    AbstractRealLiteral <|-- Float
+    AbstractExpression <|-- Complex
     AbstractExpression <|-- Zero
     AbstractExpression <|-- Sum
     AbstractExpression <|-- Product
     AbstractExpression <|-- Power
-    AbstractExpression <|-- Division
 ```
 
 ```mermaid
@@ -4086,6 +4168,7 @@ config:
 classDiagram
     direction LR
     accTitle: Algebra class hierarchy (2 of 3)
+    AbstractExpression <|-- Division
     AbstractExpression <|-- Absolute
     AbstractExpression <|-- Conjugate
     AbstractExpression <|-- RealPart
@@ -4093,7 +4176,6 @@ classDiagram
     AbstractExpression <|-- SquareRoot
     AbstractExpression <|-- Logarithm
     AbstractExpression <|-- Tensor
-    AbstractExpression <|-- Indexed
 ```
 
 ```mermaid
@@ -4109,6 +4191,7 @@ config:
 classDiagram
     direction LR
     accTitle: Algebra class hierarchy (3 of 3)
+    AbstractExpression <|-- Indexed
     AbstractExpression <|-- ComponentTensor
     AbstractExpression <|-- IndexSum
     Base <|-- EllipsisIndex
@@ -4334,7 +4417,8 @@ and are not added to the enclosing expression's argument spaces.
 
 | Class                                    | Argument spaces of the node                                    |
 | ---------------------------------------- | -------------------------------------------------------------- |
-| `Integer`, `Float`, `ImaginaryUnit`      | `()`                                                           |
+| `Integer`, `Float`                        | `()` |
+| `Complex`                                | Those of the parts, which must be equal |
 | `Zero`                                   | The stored argument spaces                                     |
 | `Sum`                                    | Those of the operands, which must be equal                     |
 | `Product`                                | Those of the operands, concatenated                            |
@@ -4363,7 +4447,7 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 
 | Class                    | Support of the node                | Scalar type of the node           |
 | ------------------------ | ---------------------------------- | --------------------------------- |
-| `ImaginaryUnit`          | None                               | Complex                           |
+| `Complex`          | None                               | Complex                           |
 | `Zero`                   | None                               | Real                              |
 | `Absolute`               | The support of the operand         | Real                              |
 | `RealPart`, `ImaginaryPart` | The support of the operand      | Real                              |
@@ -4386,8 +4470,8 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 53    |
-| Abstract classes                | 10    |
+| Classes                         | 54    |
+| Abstract classes                | 11    |
 | Concrete classes                | 43    |
 | Expression node classes         | 32    |
 | Free functions                  | 55    |

@@ -106,7 +106,7 @@ The solver sets `sigma_x` and `sigma_y` to zero outside the layer:
 D = image(x, RD(2))
 k0 = function(C, "k0")
 sigma_x, sigma_y = push_forward(function(F, "sigma_x"), D), push_forward(function(F, "sigma_y"), D)
-one, i_unit = Integer(1), ImaginaryUnit()
+one, i_unit = Integer(1), Complex(Integer(0), Integer(1))
 s_x = one + i_unit * sigma_x / k0
 s_y = one + i_unit * sigma_y / k0
 
