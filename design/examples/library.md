@@ -201,20 +201,30 @@ unit simplex in $R^n$. Vertex 0 is the origin, and vertex $v \ge 1$ is the unit
 vector $e_{v-1}$. `ReferenceSimplex(0)` is the reference point.
 
 ```python
+def simplex_vertices(n: int) -> AbstractExpression:
+    if type(n) is not int:
+        raise TypeError("Dimension must be an int.")
+    if n < 0:
+        raise ValueError("Dimension must be non-negative.")
+    if n == 0:
+        return Zero((1, 0), (), ())
+    return tensor(
+        tuple(
+            tensor(tuple(Integer(1 if k == v - 1 else 0) for k in range(n))) for v in range(n + 1)
+        )
+    )
+
+
 class ReferenceSimplex(Simplex, AbstractReferenceCell):
     identifier = "library.ReferenceSimplex"
 
+    def __init__(self, n: int):
+        super().__init__(n)
+        self._vertices = simplex_vertices(n)
+
     @property
     def vertices(self) -> AbstractExpression:
-        n = self.dimension
-        if n == 0:
-            return Zero((1, 0), (), ())
-        return tensor(
-            tuple(
-                tensor(tuple(Integer(1 if k == v - 1 else 0) for k in range(n)))
-                for v in range(n + 1)
-            )
-        )
+        return self._vertices
 ```
 
 `vertices` is a property of the library, not of `AbstractReferenceCell`. The
