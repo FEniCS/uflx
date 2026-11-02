@@ -86,9 +86,8 @@ provides the concrete data behind each leaf node.
   differential geometry and functional analysis.
 - The core values strictness and expressivity over brevity. Higher-level APIs
   can add brevity later.
-- The mathematical fields state variational problems uniformly across
-  geometric dimensions. Special cases for particular dimensions do not exist
-  in the mathematics, so they should not exist in the core.
+- Use dimension-independent definitions where the mathematics permits.
+  Operations such as `Curl` state their dimension-specific cases explicitly.
 - The core contains no algorithms solely for a form compiler's convenience.
   Each compiler states the forms it accepts. A pass outside the core must
   lower to those forms, using only core node classes and
@@ -641,7 +640,7 @@ Negation and subtraction are free functions, not node classes:
 | `negate(f)` | `-f` | `f: AbstractExpression` | `multiply(Integer(-1), f)` |
 | `subtract(f, g)` | `f - g` | `f, g: AbstractExpression` | `add(f, negate(g))` |
 
-These compositions preserve floating-point arithmetic and inherit the tensor
+These compositions inherit the tensor
 behaviour of `multiply` and `add` (see [Tensor arithmetic](#tensor-arithmetic)).
 
 ### `Division`
@@ -3256,6 +3255,8 @@ an expression of other node classes with that value. The lazy classes are
 A rewrite preserves value under the [mathematical admissibility](#mathematical-admissibility)
 convention and preserves [type compatibility](#type-compatibility-of-rewrites),
 using the renaming of [Substitution and binding](#substitution-and-binding).
+Value preservation is mathematical; it does not guarantee identical
+floating-point results after rewriting.
 
 Passes never simplify, so zero terms remain in the graph, and zero times an
 undefined value is undefined.
@@ -3884,8 +3885,8 @@ The core supports five kinds of extension:
 - [New subclasses](#new-subclasses), such as the elements and functions of
   Basix, or new coordinate domains.
 - [New operations](#new-operations), such as the trace or the cross product.
-- [New transformations](#new-transformations), such as the Gateaux
-  derivative.
+- [New transformations](#new-transformations), such as compiler lowering of
+  index notation.
 - [Language extensions](#language-extensions), such as external operators.
 
 A property that the rules of the core depend on is part of the core, not an
@@ -4081,10 +4082,9 @@ places:
 ### New transformations
 
 A new transformation is a pass with one rule for each node class of the core
-and one rule for each terminal class that the transformation rewrites. For example,
-the [Gateaux derivative](#gateaux-derivative) rewrites the functions that the
-derivative is taken with respect to, so the Gateaux derivative needs a rule for
-the terminal classes of those functions.
+and one rule for each terminal class that the transformation rewrites. For
+example, a compiler may reduce an `Indexed` of a `ComponentTensor`, following
+the [substitution and binding](#substitution-and-binding) rules.
 
 ### Shape derivatives
 
