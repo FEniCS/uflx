@@ -248,7 +248,7 @@ Three kinds of code produce objects:
 | Kind                                               | When the code runs              | Inspects arguments to choose what to build                                | Validates construction arguments |
 | -------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- | ----------------------------- |
 | Constructor                                        | Whenever an object is made      | No, a constructor inspects arguments only to validate                     | Yes                           |
-| Construction free function, such as `determinant`  | While the user builds the graph | Static type for expression compositions; canonical forms for spaces | May validate documented inputs |
+| Construction free function, such as `transpose`  | While the user builds the graph | Static type for expression compositions; canonical forms for spaces | May validate documented inputs |
 | Pass, such as differentiation, lowering or `units` | After construction              | Yes, and a pass may rewrite the graph                                     | No                            |
 
 A construction free function rejects invalid inputs itself or through the
@@ -468,9 +468,9 @@ composition.
 `Integral` over a decomposed domain is such a concept (see
 [`Integral`](#integral)).
 
-For example, the transpose is always `component_tensor(A[k, l], (l, k))`, and
-`determinant(A)` is the Leibniz formula for each extent $n$ of a square matrix
-`A`, so both are free functions.
+For example, the transpose is always `component_tensor(A[k, l], (l, k))`,
+so it is a free function. `Inverse` and `Determinant` keep the algorithm
+choice for the compiler.
 
 A construction free function is part of the core only if a definition or a
 rule of the core uses it, such as `density` in [`Integral` over a
@@ -1134,7 +1134,7 @@ $k = n$, $A^+$ is the inverse matrix $A^{-1}$.
 A pass chooses how to evaluate `Inverse`, in closed form for a small matrix or
 by a factorisation. The definition fixes the value and not the algorithm: the
 normal equations square the condition number of $A$, and a factorisation such
-as QR does not. The determinant is instead a fixed composition (see [Determinant](#determinant)).
+as QR does not.
 
 Examples:
 
@@ -1152,31 +1152,27 @@ J = tensor((tensor((one,)), tensor((one,))))
 - `inverse(transpose(J))` raises `ValueError`: the operand has more columns
   than rows.
 
-### Determinant
+### `Determinant`
 
-The free function `determinant(A)` is the Leibniz formula for the determinant
-of a square matrix $A$.
+`Determinant(A)` is the determinant of a square matrix $A$.
 
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `determinant(A)` | | `A: AbstractExpression` | The Leibniz formula for $\det A$ |
+| `Determinant(A)` | |
+| ---------------- | - |
+| Extends | `AbstractExpression` |
+| Free function | `determinant(A)` |
+| Takes | `A: AbstractExpression` |
+| Properties | `operand` $A$ |
+| Requires | Value shape `(n, n)` and argument spaces `()` |
+| Static type | Value shape `()` |
+| Raises | `TypeError` for an $A$ that is not an expression, and `ValueError` if a requirement fails |
 
-`determinant(A)` checks that $A$ has value shape `(n, n)` with an `int`
-extent $n$ (see [Extents](#extents)) before building the Leibniz formula:
+The extent $n$ may be an `int` or an `AbstractExtent`; the two axes must
+have equal extents. The empty determinant, of shape `(0, 0)`, has value 1.
+Support, free indices and scalar type follow the operand.
 
-$$
-\det A = \sum_\sigma \operatorname{sgn}(\sigma) \prod_{i=0}^{n-1} A_{i, \sigma(i)},
-$$
-
-with $\sigma$ over the permutations of $(0, \dots, n - 1)$. The product for
-$\sigma$ is `A[0, σ(0)] * ... * A[n - 1, σ(n - 1)]`, nested to the left. The
-products are joined in the lexicographic order of $\sigma$, nested to the
-left, with `+` for an even $\sigma$ and `-` for an odd $\sigma$. For example,
-for $n = 2$, `determinant(A)` is `A[0, 0] * A[1, 1] - A[0, 1] * A[1, 0]`. For
-$n = 1$, `determinant(A)` is `A[0, 0]`, and for $n = 0$, `determinant(A)` is
-`Integer(1)`.
-
-This fixed composition lets a pass find every use of $\det A$ as one expression.
+The node remains in the core normal form. The compiler chooses its evaluation,
+such as an explicit formula for a small matrix or a factorisation. The
+[derivative rule](#derivatives-of-the-node-classes) uses `Inverse`.
 
 ### Operator overloads
 
@@ -1649,8 +1645,8 @@ An inverse Jacobian requires $\operatorname{rank} J = k$ wherever evaluated.
 The density alone does not require full rank and may vanish.
 
 The core, passes and libraries use `jacobian(D)`, `determinant(jacobian(D))`
-and `inverse_jacobian(D)` for $J$, $\det J$ and $K$. These fixed constructions
-let a pass identify and evaluate each geometric quantity once per $D$.
+and `inverse_jacobian(D)` for $J$, $\det J$ and $K$. These expressions let a
+pass identify and evaluate each geometric quantity once per $D$.
 
 ### Concept: integral over a domain
 
@@ -3572,10 +3568,12 @@ its own rows first, for the terminals of the expression, and then the rows below
 | `Absolute(b)` | $\operatorname{Re}(\bar b \, \delta b) / \lvert b \rvert$, with `real_part`, so the derivative is real |
 | `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
 | `Logarithm(b)` | $\delta b / b$ |
+| `Determinant(A)` | $\det(A)\sum_{i,j}(A^{-1})_{ij}\,\delta A_{ji}$, with `inverse`, `index_sum` and derived indices $i,j$ |
 | `Inverse(A)` | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
 | `Conjugate(b)`, `RealPart(b)`, `ImaginaryPart(b)` | The same node applied to $\delta b$ |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the derivative moved into the listed operands |
 
+- The `Determinant` row applies where $A$ is invertible.
 - The constant-exponent row for `Power` avoids the logarithm of the general
   row, allowing negative real bases where the power is differentiable.
 - A commuting row applies only to an operand that no row of the pass
@@ -3787,7 +3785,7 @@ The following table lists all allowed node classes and their conditions:
 | [Algebra](#algebra) | `Integer`, `Float`, `Complex`, `Zero` | Always |
 | [Algebra](#algebra) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
 | [Algebra](#algebra) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of a `ComponentTensor`, which the compiler rewrites (see [Evaluation](#evaluation)) |
-| [Algebra](#algebra) | `Inverse` | Always, for the compiler to evaluate |
+| [Algebra](#algebra) | `Inverse`, `Determinant` | Always, for the compiler to evaluate |
 | [Calculus on a domain](#calculus-on-a-domain) | `Coordinate` | Always |
 | [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
 | [Calculus on a domain](#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
@@ -4086,7 +4084,7 @@ composition:
 | `Division`                                       | `multiply(f, power(g, Integer(-1)))` rounds twice, and the quotient the user wrote rounds once                |
 | `SquareRoot`                                     | IEEE 754 rounds the square root correctly and the power not, so `power(f, Integer(1) / Integer(2))` differs   |
 | `Logarithm`                                      | An elementary function, which nothing else composes                                                           |
-| `Inverse`                                        | No one composition covers every $k \le n$, and a pass chooses the algorithm, as for `Division`                |
+| `Inverse`, `Determinant`                         | The compiler chooses the numerical algorithm; construction retains the operation |
 | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | The primitives of index notation                                                                            |
 | `Coordinate`, `Function`, `Normal`               | Terminals: the coordinate function of a domain, a member of a space, the unit side conormal |
 | `Gradient`                                       | Nothing composes to differentiate                                                                             |
@@ -4211,6 +4209,7 @@ classDiagram
     Base <|-- AbstractIndexValue
     Base <|-- GatheredIndex
     AbstractExpression <|-- Inverse
+    AbstractExpression <|-- Determinant
 ```
 
 ### Calculus on a domain
@@ -4386,7 +4385,7 @@ classDiagram
 |                             | [`matrix_product(first, second)`](#tensor-arithmetic)                    | `@`                           | `first, second: AbstractExpression`                                                                                    | The contraction of the last axis of `first` with the first axis of `second`, below                                                                                              |
 |                             | [`transpose(A)`](#tensor-arithmetic)                                     |                               | `A: AbstractExpression`                                                                                                | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2                                                                                                     |
 |                             | [`inverse(A)`](#inverse)                                                 |                               | `A: AbstractExpression`                                                                                                | `Inverse`                                                                                                                                                                       |
-|                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                                                | The Leibniz formula for $\det A$                                                                                                                                                |
+|                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                                                | `Determinant`                                                                                                                                                                   |
 | Calculus on a domain        | [`coordinate(P)`](#coordinate)                                           |                               | `P: AbstractDomain`                                                                                                    | `Coordinate`                                                                                                                                                                    |
 |                             | [`gradient(f, P)`](#gradient)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                           | `Gradient`                                                                                                                                                                      |
 |                             | [`divergence(u, P)`](#divergence-and-curl)                               |                               | `u: AbstractExpression`, `P: AbstractDomain`                                                                           | `Divergence`                                                                                                                                                                    |
@@ -4438,7 +4437,7 @@ and are not added to the enclosing expression's argument spaces.
 | `RealPart`, `ImaginaryPart`              | `()`                                                           |
 | `Division`                               | Those of the first operand                                     |
 | `Conjugate`                              | Those of the operand, each conjugated                          |
-| `SquareRoot`, `Logarithm`, `Inverse`     | `()`                                                           |
+| `SquareRoot`, `Logarithm`, `Inverse`, `Determinant` | `()`                                                           |
 | `Tensor`                                 | Those of the entries, which must be equal                      |
 | `Indexed`, `ComponentTensor`, `IndexSum` | Those of the expression                                        |
 | `Coordinate`                             | `()`                                                           |
@@ -4482,10 +4481,10 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 54    |
+| Classes                         | 55    |
 | Abstract classes                | 11    |
-| Concrete classes                | 43    |
-| Expression node classes         | 32    |
+| Concrete classes                | 44    |
+| Expression node classes         | 33    |
 | Free functions                  | 54    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->
