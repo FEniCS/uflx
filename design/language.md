@@ -32,6 +32,7 @@ languages for variational forms, such as UFL and ngsolve.
 | [Terminal](#leaves-and-subclassing) | A leaf that is an expression, such as a literal, `Coordinate`, `Function` or `Normal`. |
 | [Construction free function](#node-class-or-free-function) | A pure free function that builds objects using static properties, without inspecting operand structure or performing validation. |
 | [Pass](#passes) | A pure free function that walks a graph after construction to compute a result or rewrite the graph. |
+| [Evaluation traversal](#evaluation-traversal) | A walk through expression operands, excluding dependencies stored in geometry, spaces and labels. |
 | [Grammar pattern](#grammars) | A structural condition on a node and objects within a bounded number of edges, independent of pass results. |
 | [Rule pattern](#rule-tables) | A condition selecting a rewrite rule; it may inspect a pass result on an operand. |
 | [Array rank](#abstractexpression), or **rank** | The number of axes in an expression's value shape. |
@@ -132,9 +133,10 @@ Objects must satisfy the following rules:
    order.
 6. Any order that the core or a pass relies on must be deterministic across
    processes. A pass, and any other walk of the graph such as hashing,
-   serialisation or printing, follows the edges of each object in order (rule
-   5). Where unrelated objects must be sorted, the sort uses a total order
-   defined by the class and the construction arguments alone.
+   serialisation or printing, follows the edges it visits in order (rule 5).
+   A pass states which edges it visits. Where unrelated objects must be sorted,
+   the sort uses a total order defined by the class and the construction
+   arguments alone.
 7. Equality (`==`) must be structural and return a `bool`. Whether `is` is
    structural is implementation dependent. An implementation in which `is` is
    structural must intern objects, so that equal objects are the same object.
@@ -210,9 +212,11 @@ later, the user may need `(a + b)` evaluated before `c` is added.
 
 A pass is a pure free function that walks a graph after construction and
 returns a value, such as a unit, or a new graph. To build a new graph, it
-constructs replacement nodes and reconstructs every dependent object up to
-the root (see [The base object](#the-base-object-base)). An object depends on a
-replaced node through any edge, so a pass that replaces an object also
+constructs replacement nodes and reconstructs dependent objects up to
+the root along the edges it visits (see [The base object](#the-base-object-base)).
+The dependency graph includes every construction argument; the
+[evaluation traversal](#evaluation-traversal) follows only expression operands.
+A substitution follows dependencies, so replacing an object also
 reconstructs an [`Index`](#index) whose label contains the object, other than
 a renamed name (see [Derived indices](#derived-indices)). Hence a
 replacement commutes with construction free functions: replacing `A` by `B` in
@@ -969,7 +973,10 @@ the label there would substitute into $s_1, \dots, s_n$ again, which may
 contain the binding node, so the substitution would not terminate.
 
 The edges of an index to the objects in the label of the index identify the
-index and are not operands.
+index and are not operands. Evaluation does not descend into the label, and
+expressions stored there do not enter the lowering grammars (see
+[Evaluation traversal](#evaluation-traversal)). Rebuilding a label during
+substitution does not evaluate the expressions it contains.
 
 A free function or a pass of the core derives one `Index` for each axis, and
 never an `EllipsisIndex`. `component_tensor(e, K)[J]` is $e$ with each index
@@ -3206,12 +3213,57 @@ which the form states the gradient, such as `gradient(coordinate(D), D)`, the
 identity matrix for $D$ of the dimension of its ambient coordinate domain, and
 not as the product of $J$ and $K$ on the reference cell.
 
-A lowering pass does not enter domains, domain maps or spaces. A substitution
-of indices does enter them. An extension pass with a precondition runs
-between two lowering stages (see [Shape derivatives](#shape-derivatives)).
+The passes above use the [evaluation traversal](#evaluation-traversal).
+A substitution of indices also enters domains, domain maps and spaces.
+An extension pass with a precondition runs between two lowering stages
+(see [Shape derivatives](#shape-derivatives)).
 
 A rewrite of index notation that keeps the value, such as the reduction of an
 `Indexed` of a `ComponentTensor`, is a pass of the compiler, not of the core.
+
+### Evaluation traversal
+
+The complete dependency graph records what defines each object. Evaluation
+visits only expression operands:
+
+- A terminal has no expression operands, even if its construction arguments
+  contain expressions, as a derived `Function` label may.
+- For every other core expression, the expression operands are the
+  `AbstractExpression` construction arguments, including those nested in
+  `tuple`s, in construction order. The traversal does not continue through
+  an argument that is a non-expression `Base` object.
+- Starting at the expression being evaluated, the traversal visits the root
+  and recursively visits these operands. For example, it visits the entries
+  of a `Tensor` and both expression arguments of an `Action`, including a
+  tuple argument. At `PullBack(f, D)` it visits `f`, but does not enter `D`;
+  at `Indexed(f, indices)` it visits `f`, but does not enter the indices.
+
+Thus domains, domain maps, spaces, extents, index tables and labels remain
+dependencies without being traversed by evaluation. A rule may inspect them
+to select a rewrite, and may explicitly read an expression from them. For
+example, a pull-back of coordinates becomes the map's parameterisation, and
+an integral expansion builds a density from that parameterisation. Once such
+an expression is inserted as an expression operand or returned as the root,
+evaluation visits it. The stored geometry is unchanged.
+
+The pass contracts below require each expression read from geometry into the
+evaluated expression to belong to $N_4$ when considered as a separate root.
+This is a precondition on supplied geometry, not a constructor restriction.
+The supplier prepares such expressions with the first four passes before
+building the geometry if necessary. They may still contain reducible
+gradients and pull-backs: the lowering stage evaluates those when exposed.
+This precondition prevents a late rewrite from introducing a Gateaux or
+directional derivative, a reducible action, or an integral over a decomposed
+domain after its pass has run. Rules that build new maps satisfy the same
+precondition for their parameterisations.
+
+Expressions kept only in labels have no lowering-grammar requirement. Other
+expressions retained in geometry, spaces or library metadata are evaluated
+separately if a consumer needs their values; the normal form of an enclosing
+expression makes no promise about their normal form. Substitution and
+reconstruction still follow their own dependency and binding rules, including
+the rebuilding of derived labels. They do not apply evaluation rules to a
+label merely because it contains an expression.
 
 ### Substitution and binding
 
@@ -3294,9 +3346,9 @@ whether an expression belongs to the grammar (see [New
 questions](#new-questions)), built from rule tables as any other pass (see
 [Rule tables](#rule-tables)).
 
-- An expression node of an expression $e$ is an expression reached from $e$
-  along the edges of the graph, including $e$ (see [The base object
-  `Base`](#the-base-object-base)). The grammar $N_0$ is the set of the
+- For the lowering grammars, an expression node of an expression $e$ is a
+  node visited by the [evaluation traversal](#evaluation-traversal), including
+  $e$. The grammar $N_0$ is the set of the
   expressions $e$ in which every expression node is an instance of a concrete
   class of the core or a terminal of a downstream library (see [Leaves and
   subclassing](#leaves-and-subclassing)). Every object is valid, so $N_0$
@@ -3304,11 +3356,13 @@ questions](#new-questions)), built from rule tables as any other pass (see
   $N_0$, and an extension that adds node classes states the grammars that
   contain them.
 - A pass maps a source grammar into a target grammar if, for every
-  expression of the source grammar, the result of the pass belongs to the
-  target grammar.
+  expression of the source grammar satisfying the pass's preconditions, the
+  result belongs to the target grammar. The core pass contracts also require
+  the geometry precondition of [Evaluation traversal](#evaluation-traversal).
 - A grammar pattern is a condition on one expression node that reads only
   the node and the objects within a bounded number of edges. It never reads
-  the result of a pass.
+  the result of a pass. It may inspect a domain or map to classify that node;
+  this does not add the expressions in that dependency to the traversal.
 - For a grammar $N$ and a set of grammar patterns $P$, the delta $N \setminus P$ is
   the set of the expressions of $N$ with no expression node that matches a
   pattern of $P$. An intermediate grammar is written as a delta of an earlier
@@ -3327,6 +3381,13 @@ The section of each pass states the input grammar and the output grammar of
 the pass, such as $N_1$ of
 [`apply_gateaux_derivatives`](#applying-gateaux-derivatives), and [The core
 normal form](#the-core-normal-form) lists what the last of them allows.
+
+For example, a `Function` on a domain whose stored parameterisation contains
+a reducible `Gradient` is in $N_5$: the traversal stops at the function.
+That gradient is checked and lowered if the parameterisation is evaluated as
+a separate root, or if a rewrite exposes it in the evaluated expression.
+Likewise, an old expression retained in a derived-index label does not keep
+the enclosing expression out of $N_5$.
 
 ### Applying Gateaux derivatives
 
@@ -3598,7 +3659,8 @@ $A_i$ are the maps of [Restriction](#restriction).
   pull-back by a `SideMap` that no pull-back by a cell encloses, such as on an
   expression on $P$ that is not integrated, remains.
 - The composition of maps lowers the parameterisation of the map that the
-  composition builds. With a `CellMap` as $\psi$ and φ =
+  composition builds as a separate expression root (see
+  [Evaluation traversal](#evaluation-traversal)). With a `CellMap` as $\psi$ and φ =
   `domain_map(T, x, D)`, the composition is `cell_domain(D, j, e)` for the
   coordinate function $x$ of $D$.
 - The rows of the identity of Piola read no derivative of $J$. A
@@ -3620,9 +3682,9 @@ $A_i$ are the maps of [Restriction](#restriction).
 ### The core normal form
 
 The core normal form is $N_5 = N_4 \setminus (G \cup R)$, the output grammar of
-the lowering stage. Its expression nodes are instances of concrete core
-classes or downstream terminals. The following table lists all allowed node
-classes and their conditions:
+the lowering stage. Its expression nodes, as visited by the evaluation
+traversal, are instances of concrete core classes or downstream terminals.
+The following table lists all allowed node classes and their conditions:
 
 | Chapter | Node class | Allowed in the core normal form |
 | ------- | ---------- | ------------------------------- |
@@ -3644,8 +3706,9 @@ classes and their conditions:
 
 The objects of an expression that are not expressions, such as an `Index`, an
 `EllipsisIndex`, a `GatheredIndex`, a domain, a `DomainMap`, a `SideMap`, a
-`CellMap` and a space, occur as in any expression, because a grammar restricts
-only the expression nodes.
+`CellMap` and a space, occur as in any expression. Expressions reachable only
+through those dependencies or through terminal metadata are outside this
+normal-form claim (see [Evaluation traversal](#evaluation-traversal)).
 
 The code that assembles receives the form layer (see [Grammars](#grammars)):
 sums and products of forms, `Zero`, forms whose expression may be a form,
@@ -3716,6 +3779,8 @@ classes. Each extends `AbstractExpression`, never a concrete core class
 
 - the value of the node, as the section of a lazy node class of the core
   states the value (see [Evaluation](#evaluation)), and
+- its expression operands for the [evaluation traversal](#evaluation-traversal),
+  distinguishing them from metadata, and
 - a lowering to a mathematically equal expression of core node classes, if
   such an expression exists.
 
