@@ -70,12 +70,19 @@ avg_dn_v = half * index_sum((dv_p[i] + dv_m[i]) * n[i], (i,))
 alpha = runtime_array("alpha", (diagonal.num_cells[0],))
 
 f = -avg_dn_u * jump_v - jump_u * avg_dn_v + alpha[e] * jump_u * jump_v
-a_facet = form(integral(f, E), (v, u))
+facet_cell = cell_domains(E, 0)[e]
+a_facet = form(
+    index_sum(integral(pull_back(f, facet_cell) * density(facet_cell), I), (e,)),
+    (v, u),
+)
 ```
 
 `a_facet` binds the functions `v` and `u` on `square`. Its integrand has
 support `E` and the free index `e` from the penalty array; the traces themselves
-have no free index. Swapping the sides negates the normal and both jumps,
+have no free index. Selecting `facet_cell` with the same `e` pairs each
+penalty with its facet, and the explicit `IndexSum` binds `e`. In contrast,
+`integral(f, E)` preserves `e` and would integrate each fixed penalty value
+over all facets. Swapping the sides negates the normal and both jumps,
 leaving every term unchanged.
 
 For this square, the reference-facet inclusions are
@@ -86,11 +93,12 @@ $(1,1)/\sqrt{2}$ and the facet density is $\sqrt{2}$.
 
 ### From the facet integral to a kernel
 
-`expand_integrals` expresses the integral on the reference interval. Here
-its internal piece index has been renamed to `e`:
+The explicit facet sum above is already on the reference interval. For a
+facet integrand without indexed penalty data, `expand_integrals` constructs
+the same shape of sum with a fresh internal member index. The paired
+construction uses the caller's `e`:
 
 ```python
-facet_cell = cell_domains(E, 0)[e]
 form(
     index_sum(integral(pull_back(f, facet_cell) * density(facet_cell), I), (e,)),
     (v, u),
@@ -398,6 +406,12 @@ to the conforming trace.
 
 The ring pull-back remains after core lowering. After quadrature on the
 segments, a point-location pass identifies the tetrahedron and reference
-position of each ring point. The family has segment, quadrature-point and
-ring-point indices; a segment kernel therefore reads a list of tissue cells
-rather than one cell. Its interface follows from the expression.
+position of each ring point. It supplies an `IndexValue` owner family
+bounded by `T3.num_cells[0]` and a reference-point `Map` family from `RD(0)`
+into the reference tetrahedron. Both families have the segment,
+quadrature-point and ring-point axes in the same order. Shared selection
+from them replaces each unresolved point read by the
+[owner-cell evaluation](../language.md#a-family-of-points-in-a-mesh), then
+core lowering handles the new physical-cell reads. A segment kernel
+therefore reads a list of tissue cells rather than one cell. No topology
+of the ring points is needed; its interface follows from the expression.
