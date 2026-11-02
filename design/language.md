@@ -3431,12 +3431,14 @@ member.
 
 The pass rewrites every `DirectionalDerivative(f, x, a, h)`, inner derivatives
 first, with the first row that matches $f$. $\mathrm{D} b$ is short for
-`DirectionalDerivative(b, x, x, h)`. The rules give the derivative at $x$, and
-if $a$ is not $x$, the pass then substitutes $a$ for $x$ in the result, every
-member of a `tuple` at once. It applies `apply_actions` to the result, so the
-output remains in $N_2$ and contains no `DirectionalDerivative`.
+`DirectionalDerivative(b, x, a, h)`. The rules give the derivative directly
+at $a$: undifferentiated operands in the derivative formulas use the
+substitution $[x := a]$ of [`DirectionalDerivative`](#directionalderivative),
+while $h$ is inserted unchanged. Rules match the original operands, before
+substitution. The pass applies `apply_actions` to the result, so the output
+remains in $N_2$ and contains no `DirectionalDerivative`.
 
-| Expression $f$ | Rewrite of the derivative at $x$ |
+| Expression $f$ | Rewrite of the derivative at $a$ |
 | -------------- | -------------------------------- |
 | No function of $x$ free in $f$ | `Zero`, with the value shape and the argument spaces of $f$, and the free indices of $f$ followed by those of the members of $a$ and $h$ |
 | $f$ equal to the member $x_k$ of $x$ | $h_k$, or $h$ for a function $x$ |
@@ -3451,6 +3453,9 @@ output remains in $N_2$ and contains no `DirectionalDerivative`.
 - A dual variable can occur in the functional operand of a pairing. Its
   direction and substitution point may be symbolic forms; their actions
   are evaluated by `apply_actions`.
+
+For real scalar functions `u` and `a` in a space of constants,
+`directional_derivative(u * u, u, a, u)` rewrites to `u * a + a * u`.
 
 ### Expanding integrals
 
