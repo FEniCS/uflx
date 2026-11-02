@@ -35,8 +35,8 @@ diagonal = StaticTopology(
     (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
 )
 D = image(x, RD(2))
-E = side_domain(D, diagonal)
-B = side_domain(D, neumann_facets)
+E = side_domain(D, diagonal, "+")
+B = side_domain(D, neumann_facets, "inside")
 ```
 
 The library supplies `x`, a degree-1 coordinate function on `square` with

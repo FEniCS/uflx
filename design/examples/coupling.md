@@ -34,7 +34,7 @@ The solver gives the coordinate function `x` the vertex values
 ```python
 x = function(X_space, "x")
 D = image(x, RD(2))
-E = side_domain(D, diagonal)
+E = side_domain(D, diagonal, "+")
 e = cell_index(diagonal, 0)
 
 u, v = function(V, "u"), function(V, "v")
@@ -181,16 +181,16 @@ is the submesh, and its side table is the entity map:
 fluid_cells = StaticTopology((K,), (((0, 1, 2),),), ((("inside", square, 0),),))
 solid_cells = StaticTopology((K,), (((1, 3, 2),),), ((("inside", square, 0),),))
 
-F = side_domain(D, fluid_cells)
-S = side_domain(D, solid_cells)
+F = side_domain(D, fluid_cells, "inside")
+S = side_domain(D, solid_cells, "inside")
 
 interface = StaticTopology(
     (I,), (((1, 2),),), ((("fluid", fluid_cells, 0), ("solid", solid_cells, 0)),)
 )
-G = side_domain(F, interface)
+G = side_domain(F, interface, "fluid")
 
 inlet = StaticTopology((I,), (((2, 0),),), ((("fluid", fluid_cells, 0),),))
-G_in = side_domain(F, inlet)
+G_in = side_domain(F, inlet, "fluid")
 ```
 
 `interface` names the fluid and solid topologies. Restricting a field from
@@ -313,7 +313,7 @@ The library supplies `runtime_array` for solver data with no support and
 
 ```python
 D3 = image(x3, RD(3))
-D1 = side_domain(D3, T1)
+D1 = side_domain(D3, T1, "tissue")
 identity = transformation_law((), 0)
 
 p3, q3 = function(V3, "p3"), function(V3, "q3")

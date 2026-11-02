@@ -2244,7 +2244,7 @@ side domain $E$ into a mesh $D$, through the side $s$.
 | `SideMap(X, P, s)` |                                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
 | Extends            | `Base` |
-| Takes              | `X, P: AbstractTopology \| DecomposedDomain`, `s: str \| None` |
+| Takes              | `X, P: AbstractTopology \| DecomposedDomain`, `s: str` |
 | Properties         | `ambient_domain` $X$, `parameter_domain` $P$, and `side` $s$ |
 | Derived            | `free_indices`, always `()` |
 | Requires           | Conditions 1 to 3 below                                                                                 |
@@ -2253,13 +2253,11 @@ side domain $E$ into a mesh $D$, through the side $s$.
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `side_map(X, P, s)` | | `X, P: AbstractTopology \| DecomposedDomain`, `s: str` | `SideMap(X, P, s)` |
-| `side_map(X, P)` | | `X, P: AbstractTopology \| DecomposedDomain` | `SideMap(X, P, None)`, the first side of each group on $T$ |
 
 1. $X$ is a topology $T$ and $P$ a topology $S$, or $X$ is a mesh with the
    topology $T$ and $P$ a side domain with the topology $S$.
 2. Every cell type of $S$ is an `AbstractReferenceCell`.
-3. Every group of $S$ has a side named $s$ with the topology $T$, or a side on
-   $T$ for $s$ `None`.
+3. Every group of $S$ has a side named $s$ with the topology $T$.
 
 A side map of a mesh takes a side domain, so that a coupling of two meshes
 shares one side domain. `pull_back(f, side_map(X, P, s))` is an expression
@@ -2271,12 +2269,11 @@ for a side domain, is `pull_back(pull_back(f, B_i), A_i)`.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `side_domain(D, S)` | | `D: DecomposedDomain`, `S: AbstractTopology` | `image(pull_back(x, side_map(T, S)), Q)` |
+| `side_domain(D, S, s)` | | `D: DecomposedDomain`, `S: AbstractTopology`, `s: str` | `image(pull_back(x, side_map(T, S, s)), Q)` |
 
 For a mesh $D$ = `image(x, Q)` with the topology $T$, the side domain of $S$
-is the image of the trace of $x$, so the side domain moves with $x$. The
-topology of the result is $S$; the side selected by `side_map` supplies its
-geometry.
+is the image of the trace of $x$ from side $s$, so the side domain moves with
+$x$. The result has topology $S$ and geometry supplied by that side.
 
 #### Traces and normals
 
@@ -2305,7 +2302,7 @@ diagonal = StaticTopology(
 plus = side_map(square, diagonal, "+")
 minus = side_map(square, diagonal, "-")
 jump = pull_back(u, plus) - pull_back(u, minus)
-E = side_domain(D, diagonal)
+E = side_domain(D, diagonal, "+")
 ```
 
 From `"+"`, the side tables are the cells `(0,)` and the inclusion
@@ -2364,7 +2361,7 @@ of each point is the constant map onto the position of the point in $K_j$,
 and the points have no reference normal.
 
 An expression $f$ on $D$ is evaluated at the points through the
-[restriction](#restriction) to the points, with $P$ = `side_domain(D, S)` the
+[restriction](#restriction) to the points, with $P$ = `side_domain(D, S, "inside")` the
 decomposed domain of the points:
 
 ```python
@@ -4386,8 +4383,7 @@ classDiagram
 |                             | [`push_forward(f, D, m)`](#pushforward)                                  |                               | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw`                                                 | `PushForward(f, D, m)`                                                                                                                                                          |
 |                             | [`push_forward(u, D)`](#pushforward)                                     |                               | `u: Function`, `D: DecomposedDomain`                                                                                   | `PushForward(u, D, u.space.transformation_law)`                                                                                                                                 |
 |                             | [`side_map(X, P, s)`](#sidemap)                                          |                               | `X, P: AbstractTopology \| DecomposedDomain`, `s: str`                                                                 | `SideMap(X, P, s)`                                                                                                                                                              |
-|                             | [`side_map(X, P)`](#sidemap)                                             |                               | `X, P: AbstractTopology \| DecomposedDomain`                                                                           | `SideMap(X, P, None)`, the first side of each group on $T$                                                                                                                      |
-|                             | [`side_domain(D, S)`](#side-domains)                                     |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                                           | `image(pull_back(x, side_map(T, S)), Q)`                                                                                                                                        |
+|                             | [`side_domain(D, S, s)`](#side-domains)                                  |                               | `D: DecomposedDomain`, `S: AbstractTopology`, `s: str`                                                                 | `image(pull_back(x, side_map(T, S, s)), Q)`                                                                                                                                     |
 |                             | [`normal(sm)`](#normal)                                                  |                               | `sm: SideMap`                                                                                                          | `Normal`                                                                                                                                                                        |
 | Function spaces             | [`function(V, label)`](#function)                                        |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                                      | `Function`                                                                                                                                                                      |
 | Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                               | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise                                                                                         |
@@ -4464,6 +4460,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 11    |
 | Concrete classes                | 43    |
 | Expression node classes         | 32    |
-| Free functions                  | 55    |
+| Free functions                  | 54    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

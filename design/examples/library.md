@@ -386,9 +386,9 @@ class Measure:
         mesh = self.domain
         if self.subdomain_id != "everywhere":
             # The marker value names a topology with a side "inside" into the mesh.
-            E = side_domain(mesh.domain, self.subdomain_data[self.subdomain_id])
+            E = side_domain(mesh.domain, self.subdomain_data[self.subdomain_id], "inside")
         elif self.integral_type == "ds":
-            E = side_domain(mesh.domain, mesh.boundary)
+            E = side_domain(mesh.domain, mesh.boundary, "inside")
         else:
             E = integrand.support if mesh is None else mesh.domain
         if E != integrand.support:
