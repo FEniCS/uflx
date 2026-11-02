@@ -2604,7 +2604,8 @@ spaces and the labels are equal. A function in a [dual space](#dualspace) is an
 antilinear form, such as a known load.
 
 Multilinearity applies to the argument slots, not to spatial dependence.
-The supplying library defines how actions on the function are evaluated.
+The supplying library defines how actions on the function and spatial
+transformations of its output are evaluated.
 
 The [form](#form), rather than the function, decides whether a function is an
 argument or fixed data.
@@ -2961,6 +2962,17 @@ leave argument slots open; further actions remain nested, with positions
 counted among the remaining slots. The library evaluates these partial or
 complete applications. A dual pairing is the one-slot case.
 
+Spatial differentiation and pull-back transform the output of a form, keeping
+the supplied argument fixed:
+
+| Expression | Value |
+| ---------- | ----- |
+| `gradient(action(A, p, g), P)` | `action(gradient(A, P), p, g)` |
+| `pull_back(action(A, p, g), psi)` | `action(pull_back(A, psi), p, g)` |
+
+The transformed form retains its argument spaces. For $A(g) = a g$,
+$(\nabla A)(g) = \nabla(a g)$, including the derivative of $g$.
+
 A dual argument may receive a symbolic form. With `P` from the
 [`DualSpace`](#dualspace) example and scalar fields `f`, `w` in `V` on `D`:
 
@@ -3168,13 +3180,16 @@ except `Gradient`, `Divergence`, `Curl`, `PushForward`, `PullBack` and
 `Integral`, which the rows of that pass match first; it also commutes with
 `Conjugate`, `RealPart` and `ImaginaryPart`.
 
+For `Action`, the `Gradient` and `PullBack` identities are evaluated toward
+actions on transformed forms, as in [`Action`](#action).
+
 The passes of the core run in this order, each on the output grammar of the
 one before, from $N_0$ (see [Grammars](#grammars)):
 
 | Pass | Evaluates | Output grammar |
 | ---- | --------- | -------------- |
 | [`apply_gateaux_derivatives`](#applying-gateaux-derivatives) | `GateauxDerivative` | $N_1$ |
-| [`apply_actions`](#applying-actions) | `Action`, except successive actions on a `Function` | $N_2$ |
+| [`apply_actions`](#applying-actions) | `Action`, except actions on a `Function`, `Gradient`, `PullBack` or another remaining `Action` | $N_2$ |
 | [`apply_derivatives`](#applying-derivatives) | `DirectionalDerivative`, then any actions it creates | $N_3$ |
 | [`expand_integrals`](#expanding-integrals) | `Integral` over a decomposed domain | $N_4$ |
 | The lowering stage | `Gradient`, `Divergence`, `Curl`, `PushForward` and `PullBack` | $N_5$, [the core normal form](#the-core-normal-form) |
@@ -3184,6 +3199,8 @@ created by substitution, and `apply_derivatives` uses it to evaluate actions
 created by differentiation or substitution at the derivative's point.
 The lowering stage repeats [`apply_gradients`](#applying-gradients)
 and then [`expand_pull_backs`](#expanding-pull-backs) until neither rewrites.
+Both passes evaluate actions they create or expose with `apply_actions` and
+revisit affected expressions with their own rules.
 `apply_gradients` runs first, so a gradient is evaluated on the domain on
 which the form states the gradient, such as `gradient(coordinate(D), D)`, the
 identity matrix for $D$ of the dimension of its ambient coordinate domain, and
@@ -3353,7 +3370,7 @@ derivative](#gateaux-derivative):
 | ------------------ | - |
 | Evaluates          | `Action` |
 | Input grammar      | $N_1$ |
-| Output grammar     | $N_2 = N_1 \setminus \{$an `Action` whose form is neither a `Function` nor an `Action`$\}$ |
+| Output grammar     | $N_2 = N_1 \setminus \{$an `Action` whose form is not a `Function`, `Gradient`, `PullBack` or `Action`$\}$ |
 
 The pass rewrites every `Action(f, p, g)`, inner actions first, with the first
 row that matches the form $f$, and keeps the value of [`Action`](#action).
@@ -3365,10 +3382,11 @@ created by substituting a symbolic form for a dual function.
 | `Form(e, arguments)`, $p$ at least the arity $n$ of $e$ | The value of `Action`: `Form(e, others)` with $g$ substituted for the argument at $p - n$, or $e$ with $g$ substituted if no entries remain |
 | `Conjugate(e)` | `conjugate(action(e, p, conjugate(g)))`, with conjugation member by member for a `tuple` $g$ |
 | `Product(a, b)`, with $n$ the arity of $a$ | `Product(Action(a, p, g), b)` for $p < n$, otherwise `Product(a, Action(b, p - n, g))` |
+| `Gradient`, `PullBack` | Remains; the operation transforms the form's output |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the action moved into the listed operands |
 | `Zero` | `Zero` with the free indices of $g$ added and the entry at $p$ removed |
 | `Function` | Remains, for the supplying library |
-| `Action` | Remains; after rewriting the inner actions, it is a further application of a `Function` |
+| `Action` | Remains, as a further application of a remaining action |
 | Any other class of the core | Cannot occur, because the argument spaces are `()` |
 
 - `DirectionalDerivative` binds its variable, so moving the action into it
@@ -3376,8 +3394,9 @@ created by substituting a symbolic form for a dual function.
   not differentiated.
 - A substituted form is a value with its own binders. Substitution preserves
   their scope and the scope of the enclosing form. The pass finishes when
-  every remaining action applies a `Function`, directly or through further
-  actions on it.
+  every remaining action applies a `Function`, a `Gradient`, a `PullBack`
+  or another remaining action. Actions on `Gradient` and `PullBack` stay
+  outside these operations, so spatial lowering does not rewrite in a cycle.
 
 ### Derivatives of the node classes
 
@@ -3397,7 +3416,6 @@ its own rows first, for the terminals of the expression, and then the rows below
 | `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
 | `Logarithm(b)` | $\delta b / b$ |
 | `Inverse(A)` | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
-| `Action(f, p, g)` | `Action(δf, p, g) + Action(f, p, δg)` |
 | `Conjugate(b)`, `RealPart(b)`, `ImaginaryPart(b)` | The same node applied to $\delta b$ |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the derivative moved into the listed operands |
 
@@ -3415,11 +3433,6 @@ its own rows first, for the terminals of the expression, and then the rows below
   class to this table, and every pass that differentiates then uses the row.
 - The derivative of each row is a composition of node classes of the core,
   with actions evaluated as in [Applying actions](#applying-actions).
-
-The action rule is linear in both expression operands. For the antilinear
-pairing of `l` with a field `v`, `w` is `conjugate(v)` and its variation is
-`conjugate(δv)`. For a product-space argument, the variation is member by
-member.
 
 ### Applying derivatives
 
@@ -3442,6 +3455,7 @@ remains in $N_2$ and contains no `DirectionalDerivative`.
 | -------------- | -------------------------------- |
 | No function of $x$ free in $f$ | `Zero`, with the value shape and the argument spaces of $f$, and the free indices of $f$ followed by those of the members of $a$ and $h$ |
 | $f$ equal to the member $x_k$ of $x$ | $h_k$, or $h$ for a function $x$ |
+| `Action(b, p, g)` | `Action(Db, p, g) + Action(b, p, Dg)`, with undifferentiated operands evaluated at $a$ |
 | Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \mathrm{D} b$ |
 | `DirectionalDerivative` | Cannot occur, because the inner derivative is rewritten first |
 
@@ -3453,6 +3467,8 @@ remains in $N_2$ and contains no `DirectionalDerivative`.
 - A dual variable can occur in the functional operand of a pairing. Its
   direction and substitution point may be symbolic forms; their actions
   are evaluated by `apply_actions`.
+- The `Action` row varies both expression operands, member by member for a
+  `tuple` argument. A conjugated argument varies through `Conjugate`.
 
 For real scalar functions `u` and `a` in a space of constants,
 `directional_derivative(u * u, u, a, u)` rewrites to `u * a + a * u`.
@@ -3504,9 +3520,10 @@ matches `Divergence(PushForward(f, D, m), D)` with $m$ =
 with $m$ = `transformation_law(("covariant",), 0)` and $k = n$ (see
 [`PushForward`](#pushforward)).
 
-The pass rewrites every `Divergence` and `Curl` that the identity of Piola
-does not match as its composition of `gradient(u, P)`, and every
-`Gradient(f, P)` that a row below rewrites, inner gradients first, as
+The pass rewrites `Gradient(Action(A, p, g), P)` as
+`Action(Gradient(A, P), p, g)`. It rewrites every `Divergence` and `Curl` that
+the identity of Piola does not match as its composition of `gradient(u, P)`,
+and every other `Gradient(f, P)` that a row below rewrites, inner gradients first, as
 `component_tensor(∂_j f[a_1, …, a_r], (a_1, …, a_r, j))`, with $r$ the rank
 of $f$ and derived indices $a_1, \ldots, a_r$ and $j$. $\partial_j b$, entry
 $j$ of the last axis of the gradient of $b$ on $P$, has the value shape of
@@ -3519,6 +3536,7 @@ coordinate domain of $P$. $\partial_j$ applies the first row that matches:
 | `Coordinate(P)`, $P$ of the dimension of its ambient coordinate domain | `component_tensor(I[i, j], (i,))`, with $I$ the identity matrix of value shape `(n, n)` and a derived index $i$ |
 | A terminal, a `Gradient`, a `PushForward`, a node that the identity of Piola matches, or a `PullBack` by a cell or a `SideMap` | `component_tensor(gradient(b, P)[a_1, …, a_s, j], (a_1, …, a_s))`, with $s$ the rank of $b$, so the gradient remains |
 | `PullBack(g, φ)`, φ a `DomainMap` | The chain rule $(\nabla_Q g \circ \varphi) \, \nabla_P \varphi$, `pull_back(gradient(g, Q), φ)[a_1, …, a_s, l] * jacobian(φ)[l, j]` summed over a derived index $l$, with $Q$ the ambient domain of φ |
+| `Action(A, p, g)` | `Action(∂_j A, p, g)`, with $g$ unchanged |
 | Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \partial_j b$ |
 
 - An operand is constant for the pass if the operand has no support.
@@ -3553,6 +3571,7 @@ $A_i$ are the maps of [Restriction](#restriction).
 
 | `PullBack(f, ψ)` | Rewrite |
 | ---------------- | ------- |
+| `Action(A, p, g)` | `Action(PullBack(A, ψ), p, g)`, with $g$ unchanged |
 | $\psi$ a `SideMap`, $f$ with a support | Remains until a pull-back by a cell of $P$ |
 | $f$ with no support | $f$, or `f + Zero(…)` with the free indices of $\psi$ that $f$ lacks |
 | `Coordinate(Q)` | The parameterisation of $\psi$ |
@@ -3569,8 +3588,9 @@ $A_i$ are the maps of [Restriction](#restriction).
 | A terminal | Remains, for the library of the terminal |
 | Any other node class | The node of the pull-backs of the operands that are expressions |
 
-- A pull-back is pointwise, so the last row moves the pull-back into every
-  other node class, with a binding node made fresh for $\psi$ first.
+- The `Action` row transforms only the form's output. The last row moves the
+  pull-back into the expression operands of the other unmatched node classes,
+  with a binding node made fresh for $\psi$ first.
 - `Zero` is the one node class that carries free indices without operands, so
   `f + Zero(…)` is $f$ for each member of the family $\psi$.
 - A restriction is a pull-back by a `SideMap` (see
@@ -3614,12 +3634,12 @@ classes and their conditions:
 | [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
 | [Calculus on a domain](#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
 | [Calculus on a domain](#calculus-on-a-domain) | `Integral` | Over a domain that is not a `DecomposedDomain`, such as a reference cell or `RD(0)` |
-| [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
+| [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap` of an expression other than an `Action`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
 | [Decomposed domains](#decomposed-domains) | `Normal` | Always |
 | [Decomposed domains](#decomposed-domains) | `PushForward` | Under no pull-back by a cell |
 | [Function spaces](#function-spaces) | `Function` | Always |
 | [Variational forms](#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](#form)) |
-| [Variational forms](#variational-forms) | `Action` | Its form is a `Function` or another such `Action` |
+| [Variational forms](#variational-forms) | `Action` | Its form is a `Function`, a `Gradient`, a `PullBack` or another such `Action`, with each operand in the core normal form |
 | | A terminal of a downstream library | Always |
 
 The objects of an expression that are not expressions, such as an `Index`, an
@@ -3630,7 +3650,8 @@ only the expression nodes.
 The code that assembles receives the form layer (see [Grammars](#grammars)):
 sums and products of forms, `Zero`, forms whose expression may be a form,
 with the order of the arguments from the static type (see [`Form`](#form)),
-and actions on supplied functions, which their libraries evaluate.
+and actions on supplied or spatially transformed forms. Libraries evaluate
+supplied functions and their spatial transformations.
 
 A form compiler receives the integrand layer: integrals over reference cells
 and over points, whose integrands are arithmetic and index notation of
