@@ -1413,24 +1413,39 @@ is `u`, the evaluation point is `a`, and the direction is `h`.
 The derivative with respect to a tensor is a composition over unit
 directions. The direction states the symmetry, and the core has none. With a
 Python function `strain_energy` that builds the strain energy from a tensor,
-the right Cauchy–Green tensor `C`, a function `C_` in a real space of
+the right Cauchy–Green tensor `C`, an increment `H` in a real space of
 constants of value shape `(3, 3)`, the identity matrix `I` of value shape
 `(3, 3)` and indices `i`, `j`, `k` and `l`:
 
 ```python
 E = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / Integer(2), (i, j))
-psi_symbol = strain_energy(C_)
-dpsi = directional_derivative(psi_symbol, C_, C, E)
+zero = Zero((3, 3), (), ())
+psi_perturbed = strain_energy(C + H)
+dpsi = directional_derivative(psi_perturbed, H, zero, E)
 S = Integer(2) * component_tensor(dpsi, (k, l))
 ```
 
-`E` has the free indices `k` and `l`, and is symmetric for each value of `k` and
-`l`, so `S` is $2 \operatorname{sym}(\partial \psi / \partial C)$ at `C`, the
-second Piola–Kirchhoff stress. If the strain energy `psi` is already built
-from `C`, construct the symbolic expression by substitution instead:
+`E` is a family of matrix directions, with free indices `k` and `l`:
+
+$$
+E^{kl}_{ij}=\tfrac12(\delta_{ik}\delta_{jl}+\delta_{il}\delta_{jk}).
+$$
+
+For `k == l`, it has a single diagonal entry of one. Otherwise it has entries
+of one half at `(k, l)` and `(l, k)`, so the perturbation stays symmetric.
+Writing $G=\partial\psi/\partial C$, the directional derivative is
+$G:E^{kl}=(G_{kl}+G_{lk})/2$. Thus `component_tensor(dpsi, (k, l))`
+collects the entries of $\operatorname{sym}G$, and the factor two gives the
+second Piola–Kirchhoff stress $S=2\operatorname{sym}G$. The halves average
+the two off-diagonal derivatives; these directions are symmetrised coordinate
+directions, not an orthonormal basis.
+
+The field `C` stays in the expression; the constant increment is differentiated
+at zero. If the strain energy `psi` is already built from `C`, construct the
+perturbed expression by substitution:
 
 ```python
-psi_symbol = replace(psi, {C: C_})
+psi_perturbed = replace(psi, {C: C + H})
 ```
 
 For the full derivative without `sym`, use the direction:

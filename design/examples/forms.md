@@ -202,6 +202,24 @@ $\widehat{\operatorname{div}}\hat\sigma/\det J$ even on curved cells, without
 differentiating $J$. For a Nédélec space, the corresponding covariant law of
 weight 0 makes `curl` transform by the contravariant law of weight 1.
 
+## A scalar constitutive derivative
+
+Let `c` be a real scalar field on `D`, and `R` a real scalar space of
+constants with no domain. For the local energy $\psi(c)=c^4/4$, differentiate
+a constant increment at zero:
+
+```python
+def energy(c):
+    return c ** Integer(4) / Integer(4)
+
+
+h = function(R, "h")
+dpsi = directional_derivative(energy(c + h), h, Integer(0), Integer(1))
+```
+
+`dpsi` is the field $c^3$ on `D`. The field `c` stays in the expression;
+only the constant increment `h` is varied.
+
 ## Hyperelasticity and the stress
 
 Differentiate a strain energy to obtain both a stress field and variational
@@ -234,15 +252,30 @@ C = transpose(F) @ F
 psi = strain_energy(C)
 ```
 
-Differentiate with respect to a matrix symbol, evaluate at `C`, and use
-symmetric unit directions:
+Differentiate a constant matrix increment at zero, using symmetrised coordinate
+directions:
 
 ```python
-C_ = function(R, "C")
+H = function(R, "H")
+zero = Zero((2, 2), (), ())
 N = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / two, (i, j))
-S = two * component_tensor(directional_derivative(strain_energy(C_), C_, C, N), (k, l))
+dpsi = directional_derivative(strain_energy(C + H), H, zero, N)
+S = two * component_tensor(dpsi, (k, l))
 sigma = F @ S @ transpose(F) / determinant(F)
 ```
+
+The free indices `k, l` select the direction `N`. For example,
+
+$$
+N^{00}=\begin{pmatrix}1&0\\0&0\end{pmatrix},
+\qquad
+N^{01}=N^{10}=\tfrac12\begin{pmatrix}0&1\\1&0\end{pmatrix}.
+$$
+
+With $G=\partial\psi/\partial C$, differentiation along `N` gives
+$(G_{kl}+G_{lk})/2$. Binding `k, l` collects these symmetric entries into a
+matrix; multiplying by two gives $S=2\operatorname{sym}G$. The halves prevent
+doubling the off-diagonal entries.
 
 `S` evaluates to $\lambda\operatorname{tr}(E)I+2\mu E$. Both `S` and the
 Cauchy stress `sigma` are fields on `D`, which the solver can interpolate or
