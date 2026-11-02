@@ -143,6 +143,64 @@ centroid_D = integral(coordinate(D), D) / integral(integer(1), D)
 
 `expand_integrals` splits the vector integrand into scalar components.
 
+## Integrating over point families
+
+For explicit point families, use real, support-free `coordinates` of shape
+`(n, 1)` and a support-free numerical array `a` of shape `(2,)`:
+
+```python
+Q = RD(1)
+i = index("i")
+p = indexed_family(domain_map(RD(0), coordinates[i], Q), (i,))
+q = domain_map(RD(0), tensor((integer(3),)), Q)
+points = decomposed_domain((p, q))
+first_moment = integral(coordinate(Q)[0], points)
+constant_integrals = integral(a[i], points)
+```
+
+With coordinate rows `(1,)` and `(2,)`, `first_moment` is 6 and
+`constant_integrals` is `integer(3) * a[i]`, with free index `i` of extent 2.
+The same index label is bound inside `p` and free in `a[i]`; neither domain
+construction nor expansion captures it. The two pieces have ranks 1 and 0,
+and every contribution retains that free `i`.
+
+With two rows `(1,)` and `(1,)`, `first_moment` is 5: repeated points
+contribute separately. For `n = 0`, `p` is empty, so only `q` contributes and
+`first_moment` is 3. Using only the empty `p` gives zero, retaining the value
+shape and free indices of any integrand. A family of shape `(n, m)` works
+the same way with two fresh member indices, independent of an integrand's
+free indices and of the indices bound inside that family.
+
+## Located point samples
+
+The mesh library supplies a two-cell interval mesh `D` with reference cell
+`K = ReferenceSimplex(1)`. Its physical-cell parameterisations are
+$X \mapsto X$ and $X \mapsto 1+X$. It supplies owner entries `(0, 1, 1)`, reference-position
+rows `(1/2,)`, `(1/4,)`, `(1/4,)`, and weights `(2, 3, 5)` as support-free
+families `owners`, `positions` and `weights` with no free indices.
+`owners` has target extent 2; their shapes are `(3,)`, `(3, 1)` and `(3,)`.
+
+```python
+i = index("point")
+f = coordinate(D)[0] ** integer(2)
+reference_points = indexed_family(domain_map(RD(0), positions[i], K), (i,))
+sampled = pull_back(pull_back(f, cell_domains(D, 0)[owners[i]]), reference_points[i])
+value_i = integral(sampled, RD(0))
+values = indexed_family(value_i, (i,))
+weighted_total = index_sum(weights[i] * value_i, (i,))
+```
+
+The physical points are `(1/2, 5/4, 5/4)`, so `values` has entries
+`(1/4, 25/16, 25/16)` and `weighted_total` is 13. The repeated point is
+counted twice. Other free indices in `f` remain free; its scalar type and
+argument spaces are retained. For zero points, the same constructions give
+an empty sample array and zero total without evaluating a cell or point.
+
+The [located-point contract](../language.md#a-family-of-points-in-a-mesh)
+also applies after a compiler location pass, without a synthetic point
+topology. Sampling `gradient(f, D)` gives the physical gradient at the
+points; vector samples have one leading point axis.
+
 ## Quadrature
 
 An edge-midpoint rule integrates $f(x,y)=xy$ exactly on the unit triangle:

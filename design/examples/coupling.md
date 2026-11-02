@@ -77,8 +77,8 @@ a_facet = form(
 )
 ```
 
-`a_facet` binds the functions `v` and `u` on `square`. Its integrand has
-support `E` and the free index `e` from the penalty array; the traces themselves
+`a_facet` binds the functions `v` and `u` on `square`. `f` has support `E`
+and the free index `e` from the penalty array; the traces themselves
 have no free index. Selecting `facet_cell` with the same `e` pairs each
 penalty with its facet, and the explicit `IndexSum` binds `e`. In contrast,
 `integral(f, E)` preserves `e` and would integrate each fixed penalty value
@@ -93,17 +93,9 @@ $(1,1)/\sqrt{2}$ and the facet density is $\sqrt{2}$.
 
 ### From the facet integral to a kernel
 
-The explicit facet sum above is already on the reference interval. For a
-facet integrand without indexed penalty data, `expand_integrals` constructs
-the same shape of sum with a fresh internal member index. The paired
-construction uses the caller's `e`:
-
-```python
-form(
-    index_sum(integral(pull_back(f, facet_cell) * density(facet_cell), I), (e,)),
-    (v, u),
-)
-```
+The explicit facet sum above is on the reference interval. Without indexed
+penalty data, `expand_integrals` constructs the same form of sum with a
+fresh internal member index; here the caller's `e` pairs the data.
 
 The side tables supply owner-cell families, inclusion-map families and
 reference-normal families. The library builds the affine inclusions from

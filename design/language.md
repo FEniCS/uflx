@@ -333,9 +333,8 @@ nodes, and add no mathematical information.
 | Extends | `Base` |
 | Provides | `result_interface`, `value_shape`, `free_indices` |
 
-Every concrete value-node class defines a result-interface rule. The rule is
-pure and depends only on the node and its construction arguments; it is not
-an independently stored tag or a mutable registry. The core rules are:
+Each concrete value-node class derives its result interface by a pure rule
+on its construction arguments:
 
 | Node | Result interface |
 | ---- | ---------------- |
@@ -344,10 +343,6 @@ an independently stored tag or a mutable registry. The core rules are:
 | `AbstractIndexValue` implementations | `IndexValue` |
 | `Indexed`, `IndexedFamily`, `BroadcastTo` | The operand's result interface |
 | `Tensor` | The common result interface of its entries |
-
-A new value category supplies its own interface and node rules. Shared
-indexing and binding preserve that interface without a numerical-versus-map
-switch. Construction still validates the category-specific requirements.
 
 | `AbstractValue` | |
 | ---------------- | --- |
@@ -423,30 +418,17 @@ functions return their wrapped results. For example, `integer(2)` returns
 construction means its wrapped value. Domains, spaces and bindable indices
 remain ordinary graph objects.
 
-Construction free functions also accept the corresponding nodes in place of
-views and may use `wrap` to read their static properties. A property required
-by an explicit node-class contract, such as the space of a `Function`
-variable, is read from `value.node`. This does not permit
-branching on operand structure to choose a construction.
+Value arguments accept views or their nodes. Constructors unwrap views,
+including inside tuples, and validate interfaces and static properties.
+A node-class requirement, such as a `Function` variable, refers to
+`value.node`; an interface requirement accepts every node with that result
+interface. Construction free functions inspect static properties; only
+passes inspect operand structure to choose a rewrite.
 
-A node constructor accepts a value view wherever it accepts the corresponding
-value node. It unwraps views, including those nested in tuples, before storing
-construction arguments. Validation uses the operands' result interfaces and
-static properties. Thus the stored graph contains nodes, never views; no
-Python scalar or mathematical value is converted by this unwrapping.
-
-Node-class requirements in contracts, such as a `Function` variable, refer
-to the underlying node of a value.
-An `Expression` requirement instead accepts any node with that result
-interface. Free functions may inspect static properties through `wrap`, but
-only a pass may inspect operand structure to choose a rewrite.
-
-Passes match and reconstruct nodes. They rebuild a changed node from its
-class and replaced `construction_arguments`, validate it, and derive its
-result interface again. The public pass returns the wrapped root if it is a
-value node. A type-preserving rewrite preserves the result interface as well
-as the properties of that interface. Equality and hashing of views follow
-the underlying nodes; wrappers do not enter graph identity or serialisation.
+Passes reconstruct changed nodes from their classes and replaced
+`construction_arguments`, validate them, and derive their interfaces again.
+A public pass wraps a value root. View equality and hashing follow the
+underlying nodes; views add no graph state.
 
 #### The point-family construction path
 
@@ -469,15 +451,9 @@ result = pull_back(f, selected)
 | `selected` | `Indexed` | `Map` | `()` | `j: n` |
 | `result` | `PullBack` | `Expression` | `()` | `j: n` |
 
-The first three views derive the same endpoints, `RD(0)` and `Q`, from
-`m.node`. `result` derives support `RD(0)` from its map operand and scalar
-type and argument spaces from `f`. The stored operands of `p.node` are
-`(m.node, (i,))`; those of `result.node` are `(f.node, selected.node)`.
-
-Reconstruction works from these operands alone. Replacing `coordinates`
-rebuilds the dependent nodes and validates their new shapes and extents;
-`wrap` then exposes the root's newly derived interface. Rebuilding the
-selection does not copy endpoints or depend on the original Python view.
+The first three values have endpoints `RD(0)` and `Q`. `result` has support
+`RD(0)` and the scalar type and argument spaces of `f`. Reconstruction derives
+these properties from the stored nodes without the original views.
 
 The third interface follows the same path: for a supplied index table
 `owners` of shape `(n,)` and target extent `c`, `owners[j]` is an `IndexValue`
@@ -888,9 +864,8 @@ Examples, with `one, two = integer(1), integer(2)`:
 
 ### `BroadcastTo`
 
-`BroadcastTo` repeats a value to an explicit target shape, preserving its
-result interface and member properties. The target is the complete result
-shape, as in NumPy's `broadcast_to`.
+`BroadcastTo` repeats a value to a complete target shape, preserving its
+result interface and member properties.
 
 | `BroadcastTo(expression, value_shape)` | |
 | ------------------------------------- | --- |
@@ -902,71 +877,38 @@ shape, as in NumPy's `broadcast_to`.
 | Requires | Source and target shapes satisfy the compatibility rules below |
 | Raises | `TypeError` for an unsupported operand or invalid shape-entry type, and `ValueError` for a negative extent or incompatible shapes |
 
-Let `s` be the operand's shape and `t` the target shape:
+Let `s` be the source shape and `t` the target shape. Require
+`len(t) >= len(s)` and align source axes with the trailing target axes.
+Each source extent must equal its target extent or be the integer 1.
+Missing leading source axes behave as extent 1. Extent 1 can expand to
+any extent, including 0 or an `AbstractExtent`; other symbolic extents
+must be structurally equal. Target extents follow [Extents](#extents),
+so `-1` does not request inference. Equal shapes are allowed.
 
-- `len(t)` must be at least `len(s)`. Align the source axes with the trailing
-  target axes. Missing leading source axes behave as axes of extent 1.
-- On every aligned axis, the source extent must equal the target extent,
-  or the source extent must be the integer 1. An extent 1 can expand to
-  any target extent, including 0 or an `AbstractExtent`.
-- Extents are compared by structural equality; no arithmetic or run-time
-  comparison of `AbstractExtent` values is performed. Distinct symbolic
-  extents are incompatible unless the source extent is 1.
-- Target extents are non-negative integers or `AbstractExtent` values.
-  `-1` does not request inference. The target shape `()` accepts only a
-  scalar source. Equal source and target shapes are allowed and still
-  construct a `BroadcastTo` node.
+At a target entry, the source entry omits the new leading axes and uses 0
+on source axes of extent 1. Selection retains the free indices specified
+by [`Indexed`](#indexed), including indices on repeated axes. Broadcasting
+binds no indices and does not change arithmetic's shape rules.
 
-For a full selection of the target, discard the selectors of the new
-leading axes; on an aligned source axis of extent 1 use entry 0, and on
-any other source axis use the corresponding target selector. This describes
-the selected value, not permission to discard free indices: the selected
-result carries the free indices of the broadcast operand followed by those
-introduced by the shared `Indexed` rules, even when every selected value is
-equal. A compiler rewrite must preserve that static type.
-
-Broadcasting binds no indices. In particular, a free index in the operand
-remains free and independent of a newly introduced shape axis. Numerical
-broadcasts retain scalar type, support and argument spaces; map broadcasts
-retain endpoints; index-value broadcasts retain the target bound. There is
-no implicit broadcasting in arithmetic: its existing shape rules remain.
-
-If the target has a zero-length axis, the result has no members. The operand
-supplies static member information and remains a graph dependency, but no
-operand value is evaluated. Its construction must still be valid; an empty
-broadcast does not bypass constructor checks. This provides typed empty
-families without an empty literal or a separate type-description object.
+A target with a zero-length axis has no entries and evaluates no operand
+value. The statically valid operand supplies the member properties and
+remains a graph dependency. This constructs typed empty values without
+an empty literal. `IndexedFamily` can also bind a zero-length axis.
 
 Examples:
 
-- For a numerical vector `v` of shape `(3,)`, `broadcast_to(v, (5, 3))`
-  repeats the vector five times. `broadcast_to(v, (5,))` raises `ValueError`.
-- A source of shape `(1, 3)` broadcasts to `(4, 3)` or `(0, 3)`. A source
-  of shape `(0, 3)` cannot broadcast to `(1, 3)`.
-- For a scalar point map `p`, `broadcast_to(p, (n,))` is a map family with
-  the same endpoints. `broadcast_to(p, (0,))` is its typed empty family.
-- For a scalar bounded index value `owner` with target extent `c`,
-  `broadcast_to(owner, (n,))[i]` retains target extent `c` and introduces
-  the free index `i` of extent `n`.
+- For `v` of shape `(3,)`, `broadcast_to(v, (5, 3))` repeats `v` five times;
+  `broadcast_to(v, (5,))` raises `ValueError`.
+- Shape `(1, 3)` broadcasts to `(4, 3)` or `(0, 3)`; `(0, 3)` cannot
+  broadcast to `(1, 3)`.
+- For a scalar map `p`, `broadcast_to(p, (n,))` has the same endpoints,
+  including when `n` is zero. A scalar index value similarly retains its
+  target bound.
 
-```python
-i = index("i")
-constant = broadcast_to(integer(2), (n,))
-entry = constant[i]
-empty_points = broadcast_to(p, (0,))
-```
-
-`entry` equals 2 for each `i`, but still has free index `i` of extent `n`.
-A selection must not be replaced by `integer(2)` alone. An `IndexSum` over
-an empty broadcast evaluates no members. A literal selection from its
-zero-length axis raises `IndexError` under the ordinary indexing rules.
-
-For a numerical `f` of shape `s`, broadcasting is linear in its operand.
-Actions and numerical derivatives therefore move through it with the same
-explicit target shape, as specified by the commuting rules of
-[Evaluation](#evaluation). Pull-back by a map family broadcasts both the
-family axes and the numerical member axes through the rule in
-[Pull-backs by map families](#pull-backs-by-map-families).
+With `i = index("i")`, `broadcast_to(integer(2), (n,))[i]` equals 2 for each
+`i` but retains free index `i` of extent `n`. Replacing it by `integer(2)`
+alone would lose that index. Literal selections and empty sums follow the
+ordinary indexing and summation rules.
 
 ### Index notation
 
@@ -1102,11 +1044,9 @@ map families and index-valued families through the same operation.
 Each `EllipsisIndex` contributes all its extents in order. Member properties
 are the numerical scalar type, support and argument spaces, the map endpoints,
 or the index-value target extent. They remain common to the family.
-Both binders require their indices to occur free in the body. Explicit
-extents for unused bound indices are not supported; use `BroadcastTo` to
-construct a constant family with explicit axes. Zero-length axes inferred
-from the body are allowed, and `BroadcastTo` also constructs typed empty
-families without changing the binder's rules.
+Both binders require their indices to occur free in the body; inferred
+zero-length axes are allowed. `BroadcastTo` supplies axes when the body does
+not depend on an index.
 
 Scope is lexical. An index occurrence refers to the innermost enclosing
 `IndexedFamily` or `IndexSum` that binds it; otherwise it is free. A bound
@@ -1858,22 +1798,15 @@ pull_back(f, edge_in_plane)  # Raises ValueError.
 The free functions `jacobian(D)`, `inverse_jacobian(D)` and `density(D)` are
 the Jacobian matrix, the left inverse of the Jacobian matrix and the density
 of an individual map $D$ with a coordinate parameter domain $P$ of
-dimension $k$ and an ambient domain $Q$. $n$ is the dimension of the ambient
-coordinate domain of $Q$. Its coordinate parameterisation is
-`pull_back(coordinate(Q), D)`, so these constructions also accept a selected
-physical cell without inspecting its map-family construction.
+dimension $k$, ambient domain $Q$ and shape `()`. $Q$ is an
+`AbstractDomain`; $n$ is its ambient coordinate dimension. The coordinate
+parameterisation is `pull_back(coordinate(Q), D)`.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `jacobian(D)` | | `D: Map` | `gradient(pull_back(coordinate(D.ambient_domain), D), D.parameter_domain)` |
 | `inverse_jacobian(D)` | | `D: Map` | `inverse(jacobian(D))` |
 | `density(D)` | | `D: Map` | The density $\rho$ below |
-
-The map must have shape `()`, its parameter domain must be an
-`AbstractCoordinateDomain`, and its ambient domain must be an
-`AbstractDomain`. The constituent constructors reject invalid shapes or
-endpoints. In particular, a cell-map family or a selected characteristic
-map into a topology does not satisfy this contract.
 
 The Jacobian matrix $J$ has value shape `(n, k)`, and $K$ =
 `inverse_jacobian(D)`, of value shape `(k, n)`, is the inverse of $J$ for
@@ -2083,16 +2016,12 @@ coordinates.
   such as for a macro element, or an `AbstractExtent`, such as for the mesh of
   a solver.
 - `sides` is `()`, or the sides of [Sides of a topology](#sides-of-a-topology).
-- `orientations` is `None`, or a `tuple` with one numerical sign family per
-  cell group. Entry `j` is a real, support-free `Expression` of shape
-  `(T.num_cells[j],)`, with no free indices or argument spaces and values
-  $+1$ and $-1$. `T.orientations[j][e]` is the orientation sign of cell `e`
-  of group `j`, selected with the same ordinary index, literal or bounded
-  runtime selector as the cell maps. The family axis introduces the cell
-  dependence; there is no pull-back of an orientation field on $T$.
-  The signs give the unit normal field of a hypersurface, the flux of an
-  ambient field through a surface and signed top forms. The library supplies
-  the signs; the core does not check their geometric consistency.
+- `orientations` is `None`, or a tuple with one real, support-free sign
+  family per cell group. Entry `j` has shape `(T.num_cells[j],)`, no free
+  indices or argument spaces, and values $+1$ or $-1$.
+  `T.orientations[j][e]` gives the sign of cell `e` for unit normals,
+  surface fluxes and signed top forms. The library supplies geometrically
+  consistent signs.
 
 A topology whose cell types are reference cells may be the support of an
 expression and the domain of a space, as the cell complex of its cells (see
@@ -2179,48 +2108,24 @@ $K_j$ the reference cell of group $j$ of $T$, $k_j$ its dimension, and
 | `inclusions` | `Map` | `(n,)` | Parameter domain $F_i$, ambient domain $K_j$ |
 | `reference_normals`, for a group of dimension $k_j - 1$ | `Expression` | `(n, k_j)` | Real, support $F_i$ or no support, argument spaces `()` |
 
-For any other group dimension, `reference_normals` is `None`. Each supplied
-family has no free indices. The common leading axis enumerates cells of
-$S$ in the same order on every side; it is an ordinary shape axis, not a
-specially named index. The vector axis of `reference_normals` is part of the
-same numerical value shape.
+For other group dimensions, `reference_normals` is `None`. Each family has
+no free indices. Their leading axes enumerate the cells of $S$ in the same
+order on every side. Shared indexing selects:
 
-For a selector `e`, ordinary indexing gives:
+- `owners[e]`, the bounded index of the cell on the side;
+- `inclusions[e]`, the map from $F_i$ into that owner cell;
+- `reference_normals[e]`, when present, a vector of shape `(k_j,)` normal to
+  the image in $K_j$. It points out of $K_j$ on its boundary and away from
+  its centroid for an interior image. A varying normal has support $F_i$.
 
-- `owners[e]`, a scalar bounded index value naming the cell of group $j$ of
-  $T$ on the side of cell `e` of $S$.
-- `inclusions[e]`, an individual map from $F_i$ into $K_j$, giving the
-  inclusion of cell `e` into its owner cell.
-- `reference_normals[e]`, a vector of shape `(k_j,)` normal to the image of
-  cell `e` in $K_j$. A normal that varies along the reference cell has
-  support $F_i$. It points out of $K_j$ for an image on its boundary, and
-  away from the centroid of $K_j$ for an image inside $K_j$.
+Repeated owners are allowed, with a separate inclusion for each cell of
+$S$. Empty groups have a zero-length leading axis.
 
-These selections use the shared `Indexed` and partial-indexing rules.
-An ordinary `Index` takes extent `n`; a literal must be in range, and a
-scalar `IndexValue` selector must have target extent `n`. The selected owner
-retains its own target extent `T.num_cells[j]`, independently of `n`.
-There is no provider-chosen free index to discover or substitute. Families
-may be built with `IndexedFamily` or other shared constructions; their
-internal binders are lexical and may use unrelated index names.
-
-For example, with `e = index("e")` and `h = index("h")`,
-`inclusions[e]` and `inclusions[h]` have independent free indices.
-`cell_maps(T, j)[owners[e]]` and `inclusions[e]` share the free index `e`
-of extent `n`. Repeated owners are allowed: two cells of $S$ may have the
-same owner with different inclusions. Selecting one member does not
-require evaluation of any other member. Empty groups use families with a
-zero-length leading axis; symbolic selections and binding over that axis
-are valid and evaluate no members when summed.
-
-The inclusions on all sides parameterise each cell of $S$ in the same way:
-a point of $F_i$ is the same point of that cell from every side, so the
-difference of two restrictions is the jump (see [Restriction](#restriction)).
-[Restriction](#restriction) and [`Normal`](#normal) select these families.
-The library supplies families satisfying the static contracts above;
-shared constructors enforce their usual static rules. The core does not
-check geometric incidence, normal direction or agreement of the physical
-parameterisations on different sides.
+All sides parameterise each cell of $S$ in the same way: a point of $F_i$
+names the same point from every side, so differences of restrictions give
+the jump (see [Restriction](#restriction)). The library supplies families
+satisfying these contracts. The core does not check geometric incidence,
+normal direction or agreement of physical parameterisations.
 
 #### What the concrete mesh decides
 
@@ -2329,27 +2234,11 @@ of a topology $T$. It has one axis and no parameterisation.
 | Static type | Result interface `Map`, value shape `(T.num_cells[j],)`, `parameter_domain` $K_j$, `ambient_domain` $T$, and free indices `()` |
 | Raises | `TypeError` for an invalid argument type, `IndexError` for an invalid group number, and `ValueError` if the cell type is not a reference cell |
 
-`cell_maps(T, j)[e]` is an individual map of shape `()`. Selection is the
-shared `Indexed` operation: `e` may be an ordinary `Index`, a valid literal
-`int`, or a scalar `IndexValue` whose target extent equals `T.num_cells[j]`.
-The selection supplies its free indices according to the common rules;
-`CellMaps` itself introduces none. Selecting an empty cell group by a free
-index is valid, while any literal selection from it raises `IndexError`.
-
-`pull_back(f, cell_maps(T, j)[e])` is the value of an expression $f$ on $T$
-on the reference cell $K_j$ of the selected cell. For a function $f$, the
-library of its space gives the value (see [Functions in a
-space](#functions-in-a-space)). Other expressions on $T$ are built from
-functions and constants, and the pull-back moves to them. Passing the
-unselected family to `PullBack` raises `ValueError` for its non-scalar map
-shape.
-
-For `e, h = index("e"), index("h")`, the selections `cell_maps(T, j)[e]`
-and `cell_maps(T, j)[h]` have independent free indices, even though their
-extents agree. A supplied scalar `owner` with target extent `T.num_cells[j]`
-can select `cell_maps(T, j)[owner]` directly; a different target extent raises
-`IndexError`. Shared selection depends only on the chosen member and does
-not evaluate any unselected cells.
+`cell_maps(T, j)[e]` selects an individual map by the rules of
+[`Indexed`](#indexed). `pull_back(f, cell_maps(T, j)[e])` is the value of $f$
+on the selected cell's reference domain $K_j$. For a function, its space's
+library supplies this value (see [Functions in a space](#functions-in-a-space));
+other expressions lower through their operands.
 
 Worked examples for this chapter: [the unit simplex as a reference cell](examples/library.md#the-unit-simplex-as-a-reference-cell).
 
@@ -2369,37 +2258,22 @@ maps.
 | Derived                    | `ambient_domain` $Q$, `dimension` $k$, and `topology` and `coordinate_function`, below                                  |
 | Raises                     | `TypeError` for a non-map piece, and `ValueError` if another requirement fails                        |
 
-For piece $j$ of $D$, write $M_j$ for the map family, $P_j$ for its
-parameter domain, and `s_j` for its value shape. The shape describes only
-the family axes, independently of the dimension of $P_j$.
-
 #### Pieces
 
-Each axis of $M_j$ enumerates members of that family. $D$ is the union of
-the images of all members of all pieces. A scalar map of shape `()` is one
-member; a shape `(n, m)` contributes one member per pair of axis entries.
-The outer tuple keeps different pieces separate: they may have different
-family shapes and different coordinate parameter domains of the same
-dimension. No heterogeneous selection between those pieces is required.
+For piece $j$, let $M_j$ be its map family and $P_j$ its coordinate
+parameter domain. $D$ is the union of all member images, counted with
+multiplicity in integration. A scalar map contributes one member; a family
+contributes one per entry, and a zero-length axis contributes none.
 
-Each piece must have no free indices. An indexed map is made into a piece
-by explicitly binding its indices with `IndexedFamily`; passing an
-unbound indexed map raises `ValueError`. An index used inside a family
-binder is lexical, not a domain index visible to the integrand. A
-zero-length family axis gives no members. A non-empty tuple of empty
-families is allowed and describes an empty domain with known endpoints
-and dimension.
+Pieces may have different shapes and coordinate parameter domains of the
+same dimension. Their free indices must be bound with `IndexedFamily`
+before construction. A non-empty tuple of empty families defines an empty
+domain with known dimension and ambient domain.
 
-$D$ may have a lower dimension than the ambient coordinate domain, such as
-a surface in $R^3$. Only the construction by `image` supplies a topology.
-A scalar `DomainMap` can still describe one piece with one member. The core
-does not check that member images meet only in sets of measure zero.
-Integration is additive over the stored members: repeated entries contribute
-with their multiplicity, including repeated points.
-
-The parameter domain of each piece is a coordinate domain, so decomposed
-parameter domains do not nest. The common ambient domain $Q$ may be a
-decomposed domain, such as a mesh in which a family of points lies.
+The parameter domains are coordinate domains, so decomposed parameter
+domains do not nest. The common ambient domain $Q$ may be decomposed. The
+core does not check whether member images overlap; repeated entries,
+including repeated points, contribute separately.
 
 #### Meshes
 
@@ -2407,19 +2281,18 @@ decomposed domain, such as a mesh in which a family of points lies.
 | ------------- | -------- | ----- | ------- |
 | `image(x, Q)` | | `x: Expression`, `Q: AbstractDomain` | `DecomposedDomain` with pieces `indexed_family(domain_map(K_j, pull_back(x, cell_maps(T, j)[e_j]), Q), (e_j,))` |
 
-A mesh is `image(x, Q)`, where $x$ is an expression on a topology $T$ with
-value shape `(n,)` for the ambient coordinate dimension of $Q$ and no free
-indices. The construction gives one family of shape `(T.num_cells[j],)`
-per cell type $K_j$, with `e_j = Index(("uflx.image", x, Q, j))` bound as its
-axis. No cell index remains free in a piece. A coordinate family must first be selected to a vector expression without
-free indices to define one mesh; parameterised families of domains are not
-covered. The mesh has `topology` $T$ and
-`coordinate_function` $x$; both properties are `None` for every other
-decomposed domain.
+For an expression $x$ on topology $T$, with shape `(n,)` for the ambient
+coordinate dimension of $Q$ and no free indices, `image(x, Q)` builds the
+pieces above. $K_j$ is the reference cell of group $j$, and
+`e_j = Index(("uflx.image", x, Q, j))` is bound as the cell axis.
+
+A decomposed domain with pieces of this form is a mesh. Its derived
+`topology` is $T$ and `coordinate_function` is $x$; otherwise both are
+`None`. Parameterised families of domains are not covered.
 
 Deformed surfaces, isogeometric patches and analytic maps are meshes of
-coordinate functions. Continuity across groups is a property of the space of
-$x$.
+coordinate functions. Continuity across groups is a property of the space
+of $x$.
 
 #### Cell domains
 
@@ -2434,30 +2307,15 @@ e = Index(("uflx.cell_domains", D, j, 0))
 cell_domains_j = indexed_family(domain_map(K_j, pull_back(x, cell_maps(T, j)[e]), D), (e,))
 ```
 
-The factory `cell_domains(D, j)` returns this fixed composition. The bound
-index is fresh with respect to the operands; substitution during lowering
-avoids capture. The family has no free indices, and all members have the endpoints $K_j$
-and $D$. Constructors reject a non-mesh $D$, an invalid group number or a
-group without a reference cell. No selector is a
-factory argument.
+The factory returns this fixed composition for a mesh $D$. It has no free
+indices and endpoints $K_j$ and $D$. By shared indexing,
+`cell_domains(D, j)[e]` has the value
+`domain_map(K_j, pull_back(x, cell_maps(T, j)[e]), D)`.
 
-`cell_domains(D, j)[e]` selects a physical cell using shared indexing,
-including literal and bounded runtime selectors. Its value is
-`domain_map(K_j, pull_back(x, cell_maps(T, j)[e]), D)`. A cell of a topology
-is a selection from `CellMaps`; a cell of a mesh is the corresponding
-selected domain map. Neither family can be passed unselected to `PullBack`,
-`jacobian` or `density`.
-
-For a general decomposed domain, select a member `m_j` of piece $j$ and
-retarget it into $D$ as
-`domain_map(P_j, pull_back(coordinate(Q), m_j), D)`. Integral expansion
-constructs this individual map; it does not require a mesh or the
-`cell_domains` factory.
-
-An expression $f$ with support $D$ is defined through the pieces.
-`pull_back(f, cell_domains(D, j)[e])` is its value on the selected cell's
-reference domain $K_j$. The pull-back of `coordinate(D)` is
-`pull_back(x, cell_maps(T, j)[e])`.
+For $f$ supported on $D$, its pull-back is the value on the selected cell's
+reference domain $K_j$. In particular, the pull-back of `coordinate(D)` is
+`pull_back(x, cell_maps(T, j)[e])`. General decomposed domains use the
+selected piece maps of [integral expansion](#expansion-into-pieces).
 
 #### Examples
 
@@ -2735,128 +2593,60 @@ The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on th
 
 ### A family of points in a mesh
 
-For a mesh $D$ with topology $T$, evaluation at located points needs an
-owner cell and a reference position for each point. The mesh library locates
-the cells and inverts their coordinate maps outside the language, for
-example by Newton's method. For points in one cell group $j$, with reference
-cell $K_j$ of dimension $k_j$, it supplies two families:
+For points in cell group $j$ of a mesh $D$ with topology $T$ and reference
+cell $K_j$, the mesh library supplies two families:
 
 | Value | Interface | Shape | Member properties |
 | ----- | --------- | ----- | ----------------- |
 | `owners` | `IndexValue` | `(m,)` | Target extent `T.num_cells[j]` |
 | `reference_points` | `Map` | `(m,)` | Parameter domain `RD(0)`, ambient domain $K_j$ |
 
-Both families have no free indices. Their common axis enumerates the same
-points in the same order. The library guarantees that each reference point,
-mapped through its owner cell, is the requested physical point. At a shared
-cell boundary, choosing the owner selects the value from that cell, which
-may differ between cells for a discontinuous field.
-
-A library with reference-coordinate data `positions` of shape `(m, k_j)`,
-real, support-free and with no argument spaces or free indices, can build
-the reference-point family by ordinary binding:
-
-```python
-i = index("point")
-reference_points = indexed_family(domain_map(RD(0), positions[i], K_j), (i,))
-```
-
-The bound index belongs only to the construction of this family. The owner
-family may be supplied independently, without a matching internal index.
-Neither a point topology nor side tables or reference normals are needed
-for evaluation. A topology remains useful when the points also need
-incidence relationships or sides.
+Both have no free indices and enumerate the same ordered points. Each
+reference point mapped through its owner cell must be the requested
+physical point. At a cell boundary, the chosen owner determines the value
+for a discontinuous field. Location and inversion of cell maps belong to
+the mesh library. Evaluation itself needs no point topology.
 
 #### Evaluation through the owner cells
 
-For a scalar numerical expression `f` on $D$, choose `i = index("point")`
-not free in `f`, and use shared selection for both families:
+For scalar `f` on $D$ and an index `i` not free in `f`:
 
 ```python
-physical_cells = cell_domains(D, j)
-sampled = pull_back(pull_back(f, physical_cells[owners[i]]), reference_points[i])
+sampled = pull_back(pull_back(f, cell_domains(D, j)[owners[i]]), reference_points[i])
 value_i = integral(sampled, RD(0))
 values = indexed_family(value_i, (i,))
 total = index_sum(value_i, (i,))
 ```
 
-`sampled` has support `RD(0)` and the free indices of `f` followed by `i` of
-extent `m`. `value_i` has no support and retains those indices; `values` has
-shape `(m,)` and only the free indices of `f`. The explicit `IndexSum` in
-`total` binds the point index. With support-free weights of shape `(m,)`,
-a weighted total is `index_sum(weights[i] * value_i, (i,))`.
+`sampled` has support `RD(0)`; `value_i` has none. Both have the free indices
+of `f` followed by `i` of extent `m`. `values` has shape `(m,)` and the free
+indices of `f`; `total` explicitly sums over the points. Array-valued `f`
+of shape `s` gives samples of shape `s` and `values` of shape `(m,) + s`,
+with totals formed component by component. Scalar type and argument spaces
+are those of `f`. Sample `gradient(f, D)` to obtain the physical gradient
+at the points.
 
-For an array-valued `f` of shape `s`, the same `sampled`, `value_i` and
-`values` constructions give shapes `s`, `s` and `(m,) + s`; totals are
-formed component by component using scalar `IndexSum`. Scalar type and
-argument spaces are those of `f`. To sample a gradient, use `gradient(f, D)`
-as the expression before taking these pull-backs. The result is the physical
-gradient at each point, rather than a derivative of the array of samples.
-
-The common indexing and pull-back rules enforce the static contracts:
-`owners[i]` must be a scalar index value bounded by the physical-cell extent,
-`reference_points[i]` must be an individual map into $K_j$, and both uses of
-`i` must have the same extent. A literal or scalar bounded index can also
-select one point from both families. Unselected families are rejected by
-`PullBack`. Map-family lowering respects the lexical binders inside either
-family and avoids capture of indices free in `f` or the selectors.
-
-The inner pull-back selects a physical cell, so the core rewrites fields,
-transformation laws and physical gradients to their reference-cell values.
-The outer pull-back reads those values at the selected reference point.
-For a function `u` on $T$, the resulting library read is the value of
-`pull_back(u, cell_maps(T, j)[owners[i]])` at `reference_points[i]`, in the
-contract of its space (see [`AbstractFunctionSpace`](#abstractfunctionspace)).
-No new core node or evaluation pass is required once the locations are
-supplied.
-
-Repeated owners and repeated point entries are allowed; each entry produces
-one sample and contributes separately to a total. Selecting one entry does
-not evaluate any other entry. For `m = 0`, `values` has an empty leading
-axis and `total` is zero; no cell or point is evaluated. The family can be
-constructed from an array of shape `(0, k_j)` without an empty map literal.
-
-For example, let $D$ consist of two interval cells mapped from $[0,1]$ to
-$[0,1]$ and $[1,2]$. Owner entries `(0, 1, 1)` and reference positions
-`(1/2, 1/4, 1/4)` select physical points `(1/2, 5/4, 5/4)`. For $f(x)=x^2$,
-`values` has entries `(1/4, 25/16, 25/16)`. Weights `(2, 3, 5)` give total
-13, counting the repeated point twice. An unrelated free index of `f`
-remains free in the samples and totals.
+The inner pull-back lowers through the selected physical cell; the outer
+one reads its reference value at `reference_points[i]`, as required by the
+[function-space contract](#abstractfunctionspace). Repeated point entries
+contribute separately. For `m = 0`, `values` is empty and `total` is zero,
+with no member evaluated.
 
 #### Locations obtained after core lowering
 
-A pull-back by points specified only in physical coordinates does not
-supply their owner cells or reference positions. The core does not perform
-cell location or invert arbitrary cell maps. Such a pull-back of a mesh
-field, for example `pull_back(f, points[i])`, may remain in the core normal
-form until the mesh library supplies `owners` and `reference_points`.
+A mesh-field pull-back by physical points may remain in the core normal
+form until their locations are available. A compiler pass with the mesh
+library replaces `pull_back(f, points[i])` by the two pull-backs in `sampled`
+above and applies core lowering to the result. The supplied families must
+describe the same ordered points, preserving all batch indices and
+introducing no sum. The same construction applies to points obtained from
+a chain of cell and quadrature maps, with shared selectors on each batch
+axis (see [the network example](examples/coupling.md#averaging-around-the-network)).
 
-For points available while constructing the graph, use the direct
-owner-cell evaluation above. For points obtained only after compiler
-passes, such as quadrature-dependent points, a compiler pass with the mesh
-library locates them and replaces the unresolved pull-back by:
+Points in different cell groups require externally grouped homogeneous
+families; heterogeneous runtime selection and reordering are not covered.
 
-```python
-pull_back(pull_back(f, cell_domains(D, j)[owners[i]]), reference_points[i])
-```
-
-The compiler applies the core lowering stage to the new expression so its
-physical-cell reads and transformation laws are lowered before evaluation.
-The locations must describe the same ordered point family as the original
-map. The rewrite preserves its numerical value, value shape, free indices
-and argument spaces; it introduces no point summation.
-
-A chain of maps below `f` may include cell selection and quadrature maps.
-The location pass reads the chain as one point family, retaining all its
-independent batch indices (see [A 1D network in a 3D
-mesh](examples/coupling.md#a-1d-network-in-a-3d-mesh)). Multiple batch axes
-can be represented by the same common family rules; each selector is shared
-between the owner family and the reference-point family.
-
-This contract fixes one cell group $j$. Points in different cell groups
-require externally grouped homogeneous families; heterogeneous runtime
-selection and restoring their original interleaved order are not yet
-covered.
+Worked example: [located point samples](examples/integration.md#located-point-samples).
 
 ### `Integral` over a decomposed domain
 
@@ -2864,73 +2654,45 @@ covered.
 density that the pieces induce. $f$ has the support $D$, the support
 `D.ambient_domain` or no support.
 
-For piece $j$ of $D$, $M_j$ is its map family, $P_j$ its coordinate
-parameter domain, $Q$ the common ambient domain, and `s_j` its family shape.
+For piece $j$, let $M_j$ be its map family, $P_j$ its coordinate parameter
+domain and $Q$ the common ambient domain.
 
 #### Expansion into pieces
 
-The integral sums over the members of every piece, with one fresh internal
-index per family axis. For piece $j$, let `I_j` be that tuple of indices,
-with labels `("uflx.expand_integrals", f, D, "member", j, a)` for axis
-number `a`. Their extents are the entries of `s_j`. These indices are fresh
-with respect to $f$ and $D$; they do not bind indices already free in $f$.
-
-Select `m_j = indexed(M_j, I_j)` when `s_j` is non-empty, and `m_j = M_j`
-otherwise. A rank-zero piece is already an individual map and needs no
-empty selection. Retarget the selected member into $D$:
+Choose one fresh index per axis of $M_j$, forming `I_j`, and select
+`m_j = indexed(M_j, I_j)`. For a scalar piece, `I_j` is empty and `m_j = M_j`.
+Retarget that selected member into $D$:
 
 ```python
 D_j = domain_map(P_j, pull_back(coordinate(Q), m_j), D)
 ```
 
-For a mesh, construct `D_j = indexed(cell_domains(D, j), I_j)` instead.
-It has the same selected map value and exposes the primitive physical-cell
-pattern through map-family lowering, so the function-space and Piola rules
-continue to recognise a cell of $D$.
-
-For a scalar $f$ supported on $D$ or with no support, the contribution is:
+For scalar $f$, each piece contributes:
 
 ```python
-index_sum(integral(pull_back(f, D_j) * density(m_j), P_j), I_j)
+index_sum(integral(g_j * density(m_j), P_j), I_j)
 ```
 
-Omit `IndexSum` when `I_j` is empty. The integral over $D$ is the sum of
-these contributions for all pieces.
+Here `g_j` is `pull_back(f, D_j)` for support $D$ or no support, and
+`pull_back(f, m_j)` for support $Q$. Omit `IndexSum` when `I_j` is empty.
+The integral is the sum of these contributions. Array-valued integrands
+are integrated component by component.
 
-- The internal sum binds only the selected family axes. All free indices of
-  $f$ survive, in their original order, independently of piece shapes or
-  the labels used by their internal binders.
-- An array-valued $f$ integrates component by component, with fresh component
-  indices distinct from the member indices; its value shape is preserved.
-- For $P_j$ of dimension 0, the density is `Integer(1)` and each member
-  contributes one point evaluation. Repeated entries are counted separately.
-- If any family axis has extent 0, that piece contributes a zero of the
-  result's static type and evaluates no members. A rank-zero piece instead
-  contributes one integral. Neither case requires an empty literal `Tensor`.
+Only the fresh member indices are summed; every free index of $f$ remains
+free. A zero-length family axis contributes zero without evaluating members.
+A scalar piece contributes once. For dimension-zero $P_j$, the density is
+1, so members contribute point evaluations with their stored multiplicity.
+Retargeting preserves the density, which needs no orientation.
 
-The density of `m_j` equals that of `D_j`, since retargeting preserves the
-coordinate parameterisation. It needs no orientation, so an integral of a
-positive $f$ is positive.
+The [expansion pass](#expanding-integrals) specifies the derived indices
+and the selected physical-cell construction for meshes.
 
 #### Integrands on the ambient domain
 
-For an $f$ supported on $Q$, use `pull_back(f, m_j)` in the contribution.
-This permits integrating ambient fields over a family of points or curves
-in a mesh. The member indices remain fresh: `integral(a[i], D)` with a
-support-free array `a` is the integral of the constant value `a[i]` for each
-`i`, not a pairing with member `i` of a piece.
-
-To pair data with particular members, select those members explicitly and
-write an `IndexSum`. For a point-map family `p` and weights `w` with the same
-leading extent:
-
-```python
-index_sum(w[i] * integral(pull_back(f, p[i]), RD(0)), (i,))
-```
-
-The index `i` is shared by the weight and the point selection, and bound by
-that explicit sum. No matching of labels inside `decomposed_domain((p,))`
-creates such a pairing.
+An ambient integrand uses the selected member `m_j` directly, permitting
+integration over points or curves in a mesh. `integral(a[i], D)` preserves
+`i`; pairing data with particular members requires explicit selection and
+`IndexSum`, as in [quadrature](#quadrature).
 
 #### Examples
 
@@ -2947,31 +2709,7 @@ The examples use the following objects:
 - `integral(pull_back(f, side_map(D, B, "inside")), B)` restricts `f` to the
   boundary before integrating it.
 
-For explicit point families, use real, support-free `coordinates` of shape
-`(n, 1)` and a support-free numerical array `a` of shape `(2,)`:
-
-```python
-Q = RD(1)
-i = index("i")
-p = indexed_family(domain_map(RD(0), coordinates[i], Q), (i,))
-q = domain_map(RD(0), tensor((integer(3),)), Q)
-points = decomposed_domain((p, q))
-first_moment = integral(coordinate(Q)[0], points)
-constant_integrals = integral(a[i], points)
-```
-
-With coordinate rows `(1,)` and `(2,)`, `first_moment` is 6 and
-`constant_integrals` is `integer(3) * a[i]`, with free index `i` of extent 2.
-The same index label is bound inside `p` and free in `a[i]`; neither domain
-construction nor expansion captures it. The two pieces have ranks 1 and 0,
-and every contribution retains that free `i`.
-
-With two rows `(1,)` and `(1,)`, `first_moment` is 5: repeated points
-contribute separately. For `n = 0`, `p` is empty, so only `q` contributes and
-`first_moment` is 3. Using only the empty `p` gives zero, retaining the value
-shape and free indices of any integrand. A family of shape `(n, m)` works
-the same way with two fresh member indices, independent of an integrand's
-free indices and of the indices bound inside that family.
+Worked examples: [integrating over point families](examples/integration.md#integrating-over-point-families).
 
 ```{dropdown} Legacy UFL
 `f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the decomposed domain of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
@@ -3780,7 +3518,7 @@ An extension pass with a precondition runs
 between two lowering stages (see [Shape derivatives](#shape-derivatives)).
 
 A rewrite of index notation that keeps the value, such as the reduction of an
-`Indexed` of a `IndexedFamily`, is a pass of the compiler, not of the core.
+`Indexed` of an `IndexedFamily`, is a pass of the compiler, not of the core.
 
 ### Substitution and binding
 
@@ -4055,32 +3793,21 @@ For real scalar functions `u` and `a` in a space of constants,
 The pass rewrites every `Integral(f, D)` with a decomposed domain $D$, inner
 integrals first, using the first matching row below. For piece $j$, define
 `I_j`, `m_j` and `D_j` as in [Expansion into pieces](#expansion-into-pieces).
-`I_j` contains one fresh derived `Index` per axis of `D.pieces[j]`, and is
-empty for a scalar map. Its extents come from that family's value shape,
-not from any free index of the integrand or from indices inside a binder.
+The member indices have labels
+`("uflx.expand_integrals", f, D, "member", j, a)` for family axis `a`, with
+its extent. For a mesh, construct `D_j = indexed(cell_domains(D, j), I_j)`
+to expose the physical-cell pattern to the spatial rules.
 
 | Integral | Rewrite |
 | -------- | ------- |
 | `Integral(f, D)`, $f$ of rank $r \ge 1$ | `indexed_family(Integral(f[K], D), K)`, with one fresh derived `Index` per numerical axis, labelled `("uflx.expand_integrals", f, D, "component", a)` |
 | `Integral(f, D)`, $f$ scalar | The sum over pieces $j$ of `index_sum(integral(g_j * density(m_j), P_j), I_j)`, omitting `IndexSum` when `I_j` is empty |
 
-$g_j$ is `pull_back(f, m_j)` for $f$ supported on $Q$, and
-`pull_back(f, D_j)` otherwise. An $f$ with no support is pulled back too,
-so it carries the member indices even when the density is constant, such
-as for a family of points. Map-family lowering then handles selections and
-binding, avoiding capture.
-
-- Each piece has a coordinate parameter domain. The new integrals are over
-  those domains, so no decomposed-domain integral remains.
-- Only `I_j` is summed inside a contribution. Every contribution has exactly
-  the free indices of $f$, so summing contributions preserves the static
-  type of `Integral`, even when pieces have different shapes or ranks.
-- Empty family axes contribute typed zeros without evaluating members;
-  rank-zero pieces contribute once without a selector or an `IndexSum`.
-- Retargeting a selected member into $D$ preserves its density. For a mesh,
-  this is the density of the corresponding selected physical cell.
-- The remaining integrals are over coordinate domains and can be evaluated
-  by a form compiler's quadrature rules.
+The new integrals are over coordinate domains. A support-free $f$ is
+pulled back too, so `g_j` carries the member indices even when the density
+is constant. [Map-family lowering](#pull-backs-by-map-families) then lowers
+the selections with capture avoidance. Each contribution retains exactly
+the free indices of $f$.
 
 ### Applying gradients
 
@@ -4142,9 +3869,8 @@ coordinate domain of $P$. $\partial_j$ applies the first row that matches:
 
 Before either spatial lowering pass applies its other rules, it rewrites a
 `PullBack(f, m)` whose map operand is an `Indexed`, `IndexedFamily` or
-`BroadcastTo`, except a direct scalar selection from a primitive `CellMaps` family. That
-selection is an individual characteristic map and remains for the spatial
-rules or the library. In the table, the first matching row applies.
+`BroadcastTo`, except a scalar selection from `CellMaps`, which is an
+individual characteristic map. In the table, the first matching row applies.
 For fixed numerical $f$, write $B_f(m)$ for the following recursive rewrite,
 of numerical shape `m.value_shape + f.value_shape` and support
 `m.parameter_domain`. This is pass notation, not a node or public function.
@@ -4164,19 +3890,12 @@ labels `("uflx.map_pull_back", f, m, a)` for axis number `a`. These indices
 select and restore the numerical axes; `J` selects only the map-family
 axes, including when it contains an `EllipsisIndex`.
 
-The replacement of `PullBack(f, m)` is $B_f(m)$. Each recursive call descends
-through the map construction and ends at an individual core map, including
-a scalar selection from `CellMaps`. The `CellMaps` row is used only within
-this recursive construction; it never passes an unselected family to
-`PullBack`. The other pull-back rules then evaluate the created pull-backs. No map
-parameterisation is assumed by these structural rules, and numerical indexing is not reduced.
-The resulting indexing selects only the requested evaluations; it does not
-require $f$ to be defined at unselected members of the map family.
-
-Binding is lexical across map-valued and numerical nodes alike. Making the
-binder fresh prevents it from capturing indices free in $f$. The replacement
-has the free indices of $f$ and $m$; these must be retained even when later
-pull-back rules find that $f$ is constant.
+The replacement is $B_f(m)$. Recursion ends at individual maps, including
+scalar selections from `CellMaps`; the bare `CellMaps` row is used only
+inside the recursion. The resulting pull-backs are lowered by the spatial
+rules. Numerical indexing remains for the compiler and evaluates only the
+selected members. Binder freshening preserves the free indices of $f$
+and $m$, including when later rules find $f$ constant.
 
 ### Expanding pull-backs
 
@@ -4199,34 +3918,21 @@ $A_i$ are the maps of [Restriction](#restriction), constructed by selecting
 `reference_normals[h]`. Map-family lowering avoids capture of indices by
 internal binders.
 
-For a support-free $f$, write $C_\psi(f)$ for the following index-carrying
-construction. Start with `g = f`. In order, for each free index entry `j`
-of $\psi$ that is absent from $f$, let `S` be its extent as a one-entry tuple
-for an `Index`, or its tuple of extents for an `EllipsisIndex`. Replace `g`
-by:
+For support-free $f$, define $C_\psi(f)$ by starting with `g = f` and, in
+order, adding each free index entry `j` of $\psi$ absent from $f$. Let `S`
+be its one-entry extent tuple for an `Index`, or its extent tuple for an
+`EllipsisIndex`. At each step replace `g` by:
 
-```python
-indexed(broadcast_to(g, S), (j,))
-```
+| Shape of `g` | Replacement |
+| ------------ | ----------- |
+| Scalar | `indexed(broadcast_to(g, S), (j,))` |
+| Array | `indexed_family(indexed(broadcast_to(g, S + g.value_shape), (j,) + K), K)` |
 
-when `g` is scalar. Otherwise, with `K` one fresh derived `Index` per axis
-of `g.value_shape`, use:
-
-```python
-indexed_family(indexed(broadcast_to(g, S + g.value_shape), (j,) + K), K)
-```
-
-The `K` labels are `("uflx.constant_pull_back", f, psi, j, a)` for numerical
-axis `a`; they are fresh with respect to the operands and selectors. Processing
-one entry at a time permits several independent `EllipsisIndex` entries,
-including entries with an empty tuple of extents, while each `Indexed`
-contains at most one. The construction binds only `K` and retains each `j`.
-If $\psi$ has no missing free indices, $C_\psi(f)$ is $f$ itself. This is
-pass notation, not another public free function or node class.
-
-For example, a scalar constant `f` pulled back by a map with only free index
-`i` of extent `n` becomes `indexed(broadcast_to(f, (n,)), (i,))`. The value
-is `f` for each `i`, while the index and its extent remain explicit.
+`K` has one fresh index per numerical axis, labelled
+`("uflx.constant_pull_back", f, psi, j, a)`. Only `K` is bound. Processing
+one entry at a time accepts multiple ellipsis entries, including those
+covering no axes, without placing two in one `Indexed`. If no indices are
+missing, $C_\psi(f)=f$. This notation adds no public function or node.
 
 | `PullBack(f, ψ)` | Rewrite |
 | ---------------- | ------- |
@@ -4250,11 +3956,6 @@ is `f` for each `i`, while the index and its extent remain explicit.
 - The `Action` row transforms only the form's output. The last row moves the
   pull-back into the numerical expression operands of the other unmatched node classes,
   with a binding node made fresh for $\psi$ first.
-- The support-free row preserves the value shape, scalar type and argument
-  spaces of $f$, and appends the missing free indices of $\psi$. Broadcast
-  selection retains those indices without adding an arithmetic zero.
-  `Zero` remains the numerical zero with stored free indices and argument
-  spaces, used by derivatives and other zero-producing rules.
 - A restriction is a pull-back by a `SideMap` (see
   [Restriction](#restriction)), so this pass also lowers restrictions. A
   pull-back by a `SideMap` that no pull-back by a cell encloses, such as on an
@@ -4291,7 +3992,7 @@ classes and their conditions:
 | ------- | ---------- | ------------------------------- |
 | [Algebra](#algebra) | `Integer`, `Float`, `ImaginaryUnit`, `Zero` | Always |
 | [Algebra](#algebra) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
-| [Algebra](#algebra) | `Tensor`, `Indexed`, `IndexedFamily`, `BroadcastTo`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of a `IndexedFamily`, which the compiler rewrites (see [Evaluation](#evaluation)) |
+| [Algebra](#algebra) | `Tensor`, `Indexed`, `IndexedFamily`, `BroadcastTo`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of an `IndexedFamily`, which the compiler rewrites (see [Evaluation](#evaluation)) |
 | [Algebra](#algebra) | `Inverse` | Always, for the compiler to evaluate |
 | [Calculus on a domain](#calculus-on-a-domain) | `Coordinate` | Always |
 | [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
@@ -4435,7 +4136,7 @@ classes for that composition, as with `Divergence` and `Curl` in the core
   pull-back, because the transpose is pointwise, so `Transpose` survives the
   pull-back. A pass such as a derivative takes the lowering table of
   `Transpose`.
-- For a pass that reduces an `Indexed` of a `IndexedFamily`, the table of
+- For a pass that reduces an `Indexed` of an `IndexedFamily`, the table of
   the `Transpose` extension matches an `Indexed` of a `Transpose`, and
   rewrites `Transpose(A)[i, j]` as `A[j, i]`. The table comes before the table
   of the core, which has a rule for every `Indexed`.
