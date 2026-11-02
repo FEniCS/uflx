@@ -36,7 +36,7 @@ through singularities.
 | ---- | ------- |
 | [Leaf](#leaves-and-subclassing) | A primitive object rather than an operation; it may have graph dependencies. |
 | [Terminal](#leaves-and-subclassing) | A leaf that is an expression, such as a literal, `Coordinate`, `Function` or `Normal`. |
-| [Construction free function](#node-class-or-free-function) | A pure free function that may validate inputs and builds a composition chosen from static properties. |
+| [Construction free function](#node-class-or-free-function) | A pure free function that may validate inputs and builds fixed expression compositions or canonical space descriptions. |
 | [Pass](#passes) | A pure free function that walks a graph after construction to compute a result or rewrite the graph. |
 | [Evaluation traversal](#evaluation-traversal) | A walk through expression operands, excluding dependencies stored in geometry, spaces and labels. |
 | [Grammar pattern](#grammars) | A structural condition on a node and objects within a bounded number of edges, independent of pass results. |
@@ -203,7 +203,8 @@ Free functions may take named arguments, such as `domain_map(P=T, psi=psi, Q=RD(
 
 A stored property returns a construction argument; a derived property depends
 on the class and those arguments. Concrete classes inherit the derived
-properties of their abstract classes.
+properties of their abstract classes. Derived objects may be built and stored
+during construction for properties to return.
 
 ### No simplification during construction
 
@@ -212,6 +213,10 @@ constructs the graph, so the graph keeps the intent of the user. Only later
 passes, chosen by the user, should rewrite. For example, in `(a + b) + c` in
 floating point arithmetic, where `a`, `b` and `c` are terminals supplied
 later, the user may need `(a + b)` evaluated before `c` is added.
+
+Space descriptions use the canonical forms specified by their classes.
+Their factories and substitution apply these identities without simplifying
+expression structure.
 
 ### Passes
 
@@ -223,9 +228,10 @@ The dependency graph includes every construction argument; the
 [evaluation traversal](#evaluation-traversal) follows only expression operands.
 A substitution follows dependencies, so replacing an object also
 reconstructs an [`Index`](#index) whose label contains the object, other than
-a renamed name (see [Derived indices](#derived-indices)). Hence a
-replacement commutes with construction free functions: replacing `A` by `B` in
-`transpose(A)` gives `transpose(B)`, with the derived indices of `B`. A pass
+a renamed name (see [Derived indices](#derived-indices)). Substitution
+commutes with a fixed expression composition when its static-type choice is
+unchanged: replacing `A` by `B` in `transpose(A)` gives `transpose(B)`, with
+the derived indices of `B`. A pass
 may cache results for each object, because objects are immutable.
 
 Substitution is simultaneous and respects lexical scope, renaming bound names to
@@ -242,7 +248,7 @@ Three kinds of code produce objects:
 | Kind                                               | When the code runs              | Inspects arguments to choose what to build                                | Validates construction arguments |
 | -------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- | ----------------------------- |
 | Constructor                                        | Whenever an object is made      | No, a constructor inspects arguments only to validate                     | Yes                           |
-| Construction free function, such as `determinant`  | While the user builds the graph | Only the static type, to build one fixed composition for each static type | May validate documented inputs |
+| Construction free function, such as `determinant`  | While the user builds the graph | Static type for expression compositions; canonical forms for spaces | May validate documented inputs |
 | Pass, such as differentiation, lowering or `units` | After construction              | Yes, and a pass may rewrite the graph                                     | No                            |
 
 A construction free function rejects invalid inputs itself or through the
@@ -443,7 +449,7 @@ forms](#variational-forms)).
 
 ### Node class or free function
 
-A concept must be a construction free function, not a node class, if it can
+An expression operation must be a construction free function, not a node class, if it can
 build the concept as one fixed composition of existing node classes for each
 static type of the arguments. The static type of an expression is the value
 shape, the free indices, the scalar type, the support and the argument
@@ -2574,8 +2580,10 @@ A space with the domain `None` has functions that do not depend on a domain.
 
 #### Functions in a space
 
-A function in $V$ is an expression with the support of the domain of $V$ and
-with the value shape, scalar type and argument spaces of $V$. For a field,
+`Function(V, label)` uses the support of the domain of $V$ and the value
+shape, scalar type and argument spaces of $V$. These describe its expression
+representation; a form may represent the same space element differently
+(see [The double dual](#the-double-dual)). For a field,
 the concrete subclass defines the function on the cells:
 
 - A space whose values on the reference cell do not depend on the geometry is
@@ -2655,8 +2663,8 @@ with those argument spaces.
 | Raises               | `TypeError` if a requirement fails                                                                                           |
 
 The label identifies the function, so two functions are the same only if the
-spaces and the labels are equal. A function in a [dual space](#dualspace) is an
-antilinear form, such as a known load.
+spaces and the labels are equal. `Function(DualSpace(S), label)` is an
+antilinear form, such as a known load (see [DualSpace](#dualspace)).
 
 Multilinearity applies to the argument slots, not to spatial dependence.
 The supplying library defines how actions on the function and spatial
@@ -2750,67 +2758,83 @@ of an argument space is `conjugate_space(V)` for a space $V$ and $V$ for
 `ConjugateSpace(V)`, so conjugating twice gives the space back (see
 [`Conjugate`](#conjugate)).
 
-For `l` in `dual_space(V)`, `l` has argument spaces
+For `l` with space `DualSpace(V)`, `l` has argument spaces
 `(conjugate_space(V),)` and `conjugate(l)` has `(V,)`.
 `conjugate_space(dual_space(V))` and `dual_space(conjugate_space(V))` are
 not identified structurally.
 
+Space substitution rebuilds conjugate spaces through `conjugate_space`,
+preserving these canonical forms.
+
 ### `DualSpace`
 
-`DualSpace` is the space of antilinear forms on a space or a product of spaces.
+`DualSpace` is the space of bounded antilinear functionals on a space or a
+product of spaces. All spaces in the language are reflexive: the core
+identifies the double dual with the original space, but keeps a space
+and its dual distinct. A Riesz map between them requires a chosen inner
+product and belongs to the supplying library.
 
-| `DualSpace(S)` |                                                                                                                            |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Extends        | `AbstractFunctionSpace` |
-| Free function  | `dual_space(S)`                                                                                                            |
-| Takes          | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` |
-| Properties     | `space` $S$, an `AbstractFunctionSpace`, or a `tuple` of at least two spaces                                               |
-| Derived        | `domain`, `value_shape`, `scalar_type` and `argument_spaces`, below |
-| Raises         | `TypeError` for an $S$ that is not a space or a `tuple` of spaces, and `ValueError` for a `tuple` of fewer than two spaces |
+| `DualSpace(S)` | |
+| -------------- | - |
+| Extends | `AbstractFunctionSpace` |
+| Takes | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` |
+| Properties | `space` $S$, a space other than a `DualSpace`, or a `tuple` of at least two spaces with the same scalar type |
+| Derived | `domain`, `value_shape`, `scalar_type`, `argument_spaces` and `transformation_law`, below |
+| Raises | `TypeError` for an $S$ of another type, and `ValueError` for a `DualSpace` or an invalid tuple |
 
-`dual_space(S)` provides:
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `dual_space(S)` | | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` | `S.space` for a `DualSpace`, otherwise `DualSpace(S)` |
 
-- The domain `None` and the value shape `()`.
-- The argument spaces `(S',)`, with $S'$ the conjugate of $S$ as in
-  [`Conjugate`](#conjugate), member by member for a `tuple` $S$.
-- The scalar type of $S$, complex if any space of a `tuple` is complex.
+`DualSpace(S)` provides:
+
+- No domain or transformation law, and value shape `()`.
+- The argument spaces `(S',)`, with $S'$ = `conjugate_space(S)` for a
+  space, or the tuple of the conjugate spaces for a `tuple` $S$.
+- The scalar type of $S$, common to the members of a `tuple`.
+
+Space substitution rebuilds a dual through `dual_space`, preserving its
+canonical form. For a `tuple` $S$, taking the dual twice returns that tuple;
+product values remain tuples of members, not a single `Function`.
 
 #### Antilinear forms
 
-A function in `dual_space(S)` is antilinear on $S$ and linear on its conjugate
-space. A residual bound as `(conjugate(v),)` and an assembled load therefore
-have the same argument spaces and can be subtracted.
+A function whose space is `DualSpace(S)` is antilinear on $S$ and linear on
+its conjugate space. A residual bound as `(conjugate(v),)` and an assembled
+load therefore have the same argument spaces and can be subtracted.
 
-The space of linear forms on a complex $S$ is
-`dual_space(conjugate_space(S))`, with the argument spaces `(S,)`. The core
-therefore fixes no convention on the argument in which a form is antilinear.
+A linear form on a complex $S$ has argument spaces `(S,)` and represents an
+element of `dual_space(conjugate_space(S))`. The core therefore fixes no
+convention on the argument in which a form is antilinear.
 
-For `l` in `dual_space(S)` and `w` in $S$, the pairing is
+For `l` with space `DualSpace(S)` and `w` in $S$, the pairing is
 `action(l, 0, conjugate(w))`: the argument space of `l` is conjugated, and
 [actions](#action) are linear in their arguments.
 The library supplying `l` evaluates the pairing.
 
-#### The dual of a product
-
-For a `tuple` $S$, a function in `dual_space(S)` is one antilinear form on the
-product of the spaces, such as the load of a mixed problem. No single function
-is in the product.
-
 #### The double dual
 
-`dual_space(dual_space(V))` is the space of antilinear forms on
-`dual_space(V)`, with the argument spaces
-`(conjugate_space(dual_space(V)),)`. `dual_space(dual_space(V))` is not `V`,
-because `V` has the argument spaces `()`.
+`dual_space(dual_space(V))` returns `V`. The canonical identification is
 
-A functional on a dual space may be a terminal or a form binding a dual
-function. Partial application leaves that functional as a functional; the
-core does not convert it to a field in `V`.
+$$
+\iota_V(u)(\ell) = \overline{\ell(u)},
+$$
+
+with the conjugation absent over real scalars. Thus
+`form(conjugate(action(l, 0, conjugate(u))), (conjugate(l),))`
+represents $u$ in the double dual.
+
+Space membership and expression representation are separate. A
+`Function` in the double dual is a `Function` in `V`. A scalar form with
+one argument in `conjugate_space(dual_space(V))` represents an element of
+`V` but retains that argument and its scalar output. Assembly may produce
+the corresponding field; space normalisation does not change a form's
+argument spaces or make it a pointwise field expression.
 
 #### Examples
 
-Let `v` and `q` be functions in spaces `V` and `Q`, respectively. A function
-in a dual space pairs with a conjugated argument:
+Let `v` and `q` be fields in spaces `V` and `Q` with the same scalar type.
+A function in a dual space pairs with a conjugated argument:
 
 ```python
 l = function(dual_space(V), "l")
@@ -2838,7 +2862,7 @@ P = form(pairing, (l, conjugate(v)))
 is linear in `l` and antilinear in `v`.
 
 ```{dropdown} Legacy UFL
-The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual_space(V)`. In legacy UFL, the dual of the dual space is $V$. In UFLx, the spaces keep distinct argument spaces, even when a form binds a dual function.
+The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual_space(V)`. Both languages identify the double dual with the primal space.
 ```
 
 ### `Form`
@@ -3987,8 +4011,9 @@ B = form(action(l, 0, conjugate(interpolate(u, V))), (l, conjugate(u)))
 
 `B` has argument spaces `(dual_space(V), conjugate_space(U))`. Supplying a
 target load at position 0 gives its dual transfer to `U`. Supplying
-`conjugate(u0)` at position 1 leaves a functional of the target load, not a
-field. Forward interpolation remains `interpolate(u0, V)`.
+`conjugate(u0)` at position 1 leaves a linear functional of the target load.
+Its conjugate represents `interpolate(u0, V)` through the double-dual
+identification; pointwise evaluation uses the interpolant itself.
 
 Only value sampling and affine, invertible cell maps between equal dimensions
 are covered. Derivative sampling is not yet covered.
@@ -4388,7 +4413,7 @@ classDiagram
 |                             | [`normal(sm)`](#normal)                                                  |                               | `sm: SideMap`                                                                                                          | `Normal`                                                                                                                                                                        |
 | Function spaces             | [`function(V, label)`](#function)                                        |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                                      | `Function`                                                                                                                                                                      |
 | Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                               | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise                                                                                         |
-|                             | [`dual_space(S)`](#dualspace)                                            |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                        | `DualSpace`                                                                                                                                                                     |
+|                             | [`dual_space(S)`](#dualspace)                                            |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                        | `S.space` for a `DualSpace`, otherwise `DualSpace(S)`                                                                                                                           |
 |                             | [`form(expression, arguments)`](#form)                                   |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`  | `Form`                                                                                                                                                                          |
 |                             | [`action(f, position, g)`](#action)                                      |                               | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                                                                                                        |
 |                             | [`gateaux_derivative(F, x, a, w)`](#gateaux-derivative)                  |                               | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | `GateauxDerivative(F, x, a, w)`                                                                                                                                                 |
