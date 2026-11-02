@@ -1575,10 +1575,10 @@ the value $f(\psi(p))$ at each point $p$ of $P$. The axes of the value shape
 are not transformed. An axis of an expression on $Q$ is an array in the
 coordinate frame of $Q$, so the pull-back keeps the frame of $Q$.
 
-The dual of the pull-back by `domain_map(T, x, D)` is a
-[`PushForward`](#pushforward) to the mesh $D$. The two are inverse only for
-the identity law, because a pull-back keeps the frame of each axis and a
-push-forward applies a law.
+[`PushForward`](#pushforward) gives the corresponding forward value
+transformation from $T$ to the mesh $D$. With the identity law it reverses
+the pull-back cellwise; other laws also transform the values. It does not
+denote a dual or adjoint operator.
 
 A `PullBack` of a downstream terminal or of a [`Function`](#function) remains,
 and the library of the terminal evaluates the terminal at $\psi(p)$. For a
