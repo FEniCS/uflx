@@ -36,7 +36,7 @@ through singularities.
 | ---- | ------- |
 | [Leaf](#leaves-and-subclassing) | A primitive object rather than an operation; it may have graph dependencies. |
 | [Terminal](#leaves-and-subclassing) | A leaf that is an expression, such as a literal, `Coordinate`, `Function` or `Normal`. |
-| [Construction free function](#node-class-or-free-function) | A pure free function that builds objects using static properties, without inspecting operand structure or performing validation. |
+| [Construction free function](#node-class-or-free-function) | A pure free function that may validate inputs and builds a composition chosen from static properties. |
 | [Pass](#passes) | A pure free function that walks a graph after construction to compute a result or rewrite the graph. |
 | [Evaluation traversal](#evaluation-traversal) | A walk through expression operands, excluding dependencies stored in geometry, spaces and labels. |
 | [Grammar pattern](#grammars) | A structural condition on a node and objects within a bounded number of edges, independent of pass results. |
@@ -149,12 +149,11 @@ Objects must satisfy the following rules:
    Structural equality does not decide mathematical equality: $a + b$ and
    $b + a$ are not structurally equal. Mathematical equalities are applied
    in later graph algorithms.
-8. Structural validation happens in the object's constructor. A construction free
-   function only reads derived properties and constructs objects; it never
-   validates or converts arguments. The first constructor made invalid by an
-   argument rejects it. Unless a class states otherwise, an unacceptable type or class
-   raises `TypeError`, and an unacceptable value of an accepted type or class
-   raises `ValueError`.
+8. Constructors validate their nodes. Construction free functions may validate
+   their documented inputs, but never convert them. Structural requirements
+   must be checked by the free function or the constructors it calls. Unless
+   stated otherwise, an unacceptable type or class raises `TypeError`, and an
+   unacceptable value of an accepted type or class raises `ValueError`.
 9. A constructor has no default values, so every construction argument is
    written at construction.
 10. A concrete class states an `identifier`, a `str` with the public name of
@@ -242,14 +241,12 @@ Three kinds of code produce objects:
 
 | Kind                                               | When the code runs              | Inspects arguments to choose what to build                                | Validates construction arguments |
 | -------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- | ----------------------------- |
-| Constructor                                        | Whenever an object is made      | No, a constructor inspects arguments only to validate                     | Yes, and only constructors do |
-| Construction free function, such as `determinant`  | While the user builds the graph | Only the static type, to build one fixed composition for each static type | No                            |
+| Constructor                                        | Whenever an object is made      | No, a constructor inspects arguments only to validate                     | Yes                           |
+| Construction free function, such as `determinant`  | While the user builds the graph | Only the static type, to build one fixed composition for each static type | May validate documented inputs |
 | Pass, such as differentiation, lowering or `units` | After construction              | Yes, and a pass may rewrite the graph                                     | No                            |
 
-A construction free function fails when a constructor rejects the
-arguments, for example `side_map(D, E, s)` raises `ValueError` from the
-constructor of `SideMap` when no group of the topology of `E` has a side named
-`s`. A pass fails with `TypeError` for a node class that
+A construction free function rejects invalid inputs itself or through the
+constructors it calls. A pass fails with `TypeError` for a node class that
 the pass has no rule for, or with an error of the pass, such as inconsistent
 units.
 
@@ -452,10 +449,11 @@ static type of the arguments. The static type of an expression is the value
 shape, the free indices, the scalar type, the support and the argument
 spaces. The static type of a domain is the stored and the derived
 properties of the domain, such as the dimension of a coordinate domain or the pieces of a
-decomposed domain. A construction free function may read the static type to
-choose the composition, and never reads argument structure, such as the class,
-the edges or the values. Otherwise the concept gets its own node class. A
-concept that is evaluated by a numerical algorithm that the user supplies also
+decomposed domain. A construction free function chooses the composition from
+the static type, never from argument structure, such as the class, the edges
+or the values. Choosing a composition from argument structure requires a node
+class; inspecting it to validate inputs does not. A concept that is evaluated
+by a numerical algorithm that the user supplies also
 gets its own node class, even if a fixed composition exists, because the
 composition would fix the algorithm. A concept that a pass must
 meet as the user wrote the concept also gets its own node class, even if a
@@ -479,8 +477,7 @@ other construction free function belongs to a library, such as the operations
 of [Tensor algebra with `EllipsisIndex`](examples/tensors.md#tensor-algebra-with-ellipsisindex).
 
 A construction free function that builds a fixed composition is a definition,
-not a simplification. It does not read operand structure, so it never removes
-structure that the user built.
+not a simplification. Validation does not rewrite the operands.
 
 A node class is part of the core only if a definition or a rule of the core
 needs the node class, or if the node class is an operation of the scalar
@@ -1158,9 +1155,8 @@ of a square matrix $A$.
 | ------------- | -------- | ----- | ------- |
 | `determinant(A)` | | `A: AbstractExpression` | The Leibniz formula for $\det A$ |
 
-`determinant(A)` requires $A$ with value shape `(n, n)` and an `int` extent
-$n$ (see [Extents](#extents)), which selects the composition. The Leibniz
-formula is
+`determinant(A)` checks that $A$ has value shape `(n, n)` with an `int`
+extent $n$ (see [Extents](#extents)) before building the Leibniz formula:
 
 $$
 \det A = \sum_\sigma \operatorname{sgn}(\sigma) \prod_{i=0}^{n-1} A_{i, \sigma(i)},
@@ -1617,6 +1613,8 @@ the Jacobian matrix, the left inverse of the Jacobian matrix and the density
 of a domain $D$ = `DomainMap(P, psi, Q)` with a coordinate domain $P$ of
 dimension $k$. $n$ is the dimension of the ambient coordinate domain of $Q$.
 
+Each helper checks these input requirements before building its composition.
+
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `jacobian(D)` | | `D: DomainMap` | `gradient(D.parameterisation, D.parameter_domain)` |
@@ -1800,6 +1798,9 @@ The free function `cell_index(T, j)` returns the derived index
 `Index(("uflx.cell_index", T, j, 0))` for the cells of type $j$, numbered from
 0. The index has the extent `T.num_cells[j]`. The index differs between types
 and between topologies, even if the numbers of cells are equal.
+
+`cell_index` checks that $T$ is a topology and $j$ is an `int` with
+`0 <= j < len(T.cell_types)`.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -3940,7 +3941,7 @@ A downstream library builds a new operation from existing node classes, as a
 construction free function. As in the core, it may read the static type of
 the operands, such as a value shape, to choose the composition (see
 [Node class or free function](#node-class-or-free-function)). For example,
-`cross(a, b)` requires both operands to have value shape `(3,)` and returns:
+`cross(a, b)` checks that both operands have value shape `(3,)` and returns:
 
 ```python
 tensor((
