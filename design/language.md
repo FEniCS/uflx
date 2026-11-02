@@ -3068,7 +3068,7 @@ $x$ at a point $a$, adding an argument $w$ after the arguments of $F$.
 | Extends     | `AbstractExpression` |
 | Takes       | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` |
 | Properties  | `expression` $F$, `variable` $x$, `point` $a$ and `argument` $w$, an entry as in [`Form`](#form) |
-| Requires    | $x$ a [bindable function](#bindable-functions) or a `tuple` of at least two distinct bindable functions; member by member, $a$ an admissible value for the space of $x$ as in [`Action`](#action), and the function underlying each entry of $w$ in that space; the members of a `tuple` $w$ all functions or all conjugates, no function of $w$ free in $F$, and the members of a `tuple` $x$ all real or all complex |
+| Requires    | $x$ a [bindable function](#bindable-functions) or a `tuple` of at least two distinct bindable functions; member by member, $a$ an admissible value for the space of $x$ as in [`Action`](#action), and the function underlying each entry of $w$ in that space; the members of a `tuple` $w$ all functions or all conjugates, no function of $w$ free in $F$ or $a$, and the members of a `tuple` $x$ all real or all complex |
 | Static type | The value shape of $F$, the free indices of $F$ followed by those of $a$, the argument spaces of $F$ followed by the space of the entry $w$, and the scalar type of $F$ for a real $x$, and complex for a complex $x$ |
 | Raises      | `TypeError` for an $x$ that is not a function, and `ValueError` if another requirement fails |
 
