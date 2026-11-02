@@ -71,13 +71,13 @@ nu, h = function(R, "nu"), function(R, "h")
 mu_s = function(R_S, "mu_s")
 u = function(V, "u")
 i, j = index("i"), index("j")
-two = Integer(2)
+two = integer(2)
 grad_d, grad_w = gradient(d_S, S), gradient(w_S, S)
 eps_d = (grad_d[i, j] + grad_d[j, i]) / two
 eps_w = (grad_w[i, j] + grad_w[j, i]) / two
 
 e = integral(two * push_forward(mu_s, S) * index_sum(eps_d * eps_w, (i, j)), S)
-de_dmu = form(directional_derivative(e, mu_s, mu_s, Integer(1)), (w, d))
+de_dmu = form(directional_derivative(e, mu_s, mu_s, integer(1)), (w, d))
 
 grad_u = gradient(push_forward(u, F), F)
 dissipation = integral(nu * index_sum(grad_u[i, j] * grad_u[i, j], (i, j)), F)
@@ -106,7 +106,7 @@ The solver sets `sigma_x` and `sigma_y` to zero outside the layer:
 D = image(x, RD(2))
 k0 = function(C, "k0")
 sigma_x, sigma_y = push_forward(function(F, "sigma_x"), D), push_forward(function(F, "sigma_y"), D)
-one, i_unit = Integer(1), ImaginaryUnit()
+one, i_unit = integer(1), imaginary_unit()
 s_x = one + i_unit * sigma_x / k0
 s_y = one + i_unit * sigma_y / k0
 
@@ -195,7 +195,7 @@ real scalar space `M` for the Lamé parameters, both on `T`, and a real space
 
 ```python
 D = image(x, RD(2))
-one, zero, two = Integer(1), Integer(0), Integer(2)
+one, zero, two = integer(1), integer(0), integer(2)
 I = tensor((tensor((one, zero)), tensor((zero, one))))
 i, j, k, l, a = index("i"), index("j"), index("k"), index("l"), index("a")
 

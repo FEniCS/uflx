@@ -53,7 +53,7 @@ selecting the stored value for each tensor entry:
 D = image(x, RD(2))
 u, v = function(V, "u"), function(V, "v")
 i, j, k, l = index("i"), index("j"), index("k"), index("l")
-two = Integer(2)
+two = integer(2)
 c = function(K, "c")
 stiffness = component_tensor(c[gathered_index(packed, (i, j, k, l))], (i, j, k, l))
 

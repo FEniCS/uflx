@@ -234,7 +234,7 @@ def free_functions(functions: list[FreeFunction]) -> str:
         group = f.chapter if f.chapter != previous else ""
         previous = f.chapter
         rows.append([group, f"[`{f.signature}`](#{f.anchor})", f.overload, f.takes, f.returns])
-    header = ["Group", "Free function", "`AbstractExpression` overload", "Takes", "Returns"]
+    header = ["Group", "Free function", "Value overload", "Takes", "Returns"]
     return table(header, rows)
 
 
@@ -254,21 +254,25 @@ def checks(lang: Document) -> list[str]:
     """Return the disagreements between the sections and the hand-written appendices."""
     problems = []
     for c in core(lang.classes):
-        if c.name != "Base" and not c.extends:
+        if c.name != "Base" and not c.extends and "interface" not in c.rows.get("Role", ""):
             problems.append(f"{c.name}: the table has no Extends row")
         named = opening_parents(c)
         if named and c.extends and named != c.extends and len(lang_entries(lang, c)) == 1:
             problems.append(f"{c.name}: Extends {c.extends}, the opening sentence says {named}")
-    expressions = {
-        c.name for c in core(lang.classes) if not c.abstract and is_expression(lang, c.name)
+    value_nodes = {
+        c.name for c in core(lang.classes) if not c.abstract and is_value_node(lang, c.name)
     }
+    interfaces = {c.name for c in lang.classes if "interface" in c.rows.get("Role", "")}
+    for c in core(lang.classes):
+        if c.name not in interfaces and interfaces.intersection(c.extends):
+            problems.append(f"{c.name}: graph nodes must not inherit a value interface")
     known = {c.name for c in lang.classes}
     # The first table of each appendix covers every node class.
     for title in ("Appendix: Static type table",):
         tables = lang.tables.get(title, [])
         first = tables[0][1:] if tables else []
         listed = {n for r in first for n in code_names(r[0])}
-        for name in sorted(expressions - listed):
+        for name in sorted(value_nodes - listed):
             problems.append(f"{title}: no row for {name}")
         for rows in tables:
             for name in sorted({n for r in rows[1:] for n in code_names(r[0])} - known):
@@ -281,14 +285,14 @@ def lang_entries(lang: Document, entry: ClassEntry) -> list[ClassEntry]:
     return [c for c in lang.classes if c.rows is entry.rows]
 
 
-def is_expression(lang: Document, name: str) -> bool:
-    """Return whether a class extends AbstractExpression."""
+def is_value_node(lang: Document, name: str) -> bool:
+    """Return whether a class extends AbstractValueNode, excluding public views."""
     parents = {c.name: c.extends for c in lang.classes}
     seen = set()
     todo = [name]
     while todo:
         n = todo.pop()
-        if n == "AbstractExpression":
+        if n == "AbstractValueNode":
             return True
         if n not in seen:
             seen.add(n)
@@ -309,14 +313,14 @@ def summary(lang: Document) -> str:
     """Render counts of the classes and free functions of the core."""
     classes = core(lang.classes)
     abstract = [c for c in classes if c.abstract]
-    nodes = [c for c in classes if not c.abstract and is_expression(lang, c.name)]
+    nodes = [c for c in classes if not c.abstract and is_value_node(lang, c.name)]
     functions = [f for f in lang.functions if f.chapter not in EXCLUDED_CHAPTERS]
     overloads = [f for f in functions if f.overload]
     counts = [
         ["Classes", str(len(classes))],
         ["Abstract classes", str(len(abstract))],
         ["Concrete classes", str(len(classes) - len(abstract))],
-        ["Expression node classes", str(len(nodes))],
+        ["Value node classes", str(len(nodes))],
         ["Free functions", str(len(functions))],
         ["Free functions with an overload", str(len(overloads))],
     ]

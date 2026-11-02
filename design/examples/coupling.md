@@ -63,7 +63,7 @@ $1/h$.
 ```python
 i = index("i")
 n = normal(plus)
-half = Integer(1) / Integer(2)
+half = integer(1) / integer(2)
 jump_u, jump_v = u_p - u_m, v_p - v_m
 avg_dn_u = half * index_sum((du_p[i] + du_m[i]) * n[i], (i,))
 avg_dn_v = half * index_sum((dv_p[i] + dv_m[i]) * n[i], (i,))
@@ -106,7 +106,7 @@ lowers to:
 g_p = gathered_index(cells_p, (e,))
 C_p = cell_map(square, 0, g_p)
 t = coordinate(I)[0]
-A_p = domain_map(I, tensor((Integer(1) - t, t)), K)
+A_p = domain_map(I, tensor((integer(1) - t, t)), K)
 pull_back(pull_back(u, C_p), A_p)
 ```
 
@@ -222,7 +222,7 @@ lam_G, mu_G = push_forward(lam, G), push_forward(mu, G)
 nu, mu_s, lam_s = runtime_array("nu", ()), runtime_array("mu_s", ()), runtime_array("lam_s", ())
 dt, g = runtime_array("dt", ()), runtime_array("g", (2,))
 i, j = index("i"), index("j")
-half, two = Integer(1) / Integer(2), Integer(2)
+half, two = integer(1) / integer(2), integer(2)
 ```
 
 The bulk terms are the usual Stokes and linear-elasticity integrals:

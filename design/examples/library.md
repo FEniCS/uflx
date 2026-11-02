@@ -180,11 +180,11 @@ Jacobian of the inclusion, turned away from the centroid of $K_j$:
 ```python
 J_A = jacobian(inclusion)  # value shape (k, k - 1)
 C_r = tensor(tuple(
-    tensor((Integer(1 if q == r else 0), J_A[q, 0], ..., J_A[q, k - 2]))
+    tensor((integer(1 if q == r else 0), J_A[q, 0], ..., J_A[q, k - 2]))
     for q in range(k)
 ))
 m0 = tensor((determinant(C_0), ..., determinant(C_(k - 1))))
-centroid = (V[0] + V[1] + ... + V[m_j - 1]) / Integer(m_j)
+centroid = (V[0] + V[1] + ... + V[m_j - 1]) / integer(m_j)
 away = m0 @ (points[0] - centroid)
 reference_normal = away / absolute(away) * m0
 ```
@@ -204,13 +204,13 @@ class ReferenceSimplex(Simplex, AbstractReferenceCell):
     identifier = "library.ReferenceSimplex"
 
     @property
-    def vertices(self) -> AbstractExpression:
+    def vertices(self) -> Expression:
         n = self.dimension
         if n == 0:
-            return Zero((1, 0), (), ())
+            return zero((1, 0), (), ())
         return tensor(
             tuple(
-                tensor(tuple(Integer(1 if k == v - 1 else 0) for k in range(n)))
+                tensor(tuple(integer(1 if k == v - 1 else 0) for k in range(n)))
                 for v in range(n + 1)
             )
         )
@@ -237,7 +237,9 @@ Python wrapper classes are outside the core.
 ```python
 # uflx/legacy.py
 from uflx import (
-    AbstractExpression,
+    AbstractValue,
+    AbstractValueNode,
+    Expression,
     Base,
     Function,
     conjugate,
@@ -254,6 +256,7 @@ from uflx import (
     push_forward,
     side_domain,
     side_map,
+    wrap,
 )
 
 
@@ -291,7 +294,8 @@ def FacetNormal(mesh):
 
 
 def is_facet_normal(obj):
-    return isinstance(obj, Function) and obj.label == "facet normal"
+    node = obj.node if isinstance(obj, AbstractValue) else obj
+    return isinstance(node, Function) and node.label == "facet normal"
 
 
 def grad(f):
@@ -332,7 +336,7 @@ def arguments(expression):
     def visit(obj):
         if isinstance(obj, Function) and isinstance(obj.label, tuple):
             if obj.label[0] == "argument":
-                found[obj.label[1]] = obj
+                found[obj.label[1]] = wrap(obj)
         if isinstance(obj, tuple):
             for item in obj:
                 visit(item)
@@ -340,7 +344,7 @@ def arguments(expression):
             for item in obj.construction_arguments:
                 visit(item)
 
-    visit(expression)
+    visit(expression.node)
     return tuple(found[n] for n in sorted(found))
 
 
@@ -348,15 +352,18 @@ def restrict(obj, E):
     # The legacy apply_restrictions, at construction: the largest subtrees on the
     # mesh are pulled back to E, and the facet normal of the mesh becomes the
     # normal of E.
+    if isinstance(obj, AbstractValueNode):
+        obj = wrap(obj)
     if is_facet_normal(obj):
         return normal(side_map(obj.support, E, "inside"))
     if isinstance(obj, tuple):
         return tuple(restrict(item, E) for item in obj)
-    if not isinstance(obj, AbstractExpression) or obj.support is None:
+    if not isinstance(obj, Expression) or obj.support is None:
         return obj
     if not contains(obj, is_facet_normal):
         return pull_back(obj, side_map(obj.support, E, "inside"))
-    return obj.__class__(*restrict(obj.construction_arguments, E))
+    node = obj.node
+    return wrap(node.__class__(*restrict(node.construction_arguments, E)))
 
 
 class Mesh:

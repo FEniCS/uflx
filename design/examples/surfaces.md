@@ -77,7 +77,7 @@ flux = index_sum(
     (cell_index(T, 0),),
 )
 
-area = integral(Integer(1), M)
+area = integral(integer(1), M)
 ```
 
 `nu` is the directed cofactor normal: its magnitude already includes the
@@ -109,7 +109,7 @@ s = function(W, "s")
 
 D_s = image(x + s, RD(2))
 
-volume = integral(Integer(1), D_s)
+volume = integral(integer(1), D_s)
 
 u, v = function(V, "u"), function(V, "v")
 grad_u, grad_v = gradient(push_forward(u, D_s), D_s), gradient(push_forward(v, D_s), D_s)
@@ -136,7 +136,7 @@ the same value shape:
 w = function(W_T, "w")
 M_w = image(x_T + w, RD(3))
 
-area = integral(Integer(1), M_w)
+area = integral(integer(1), M_w)
 ```
 
 The cell Jacobian is $3\times2$ and the density is $\sqrt{\det(J^T J)}$.

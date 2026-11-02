@@ -58,7 +58,7 @@ u_h, f, g = function(V, "u_h"), function(F, "f"), function(F, "g")
 e, v = function(W, "e"), function(W, "v")
 f_D, g_D, v_D = push_forward(f, D), push_forward(g, D), push_forward(v, D)
 i = index("i")
-half = Integer(1) / Integer(2)
+half = integer(1) / integer(2)
 
 # Local bilinear form.
 grad_e = gradient(push_forward(e, D), D)

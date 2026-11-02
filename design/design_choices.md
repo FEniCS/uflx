@@ -15,6 +15,15 @@ but lowercase, with `_x` wherever the class name has (eg) a capital `X` mid name
 Class `__init__` functions have no default values. If default values are required, a function
 to initialise the class with defaults should be defined.
 
+## Graph nodes and value interfaces
+
+Value-producing node classes record graph construction. Their lower-case
+factories return immutable `Expression`, `Map`, or `IndexValue` views. A view
+stores only its node; graph construction unwraps views, and reconstruction
+derives the result interface again. Shape, indexing and binding are shared,
+while numerical properties, map endpoints and index bounds stay on their
+respective interfaces. See [language.md](language.md#graph-nodes-and-value-interfaces).
+
 ## Implementation principles
 
 - Explicit is better than implicit.

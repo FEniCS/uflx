@@ -29,12 +29,12 @@ languages for variational forms, such as UFL and ngsolve.
 | Term | Meaning |
 | ---- | ------- |
 | [Leaf](#leaves-and-subclassing) | A primitive object rather than an operation; it may have graph dependencies. |
-| [Terminal](#leaves-and-subclassing) | A leaf that is an expression, such as a literal, `Coordinate`, `Function` or `Normal`. |
+| [Terminal](#leaves-and-subclassing) | A leaf that produces a value, such as a literal, `Function`, or a supplied index table. |
 | [Construction free function](#node-class-or-free-function) | A pure free function that builds objects using static properties, without inspecting operand structure or performing validation. |
 | [Pass](#passes) | A pure free function that walks a graph after construction to compute a result or rewrite the graph. |
 | [Grammar pattern](#grammars) | A structural condition on a node and objects within a bounded number of edges, independent of pass results. |
 | [Rule pattern](#rule-tables) | A condition selecting a rewrite rule; it may inspect a pass result on an operand. |
-| [Array rank](#abstractexpression), or **rank** | The number of axes in an expression's value shape. |
+| [Array rank](#expression), or **rank** | The number of axes in an expression's value shape. |
 | [Arity](#argument-spaces) | The number of argument spaces of a form, counting a product-space argument once. |
 | [Structurally equal](#the-base-object-base) | Objects with the same class and equal construction arguments, as tested by `==`. |
 | [Mathematically equal](#the-base-object-base) | Expressions denoting the same value, whether or not their graphs are structurally equal. |
@@ -101,7 +101,8 @@ TSFC lowers a UFL form to GEM, which repeats much of the algebra of UFL, partly 
 Every object in the directed acyclic graph (DAG) must extend `Base`. A graph
 edge means "is defined from"; geometric edges are explicitly called edges of
 a triangle or cell. Everything defining the variational problem must be
-recoverable from the graph.
+recoverable from the graph. These rules apply to graph objects; the
+[value interfaces](#graph-nodes-and-value-interfaces) are views of those objects.
 
 | `Base`     |                                                                    |
 | ---------- | ------------------------------------------------------------------ |
@@ -109,7 +110,8 @@ recoverable from the graph.
 
 Objects must satisfy the following rules:
 
-1. A construction argument must be one of a small curated set of types: a base
+1. After unwrapping value interfaces, a stored construction argument must be
+   one of a small curated set of types: a base
    object, or exactly an `int`, a finite `float`, a `str`, or a `tuple` whose
    items are of these types. A subclass of these Python types is not accepted,
    so a `bool` is not an `int` and a named tuple is not a `tuple`. Construction
@@ -169,9 +171,10 @@ construction. Every object that exists is therefore valid.
 Only leaves are subclassed. A leaf is a primitive object rather than an
 operation, such as the coordinate domain `RD(n)` or a function whose values an
 external library supplies. Leaves may have graph dependencies: a `Function`
-depends on its space, and a `Coordinate` on its domain. A terminal is a leaf
-that is an expression, such as a literal, `Coordinate`, `Function` or `Normal`
-of the core, or a terminal of a downstream library.
+depends on its space, and a `Coordinate` on its domain. A terminal is a leaf that produces a value, such as a numerical literal,
+`Coordinate`, `Function`, `Normal`, or a supplied index table. Numerical and
+index-valued library terminals are supported; map-valued library terminals
+require an extension with its own evaluation rules.
 
 An operation is represented by a single core class or a construction free
 function returning core objects, never a subclass. For example, a construction
@@ -179,7 +182,11 @@ free function builds the map of an affinely mapped triangle as a
 `DomainMap`, rather than a subclass of `DomainMap`. A language extension is the
 one exception (see [Language extensions](#language-extensions)).
 
-Concrete core classes are final; libraries subclass only abstract classes.
+Concrete core classes are final; libraries subclass only abstract node classes.
+An extension adding a new value interface may subclass `AbstractValue`; the
+node-subclassing rules do not apply to views.
+Numerical terminals now extend `AbstractValueNode` and declare `Expression`
+as their result interface. They do not subclass the public view.
 A parent class never constructs a subclass, though its properties may return
 existing subclass instances. A subclass may narrow a property's return type.
 
@@ -187,16 +194,18 @@ existing subclass instances. A subclass may narrow a property's return type.
 
 A property reads and a construction free function builds. Properties expose
 stored or derived data, such as `value_shape` or `parameter_domain`, and never construct
-objects. Operations that construct objects are pure free functions, such as
+graph objects. Accessing a view of an existing node does not construct a graph
+object. Operations that construct objects are pure free functions, such as
 `coordinate(P)` or `density(D)`. A class method immediately calls a free
 function.
 
 Constructor arguments are positional only; a named argument raises `TypeError`.
 Free functions may take named arguments, such as `domain_map(P=T, psi=psi, Q=RD(2))`.
 
-A stored property returns a construction argument; a derived property depends
-on the class and those arguments. Concrete classes inherit the derived
-properties of their abstract classes.
+A stored node property returns a construction argument; a derived property
+depends on the class and those arguments. Static-type rows describe the
+properties of the result interface. When a table accepts `Expression`, `Map`
+or `IndexValue`, the constructor stores its underlying node.
 
 ### No simplification during construction
 
@@ -312,17 +321,168 @@ Worked examples for this chapter: [the unit simplex](examples/library.md#the-uni
 
 ## Expressions and static type
 
-### `AbstractExpression`
+### Graph nodes and value interfaces
 
-| `AbstractExpression` |                                                                                      |
-| -------------------- | ------------------------------------------------------------------------------------ |
-| Extends              | `Base`                                                                               |
-| Provides             | `value_shape`, `free_indices`, `scalar_type`, `support`, `argument_spaces` |
+A value-producing graph node and its public interface are separate objects.
+The node records the construction; the interface exposes the operations and
+static properties of its result. Interfaces are immutable views, not graph
+nodes, and add no mathematical information.
 
-These five derived properties form the static type (see
-[Argument spaces](#argument-spaces)). The value shape is a `tuple` of
-[extents](#extents), one per axis; `()` denotes a scalar. The array rank,
-written simply as rank, is the number of axes.
+| `AbstractValueNode` | |
+| ------------------- | --- |
+| Extends | `Base` |
+| Provides | `result_interface`, `value_shape`, `free_indices` |
+
+Every concrete value-node class defines a result-interface rule. The rule is
+pure and depends only on the node and its construction arguments; it is not
+an independently stored tag or a mutable registry. The core rules are:
+
+| Node | Result interface |
+| ---- | ---------------- |
+| Numerical terminals, arithmetic, calculus and variational-form nodes | `Expression` |
+| `DomainMap`, `CellMap`, `SideMap` | `Map` |
+| `AbstractIndexValue` implementations, `GatheredIndex` | `IndexValue` |
+| `Indexed`, `ComponentTensor` | The operand's result interface |
+| `Tensor` | The common result interface of its entries |
+
+A new value category supplies its own interface and node rules. Shared
+indexing and binding preserve that interface without a numerical-versus-map
+switch. Construction still validates the category-specific requirements.
+
+| `AbstractValue` | |
+| ---------------- | --- |
+| Role | Abstract value interface; not a graph object |
+| Provides | `node`, `value_shape`, `free_indices`, indexing |
+
+`value_shape` and `free_indices` expose those of `node`. Shape is a `tuple`
+of [extents](#extents); `()` denotes an individual value. Rank is the number
+of axes. A scalar and a vector share the numerical interface; an individual
+map and a map family share the map interface.
+
+### `Expression`
+
+| `Expression(node)` | |
+| ------------------- | --- |
+| Role | Value interface |
+| Extends | `AbstractValue` |
+| Provides | `scalar_type`, `support`, `argument_spaces`, arithmetic |
+| Requires | `node.result_interface` is `Expression` |
+
+An `Expression` always denotes a numerical value. Its shape, free indices,
+scalar type, support and argument spaces form its static type. The numerical
+rules below derive these properties from the graph. It has no map endpoints
+or index bound.
+
+### `Map`
+
+| `Map(node)` | |
+| ------------ | --- |
+| Role | Value interface |
+| Extends | `AbstractValue` |
+| Provides | `parameter_domain`, `ambient_domain` |
+| Requires | `node.result_interface` is `Map` |
+
+The endpoints, shape and free indices form a map's static type. All members
+of a map family have the same endpoints. The three core map nodes define
+these endpoints; `Indexed` and `ComponentTensor` preserve them, and `Tensor`
+requires them to agree. A map's shape describes its family axes, independently
+of the vector shape of a coordinate parameterisation. `Map` exposes no
+numerical arithmetic, scalar type, support or argument spaces.
+
+### `IndexValue`
+
+| `IndexValue(node)` | |
+| ------------------- | --- |
+| Role | Value interface |
+| Extends | `AbstractValue` |
+| Provides | `extent`, the target extent |
+| Requires | `node.result_interface` is `IndexValue` |
+
+The target extent, shape and free indices form an index value's static type.
+Every member is an integer in `[0, extent)`. `Indexed` and `ComponentTensor`
+preserve the target extent; `Tensor` requires equal target extents.
+An `IndexValue` of shape `()` is usable as an index selector. It is neither
+a numerical expression nor a bindable `Index`.
+
+### Construction and reconstruction
+
+`wrap(node)` returns the result interface declared by a validated value node.
+It adds no graph node and is idempotent on a value view. The view constructors
+check the result interface, so `Map` cannot be used to reinterpret a numerical
+node. A view stores only its node; derived properties may be cached.
+
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `wrap(node)` | | `node: AbstractValueNode \| AbstractValue` | The canonical value interface of the node; an existing view is returned unchanged |
+
+Capitalised node constructors build graph nodes. Public construction free
+functions return their wrapped results. For example, `integer(2)` returns
+`wrap(Integer(2))`, and `domain_map(P, psi, Q)` returns
+`wrap(DomainMap(P, psi, Q))`. In the free-function tables, a returned node
+construction means its wrapped value. Domains, spaces and bindable indices
+remain ordinary graph objects.
+
+Construction free functions also accept the corresponding nodes in place of
+views and may use `wrap` to read their static properties. A property required
+by an explicit node-class contract, such as the parameterisation argument of
+`DomainMap` for `jacobian`, is read from `value.node`. This does not permit
+branching on operand structure to choose a construction.
+
+A node constructor accepts a value view wherever it accepts the corresponding
+value node. It unwraps views, including those nested in tuples, before storing
+construction arguments. Validation uses the operands' result interfaces and
+static properties. Thus the stored graph contains nodes, never views; no
+Python scalar or mathematical value is converted by this unwrapping.
+
+Node-class requirements in contracts, such as a `Function` variable or an
+explicit `DomainMap` for `jacobian`, refer to the underlying node of a value.
+An `Expression` requirement instead accepts any node with that result
+interface. Free functions may inspect static properties through `wrap`, but
+only a pass may inspect operand structure to choose a rewrite.
+
+Passes match and reconstruct nodes. They rebuild a changed node from its
+class and replaced `construction_arguments`, validate it, and derive its
+result interface again. The public pass returns the wrapped root if it is a
+value node. A type-preserving rewrite preserves the result interface as well
+as the properties of that interface. Equality and hashing of views follow
+the underlying nodes; wrappers do not enter graph identity or serialisation.
+
+#### The point-family construction path
+
+Let `coordinates` be an `Expression` of shape `(n, d)`, `f` a scalar
+`Expression` on `Q = RD(d)`, and `i` and `j` bindable indices. The coordinates
+are real and support-free, and both expressions have no free indices or
+argument spaces.
+
+```python
+m = domain_map(RD(0), coordinates[i], Q)
+p = component_tensor(m, (i,))
+selected = p[j]
+result = pull_back(f, selected)
+```
+
+| Value | Underlying node | Public interface | Shape | Free indices |
+| ----- | --------------- | ---------------- | ----- | ------------ |
+| `m` | `DomainMap` | `Map` | `()` | `i: n` |
+| `p` | `ComponentTensor` | `Map` | `(n,)` | None |
+| `selected` | `Indexed` | `Map` | `()` | `j: n` |
+| `result` | `PullBack` | `Expression` | `()` | `j: n` |
+
+The first three views derive the same endpoints, `RD(0)` and `Q`, from
+`m.node`. `result` derives support `RD(0)` from its map operand and scalar
+type and argument spaces from `f`. The stored operands of `p.node` are
+`(m.node, (i,))`; those of `result.node` are `(f.node, selected.node)`.
+
+Reconstruction works from these operands alone. Replacing `coordinates`
+rebuilds the dependent nodes and validates their new shapes and extents;
+`wrap` then exposes the root's newly derived interface. Rebuilding the
+selection does not copy endpoints or depend on the original Python view.
+
+The third interface follows the same path: for a supplied index table
+`owners` of shape `(n,)` and target extent `c`, `owners[j]` is an `IndexValue`
+of shape `()` with target extent `c`. `component_tensor(owners[j], (j,))`
+is an index-valued family. If `cells` is a map family of shape `(c,)`,
+`cells[owners[j]]` is a `Map`. Both selections use `Indexed`.
 
 ### Extents
 
@@ -387,13 +547,13 @@ from the operands, so that the index is fresh without a global counter (see
 
 ### Free indices
 
-Every `AbstractExpression` derives the free indices, a `tuple` of pairs. Each
+Every `AbstractValueNode` derives the free indices, a `tuple` of pairs. Each
 pair is an `Index` and an extent, or an [`EllipsisIndex`](#ellipsisindex) and
 a `tuple` of extents. The order is the order of first occurrence, never the
 order of a `set`.
 
 Unless a node class states otherwise, the free indices of a node are derived
-from the edges of the node that are expressions:
+from the edges of the node that are value nodes:
 
 - The free indices of the edges are taken in edge order, with each `Index`
   taken once, at the first occurrence.
@@ -407,9 +567,9 @@ the free indices `i` and `j` and denotes the outer sum.
 
 ### Scalar type
 
-The scalar type is real or complex. Unless the [static type
-table](#appendix-static-type-table) states otherwise, an expression is complex
-if and only if at least one edge is a complex expression.
+The scalar type of a numerical expression is real or complex. Unless the
+[static type table](#appendix-static-type-table) states otherwise, it is complex
+if and only if at least one value-node edge has an `Expression` view with complex scalar type.
 
 The scalar type is the arithmetic in which the expression is evaluated, not a
 statement about the value. A real `SquareRoot`, `Logarithm` or `Power` whose
@@ -421,13 +581,13 @@ The support is an [`AbstractDomain`](#abstractdomain), or an
 [`AbstractTopology`](#abstracttopology) whose cell types are reference cells.
 The support is absent for an expression with no support, such as a literal. Unless the [static type
 table](#appendix-static-type-table) states otherwise, the support
-of a node is the support of the edges of the node that are expressions with a support.
+of a numerical node is the support of its value-node edges whose `Expression` views have a support.
 All such edges must have the same support, or construction raises `ValueError`. A
 node with no such edge has no support.
 
 ### Expressions as functions
 
-An expression denotes an array-valued function on the support of the
+A numerical expression denotes an array-valued function on the support of the
 expression. An expression on a topology denotes a function on the reference
 cell of each cell of the topology (see [`CellMap`](#cellmap)). An expression
 with no support denotes a single array. An expression with argument spaces other than `()` denotes a multilinear map from
@@ -438,9 +598,9 @@ forms](#variational-forms)).
 
 A concept must be a construction free function, not a node class, if it can
 build the concept as one fixed composition of existing node classes for each
-static type of the arguments. The static type of an expression is the value
-shape, the free indices, the scalar type, the support and the argument
-spaces. The static type of a domain is the stored and the derived
+static type of the arguments. The static type of an expression is its result interface,
+value shape, free indices and the properties of that interface (see
+[Graph nodes and value interfaces](#graph-nodes-and-value-interfaces)). The static type of a domain is the stored and the derived
 properties of the domain, such as the dimension of a coordinate domain or the pieces of a
 decomposed domain. A construction free function may read the static type to
 choose the composition, and never reads argument structure, such as the class,
@@ -487,41 +647,45 @@ individual choices.
 
 ### Literals
 
-A literal is a number written in an expression, such as `Integer(2) * u`.
+A literal is a number written in an expression, such as `integer(2) * u`.
 The three concrete literal classes have value shape `()`, no free indices
 and no support:
 
 | `Integer(v)` |                       |
 | ------------ | --------------------- |
-| Extends      | `AbstractExpression`  |
+| Extends      | `AbstractValueNode`  |
+| Free function | `integer(v)` |
 | Properties   | `value` $v$, an `int` |
 
 | `Float(v)` |                               |
 | ---------- | ----------------------------- |
-| Extends    | `AbstractExpression`          |
+| Extends    | `AbstractValueNode`          |
+| Free function | `float(v)` |
 | Properties | `value` $v$, a finite `float` |
 
 | `ImaginaryUnit()` |                      |
 | ----------------- | -------------------- |
-| Extends           | `AbstractExpression` |
+| Extends           | `AbstractValueNode` |
+| Free function | `imaginary_unit()` |
 
 Each literal constructor accepts only exact types, as in rule 1 of [the base
 object](#the-base-object-base). So `Integer(True)` raises `TypeError`, and
 `Float(-0.0) != Float(0.0)`. `ImaginaryUnit()` denotes $i$.
 
 A rational number is the `Division` of two `Integer`s, such as
-`Integer(1) / Integer(3)`. In floating-point arithmetic, the division of two
+`integer(1) / integer(3)`. In floating-point arithmetic, the division of two
 integers rounds once, the same as the conversion of a rational number, so the
 core has no rational literal. A complex number is a composition such as
-`a + ImaginaryUnit() * b`, so the core has no complex literal.
+`a + imaginary_unit() * b`, so the core has no complex literal.
 
 ### `Zero`
 
-`Zero` is the zero of any static type.
+`Zero` is the zero of any numerical static type.
 
 | `Zero(value_shape, free_indices, argument_spaces)` |                                                                                                                                |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Extends                                            | `AbstractExpression` |
+| Extends                                            | `AbstractValueNode` |
+| Free function                                      | `zero(value_shape, free_indices, argument_spaces)` |
 | Properties                                         | `value_shape`, `free_indices` and `argument_spaces`, as in [Extents](#extents), [Free indices](#free-indices) and [Argument spaces](#argument-spaces) |
 | Static type                                        | The stored properties, with no support                                                                                         |
 | Raises                                             | `TypeError` for an argument of another type, and `ValueError` for a negative extent or an index that occurs twice             |
@@ -552,9 +716,9 @@ The free functions below construct these nodes for scalar operands. `add`,
 
 | `Sum(first, second)` |                                             |
 | -------------------- | ------------------------------------------- |
-| Extends              | `AbstractExpression` |
+| Extends              | `AbstractValueNode` |
 | Free function        | [`add`](#tensor-arithmetic), with the overload `+` |
-| Takes                | `first, second: AbstractExpression` |
+| Takes                | `first, second: Expression` |
 | Properties           | `first` and `second` |
 | Requires             | The operands of [Arithmetic](#arithmetic)   |
 | Raises               | `ValueError` if a requirement fails         |
@@ -563,9 +727,9 @@ The free functions below construct these nodes for scalar operands. `add`,
 
 | `Product(first, second)` |                                                  |
 | ------------------------ | ------------------------------------------------ |
-| Extends                  | `AbstractExpression` |
+| Extends                  | `AbstractValueNode` |
 | Free function            | [`multiply`](#tensor-arithmetic), with the overload `*` |
-| Takes                    | `first, second: AbstractExpression` |
+| Takes                    | `first, second: Expression` |
 | Properties               | `first` and `second` |
 | Requires                 | The operands of [Arithmetic](#arithmetic)        |
 | Raises                   | `ValueError` if a requirement fails              |
@@ -574,9 +738,9 @@ The free functions below construct these nodes for scalar operands. `add`,
 
 | `Power(first, second)` |                                                                             |
 | ---------------------- | --------------------------------------------------------------------------- |
-| Extends                | `AbstractExpression` |
+| Extends                | `AbstractValueNode` |
 | Free function          | `power(first, second)`, with the overload `**`                              |
-| Takes                  | `first, second: AbstractExpression` |
+| Takes                  | `first, second: Expression` |
 | Properties             | `first` and `second` |
 | Requires               | The operands of [Arithmetic](#arithmetic)                                   |
 | Raises                 | `ValueError` if a requirement fails                                         |
@@ -590,8 +754,8 @@ Negation and subtraction are free functions, not node classes:
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `negate(f)` | `-f` | `f: AbstractExpression` | `multiply(Integer(-1), f)` |
-| `subtract(f, g)` | `f - g` | `f, g: AbstractExpression` | `add(f, negate(g))` |
+| `negate(f)` | `-f` | `f: Expression` | `multiply(Integer(-1), f)` |
+| `subtract(f, g)` | `f - g` | `f, g: Expression` | `add(f, negate(g))` |
 
 These compositions preserve floating-point arithmetic and inherit the tensor
 behaviour of `multiply` and `add` (see [Tensor arithmetic](#tensor-arithmetic)).
@@ -600,9 +764,9 @@ behaviour of `multiply` and `add` (see [Tensor arithmetic](#tensor-arithmetic)).
 
 | `Division(first, second)` |                                                                                        |
 | ------------------------- | -------------------------------------------------------------------------------------- |
-| Extends                   | `AbstractExpression` |
+| Extends                   | `AbstractValueNode` |
 | Free function             | [`divide`](#tensor-arithmetic), with the overload `/` |
-| Takes                     | `first, second: AbstractExpression` |
+| Takes                     | `first, second: Expression` |
 | Properties                | `first` and `second` |
 | Requires                  | The operands of [Arithmetic](#arithmetic)                                              |
 | Raises                    | `ValueError` if a requirement fails                                                    |
@@ -613,9 +777,9 @@ behaviour of `multiply` and `add` (see [Tensor arithmetic](#tensor-arithmetic)).
 
 | `Absolute(f)` |                                           |
 | ------------- | ----------------------------------------- |
-| Extends       | `AbstractExpression` |
+| Extends       | `AbstractValueNode` |
 | Free function | `absolute(f)`, with the overload `abs(f)` |
-| Takes         | `f: AbstractExpression` |
+| Takes         | `f: Expression` |
 | Properties    | `operand` $f$ |
 | Requires      | A scalar $f$                              |
 | Static type   | Value shape `()`, real                    |
@@ -628,9 +792,9 @@ by entry.
 
 | `Conjugate(f)` |                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------- |
-| Extends        | `AbstractExpression` |
+| Extends        | `AbstractValueNode` |
 | Free function  | `conjugate(f)`                                                                              |
-| Takes          | `f: AbstractExpression` |
+| Takes          | `f: Expression` |
 | Properties     | `operand` $f$ |
 | Static type    | The value shape and the free indices of $f$, and the argument spaces of $f$ with each space conjugated (see [`ConjugateSpace`](#conjugatespace)) |
 
@@ -644,9 +808,9 @@ meaning is `conjugate(f)[e]` = `conjugate(f[e])` in value.
 
 | `RealPart(f)`, `ImaginaryPart(f)` |                                       |
 | --------------------------------- | ------------------------------------- |
-| Extends                           | `AbstractExpression` |
+| Extends                           | `AbstractValueNode` |
 | Free function                     | [`real_part`](#tensor-arithmetic), [`imaginary_part`](#tensor-arithmetic) |
-| Takes                             | `f: AbstractExpression` |
+| Takes                             | `f: Expression` |
 | Properties                        | `operand` $f$ |
 | Requires                          | A scalar $f$                          |
 | Static type                       | Value shape `()`, real                |
@@ -673,9 +837,9 @@ scalar.
 
 | `SquareRoot(f)`, `Logarithm(f)` |                                     |
 | ------------------------------- | ----------------------------------- |
-| Extends         | `AbstractExpression` |
+| Extends         | `AbstractValueNode` |
 | Free function   | `square_root(f)` and `logarithm(f)` |
-| Takes           | `f: AbstractExpression` |
+| Takes           | `f: Expression` |
 | Properties      | `operand` $f$ |
 | Requires        | A scalar $f$                        |
 | Static type     | Value shape `()`                    |
@@ -692,24 +856,25 @@ rounded power, so the result of `power` depends on the math library.
 
 ### `Tensor`
 
-`Tensor` stacks expressions along a new first axis.
+`Tensor` stacks values with one result interface along a new first axis.
 
 | `Tensor(entries)` |                                                                                                           |
 | ----------------- | --------------------------------------------------------------------------------------------------------- |
-| Extends           | `AbstractExpression` |
+| Extends           | `AbstractValueNode` |
 | Free function     | `tensor(entries)`                                                                                         |
-| Takes             | `entries: tuple[AbstractExpression, ...]` |
-| Properties        | `entries`, a non-empty `tuple` of `AbstractExpression`s with the same value shape `s`                     |
-| Static type       | Value shape `(n,) + s`, with $n$ the number of entries                                                    |
+| Takes             | `entries: tuple[AbstractValue, ...]` |
+| Properties        | `entries`, a non-empty `tuple` of values with the same result interface and value shape `s`; maps have equal endpoints, and index values have equal target extents |
+| Static type       | Value shape `(n,) + s`, with $n$ the number of entries; the common result interface; common endpoints for maps, common target extent for index values, and the usual numerical type rules for expressions |
 | Raises            | `ValueError` if a requirement fails                                                                       |
 
 A matrix is a `Tensor` of `Tensor`s.
 
 Value shapes may contain extent 0, as in `coordinate(RD(0))`. An empty
-`Tensor` cannot provide the entry shape `s`; use `Zero` for an array with an
-extent 0, which has no entries.
+`Tensor` cannot provide the entry shape `s`; use `Zero` for a numerical array
+with an extent 0. A map family with an extent 0 can instead be built by
+`ComponentTensor`, as in [the point-family example](#an-explicit-point-family).
 
-Examples, with `one, two = Integer(1), Integer(2)`:
+Examples, with `one, two = integer(1), integer(2)`:
 
 - `tensor((one, two))` is a vector of value shape `(2,)`.
 - `tensor((one, tensor((one, two))))` raises `ValueError`, because the entries
@@ -719,9 +884,9 @@ Examples, with `one, two = Integer(1), Integer(2)`:
 
 > LLM generated content.
 
-Index notation writes tensor algebra with four node classes. `Tensor` builds a
-tensor from scalars, `Indexed` selects one component, and `ComponentTensor`
-and `IndexSum` bind the free indices of a scalar, as axes or as a sum. Every
+Index notation uses four node classes. `Tensor` stacks values, `Indexed`
+selects a member, and `ComponentTensor` binds free indices as axes.
+`IndexSum` sums scalar numerical expressions. Every
 other tensor operation is a fixed composition of the four, so `transpose`,
 `dot` and `inner` are free functions, not node classes (see [Node class or
 free function](#node-class-or-free-function)).
@@ -746,16 +911,19 @@ indices](#derived-indices)).
 
 > LLM generated content.
 
-`Indexed` selects one component of a tensor. The overload `[]` calls
+`Indexed` selects one member of a shaped value. The overload `[]` calls
 [`component`](#partial-indexing), which also supports partial indexing.
+Its value depends only on the selected member: an undefined unselected member
+does not make the selection undefined. This applies to both numerical and
+index values and maps.
 
 | `Indexed(expression, indices)` |                                                                                   |
 | ------------------------------ | --------------------------------------------------------------------------------- |
-| Extends                        | `AbstractExpression` |
+| Extends                        | `AbstractValueNode` |
 | Free function                  | `indexed(expression, indices)`                                                    |
-| Takes                          | `expression: AbstractExpression`, `indices: tuple` |
+| Takes                          | `expression: AbstractValue`, `indices: tuple` |
 | Properties                     | `expression`, and `indices`, a non-empty `tuple` of entries of the kinds below    |
-| Static type                    | Value shape `()`, and the free indices below                                      |
+| Static type                    | Value shape `()`, the result interface and member properties of the operand, and the free indices below |
 | Raises                         | `TypeError`, `ValueError` and `IndexError`, below                                 |
 
 Indexing is full indexing. Each entry covers one or more axes of the
@@ -767,12 +935,12 @@ the following kinds:
 | ------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------ |
 | An `int` $k$                         | One axis, of extent $n_j$             | $n_j$ is an `int`, and $0 \le k < n_j$                                                             | `IndexError` |
 | An [`Index`](#index)                 | One axis, of extent $n_j$             | The `Index` takes the extent $n_j$                                                                 |              |
-| A [`GatheredIndex`](#gatheredindex)  | One axis, of extent $n_j$             | The extent of the `GatheredIndex` equals $n_j$                                                     | `IndexError` |
+| An [`IndexValue`](#indexvalue) of shape `()`  | One axis, of extent $n_j$             | The target extent of the `IndexValue` equals $n_j$                                                     | `IndexError` |
 | An [`EllipsisIndex`](#ellipsisindex) | Every axis that no other entry covers | At most one per `Indexed`. The `EllipsisIndex` takes the `tuple` of the extents of the covered axes, which may be empty | `ValueError` |
 
 The free indices of the `Indexed` are the free indices of the expression,
 followed by each `Index` and `EllipsisIndex` entry with the extent that the
-entry takes, followed by the free indices of each `GatheredIndex` entry, with
+entry takes, followed by the free indices of each `IndexValue` entry, with
 each index taken once.
 
 An `Index` may occur in two or more entries, or may already be free in the
@@ -795,7 +963,7 @@ entries than the rank and indexes the leading axes:
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `component(f, entries)` | `[]` | `f: AbstractExpression`, `entries: tuple` | `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$ and contain no `EllipsisIndex`, otherwise `indexed(f, entries)` |
+| `component(f, entries)` | `[]` | `f: AbstractValue`, `entries: tuple` | `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$ and contain no `EllipsisIndex`, otherwise `indexed(f, entries)` |
 
 `K` is the `tuple` of the derived indices
 `Index(("uflx.component", f, entries, m))`, one for each axis that the entries
@@ -817,16 +985,34 @@ row = component_tensor(entry, (k,))
 
 ### `ComponentTensor` and `IndexSum`
 
-`ComponentTensor` binds free indices as tensor axes; `IndexSum` sums over them.
+`ComponentTensor` binds free indices as leading axes of any value. `IndexSum` sums scalar numerical expressions.
 
-| `ComponentTensor(expression, indices)`, `IndexSum(expression, indices)` |                                                                                                                                                                                                                   |
-| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extends                                                                 | `AbstractExpression` |
-| Free function                                                           | `component_tensor(expression, indices)`, `index_sum(expression, indices)`                                                                                                                                         |
-| Takes                                                                   | `expression: AbstractExpression`, `indices: tuple[Index, ...]` |
-| Properties                                                              | `expression`, a scalar, and `indices`, a non-empty `tuple` of distinct `Index` and `EllipsisIndex` entries free in the expression                                                                                 |
-| Static type                                                             | The free indices of the expression without the indices. `ComponentTensor` has the value shape of the extents of the indices in order, with every extent of an `EllipsisIndex`, and `IndexSum` the value shape `()` |
-| Raises                                                                  | `ValueError` if a requirement fails                                                                                                                                                                               |
+| `ComponentTensor(expression, indices)` | |
+| --------------------------------------- | --- |
+| Extends | `AbstractValueNode` |
+| Free function | `component_tensor(expression, indices)` |
+| Takes | `expression: AbstractValue`, `indices: tuple` |
+| Properties | `expression`, and a non-empty tuple of distinct `Index` or `EllipsisIndex` entries free in it |
+| Static type | The operand's result interface and member properties; the bound extents prepended to its shape; its free indices without the bound indices |
+| Requires | The body's shape and member properties do not depend on a bound index |
+| Raises | `TypeError` for an unsupported operand, `ValueError` if a requirement fails |
+
+| `IndexSum(expression, indices)` | |
+| -------------------------------- | --- |
+| Extends | `AbstractValueNode` |
+| Free function | `index_sum(expression, indices)` |
+| Takes | `expression: Expression`, `indices: tuple` |
+| Properties | A scalar numerical expression, and a non-empty tuple of distinct `Index` or `EllipsisIndex` entries free in it |
+| Static type | `Expression`, shape `()`, the operand's numerical properties, and its free indices without the bound indices |
+| Requires | The numerical member properties do not depend on a bound index |
+| Raises | `TypeError` for a non-numerical operand, `ValueError` if a requirement fails |
+
+Each `EllipsisIndex` contributes all its extents in order. Member properties
+are the numerical scalar type, support and argument spaces, the map endpoints,
+or the index-value target extent. They remain common to the family.
+Both binders require their indices to occur free in the body. Explicit
+extents for unused indices and empty literal map collections are not yet
+covered; zero-length axes inferred from the body are allowed.
 
 Scope is lexical. An index occurrence refers to the innermost enclosing
 `ComponentTensor` or `IndexSum` that binds it; otherwise it is free. A bound
@@ -878,39 +1064,43 @@ rules it behaves as an `Index`.
 
 `AbstractIndexValue` represents a table of index values supplied by the solver,
 such as the cell on one side of each facet, or the local facet number in a facet
-integral. The values are fixed but not known during construction. An
-`AbstractIndexValue` is not an expression and not a free index.
+integral. The values are fixed but not known during construction. Its public value has the `IndexValue` interface, not `Expression` or `Index`.
 
 | `AbstractIndexValue` |                                                        |
 | -------------------- | ------------------------------------------------------ |
-| Extends              | `Base` |
+| Extends              | `AbstractValueNode` |
 | Provides             | `extent`, an extent, and `shape`, a `tuple` of extents |
+| Derived              | `value_shape`, equal to `shape`, and free indices `()` |
+| Result interface     | `IndexValue` |
 | Defined by           | A subclass outside the core                            |
 
-The table has the shape `shape`, and each value is an `int` $v$ with
-$0 \le v <$ `extent`. An `AbstractIndexValue` with the shape `()` is one
-value. An expression reads the table only through a
-[`GatheredIndex`](#gatheredindex), so one value is read as
-`gathered_index(v, ())`.
+Each member is an `int` $v$ with $0 \le v <$ `extent`. A library factory
+returns `wrap(node)` for its supplied table node. Ordinary indexing
+`table[i]` returns an `IndexValue` with that target extent; a value of shape
+`()` is already a selector and needs no gather. Existing providers define
+`shape`; the node exposes it as `value_shape` for the common value interface.
 
 ### `GatheredIndex`
 
-`GatheredIndex` reads an index value from a table. It is neither an expression
-nor a free index; its table indices determine its free indices.
+`GatheredIndex` is the existing index-table read, retained while callers
+migrate to `Indexed`. Its public result is an `IndexValue`; its table
+indices determine its free indices. Shared `Indexed` also supports index-valued
+operands, so no further gather-specific machinery is needed.
 
 | `GatheredIndex(table, indices)` |                                                                                                                                    |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Extends                         | `Base` |
+| Extends                         | `AbstractValueNode` |
 | Free function                   | `gathered_index(table, indices)`                                                                                                   |
-| Takes                           | `table: AbstractIndexValue`, `indices: tuple` |
-| Properties                      | `table`, an `AbstractIndexValue`, and `indices`, an `int`, an `Index` or a `GatheredIndex` for each axis of the shape of the table |
-| Derived                         | `extent` and `free_indices`, below |
+| Takes                           | `table: IndexValue`, `indices: tuple` |
+| Properties                      | `table`, an index-valued node, and `indices`, an `int`, an `Index` or a scalar `IndexValue` for each axis of the shape of the table |
+| Static type                     | Result interface `IndexValue`, value shape `()`, and `extent` and `free_indices` below |
 | Raises                          | The errors of the entries of an [`Indexed`](#indexed)                                                                              |
 
 The entries follow the rules and errors of [`Indexed`](#indexed), except that
-`EllipsisIndex` is not accepted. Gathers may nest. The result has the table's
-extent, and its free indices are the `Index` entries with their axis extents,
-followed by the free indices of the `GatheredIndex` entries, taking each index
+`EllipsisIndex` is not accepted and an empty selector tuple is allowed for a
+scalar table. Gathers may nest. The result has the table's extent, and its
+free indices are those of the table, then the `Index` entries with their axis extents,
+followed by the free indices of the `IndexValue` entries, taking each index
 once.
 
 #### Examples
@@ -986,13 +1176,13 @@ The free functions read operand ranks to choose the compositions below.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `add(first, second)` | `+` | `first, second: AbstractExpression` | `component_tensor(first[K] + second[K], K)` if both operands have rank 1 or more, otherwise `Sum(first, second)` |
-| `multiply(first, second)` | `*` | `first, second: AbstractExpression` | `component_tensor(first * second[K], K)` if only `first` is a scalar, `component_tensor(first[K] * second, K)` if only `second` is a scalar, otherwise `Product(first, second)` |
-| `divide(first, second)` | `/` | `first, second: AbstractExpression` | `component_tensor(first[K] / second, K)` if `first` has rank 1 or more and `second` is a scalar, otherwise `Division(first, second)` |
-| `real_part(f)` | | `f: AbstractExpression` | `component_tensor(RealPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `RealPart(f)` |
-| `imaginary_part(f)` | | `f: AbstractExpression` | `component_tensor(ImaginaryPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `ImaginaryPart(f)` |
-| `matrix_product(first, second)` | `@` | `first, second: AbstractExpression` | The contraction of the last axis of `first` with the first axis of `second`, below |
-| `transpose(A)` | | `A: AbstractExpression` | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2 |
+| `add(first, second)` | `+` | `first, second: Expression` | `component_tensor(first[K] + second[K], K)` if both operands have rank 1 or more, otherwise `Sum(first, second)` |
+| `multiply(first, second)` | `*` | `first, second: Expression` | `component_tensor(first * second[K], K)` if only `first` is a scalar, `component_tensor(first[K] * second, K)` if only `second` is a scalar, otherwise `Product(first, second)` |
+| `divide(first, second)` | `/` | `first, second: Expression` | `component_tensor(first[K] / second, K)` if `first` has rank 1 or more and `second` is a scalar, otherwise `Division(first, second)` |
+| `real_part(f)` | | `f: Expression` | `component_tensor(RealPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `RealPart(f)` |
+| `imaginary_part(f)` | | `f: Expression` | `component_tensor(ImaginaryPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `ImaginaryPart(f)` |
+| `matrix_product(first, second)` | `@` | `first, second: Expression` | The contraction of the last axis of `first` with the first axis of `second`, below |
+| `transpose(A)` | | `A: Expression` | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2 |
 
 In each composition, `K` is the `tuple` of the derived indices
 `Index((name, first, second, m))`, or `Index((name, f, m))`, for
@@ -1073,9 +1263,9 @@ with more rows than columns.
 
 | `Inverse(A)`  |                                                                                         |
 | ------------- | --------------------------------------------------------------------------------------- |
-| Extends       | `AbstractExpression` |
+| Extends       | `AbstractValueNode` |
 | Free function | `inverse(A)`                                                                            |
-| Takes         | `A: AbstractExpression` |
+| Takes         | `A: Expression` |
 | Properties    | `operand` $A$ |
 | Requires      | $A$ with value shape `(n, k)`, $k \le n$, and $A$ real for $k < n$                      |
 | Static type   | Value shape `(k, n)`                                                                    |
@@ -1094,7 +1284,7 @@ as QR does not. The determinant is instead a fixed composition (see [Determinant
 Examples:
 
 ```python
-one, two, three = Integer(1), Integer(2), Integer(3)
+one, two, three = integer(1), integer(2), integer(3)
 A = tensor((tensor((two, one)), tensor((one, three))))
 J = tensor((tensor((one,)), tensor((one,))))
 ```
@@ -1114,7 +1304,7 @@ of a square matrix $A$.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `determinant(A)` | | `A: AbstractExpression` | The Leibniz formula for $\det A$ |
+| `determinant(A)` | | `A: Expression` | The Leibniz formula for $\det A$ |
 
 `determinant(A)` requires $A$ with value shape `(n, n)` and an `int` extent
 $n$ (see [Extents](#extents)), which selects the composition. This requirement is
@@ -1137,8 +1327,10 @@ This fixed composition lets a pass find every use of $\det A$ as one expression.
 
 ### Operator overloads
 
-Only `AbstractExpression` defines arithmetic and indexing overloads, listed in
-the [table of free functions](#appendix-free-functions).
+`Expression` defines arithmetic overloads. `AbstractValue` supplies indexing
+to all three value interfaces. Graph nodes have no arithmetic or indexing
+overloads; use their public construction functions or `wrap(node)`.
+The overloads are listed in the [table of free functions](#appendix-free-functions).
 
 An overload passes operands unchanged to its free function, except for the
 indexing syntax below. There are no reflected overloads, such as `__radd__`.
@@ -1155,14 +1347,14 @@ Python passes `f[i]` to `__getitem__` as `i`, but `f[i, j]` as `(i, j)`.
 `__getitem__` wraps a single entry in a `tuple` and calls `component` (see
 [Partial indexing](#partial-indexing)).
 
-`AbstractExpression` defines `__iter__` to raise `TypeError`, because
-expressions are not iterable and Python otherwise iterates through
+`AbstractValue` defines `__iter__` to raise `TypeError`, because
+symbolic values are not iterable and Python otherwise iterates through
 `__getitem__`.
 
 ### Numbers in expressions
 
 Every number in an expression is written with literals, such as `Integer(2)`,
-`Float(0.5)`, `Integer(1) / Integer(3)` or `ImaginaryUnit()`. A Python `int`, `float`,
+`Float(0.5)`, `integer(1) / integer(3)` or `ImaginaryUnit()`. A Python `int`, `float`,
 `complex`, `Fraction` or NumPy scalar is never converted and is rejected with
 `TypeError`.
 
@@ -1181,7 +1373,7 @@ coordinate domain. It is a terminal.
 
 | `Coordinate(P)` |                                                    |
 | --------------- | -------------------------------------------------- |
-| Extends         | `AbstractExpression` |
+| Extends         | `AbstractValueNode` |
 | Free function   | `coordinate(P)`                                    |
 | Takes           | `P: AbstractDomain` |
 | Properties      | `domain`, an `AbstractDomain` $P$                  |
@@ -1216,9 +1408,9 @@ dimension $n$.
 
 | `Gradient(f, P)` |                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------- |
-| Extends          | `AbstractExpression` |
+| Extends          | `AbstractValueNode` |
 | Free function    | `gradient(f, P)`                                                                                  |
-| Takes            | `f: AbstractExpression`, `P: AbstractDomain` |
+| Takes            | `f: Expression`, `P: AbstractDomain` |
 | Properties       | `expression` $f$ and `domain` $P$, with $n$ the dimension of the ambient coordinate domain of $P$ |
 | Requires         | A [valid pair](#valid-pair) $(f, P)$                                                              |
 | Static type      | Value shape `f.value_shape + (n,)`                                                                |
@@ -1285,9 +1477,9 @@ domain $P$, with $n$ the dimension of its ambient coordinate domain.
 
 | `Divergence(u, P)` |                                                                     |
 | ------------------ | ------------------------------------------------------------------- |
-| Extends            | `AbstractExpression` |
+| Extends            | `AbstractValueNode` |
 | Free function      | `divergence(u, P)`                                                  |
-| Takes              | `u: AbstractExpression`, `P: AbstractDomain` |
+| Takes              | `u: Expression`, `P: AbstractDomain` |
 | Properties         | `expression` $u$ and `domain` $P$                                   |
 | Requires           | A [valid pair](#valid-pair) $(u, P)$, and $u$ of rank at least 1 with the last extent $n$ |
 | Static type        | Value shape `u.value_shape[:-1]`                                    |
@@ -1295,9 +1487,9 @@ domain $P$, with $n$ the dimension of its ambient coordinate domain.
 
 | `Curl(u, P)`  |                                                                     |
 | ------------- | ------------------------------------------------------------------- |
-| Extends       | `AbstractExpression` |
+| Extends       | `AbstractValueNode` |
 | Free function | `curl(u, P)`                                                        |
-| Takes         | `u: AbstractExpression`, `P: AbstractDomain` |
+| Takes         | `u: Expression`, `P: AbstractDomain` |
 | Properties    | `expression` $u$ and `domain` $P$                                   |
 | Requires      | A [valid pair](#valid-pair) $(u, P)$, $n$ 2 or 3, and $u$ of value shape `(n,)` |
 | Static type   | Value shape `(3,)` for $n = 3$ and `()` for $n = 2$                 |
@@ -1328,8 +1520,8 @@ binding](#substitution-and-binding)).
 
 | `DirectionalDerivative(f, x, a, h)` |                                                                                                       |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Extends                          | `AbstractExpression` |
-| Takes                            | `f: AbstractExpression`, `x: Function \| tuple[Function, ...]`, `a, h: AbstractExpression \| tuple[AbstractExpression, ...]` |
+| Extends                          | `AbstractValueNode` |
+| Takes                            | `f: Expression`, `x: Function \| tuple[Function, ...]`, `a, h: Expression \| tuple[Expression, ...]` |
 | Properties                       | `expression` $f$, `variable` $x$, `point` $a$ and `direction` $h$ |
 | Requires                         | $x$ a [bindable function](#bindable-functions), or a `tuple` of at least two distinct bindable functions; member by member, $a$ and $h$ admissible values for the space of $x$ as in [`Action`](#action) |
 | Static type                      | The value shape of $f$, the free indices of $f$ followed by those of the members of $a$ and $h$, each `Index` taken once, and the argument spaces and the scalar type of $f$ |
@@ -1337,7 +1529,7 @@ binding](#substitution-and-binding)).
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `directional_derivative(f, x, a, h)` | | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple` | `DirectionalDerivative(f, x, a, h)` |
+| `directional_derivative(f, x, a, h)` | | `f: Expression`, `x: Function \| tuple`, `a, h: Expression \| tuple` | `DirectionalDerivative(f, x, a, h)` |
 
 This is a partial derivative: substitution replaces only occurrences of $x$.
 The point $a$ need not be a function. A `tuple` variable differentiates jointly
@@ -1369,10 +1561,10 @@ constants of value shape `(3, 3)`, the identity matrix `I` of value shape
 `(3, 3)` and indices `i`, `j`, `k` and `l`:
 
 ```python
-E = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / Integer(2), (i, j))
+E = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / integer(2), (i, j))
 psi_symbol = strain_energy(C_)
 dpsi = directional_derivative(psi_symbol, C_, C, E)
-S = Integer(2) * component_tensor(dpsi, (k, l))
+S = integer(2) * component_tensor(dpsi, (k, l))
 ```
 
 `E` has the free indices `k` and `l`, and is symmetric for each value of `k` and
@@ -1397,9 +1589,9 @@ needs no topological notion of the domain.
 
 | `Integral(f, P)` |                                                                                             |
 | ---------------- | ------------------------------------------------------------------------------------------- |
-| Extends          | `AbstractExpression` |
+| Extends          | `AbstractValueNode` |
 | Free function    | `integral(f, P)`                                                                            |
-| Takes            | `f: AbstractExpression`, `P: AbstractDomain` |
+| Takes            | `f: Expression`, `P: AbstractDomain` |
 | Properties       | `expression` $f$ and `domain` $P$                                                           |
 | Requires         | A [valid pair](#valid-pair) $(f, P)$, or $f$ with the support `P.ambient_domain`, and an `Index` free in both $f$ and a piece of $P$ with the same extent in both |
 | Static type      | The value shape of $f$, and the free indices of $f$ other than the free indices of the pieces of $P$, with no support |
@@ -1442,12 +1634,12 @@ map and for the image of the domain map. A `DomainMap` is not an
 
 | `DomainMap(P, psi, Q)` |                                                                                                                                                                                                             |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extends                          | `Base` |
+| Extends                          | `AbstractValueNode` |
 | Free function                    | `domain_map(P, psi, Q)`                                                                                                                                                                           |
-| Takes                            | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractDomain` |
+| Takes                            | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: Expression`, `Q: AbstractDomain` |
 | Properties                       | `parameter_domain` $P$, an [`AbstractCoordinateDomain`](#abstractcoordinatedomain) or an [`AbstractTopology`](#abstracttopology) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractDomain`                                                   |
 | Requires                         | $\psi$ with the support $P$ or no support, $\psi$ real with value shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$ and the argument spaces `()`, and $k \le n$ |
-| Derived                          | `free_indices`, the free indices of $\psi$ |
+| Static type                      | Result interface `Map`, value shape `()`, endpoints $P$ and $Q$, and the free indices of $\psi$ |
 | Raises                           | `TypeError` for $P$ or $Q$, and `ValueError` if another requirement fails                                                                                                                                   |
 
 The coordinates of the ambient coordinate domain of $Q$ name the points of
@@ -1461,11 +1653,11 @@ topology $T$ as $P$, `pull_back(g, domain_map(T, x, D))` pulls a field $g$
 on $D$ back to an expression on $T$, which a pull-back by a cell map of $T$
 composes into a cell of $D$ (see [Expanding pull-backs](#expanding-pull-backs)).
 
-A $\psi$ with free indices makes $D$ a family of domains, with one domain for
-each value of the free indices. For example, with an array `x` of value shape
-`(m, n)` and an index `i`, `domain_map(RD(0), x[i], RD(n))` is a family of $m$
-points in `RD(n)`. A family of domains writes a set of points
-once, such as the points of a quadrature rule.
+A $\psi$ with free indices makes the map depend on those indices. Binding
+them makes an explicit map family. For an array `x` of shape `(m, n)`,
+`component_tensor(domain_map(RD(0), x[i], RD(n)), (i,))` has shape `(m,)`
+and no free index; selecting it with `j` gives a map with free index `j`.
+The map's shape is independent of the vector shape of its parameterisation.
 
 $Q$ is usually `RD(n)`. $Q$ may be smaller, such as the unit triangle for an
 edge of the unit triangle, or a decomposed domain for a cell of the decomposed
@@ -1483,7 +1675,7 @@ A curved example is the paraboloid, with $k = 2$ and $n = 3$:
 ```python
 P = RD(2)
 X = coordinate(P)
-h = X[0]**Integer(2) + X[1]**Integer(2)
+h = X[0]**integer(2) + X[1]**integer(2)
 psi = tensor((X[0], X[1], h))
 paraboloid = domain_map(P, psi, RD(3))
 ```
@@ -1495,16 +1687,17 @@ with parameterisation $\psi$, parameter domain $P$ and ambient domain $Q$.
 
 | `PullBack(f, D)` |                                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| Extends          | `AbstractExpression` |
+| Extends          | `AbstractValueNode` |
 | Free function    | `pull_back(f, D)`                                                                                          |
-| Takes            | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap` |
-| Properties       | `expression` $f$, and `domain` $D$, a `DomainMap`, a [`SideMap`](#sidemap) or a [`CellMap`](#cellmap) |
-| Requires         | $f$ with the support $Q$ or no support, and an equal extent for an `Index` free in both $f$ and $D$          |
+| Takes            | `f: Expression`, `D: Map` |
+| Properties       | Numerical `expression` $f$, and map-valued `domain` $D$ |
+| Requires         | $D$ of shape `()` with parameter domain $P$ and ambient domain $Q$; $f$ with the support $Q$ or no support, and an equal extent for an `Index` free in both $f$ and $D$ |
 | Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
-| Raises           | `TypeError` for $D$, and `ValueError` if another requirement fails                                         |
+| Raises           | `TypeError` for an unsupported interface, and `ValueError` for invalid shape, endpoints or free-index extents |
 
-The second operand is a domain, not an expression, because a domain states
-$Q$.
+The second operand is checked by its `Map` interface, shape and endpoints, not node class.
+It can be a `DomainMap`, a `SideMap`, a `CellMap`, or a selection from a map
+family. Passing an unselected family is an error.
 
 The pull-back is the composition $f \circ \psi$, the expression on $P$ with
 the value $f(\psi(p))$ at each point $p$ of $P$. The axes of the value shape
@@ -1525,7 +1718,7 @@ and the pull-back by another domain map into a mesh is rewritten through those
 
 A domain $E$ in the parameter domain of $D$ has the image $\psi(E)$, a subset
 of $D$. The image is given by the domain map with the parameterisation
-`pull_back(D.parameterisation, E)` on the parameter domain of $E$, in the
+`pull_back(D.node.parameterisation, E)` on the parameter domain of $E$, in the
 ambient domain of $D$, such as `E` in the example below.
 
 This example maps an edge of the unit triangle `T` into a triangle `K` in
@@ -1534,7 +1727,7 @@ This example maps an edge of the unit triangle `T` into a triangle `K` in
 ```python
 T = UnitSimplex(2)
 X = coordinate(T)
-one, two = Integer(1), Integer(2)
+one, two = integer(1), integer(2)
 psi = tensor((one + two * X[0] + X[1], one + two * X[1]))
 
 # The unit interval, the parameter domain of the edge, with coordinate t.
@@ -1544,7 +1737,7 @@ t = coordinate(S)[0]
 # The edge of T from (1, 0) to (0, 1), as a domain in T.
 e = domain_map(S, tensor((one - t, t)), T)
 
-# PullBack(f, e), with the support UnitSimplex(1) and value shape ().
+# pull_back(f, e), with the support UnitSimplex(1) and value shape ().
 f = X[0] * X[1]
 fe = pull_back(f, e)
 
@@ -1572,7 +1765,7 @@ dimension $k$. $n$ is the dimension of the ambient coordinate domain of $Q$.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `jacobian(D)` | | `D: DomainMap` | `gradient(D.parameterisation, D.parameter_domain)` |
+| `jacobian(D)` | | `D: DomainMap` | `gradient(D.node.parameterisation, D.parameter_domain)` |
 | `inverse_jacobian(D)` | | `D: DomainMap` | `inverse(jacobian(D))` |
 | `density(D)` | | `D: DomainMap` | The density $\rho$ below |
 
@@ -1636,13 +1829,14 @@ needs no node class and no free function for a point.
 
 #### Point evaluation
 
-The value of an expression `f` at a point or indexed family of points `p` is:
+The value of an expression `f` at a point `p` is:
 
 ```python
 integral(pull_back(f, p), RD(0))
 ```
 
-`p` has parameter domain `RD(0)`, and `f` is defined at its points. The
+`p` is map-valued with shape `()` and parameter domain `RD(0)`, and `f` is
+defined at its point. The map may have free indices, as in `points[i]`. The
 result has no support, preserves the value shape, scalar type and argument
 spaces of `f`, and carries the free indices of `f` followed by those of `p`,
 each taken once. Point indices are retained, not summed.
@@ -1659,10 +1853,11 @@ mesh](#a-family-of-points-in-a-mesh).
 #### Quadrature
 
 A quadrature rule on a coordinate domain is a weighted sum of point
-evaluations. For a family `p` with index `i` and weights `w`:
+evaluations. For a map family `p` of shape `(n,)` and weights `w` of the
+same shape:
 
 ```python
-index_sum(w[i] * integral(pull_back(f, p), RD(0)), (i,))
+index_sum(w[i] * integral(pull_back(f, p[i]), RD(0)), (i,))
 ```
 
 `integral(f, Q)` denotes the integral; this sum approximates it and is
@@ -1670,13 +1865,65 @@ mathematically equal when the rule is exact for `f`. A quadrature pass
 applies a supplied rule. On a mapped domain, the integrand includes the density
 from [integral expansion](#integral-over-a-decomposed-domain).
 
+#### An explicit point family
+
+Let `Q = RD(d)`, `coordinates` be a real, support-free numerical expression
+of shape `(n, d)`, `weights` a support-free numerical expression of shape
+`(n,)`, and `f` a scalar numerical expression on `Q`. All three have no free
+indices or argument spaces. The extent `n` may be zero or symbolic.
+
+```python
+i, j = index("i"), index("j")
+p = component_tensor(domain_map(RD(0), coordinates[i], Q), (i,))
+value = index_sum(
+    weights[j] * integral(pull_back(f, p[j]), RD(0)),
+    (j,),
+)
+```
+
+| Value | Interface | Shape | Free indices | Other type information |
+| ---------- | ---- | ----- | ------------ | ---------------------- |
+| `coordinates[i]` | `Expression` | `(d,)` | `i: n` | Real, no support |
+| `p` | `Map` | `(n,)` | None | `RD(0)` to `Q` |
+| `p[j]` | `Map` | `()` | `j: n` | `RD(0)` to `Q` |
+| `pull_back(f, p[j])` | `Expression` | `()` | `j: n` | Support `RD(0)` |
+| `integral(pull_back(f, p[j]), RD(0))` | `Expression` | `()` | `j: n` | No support |
+| `value` | `Expression` | `()` | None | No support |
+
+The [map-family lowering rule](#pull-backs-by-map-families) rewrites the
+pull-back to:
+
+```python
+component_tensor(
+    pull_back(f, domain_map(RD(0), coordinates[i], Q)), (i,)
+)[j]
+```
+
+The remaining pull-back uses the existing rules for a `DomainMap`; numerical
+index notation remains for the compiler. Reducing that index notation gives
+the evaluation at `coordinates[j]`. The result is
+$\sum_{j=0}^{n-1} w_j f(x_j)$. Repeated points contribute once per entry;
+with `d = 1`, coordinates `(1, 2)`, weights `(2, 3)` and $f(x)=x^2$, the
+value is 14. Replacing the coordinates by `(1, 1)` gives 5.
+
+For `n = 0`, the same construction is valid, using numerical inputs such as
+`Zero((0, d), (), ())` and `Zero((0,), (), ())`. Its sum is zero and evaluates
+no points. This constructs an empty map family without an empty map literal
+or a zero map. An out-of-range literal selection still raises `IndexError`.
+
+If `f` instead has a free index named `i`, lowering first renames the bound
+`i` in `p`; that free index survives alongside `j`. Different weight and
+point counts are rejected when their uses of `j` meet in the product.
+Passing `p` directly to `pull_back`, or using a field supported on a domain
+other than `Q`, is rejected by `PullBack`.
+
 #### Examples
 
 The examples use the unit triangle `T = UnitSimplex(2)`, `X = coordinate(T)`,
 and `f = X[0] * X[1]`:
 
 ```python
-third = Integer(1) / Integer(3)
+third = integer(1) / integer(3)
 
 # DomainMap: the centroid of T, as a point in T.
 c = domain_map(RD(0), tensor((third, third)), T)
@@ -1938,16 +2185,16 @@ selected by an entry $e$. A `CellMap` has no parameterisation.
 
 | `CellMap(T, j, e)` |                                                                                                     |
 | ------------------ | --------------------------------------------------------------------------------------------------- |
-| Extends            | `Base` |
-| Takes              | `T: AbstractTopology`, `j: int`, `e: Index \| GatheredIndex` |
+| Extends            | `AbstractValueNode` |
+| Takes              | `T: AbstractTopology`, `j: int`, `e: Index \| IndexValue` |
 | Properties         | `topology` $T$, `cell_type` $j$ and `entry` $e$                                                     |
-| Requires           | Cell type $j$ of $T$ a reference cell $K_j$, and the extent `T.num_cells[j]` for $e$ or for the table of $e$ |
-| Derived            | `parameter_domain` $K_j$, `ambient_domain` $T$, and `free_indices`, $e$ with the extent `T.num_cells[j]` or the free indices of the `GatheredIndex` $e$ |
+| Requires           | Cell type $j$ of $T$ a reference cell $K_j$, and the extent `T.num_cells[j]` for $e$ or the target extent of a scalar `IndexValue` $e$ |
+| Static type        | Result interface `Map`, value shape `()`, `parameter_domain` $K_j$, `ambient_domain` $T$, and `free_indices`, $e$ with the extent `T.num_cells[j]` or the free indices of the scalar `IndexValue` $e$ |
 | Raises             | `TypeError` for $T$, and `ValueError` if another requirement fails                                  |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `cell_map(T, j, e)` | | `T: AbstractTopology`, `j: int`, `e: Index \| GatheredIndex` | `CellMap(T, j, e)` |
+| `cell_map(T, j, e)` | | `T: AbstractTopology`, `j: int`, `e: Index \| IndexValue` | `CellMap(T, j, e)` |
 | `cell_map(T, j)` | | `T: AbstractTopology`, `j: int` | `CellMap(T, j, cell_index(T, j))` |
 
 `pull_back(f, cell_map(T, j, e))` is the value of an expression $f$ on $T$ on
@@ -1995,7 +2242,7 @@ in which a family of points lies.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `image(x, Q)` | | `x: AbstractExpression`, `Q: AbstractDomain` | `DecomposedDomain` with the pieces `domain_map(K_j, pull_back(x, cell_map(T, j)), Q)` |
+| `image(x, Q)` | | `x: Expression`, `Q: AbstractDomain` | `DecomposedDomain` with the pieces `domain_map(K_j, pull_back(x, cell_map(T, j)), Q)` |
 
 A mesh is `image(x, Q)`, where $x$ is an expression on a topology $T$ with
 value shape `(n,)` for the ambient coordinate dimension of $Q$. The construction
@@ -2012,7 +2259,7 @@ $x$.
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `cell_domain(D, j)` | | `D: DecomposedDomain`, `j: int` | `DomainMap` of the cells of type `j` |
-| `cell_domain(D, j, e)` | | `D: DecomposedDomain`, `j: int`, `e: Index \| GatheredIndex` | `DomainMap` of the cells of type `j` selected by `e` |
+| `cell_domain(D, j, e)` | | `D: DecomposedDomain`, `j: int`, `e: Index \| IndexValue` | `DomainMap` of the cells of type `j` selected by `e` |
 
 `cell_domain(D, j)` returns piece $j$ with the ambient domain $D$,
 `domain_map(P_j, psi_j, D)`, with the free indices of piece $j$. For a mesh
@@ -2115,8 +2362,8 @@ $T$.
 
 | `PushForward(f, D, m)` |                                                                     |
 | ---------------------- | ------------------------------------------------------------------- |
-| Extends                | `AbstractExpression` |
-| Takes                  | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw` |
+| Extends                | `AbstractValueNode` |
+| Takes                  | `f: Expression`, `D: DecomposedDomain`, `m: TransformationLaw` |
 | Properties             | `expression` $f$, `domain` $D$ and `law` $m$                        |
 | Requires               | $D$ a mesh with the topology $T$, $f$ with the support $T$ or no support, and the last axes of $f$, one for each variance of $m$, of the extent $k$ |
 | Static type            | The value shape of $f$ with the extent $n$ for each transformed axis, the support $D$ |
@@ -2124,8 +2371,8 @@ $T$.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `push_forward(f, D, m)` | | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw` | `PushForward(f, D, m)` |
-| `push_forward(u, D)` | | `u: Function`, `D: DecomposedDomain` | `PushForward(u, D, u.space.transformation_law)` |
+| `push_forward(f, D, m)` | | `f: Expression`, `D: DecomposedDomain`, `m: TransformationLaw` | `PushForward(f, D, m)` |
+| `push_forward(u, D)` | | `u: Function`, `D: DecomposedDomain` | `PushForward(u, D, u.node.space.transformation_law)` |
 
 The pull-back of `PushForward(f, D, m)` by `cell_domain(D, j, e)` is
 $m_\psi(\hat f)$, with $\psi$ the cell and $\hat f$ =
@@ -2193,10 +2440,10 @@ side domain $E$ into a mesh $D$, through the side $s$.
 
 | `SideMap(X, P, s)` |                                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
-| Extends            | `Base` |
+| Extends            | `AbstractValueNode` |
 | Takes              | `X, P: AbstractTopology \| DecomposedDomain`, `s: str \| None` |
 | Properties         | `ambient_domain` $X$, `parameter_domain` $P$, and `side` $s$ |
-| Derived            | `free_indices`, always `()` |
+| Static type        | Result interface `Map`, value shape `()`, endpoints $P$ and $X$, and free indices `()` |
 | Requires           | Conditions 1 to 3 below                                                                                 |
 | Raises             | `ValueError` if a requirement fails                                                                     |
 
@@ -2421,7 +2668,7 @@ topology with sides.
 
 | `Normal(sm)` |                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------- |
-| Extends      | `AbstractExpression` |
+| Extends      | `AbstractValueNode` |
 | Free function | `normal(sm)`                                                                                         |
 | Takes        | `sm: SideMap` |
 | Properties   | `side_map`, a [`SideMap`](#sidemap) `SideMap(D, E, s)`                                               |
@@ -2494,7 +2741,7 @@ flux = integral(index_sum(pull_back(grad_f, inside)[i] * n_B[i], (i,)), B)
 # The jump of the normal derivative across the diagonal, from the side "+".
 n_E = normal(plus)
 jump = pull_back(grad_f, plus)[i] - pull_back(grad_f, minus)[i]
-penalty = integral(index_sum(jump * n_E[i], (i,)) ** Integer(2), E)
+penalty = integral(index_sum(jump * n_E[i], (i,)) ** integer(2), E)
 ```
 
 Worked examples for this chapter: [an interior facet integral](examples/coupling.md#an-interior-facet-integral), [a Bank-Weiser error estimator](examples/estimation.md#a-bank-weiser-error-estimator), [a fluid and a solid](examples/coupling.md#a-fluid-and-a-solid), [a 1D network in a 3D mesh](examples/coupling.md#a-1d-network-in-a-3d-mesh), [a deformed domain](examples/surfaces.md#a-deformed-domain).
@@ -2592,7 +2839,7 @@ with those argument spaces.
 
 | `Function(V, label)` |                                                                                                                              |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Extends              | `AbstractExpression` |
+| Extends              | `AbstractValueNode` |
 | Free function        | `function(V, label)`                                                                                                         |
 | Takes                | `V: AbstractFunctionSpace`, `label: str \| tuple` |
 | Properties           | `space` $V$, an `AbstractFunctionSpace`, and `label`, a `str` or a `tuple` with the rules of the label of an [`Index`](#index) |
@@ -2792,9 +3039,9 @@ The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in
 
 | `Form(expression, arguments)` |                                                                                                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extends                       | `AbstractExpression` |
+| Extends                       | `AbstractValueNode` |
 | Free function                 | `form(expression, arguments)`                                                                                                                                                                      |
-| Takes                         | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]` |
+| Takes                         | `expression: Expression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]` |
 | Properties                    | `expression`, an expression, and `arguments`, a `tuple` of entries, each a [function](#function) `v`, the [conjugate](#conjugate) `conjugate(v)` of a function, or a `tuple` of at least two of these |
 | Requires                      | Every function in `arguments` distinct and [bindable](#bindable-functions) |
 | Static type                   | That of the expression, with the argument spaces of the expression followed by the space $V$ of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
@@ -2920,9 +3167,9 @@ In legacy UFL, the arguments of a form are the test functions and the trial func
 
 | `Action(f, position, g)` |                                                                                                                                                        |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Extends                  | `AbstractExpression` |
+| Extends                  | `AbstractValueNode` |
 | Free function            | `action(f, position, g)`                                                                                                                               |
-| Takes                    | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]` |
+| Takes                    | `f: Expression`, `position: int`, `g: Expression \| tuple[Expression, ...]` |
 | Properties               | `form`, an expression with more than `position` argument spaces, `position`, an `int`, and `argument`, the expression $g$, or a `tuple` of expressions |
 | Requires                 | The conditions below                                                                                                                                   |
 | Static type              | That of $f$, with the free indices of $f$ followed by those of $g$, each `Index` taken once, and the argument spaces of $f$ without the entry at `position` |
@@ -3077,8 +3324,8 @@ $x$ at a point $a$, adding an argument $w$ after the arguments of $F$.
 
 | `GateauxDerivative(F, x, a, w)` |  |
 | ------------------------------- | - |
-| Extends     | `AbstractExpression` |
-| Takes       | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` |
+| Extends     | `AbstractValueNode` |
+| Takes       | `F: Expression`, `x: Function \| tuple`, `a: Expression \| tuple`, `w: Function \| Conjugate \| tuple` |
 | Properties  | `expression` $F$, `variable` $x$, `point` $a$ and `argument` $w$, an entry as in [`Form`](#form) |
 | Requires    | $x$ a [bindable function](#bindable-functions) or a `tuple` of at least two distinct bindable functions; member by member, $a$ an admissible value for the space of $x$ as in [`Action`](#action), and the function underlying each entry of $w$ in that space; the members of a `tuple` $w$ all functions or all conjugates, no function of $w$ free in $F$ or $a$, and the members of a `tuple` $x$ all real or all complex |
 | Static type | The value shape of $F$, the free indices of $F$ followed by those of $a$, the argument spaces of $F$ followed by the space of the entry $w$, and the scalar type of $F$ for a real $x$, and complex for a complex $x$ |
@@ -3086,7 +3333,7 @@ $x$ at a point $a$, adding an argument $w$ after the arguments of $F$.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `gateaux_derivative(F, x, a, w)` | | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | `GateauxDerivative(F, x, a, w)` |
+| `gateaux_derivative(F, x, a, w)` | | `F: Expression`, `x: Function \| tuple`, `a: Expression \| tuple`, `w: Function \| Conjugate \| tuple` | `GateauxDerivative(F, x, a, w)` |
 
 The members of a `tuple` $x$ have one scalar type, the scalar type of $x$.
 The linear and the antilinear parts below are defined only on a complex
@@ -3152,8 +3399,8 @@ factor may be undefined where the original node is defined, even if another
 factor may be zero. The logarithm in a power derivative is one such case
 (see [Derivatives of the node classes](#derivatives-of-the-node-classes)).
 
-`Action` and `DirectionalDerivative` commute with the following node classes
-in the listed operands, when the other operands do not depend on what the
+On numerical expressions, `Action` and `DirectionalDerivative` commute with
+the following node classes in the listed operands, when the other operands do not depend on what the
 evaluated node changes:
 
 | Node class | Operands |
@@ -3206,8 +3453,12 @@ which the form states the gradient, such as `gradient(coordinate(D), D)`, the
 identity matrix for $D$ of the dimension of its ambient coordinate domain, and
 not as the product of $J$ and $K$ on the reference cell.
 
-A lowering pass does not enter domains, domain maps or spaces. A substitution
-of indices does enter them. An extension pass with a precondition runs
+A lowering pass does not enter domains, map-valued or index-valued operands,
+or spaces, except
+for the structural rules of [map-family lowering](#pull-backs-by-map-families).
+Numerical differentiation likewise holds map-valued and index-valued operands fixed.
+A substitution of indices does enter them, respecting family binders.
+An extension pass with a precondition runs
 between two lowering stages (see [Shape derivatives](#shape-derivatives)).
 
 A rewrite of index notation that keeps the value, such as the reduction of an
@@ -3277,14 +3528,14 @@ The point of a derivative is not bound, even when it is the same function as
 the variable:
 
 ```python
-d = DirectionalDerivative(f, u, u, h)
+d = directional_derivative(f, u, u, h)
 result = replace(d, {u: u0})
 ```
 
 The result is the derivative at `u0`:
 
 ```python
-DirectionalDerivative(f, u, u0, h)
+directional_derivative(f, u, u0, h)
 ```
 
 ### Grammars
@@ -3294,10 +3545,10 @@ whether an expression belongs to the grammar (see [New
 questions](#new-questions)), built from rule tables as any other pass (see
 [Rule tables](#rule-tables)).
 
-- An expression node of an expression $e$ is an expression reached from $e$
-  along the edges of the graph, including $e$ (see [The base object
+- A value node of a value $e$ is an `AbstractValueNode` reached from `e.node`
+  along the edges of the graph, including `e.node` (see [The base object
   `Base`](#the-base-object-base)). The grammar $N_0$ is the set of the
-  expressions $e$ in which every expression node is an instance of a concrete
+  expressions $e$ in which every value node is an instance of a concrete
   class of the core or a terminal of a downstream library (see [Leaves and
   subclassing](#leaves-and-subclassing)). Every object is valid, so $N_0$
   needs no other condition. A node class of a language extension is not in
@@ -3306,11 +3557,11 @@ questions](#new-questions)), built from rule tables as any other pass (see
 - A pass maps a source grammar into a target grammar if, for every
   expression of the source grammar, the result of the pass belongs to the
   target grammar.
-- A grammar pattern is a condition on one expression node that reads only
+- A grammar pattern is a condition on one value node that reads only
   the node and the objects within a bounded number of edges. It never reads
   the result of a pass.
 - For a grammar $N$ and a set of grammar patterns $P$, the delta $N \setminus P$ is
-  the set of the expressions of $N$ with no expression node that matches a
+  the set of the expressions of $N$ with no value node that matches a
   pattern of $P$. An intermediate grammar is written as a delta of an earlier
   grammar.
 - The core normal form is the last grammar of the passes of the core, written
@@ -3319,9 +3570,11 @@ questions](#new-questions)), built from rule tables as any other pass (see
   normal form and continues with passes of its own, and the code that
   assembles receives the form layer.
 
-A grammar may restrict two layers of an expression separately. The form layer
-consists of every `Action` and every node with argument spaces other than
-`()`. The integrand layer consists of the other nodes.
+A grammar may restrict two layers of numerical expressions separately. The
+form layer consists of every `Action` and every numerical node whose `Expression` view has argument
+spaces other than `()`. The integrand layer consists of the other numerical
+nodes. Map-valued and index-valued nodes describe geometry and selections
+used by these layers.
 
 The section of each pass states the input grammar and the output grammar of
 the pass, such as $N_1$ of
@@ -3512,7 +3765,11 @@ such as for a family of points, whose density is `Integer(1)`.
 | -------------------- | - |
 | Evaluates            | `Gradient`, `Divergence` and `Curl` |
 | Input grammar        | $N_4$, in the lowering stage |
-| Output grammar       | $N_4 \setminus G$, with $G$ the grammar patterns of the rows below that rewrite |
+| Output grammar       | $N_4 \setminus G$, with $G$ the grammar patterns of map-family lowering and the rows below that rewrite |
+
+The pass first applies [map-family lowering](#pull-backs-by-map-families)
+to pull-backs in the numerical expression it visits, so its gradient rules
+see individual core maps.
 
 A cell is a `CellMap` or a `cell_domain(D, j, e)`. The identity of Piola
 matches `Divergence(PushForward(f, D, m), D)` with $m$ =
@@ -3537,7 +3794,7 @@ coordinate domain of $P$. $\partial_j$ applies the first row that matches:
 | A terminal, a `Gradient`, a `PushForward`, a node that the identity of Piola matches, or a `PullBack` by a cell or a `SideMap` | `component_tensor(gradient(b, P)[a_1, …, a_s, j], (a_1, …, a_s))`, with $s$ the rank of $b$, so the gradient remains |
 | `PullBack(g, φ)`, φ a `DomainMap` | The chain rule $(\nabla_Q g \circ \varphi) \, \nabla_P \varphi$, `pull_back(gradient(g, Q), φ)[a_1, …, a_s, l] * jacobian(φ)[l, j]` summed over a derived index $l$, with $Q$ the ambient domain of φ |
 | `Action(A, p, g)` | `Action(∂_j A, p, g)`, with $g$ unchanged |
-| Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \partial_j b$ |
+| Any other numerical expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \partial_j b$ |
 
 - An operand is constant for the pass if the operand has no support.
 - The gradient of a terminal remains for the library of the terminal, so the
@@ -3552,17 +3809,50 @@ coordinate domain of $P$. $\partial_j$ applies the first row that matches:
   `expand_pull_backs` creates, such as the Jacobian of a cell, are rewritten
   in the next round of the lowering stage.
 
+### Pull-backs by map families
+
+Before either spatial lowering pass applies its other rules, it rewrites a
+`PullBack(f, m)` whose map operand is an `Indexed` or `ComponentTensor`.
+For fixed numerical $f$, write $B_f(m)$ for the following recursive rewrite,
+of numerical shape `m.value_shape + f.value_shape` and support
+`m.parameter_domain`. This is pass notation, not a node or public function.
+
+| Map expression $m$ | $B_f(m)$ |
+| ------------------ | -------- |
+| `DomainMap`, `CellMap` or `SideMap` | `PullBack(f, m)` |
+| `Tensor(entries)` | `Tensor(tuple(B_f(e) for e in entries))` |
+| `ComponentTensor(e, I)` | Make the binder fresh for $f$, then `ComponentTensor(B_f(e), I)` |
+| `Indexed(e, J)` | `ComponentTensor(Indexed(B_f(e), J + K), K)`; if `f.value_shape == ()`, just `Indexed(B_f(e), J)` |
+
+In the last row, `K` has one fresh derived index for each axis of $f$, with
+labels `("uflx.map_pull_back", f, m, a)` for axis number `a`. These indices
+select and restore the numerical axes; `J` selects only the map-family
+axes, including when it contains an `EllipsisIndex`.
+
+The replacement of `PullBack(f, m)` is $B_f(m)$. Each recursive call descends
+through the map construction and ends at an individual core map. The other
+pull-back rules then evaluate the created pull-backs. No map parameterisation
+is assumed by these structural rules, and numerical indexing is not reduced.
+The resulting indexing selects only the requested evaluations; it does not
+require $f$ to be defined at unselected members of the map family.
+
+Binding is lexical across map-valued and numerical nodes alike. Making the
+binder fresh prevents it from capturing indices free in $f$. The replacement
+has the free indices of $f$ and $m$; these must be retained even when later
+pull-back rules find that $f$ is constant.
+
 ### Expanding pull-backs
 
 | `expand_pull_backs(f)` |  |
 | ---------------------- | - |
 | Evaluates              | `PullBack` |
 | Input grammar          | $N_4$, in the lowering stage |
-| Output grammar         | $N_4 \setminus R$, with $R$ the grammar patterns of the rows below that rewrite |
+| Output grammar         | $N_4 \setminus R$, with $R$ the grammar patterns of map-family lowering and the rows below that rewrite |
 
 The pass rewrites every `PullBack(f, ψ)`, inner pull-backs first, with the
-first row that matches, and applies the rows again to each `PullBack` that a
-rewrite creates. $P$ and $Q$ are the parameter domain and the ambient domain
+map-family rules first and then the first row below that matches. It applies
+the rules again to each `PullBack` that a rewrite creates.
+$P$ and $Q$ are the parameter domain and the ambient domain
 of $\psi$. For $\psi$ a cell $D_j$ = `cell_domain(D, j, e)` of a mesh $D$ with
 the topology $T$, $\hat f$ is `pull_back(f, cell_map(T, j, e))` and $m_\psi$
 is the law $m$ on $\psi$ (see [`TransformationLaw`](#transformationlaw)). For
@@ -3577,7 +3867,7 @@ $A_i$ are the maps of [Restriction](#restriction).
 | `Coordinate(Q)` | The parameterisation of $\psi$ |
 | `PullBack(g, SideMap(X, P, s))`, $\psi$ = `cell_map(S, i)` or `cell_domain(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
 | `PullBack(g, φ)`, φ a `SideMap` or a cell | Remains, so a pull-back nests only inside a read on a cell |
-| `PullBack(g, φ)` | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](#pullback)) |
+| `PullBack(g, φ)` | `PullBack(g, domain_map(P, pull_back(φ.node.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](#pullback)) |
 | `PushForward(f, D, m)`, $\psi$ a cell of $D$ | $m_\psi(\hat f)$ |
 | `Divergence(PushForward(f, D, m), D)` of the identity of Piola, $\psi$ a cell of $D$ | $m'_\psi$ of `divergence(f̂, K_j)`, with $m'$ = `transformation_law((), 1)` |
 | `Curl(PushForward(f, D, m), D)` of the identity of Piola, $\psi$ a cell of $D$ | $m'_\psi$ of `curl(f̂, K_j)`, with $m'$ = `transformation_law(("contravariant",), 1)` for $n = 3$ and `transformation_law((), 1)` for $n = 2$ |
@@ -3586,10 +3876,10 @@ $A_i$ are the maps of [Restriction](#restriction).
 | `Gradient(g, Q)` | Remains, the gradient on $Q$ read at the points of $P$ |
 | `Normal(SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | $w / \lvert w \rvert$ of [`Normal`](#normal) |
 | A terminal | Remains, for the library of the terminal |
-| Any other node class | The node of the pull-backs of the operands that are expressions |
+| Any other numerical node class | The node of the pull-backs of its numerical expression operands |
 
 - The `Action` row transforms only the form's output. The last row moves the
-  pull-back into the expression operands of the other unmatched node classes,
+  pull-back into the numerical expression operands of the other unmatched node classes,
   with a binding node made fresh for $\psi$ first.
 - `Zero` is the one node class that carries free indices without operands, so
   `f + Zero(…)` is $f$ for each member of the family $\psi$.
@@ -3620,7 +3910,7 @@ $A_i$ are the maps of [Restriction](#restriction).
 ### The core normal form
 
 The core normal form is $N_5 = N_4 \setminus (G \cup R)$, the output grammar of
-the lowering stage. Its expression nodes are instances of concrete core
+the lowering stage. Its value nodes are instances of concrete core
 classes or downstream terminals. The following table lists all allowed node
 classes and their conditions:
 
@@ -3630,10 +3920,12 @@ classes and their conditions:
 | [Algebra](#algebra) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
 | [Algebra](#algebra) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of a `ComponentTensor`, which the compiler rewrites (see [Evaluation](#evaluation)) |
 | [Algebra](#algebra) | `Inverse` | Always, for the compiler to evaluate |
+| [Algebra](#algebra) | `GatheredIndex` | Always, with the `IndexValue` result interface |
 | [Calculus on a domain](#calculus-on-a-domain) | `Coordinate` | Always |
 | [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
 | [Calculus on a domain](#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
 | [Calculus on a domain](#calculus-on-a-domain) | `Integral` | Over a domain that is not a `DecomposedDomain`, such as a reference cell or `RD(0)` |
+| [Maps between domains](#maps-between-domains), [Reference cells](#reference-cells), [Decomposed domains](#decomposed-domains) | `DomainMap`, `CellMap`, `SideMap` | Always, as map-valued operands |
 | [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap` of an expression other than an `Action`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
 | [Decomposed domains](#decomposed-domains) | `Normal` | Always |
 | [Decomposed domains](#decomposed-domains) | `PushForward` | Under no pull-back by a cell |
@@ -3642,10 +3934,11 @@ classes and their conditions:
 | [Variational forms](#variational-forms) | `Action` | Its form is a `Function`, a `Gradient`, a `PullBack` or another such `Action`, with each operand in the core normal form |
 | | A terminal of a downstream library | Always |
 
-The objects of an expression that are not expressions, such as an `Index`, an
-`EllipsisIndex`, a `GatheredIndex`, a domain, a `DomainMap`, a `SideMap`, a
-`CellMap` and a space, occur as in any expression, because a grammar restricts
-only the expression nodes.
+Graph objects that are not value nodes, such as an `Index`, an
+`EllipsisIndex`, a domain or a space, occur as in any graph. Grammar checks
+inspect nodes, not their public views. A
+pull-back by an `Indexed` or `ComponentTensor` map has been lowered by the
+map-family rules.
 
 The code that assembles receives the form layer (see [Grammars](#grammars)):
 sums and products of forms, `Zero`, forms whose expression may be a form,
@@ -3711,7 +4004,7 @@ In legacy UFL, properties are stored on the node classes, and the set of propert
 ### Language extensions
 
 A language extension is a package outside the core that adds non-leaf node
-classes. Each extends `AbstractExpression`, never a concrete core class
+classes. Each extends `AbstractValueNode`, never a concrete core class
 (see [Leaves and subclassing](#leaves-and-subclassing)), and provides:
 
 - the value of the node, as the section of a lazy node class of the core
@@ -3831,7 +4124,7 @@ sampling rule to `f`.
 
 | `interpolate(f, V)` | |
 | ------------------- | --- |
-| Takes | `f: AbstractExpression`, `V: AbstractFunctionSpace` |
+| Takes | `f: Expression`, `V: AbstractFunctionSpace` |
 | Requires | `V` a finite element space on a reference cell, `f` with that support or no support and the value shape and scalar type of `V`, both with argument spaces `()`, and `f` defined at every sampling point |
 | Static type | The support, value shape and scalar type of `V`, the free indices of `f`, and argument spaces `()` |
 
@@ -3978,7 +4271,10 @@ config:
 classDiagram
     direction LR
     accTitle: Expressions and static type class hierarchy
-    Base <|-- AbstractExpression
+    Base <|-- AbstractValueNode
+    AbstractValue <|-- Expression
+    AbstractValue <|-- Map
+    AbstractValue <|-- IndexValue
     Base <|-- AbstractExtent
     Base <|-- Index
 ```
@@ -3998,14 +4294,14 @@ config:
 classDiagram
     direction LR
     accTitle: Algebra class hierarchy (1 of 3)
-    AbstractExpression <|-- Integer
-    AbstractExpression <|-- Float
-    AbstractExpression <|-- ImaginaryUnit
-    AbstractExpression <|-- Zero
-    AbstractExpression <|-- Sum
-    AbstractExpression <|-- Product
-    AbstractExpression <|-- Power
-    AbstractExpression <|-- Division
+    AbstractValueNode <|-- Integer
+    AbstractValueNode <|-- Float
+    AbstractValueNode <|-- ImaginaryUnit
+    AbstractValueNode <|-- Zero
+    AbstractValueNode <|-- Sum
+    AbstractValueNode <|-- Product
+    AbstractValueNode <|-- Power
+    AbstractValueNode <|-- Division
 ```
 
 ```mermaid
@@ -4021,14 +4317,14 @@ config:
 classDiagram
     direction LR
     accTitle: Algebra class hierarchy (2 of 3)
-    AbstractExpression <|-- Absolute
-    AbstractExpression <|-- Conjugate
-    AbstractExpression <|-- RealPart
-    AbstractExpression <|-- ImaginaryPart
-    AbstractExpression <|-- SquareRoot
-    AbstractExpression <|-- Logarithm
-    AbstractExpression <|-- Tensor
-    AbstractExpression <|-- Indexed
+    AbstractValueNode <|-- Absolute
+    AbstractValueNode <|-- Conjugate
+    AbstractValueNode <|-- RealPart
+    AbstractValueNode <|-- ImaginaryPart
+    AbstractValueNode <|-- SquareRoot
+    AbstractValueNode <|-- Logarithm
+    AbstractValueNode <|-- Tensor
+    AbstractValueNode <|-- Indexed
 ```
 
 ```mermaid
@@ -4044,12 +4340,12 @@ config:
 classDiagram
     direction LR
     accTitle: Algebra class hierarchy (3 of 3)
-    AbstractExpression <|-- ComponentTensor
-    AbstractExpression <|-- IndexSum
+    AbstractValueNode <|-- ComponentTensor
+    AbstractValueNode <|-- IndexSum
     Base <|-- EllipsisIndex
-    Base <|-- AbstractIndexValue
-    Base <|-- GatheredIndex
-    AbstractExpression <|-- Inverse
+    AbstractValueNode <|-- AbstractIndexValue
+    AbstractValueNode <|-- GatheredIndex
+    AbstractValueNode <|-- Inverse
 ```
 
 ### Calculus on a domain
@@ -4067,12 +4363,12 @@ config:
 classDiagram
     direction LR
     accTitle: Calculus on a domain class hierarchy
-    AbstractExpression <|-- Coordinate
-    AbstractExpression <|-- Gradient
-    AbstractExpression <|-- Divergence
-    AbstractExpression <|-- Curl
-    AbstractExpression <|-- DirectionalDerivative
-    AbstractExpression <|-- Integral
+    AbstractValueNode <|-- Coordinate
+    AbstractValueNode <|-- Gradient
+    AbstractValueNode <|-- Divergence
+    AbstractValueNode <|-- Curl
+    AbstractValueNode <|-- DirectionalDerivative
+    AbstractValueNode <|-- Integral
 ```
 
 ### Maps between domains
@@ -4090,8 +4386,8 @@ config:
 classDiagram
     direction LR
     accTitle: Maps between domains class hierarchy
-    Base <|-- DomainMap
-    AbstractExpression <|-- PullBack
+    AbstractValueNode <|-- DomainMap
+    AbstractValueNode <|-- PullBack
 ```
 
 ### Topology
@@ -4130,7 +4426,7 @@ classDiagram
     accTitle: Reference cells class hierarchy
     AbstractCoordinateDomain <|-- AbstractReferenceCell
     AbstractCellType <|-- AbstractReferenceCell
-    Base <|-- CellMap
+    AbstractValueNode <|-- CellMap
 ```
 
 ### Decomposed domains
@@ -4150,9 +4446,9 @@ classDiagram
     accTitle: Decomposed domains class hierarchy
     AbstractDomain <|-- DecomposedDomain
     Base <|-- TransformationLaw
-    AbstractExpression <|-- PushForward
-    Base <|-- SideMap
-    AbstractExpression <|-- Normal
+    AbstractValueNode <|-- PushForward
+    AbstractValueNode <|-- SideMap
+    AbstractValueNode <|-- Normal
 ```
 
 ### Function spaces
@@ -4171,7 +4467,7 @@ classDiagram
     direction LR
     accTitle: Function spaces class hierarchy
     Base <|-- AbstractFunctionSpace
-    AbstractExpression <|-- Function
+    AbstractValueNode <|-- Function
 ```
 
 ### Variational forms
@@ -4191,78 +4487,86 @@ classDiagram
     accTitle: Variational forms class hierarchy
     AbstractFunctionSpace <|-- ConjugateSpace
     AbstractFunctionSpace <|-- DualSpace
-    AbstractExpression <|-- Form
-    AbstractExpression <|-- Action
-    AbstractExpression <|-- GateauxDerivative
+    AbstractValueNode <|-- Form
+    AbstractValueNode <|-- Action
+    AbstractValueNode <|-- GateauxDerivative
 ```
 <!-- end generated: class-hierarchy -->
 
 ## Appendix: Free functions
 
 <!-- generated: free-functions, run design/appendices.py to update -->
-| Group                       | Free function                                                            | `AbstractExpression` overload | Takes                                                                                                                  | Returns                                                                                                                                                                         |
-| --------------------------- | ------------------------------------------------------------------------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Expressions and static type | [`index(label)`](#index)                                                 |                               | `label: str \| tuple`                                                                                                  | `Index`                                                                                                                                                                         |
-| Algebra                     | [`power(first, second)`](#power)                                         | `**`                          | `first, second: AbstractExpression`                                                                                    | `Power`                                                                                                                                                                         |
-|                             | [`negate(f)`](#negation-and-subtraction)                                 | `-f`                          | `f: AbstractExpression`                                                                                                | `multiply(Integer(-1), f)`                                                                                                                                                      |
-|                             | [`subtract(f, g)`](#negation-and-subtraction)                            | `f - g`                       | `f, g: AbstractExpression`                                                                                             | `add(f, negate(g))`                                                                                                                                                             |
-|                             | [`absolute(f)`](#absolute)                                               | `abs(f)`                      | `f: AbstractExpression`                                                                                                | `Absolute`                                                                                                                                                                      |
-|                             | [`conjugate(f)`](#conjugate)                                             |                               | `f: AbstractExpression`                                                                                                | `Conjugate`                                                                                                                                                                     |
-|                             | [`square_root(f)`](#elementary-functions-very-incomplete)                |                               | `f: AbstractExpression`                                                                                                | `SquareRoot`                                                                                                                                                                    |
-|                             | [`logarithm(f)`](#elementary-functions-very-incomplete)                  |                               | `f: AbstractExpression`                                                                                                | `Logarithm`                                                                                                                                                                     |
-|                             | [`tensor(entries)`](#tensor)                                             |                               | `entries: tuple[AbstractExpression, ...]`                                                                              | `Tensor`                                                                                                                                                                        |
-|                             | [`indexed(expression, indices)`](#indexed)                               |                               | `expression: AbstractExpression`, `indices: tuple`                                                                     | `Indexed`                                                                                                                                                                       |
-|                             | [`component(f, entries)`](#partial-indexing)                             | `[]`                          | `f: AbstractExpression`, `entries: tuple`                                                                              | `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$ and contain no `EllipsisIndex`, otherwise `indexed(f, entries)`                    |
-|                             | [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                                         | `ComponentTensor`                                                                                                                                                               |
-|                             | [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                                         | `IndexSum`                                                                                                                                                                      |
-|                             | [`ellipsis_index(label)`](#ellipsisindex)                                |                               | `label: str \| tuple`                                                                                                  | `EllipsisIndex`                                                                                                                                                                 |
-|                             | [`gathered_index(table, indices)`](#gatheredindex)                       |                               | `table: AbstractIndexValue`, `indices: tuple`                                                                          | `GatheredIndex`                                                                                                                                                                 |
-|                             | [`add(first, second)`](#tensor-arithmetic)                               | `+`                           | `first, second: AbstractExpression`                                                                                    | `component_tensor(first[K] + second[K], K)` if both operands have rank 1 or more, otherwise `Sum(first, second)`                                                                |
-|                             | [`multiply(first, second)`](#tensor-arithmetic)                          | `*`                           | `first, second: AbstractExpression`                                                                                    | `component_tensor(first * second[K], K)` if only `first` is a scalar, `component_tensor(first[K] * second, K)` if only `second` is a scalar, otherwise `Product(first, second)` |
-|                             | [`divide(first, second)`](#tensor-arithmetic)                            | `/`                           | `first, second: AbstractExpression`                                                                                    | `component_tensor(first[K] / second, K)` if `first` has rank 1 or more and `second` is a scalar, otherwise `Division(first, second)`                                            |
-|                             | [`real_part(f)`](#tensor-arithmetic)                                     |                               | `f: AbstractExpression`                                                                                                | `component_tensor(RealPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `RealPart(f)`                                                                                        |
-|                             | [`imaginary_part(f)`](#tensor-arithmetic)                                |                               | `f: AbstractExpression`                                                                                                | `component_tensor(ImaginaryPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `ImaginaryPart(f)`                                                                              |
-|                             | [`matrix_product(first, second)`](#tensor-arithmetic)                    | `@`                           | `first, second: AbstractExpression`                                                                                    | The contraction of the last axis of `first` with the first axis of `second`, below                                                                                              |
-|                             | [`transpose(A)`](#tensor-arithmetic)                                     |                               | `A: AbstractExpression`                                                                                                | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2                                                                                                     |
-|                             | [`inverse(A)`](#inverse)                                                 |                               | `A: AbstractExpression`                                                                                                | `Inverse`                                                                                                                                                                       |
-|                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                                                | The Leibniz formula for $\det A$                                                                                                                                                |
-| Calculus on a domain        | [`coordinate(P)`](#coordinate)                                           |                               | `P: AbstractDomain`                                                                                                    | `Coordinate`                                                                                                                                                                    |
-|                             | [`gradient(f, P)`](#gradient)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                           | `Gradient`                                                                                                                                                                      |
-|                             | [`divergence(u, P)`](#divergence-and-curl)                               |                               | `u: AbstractExpression`, `P: AbstractDomain`                                                                           | `Divergence`                                                                                                                                                                    |
-|                             | [`curl(u, P)`](#divergence-and-curl)                                     |                               | `u: AbstractExpression`, `P: AbstractDomain`                                                                           | `Curl`                                                                                                                                                                          |
-|                             | [`directional_derivative(f, x, a, h)`](#directionalderivative)           |                               | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple`                                   | `DirectionalDerivative(f, x, a, h)`                                                                                                                                             |
-|                             | [`integral(f, P)`](#integral)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                           | `Integral`                                                                                                                                                                      |
-| Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractDomain`                      | `DomainMap`                                                                                                                                                                     |
-|                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap`                                                          | `PullBack`                                                                                                                                                                      |
-|                             | [`jacobian(D)`](#jacobian-and-density)                                   |                               | `D: DomainMap`                                                                                                         | `gradient(D.parameterisation, D.parameter_domain)`                                                                                                                              |
-|                             | [`inverse_jacobian(D)`](#jacobian-and-density)                           |                               | `D: DomainMap`                                                                                                         | `inverse(jacobian(D))`                                                                                                                                                          |
-|                             | [`density(D)`](#jacobian-and-density)                                    |                               | `D: DomainMap`                                                                                                         | The density $\rho$ below                                                                                                                                                        |
-| Topology                    | [`cell_index(T, j)`](#abstracttopology)                                  |                               | `T: AbstractTopology`, `j: int`                                                                                        | `Index`                                                                                                                                                                         |
-| Reference cells             | [`cell_map(T, j, e)`](#cellmap)                                          |                               | `T: AbstractTopology`, `j: int`, `e: Index \| GatheredIndex`                                                           | `CellMap(T, j, e)`                                                                                                                                                              |
-|                             | [`cell_map(T, j)`](#cellmap)                                             |                               | `T: AbstractTopology`, `j: int`                                                                                        | `CellMap(T, j, cell_index(T, j))`                                                                                                                                               |
-| Decomposed domains          | [`decomposed_domain(pieces)`](#decomposeddomain)                         |                               | `pieces: tuple[DomainMap, ...]`                                                                                        | `DecomposedDomain`                                                                                                                                                              |
-|                             | [`image(x, Q)`](#meshes)                                                 |                               | `x: AbstractExpression`, `Q: AbstractDomain`                                                                           | `DecomposedDomain` with the pieces `domain_map(K_j, pull_back(x, cell_map(T, j)), Q)`                                                                                           |
-|                             | [`cell_domain(D, j)`](#cell-domains)                                     |                               | `D: DecomposedDomain`, `j: int`                                                                                        | `DomainMap` of the cells of type `j`                                                                                                                                            |
-|                             | [`cell_domain(D, j, e)`](#cell-domains)                                  |                               | `D: DecomposedDomain`, `j: int`, `e: Index \| GatheredIndex`                                                           | `DomainMap` of the cells of type `j` selected by `e`                                                                                                                            |
-|                             | [`transformation_law(variances, weight)`](#transformationlaw)            |                               | `variances: tuple[str, ...]`, `weight: int`                                                                            | `TransformationLaw`                                                                                                                                                             |
-|                             | [`push_forward(f, D, m)`](#pushforward)                                  |                               | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw`                                                 | `PushForward(f, D, m)`                                                                                                                                                          |
-|                             | [`push_forward(u, D)`](#pushforward)                                     |                               | `u: Function`, `D: DecomposedDomain`                                                                                   | `PushForward(u, D, u.space.transformation_law)`                                                                                                                                 |
-|                             | [`side_map(X, P, s)`](#sidemap)                                          |                               | `X, P: AbstractTopology \| DecomposedDomain`, `s: str`                                                                 | `SideMap(X, P, s)`                                                                                                                                                              |
-|                             | [`side_map(X, P)`](#sidemap)                                             |                               | `X, P: AbstractTopology \| DecomposedDomain`                                                                           | `SideMap(X, P, None)`, the first side of each group on $T$                                                                                                                      |
-|                             | [`side_domain(D, S)`](#side-domains)                                     |                               | `D: DecomposedDomain`, `S: AbstractTopology`                                                                           | `image(pull_back(x, side_map(T, S)), Q)`                                                                                                                                        |
-|                             | [`normal(sm)`](#normal)                                                  |                               | `sm: SideMap`                                                                                                          | `Normal`                                                                                                                                                                        |
-| Function spaces             | [`function(V, label)`](#function)                                        |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                                      | `Function`                                                                                                                                                                      |
-| Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                               | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise                                                                                         |
-|                             | [`dual_space(S)`](#dualspace)                                            |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                        | `DualSpace`                                                                                                                                                                     |
-|                             | [`form(expression, arguments)`](#form)                                   |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`  | `Form`                                                                                                                                                                          |
-|                             | [`action(f, position, g)`](#action)                                      |                               | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                                                                                                        |
-|                             | [`gateaux_derivative(F, x, a, w)`](#gateaux-derivative)                  |                               | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | `GateauxDerivative(F, x, a, w)`                                                                                                                                                 |
+| Group                       | Free function                                                            | Value overload | Takes                                                                                                         | Returns                                                                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Expressions and static type | [`wrap(node)`](#construction-and-reconstruction)                         |                | `node: AbstractValueNode \| AbstractValue`                                                                    | The canonical value interface of the node; an existing view is returned unchanged                                                                                               |
+|                             | [`index(label)`](#index)                                                 |                | `label: str \| tuple`                                                                                         | `Index`                                                                                                                                                                         |
+| Algebra                     | [`integer(v)`](#literals)                                                |                |                                                                                                               | `Integer`                                                                                                                                                                       |
+|                             | [`float(v)`](#literals)                                                  |                |                                                                                                               | `Float`                                                                                                                                                                         |
+|                             | [`imaginary_unit()`](#literals)                                          |                |                                                                                                               | `ImaginaryUnit`                                                                                                                                                                 |
+|                             | [`zero(value_shape, free_indices, argument_spaces)`](#zero)              |                |                                                                                                               | `Zero`                                                                                                                                                                          |
+|                             | [`power(first, second)`](#power)                                         | `**`           | `first, second: Expression`                                                                                   | `Power`                                                                                                                                                                         |
+|                             | [`negate(f)`](#negation-and-subtraction)                                 | `-f`           | `f: Expression`                                                                                               | `multiply(Integer(-1), f)`                                                                                                                                                      |
+|                             | [`subtract(f, g)`](#negation-and-subtraction)                            | `f - g`        | `f, g: Expression`                                                                                            | `add(f, negate(g))`                                                                                                                                                             |
+|                             | [`absolute(f)`](#absolute)                                               | `abs(f)`       | `f: Expression`                                                                                               | `Absolute`                                                                                                                                                                      |
+|                             | [`conjugate(f)`](#conjugate)                                             |                | `f: Expression`                                                                                               | `Conjugate`                                                                                                                                                                     |
+|                             | [`square_root(f)`](#elementary-functions-very-incomplete)                |                | `f: Expression`                                                                                               | `SquareRoot`                                                                                                                                                                    |
+|                             | [`logarithm(f)`](#elementary-functions-very-incomplete)                  |                | `f: Expression`                                                                                               | `Logarithm`                                                                                                                                                                     |
+|                             | [`tensor(entries)`](#tensor)                                             |                | `entries: tuple[AbstractValue, ...]`                                                                          | `Tensor`                                                                                                                                                                        |
+|                             | [`indexed(expression, indices)`](#indexed)                               |                | `expression: AbstractValue`, `indices: tuple`                                                                 | `Indexed`                                                                                                                                                                       |
+|                             | [`component(f, entries)`](#partial-indexing)                             | `[]`           | `f: AbstractValue`, `entries: tuple`                                                                          | `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$ and contain no `EllipsisIndex`, otherwise `indexed(f, entries)`                    |
+|                             | [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |                | `expression: AbstractValue`, `indices: tuple`                                                                 | `ComponentTensor`                                                                                                                                                               |
+|                             | [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |                | `expression: Expression`, `indices: tuple`                                                                    | `IndexSum`                                                                                                                                                                      |
+|                             | [`ellipsis_index(label)`](#ellipsisindex)                                |                | `label: str \| tuple`                                                                                         | `EllipsisIndex`                                                                                                                                                                 |
+|                             | [`gathered_index(table, indices)`](#gatheredindex)                       |                | `table: IndexValue`, `indices: tuple`                                                                         | `GatheredIndex`                                                                                                                                                                 |
+|                             | [`add(first, second)`](#tensor-arithmetic)                               | `+`            | `first, second: Expression`                                                                                   | `component_tensor(first[K] + second[K], K)` if both operands have rank 1 or more, otherwise `Sum(first, second)`                                                                |
+|                             | [`multiply(first, second)`](#tensor-arithmetic)                          | `*`            | `first, second: Expression`                                                                                   | `component_tensor(first * second[K], K)` if only `first` is a scalar, `component_tensor(first[K] * second, K)` if only `second` is a scalar, otherwise `Product(first, second)` |
+|                             | [`divide(first, second)`](#tensor-arithmetic)                            | `/`            | `first, second: Expression`                                                                                   | `component_tensor(first[K] / second, K)` if `first` has rank 1 or more and `second` is a scalar, otherwise `Division(first, second)`                                            |
+|                             | [`real_part(f)`](#tensor-arithmetic)                                     |                | `f: Expression`                                                                                               | `component_tensor(RealPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `RealPart(f)`                                                                                        |
+|                             | [`imaginary_part(f)`](#tensor-arithmetic)                                |                | `f: Expression`                                                                                               | `component_tensor(ImaginaryPart(f[K]), K)` if $f$ has rank 1 or more, otherwise `ImaginaryPart(f)`                                                                              |
+|                             | [`matrix_product(first, second)`](#tensor-arithmetic)                    | `@`            | `first, second: Expression`                                                                                   | The contraction of the last axis of `first` with the first axis of `second`, below                                                                                              |
+|                             | [`transpose(A)`](#tensor-arithmetic)                                     |                | `A: Expression`                                                                                               | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2                                                                                                     |
+|                             | [`inverse(A)`](#inverse)                                                 |                | `A: Expression`                                                                                               | `Inverse`                                                                                                                                                                       |
+|                             | [`determinant(A)`](#determinant)                                         |                | `A: Expression`                                                                                               | The Leibniz formula for $\det A$                                                                                                                                                |
+| Calculus on a domain        | [`coordinate(P)`](#coordinate)                                           |                | `P: AbstractDomain`                                                                                           | `Coordinate`                                                                                                                                                                    |
+|                             | [`gradient(f, P)`](#gradient)                                            |                | `f: Expression`, `P: AbstractDomain`                                                                          | `Gradient`                                                                                                                                                                      |
+|                             | [`divergence(u, P)`](#divergence-and-curl)                               |                | `u: Expression`, `P: AbstractDomain`                                                                          | `Divergence`                                                                                                                                                                    |
+|                             | [`curl(u, P)`](#divergence-and-curl)                                     |                | `u: Expression`, `P: AbstractDomain`                                                                          | `Curl`                                                                                                                                                                          |
+|                             | [`directional_derivative(f, x, a, h)`](#directionalderivative)           |                | `f: Expression`, `x: Function \| tuple`, `a, h: Expression \| tuple`                                          | `DirectionalDerivative(f, x, a, h)`                                                                                                                                             |
+|                             | [`integral(f, P)`](#integral)                                            |                | `f: Expression`, `P: AbstractDomain`                                                                          | `Integral`                                                                                                                                                                      |
+| Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: Expression`, `Q: AbstractDomain`                     | `DomainMap`                                                                                                                                                                     |
+|                             | [`pull_back(f, D)`](#pullback)                                           |                | `f: Expression`, `D: Map`                                                                                     | `PullBack`                                                                                                                                                                      |
+|                             | [`jacobian(D)`](#jacobian-and-density)                                   |                | `D: DomainMap`                                                                                                | `gradient(D.node.parameterisation, D.parameter_domain)`                                                                                                                         |
+|                             | [`inverse_jacobian(D)`](#jacobian-and-density)                           |                | `D: DomainMap`                                                                                                | `inverse(jacobian(D))`                                                                                                                                                          |
+|                             | [`density(D)`](#jacobian-and-density)                                    |                | `D: DomainMap`                                                                                                | The density $\rho$ below                                                                                                                                                        |
+| Topology                    | [`cell_index(T, j)`](#abstracttopology)                                  |                | `T: AbstractTopology`, `j: int`                                                                               | `Index`                                                                                                                                                                         |
+| Reference cells             | [`cell_map(T, j, e)`](#cellmap)                                          |                | `T: AbstractTopology`, `j: int`, `e: Index \| IndexValue`                                                     | `CellMap(T, j, e)`                                                                                                                                                              |
+|                             | [`cell_map(T, j)`](#cellmap)                                             |                | `T: AbstractTopology`, `j: int`                                                                               | `CellMap(T, j, cell_index(T, j))`                                                                                                                                               |
+| Decomposed domains          | [`decomposed_domain(pieces)`](#decomposeddomain)                         |                | `pieces: tuple[DomainMap, ...]`                                                                               | `DecomposedDomain`                                                                                                                                                              |
+|                             | [`image(x, Q)`](#meshes)                                                 |                | `x: Expression`, `Q: AbstractDomain`                                                                          | `DecomposedDomain` with the pieces `domain_map(K_j, pull_back(x, cell_map(T, j)), Q)`                                                                                           |
+|                             | [`cell_domain(D, j)`](#cell-domains)                                     |                | `D: DecomposedDomain`, `j: int`                                                                               | `DomainMap` of the cells of type `j`                                                                                                                                            |
+|                             | [`cell_domain(D, j, e)`](#cell-domains)                                  |                | `D: DecomposedDomain`, `j: int`, `e: Index \| IndexValue`                                                     | `DomainMap` of the cells of type `j` selected by `e`                                                                                                                            |
+|                             | [`transformation_law(variances, weight)`](#transformationlaw)            |                | `variances: tuple[str, ...]`, `weight: int`                                                                   | `TransformationLaw`                                                                                                                                                             |
+|                             | [`push_forward(f, D, m)`](#pushforward)                                  |                | `f: Expression`, `D: DecomposedDomain`, `m: TransformationLaw`                                                | `PushForward(f, D, m)`                                                                                                                                                          |
+|                             | [`push_forward(u, D)`](#pushforward)                                     |                | `u: Function`, `D: DecomposedDomain`                                                                          | `PushForward(u, D, u.node.space.transformation_law)`                                                                                                                            |
+|                             | [`side_map(X, P, s)`](#sidemap)                                          |                | `X, P: AbstractTopology \| DecomposedDomain`, `s: str`                                                        | `SideMap(X, P, s)`                                                                                                                                                              |
+|                             | [`side_map(X, P)`](#sidemap)                                             |                | `X, P: AbstractTopology \| DecomposedDomain`                                                                  | `SideMap(X, P, None)`, the first side of each group on $T$                                                                                                                      |
+|                             | [`side_domain(D, S)`](#side-domains)                                     |                | `D: DecomposedDomain`, `S: AbstractTopology`                                                                  | `image(pull_back(x, side_map(T, S)), Q)`                                                                                                                                        |
+|                             | [`normal(sm)`](#normal)                                                  |                | `sm: SideMap`                                                                                                 | `Normal`                                                                                                                                                                        |
+| Function spaces             | [`function(V, label)`](#function)                                        |                | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                             | `Function`                                                                                                                                                                      |
+| Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                | `V: AbstractFunctionSpace`                                                                                    | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise                                                                                         |
+|                             | [`dual_space(S)`](#dualspace)                                            |                | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                               | `DualSpace`                                                                                                                                                                     |
+|                             | [`form(expression, arguments)`](#form)                                   |                | `expression: Expression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]` | `Form`                                                                                                                                                                          |
+|                             | [`action(f, position, g)`](#action)                                      |                | `f: Expression`, `position: int`, `g: Expression \| tuple[Expression, ...]`                                   | `Action`                                                                                                                                                                        |
+|                             | [`gateaux_derivative(F, x, a, w)`](#gateaux-derivative)                  |                | `F: Expression`, `x: Function \| tuple`, `a: Expression \| tuple`, `w: Function \| Conjugate \| tuple`        | `GateauxDerivative(F, x, a, w)`                                                                                                                                                 |
 <!-- end generated: free-functions -->
 
 ## Appendix: Static type table
 
-This normative table gives the argument spaces of each node class. An operand
-not named in the argument spaces column must have the argument spaces `()`,
+This normative table gives the argument spaces of each numerical result
+and marks map-valued and index-valued classes as not applicable. For the structural classes,
+the rows apply to numerical results; maps preserve endpoints and index values
+preserve their target extent.
+A numerical operand not named in the argument spaces column must have the argument spaces `()`,
 except binders and functional values accepted by `Form`, `Action` and the
 derivatives. Their signatures are checked by the respective class contracts
 and are not added to the enclosing expression's argument spaces.
@@ -4291,9 +4595,11 @@ and are not added to the enclosing expression's argument spaces.
 | `GateauxDerivative`                      | Those of the expression, followed by the space of the entry $w$ |
 | `Integral`                               | Those of the integrand                                         |
 | `PullBack`                               | Those of the expression                                        |
+| `DomainMap`, `CellMap`, `SideMap`         | Not applicable: map-valued                                     |
+| `GatheredIndex`                          | Not applicable: index-valued                                   |
 
 The value shape and the free indices of each node class are in the section
-of the class. The support and the scalar type of the node classes that differ
+of the class. The support and the scalar type of numerical node classes that differ
 from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 
 | Class                    | Support of the node                | Scalar type of the node           |
@@ -4321,10 +4627,10 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 53    |
-| Abstract classes                | 10    |
-| Concrete classes                | 43    |
-| Expression node classes         | 32    |
-| Free functions                  | 55    |
+| Classes                         | 57    |
+| Abstract classes                | 11    |
+| Concrete classes                | 46    |
+| Value node classes              | 36    |
+| Free functions                  | 60    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

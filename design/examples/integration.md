@@ -16,7 +16,7 @@ Using the library's [UnitSimplex](library.md#the-unit-simplex):
 ```python
 T = UnitSimplex(2)
 X = coordinate(T)
-one, two, three = Integer(1), Integer(2), Integer(3)
+one, two, three = integer(1), integer(2), integer(3)
 psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
 K = domain_map(T, psi, RD(2))
 ```
@@ -41,10 +41,10 @@ hypotenuse, traversed in both directions:
 ```python
 T, S = UnitSimplex(2), UnitSimplex(1)
 X, t = coordinate(T), coordinate(S)[0]
-one = Integer(1)
+one = integer(1)
 e = domain_map(S, tensor((one - t, t)), T)
 e_reversed = domain_map(S, tensor((t, one - t)), T)
-F = tensor((Integer(0), X[0]))
+F = tensor((integer(0), X[0]))
 l = index("l")
 
 def circulation(edge):
@@ -71,7 +71,7 @@ $(\psi'_1,-\psi'_0)$:
 ```python
 T, S = UnitSimplex(2), UnitSimplex(1)
 X, t = coordinate(T), coordinate(S)[0]
-e = domain_map(S, tensor((Integer(1) - t, t)), T)
+e = domain_map(S, tensor((integer(1) - t, t)), T)
 J = jacobian(e)
 
 flux = integral(pull_back(X[0], e) * J[1, 0] - pull_back(X[1], e) * J[0, 0], S)
@@ -94,7 +94,7 @@ Represent the three directed edges as one family, then sum their circulations:
 ```python
 T, S = UnitSimplex(2), UnitSimplex(1)
 X, t = coordinate(T), coordinate(S)[0]
-zero, one = Integer(0), Integer(1)
+zero, one = integer(0), integer(1)
 F = tensor((zero, X[0]))
 i, k = index("i"), index("k")
 
@@ -120,7 +120,7 @@ integrals. For the triangle with vertices $(1,0)$, $(3,1)$ and $(2,3)$:
 ```python
 T = UnitSimplex(2)
 X = coordinate(T)
-one, two, three = Integer(1), Integer(2), Integer(3)
+one, two, three = integer(1), integer(2), integer(3)
 psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
 K = domain_map(T, psi, RD(2))
 Y = coordinate(RD(2))
@@ -138,7 +138,7 @@ A decomposed domain permits the shorter vector-integral form:
 
 ```python
 D = decomposed_domain((K,))
-centroid_D = integral(coordinate(D), D) / integral(Integer(1), D)
+centroid_D = integral(coordinate(D), D) / integral(integer(1), D)
 ```
 
 `expand_integrals` splits the vector integrand into scalar components.
@@ -151,17 +151,18 @@ An edge-midpoint rule integrates $f(x,y)=xy$ exactly on the unit triangle:
 T = UnitSimplex(2)
 X = coordinate(T)
 f = X[0] * X[1]
-zero, half = Integer(0), Integer(1) / Integer(2)
-sixth = Integer(1) / Integer(6)
+zero, half = integer(0), integer(1) / integer(2)
+sixth = integer(1) / integer(6)
 i = index("i")
 
 points = tensor((tensor((half, zero)), tensor((half, half)), tensor((zero, half))))
 weights = tensor((sixth, sixth, sixth))
-xs = domain_map(RD(0), points[i], T)
-q = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
+xs = component_tensor(domain_map(RD(0), points[i], T), (i,))
+q = index_sum(weights[i] * integral(pull_back(f, xs[i]), RD(0)), (i,))
 ```
 
-The points form one family with free index `i`, so `f` occurs once in `q`.
+`xs` is a map family of shape `(3,)` with no free indices; `xs[i]` selects
+one point with free index `i`. The expression `f` occurs once in `q`.
 The value is $1/24$, mathematically equal to `integral(f, T)`. Replacing the
 integral by quadrature changes its graph and is a pass, with the rule supplied
 as an argument.
@@ -175,7 +176,8 @@ the expression is:
 index_sum(weights[i] * (points[i, 0] * points[i, 1]), (i,))
 ```
 
-`expand_pull_backs` substitutes the points for `X`; the integral over `RD(0)`
+Map-family lowering moves the selection outside the pull-back.
+`expand_pull_backs` then substitutes the points for `X`; the integral over `RD(0)`
 returns its integrand. The compiler's `reduce_component_tensors` changes
 `points[i][0]` to `points[i, 0]`, and similarly for component 1. A generated
 kernel could be:
@@ -206,7 +208,7 @@ core:
 | ----- | ------- |
 | `RuntimeExtent(label)` | An `AbstractExtent` known at run time. |
 | `RuntimeArray(label, value_shape)` | An expression with no support holding quadrature data, coefficients or constants. |
-| `RuntimeIndex(label, extent)` | An `AbstractIndexValue` of shape `()`, such as a local facet number; read with `gathered_index(value, ())`. |
+| `RuntimeIndex(label, extent)` | A node extending `AbstractIndexValue`, exposed as an `IndexValue` of shape `()`; directly usable as a selector. |
 
 With their lower-case construction functions, the cut-cell integral is:
 
