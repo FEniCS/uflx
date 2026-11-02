@@ -164,7 +164,7 @@ Hence two objects are equal if and only if the two objects have the same class
 and equal construction arguments.
 
 Because objects are immutable, an object need only be validated once, at
-construction. Every object that exists is therefore valid.
+construction. Every object that exists is therefore structurally valid.
 
 ### Leaves and subclassing
 
@@ -259,7 +259,7 @@ and unit [normal](#normal).
 `AbstractDomain` represents a domain, the set on which an expression is defined.
 A domain is a coordinate domain, a leaf that a library supplies (see
 [`AbstractCoordinateDomain`](#abstractcoordinatedomain)), or a decomposed
-domain, the union of the images of families of domain maps that the core builds
+domain, built from families of parameterised pieces
 (see [`DecomposedDomain`](#decomposeddomain)). Every node class taking a
 domain accepts either kind; its section defines its value on a decomposed
 domain through the pieces.
@@ -1264,6 +1264,10 @@ The gradient acts on each component of an array-valued $f$. Entry `j` of the
 last axis of `Gradient(f, P)` is the partial derivative $\partial_j f$ in the
 coordinate $X_j$ of the frame.
 
+On a decomposed domain, `Gradient`, `Divergence` and `Curl` act cellwise.
+They do not include distributional interface terms for discontinuous fields;
+traces and interface integrals are written explicitly.
+
 #### The frame
 
 For a domain $P$ of dimension $k$, the frame is the coordinate frame of the
@@ -1474,8 +1478,8 @@ With `T = UnitSimplex(2)` and `X = coordinate(T)`:
 ### `DomainMap`
 
 `DomainMap` is a map $\psi$ from a parameter domain $P$ into an ambient domain
-$Q$, with the image $D = \psi(P)$. The sections below write $D$ for the domain
-map and for the image of the domain map. A `DomainMap` is not an
+$Q$, with geometric image $\psi(P)$. The sections below write $D$ for the map
+or its parameterised image, retaining multiplicity. A `DomainMap` is not an
 `AbstractDomain` and is not the support of an expression.
 
 | `DomainMap(P, psi, Q)` |                                                                                                                                                                                                             |
@@ -1488,11 +1492,14 @@ map and for the image of the domain map. A `DomainMap` is not an
 | Derived                          | `free_indices`, the free indices of $\psi$ |
 | Raises                           | `TypeError` for $P$ or $Q$, and `ValueError` if another requirement fails                                                                                                                                   |
 
-The coordinates of the ambient coordinate domain of $Q$ name the points of
+The coordinates of the ambient coordinate domain of $Q$ locate the image of
 $D$. The 'topological dimension' of $D$ is $k$,
 `D.parameter_domain.dimension`, and the 'geometric dimension' is $n$, the
-dimension of the ambient coordinate domain of $Q$. Construction does not check
-that $\psi(P)$ lies in $Q$.
+dimension of the ambient coordinate domain of $Q$.
+
+The supplier must ensure that $\psi(P)$ lies in $Q$ and that geometry is
+sufficiently differentiable for each requested operation. These are semantic
+assumptions, not constructor checks. Maps need not be injective.
 
 $P$ is a coordinate domain, such as a reference cell, or a topology. With a
 topology $T$ as $P$, `pull_back(g, domain_map(T, x, D))` pulls a field $g$
@@ -1502,8 +1509,7 @@ composes into a cell of $D$ (see [Expanding pull-backs](#expanding-pull-backs)).
 A $\psi$ with free indices makes $D$ a family of domains, with one domain for
 each value of the free indices. For example, with an array `x` of value shape
 `(m, n)` and an index `i`, `domain_map(RD(0), x[i], RD(n))` is a family of $m$
-points in `RD(n)`. A family of domains writes a set of points
-once, such as the points of a quadrature rule.
+points in `RD(n)`, retaining distinct members even at identical coordinates.
 
 $Q$ is usually `RD(n)`. $Q$ may be smaller, such as the unit triangle for an
 edge of the unit triangle, or a decomposed domain for a cell of the decomposed
@@ -1632,14 +1638,17 @@ value shape `(n, 0)`, out of an integral over points.
 $J^T J$ is `component_tensor(index_sum(J[l, a] * J[l, b], (l,)), (a, b))`, with
 derived indices.
 
+An inverse Jacobian requires $\operatorname{rank} J = k$ wherever evaluated.
+The density alone does not require full rank and may vanish.
+
 The core, passes and libraries use `jacobian(D)`, `determinant(jacobian(D))`
 and `inverse_jacobian(D)` for $J$, $\det J$ and $K$. These fixed constructions
 let a pass identify and evaluate each geometric quantity once per $D$.
 
 ### Concept: integral over a domain
 
-The integral of an expression $f$ on $Q$ over a domain $D$ =
-`DomainMap(P, psi, Q)` is
+Integration of an expression $f$ on $Q$ over $D$ = `DomainMap(P, psi, Q)`
+is defined by the parameterisation:
 
 $$
 \int_D f = \int_P (f \circ \psi) \, \rho \, \mathrm{d}X,
@@ -1647,6 +1656,11 @@ $$
 
 which is `integral(pull_back(f, D) * density(D), P)` for a scalar $f$. The
 integral does not depend on the direction in which $\psi$ traverses $D$.
+
+For positive-dimensional parameter domains, assume locally Lipschitz
+parameterisations and integrability of $(f \circ \psi)\rho$. Coverage is counted
+with multiplicity. The result equals the ordinary integral over the geometric
+image when the parameterisation is injective almost everywhere.
 
 The core has no orientation of a domain. An integral that depends on a
 direction, such as a circulation or a flux, is written with the Jacobian
@@ -2000,8 +2014,8 @@ Worked examples for this chapter: [the unit simplex as a reference cell](example
 
 ### `DecomposedDomain`
 
-`DecomposedDomain` is the union of the images of pieces, each a family of domain
-maps.
+`DecomposedDomain` consists of parameterised pieces, each a family of domain
+maps. Coincident coordinates do not identify distinct pieces or members.
 
 | `DecomposedDomain(pieces)` |                                                                                                                         |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -2018,12 +2032,12 @@ $\psi_j$ is the parameterisation.
 #### Pieces
 
 A piece with free indices is a family, one domain for each value of the free
-indices. $D$ is the union of all the domains of all the pieces. $D$ may have a
+indices. The geometric image of $D$ is the union of their images. $D$ may have a
 lower dimension than the ambient coordinate domain, such as a surface in $R^3$.
 A piece with an ordinary `Index`, such as a cloud of points, gives no
 topology. A single `DomainMap` with no free indices is a decomposed domain of
-one piece. The core does not check that the domains meet only in sets of
-measure zero.
+one piece. A field on $D$ may differ on topologically distinct coincident
+members; a field on the ambient coordinate domain has one value at each point.
 
 The parameter domain of a piece is a coordinate domain, so decomposed domains
 do not nest. The ambient domain $Q$ may be a decomposed domain, such as a mesh
@@ -2409,7 +2423,8 @@ Notation, for the piece $j$ of $D$:
 #### Expansion into pieces
 
 The integral is the sum over the pieces $j$ of the integrals over the domains
-of piece $j$. For a scalar $f$, `Integral(f, D)` has the value of that sum:
+of piece $j$, including every member even when images coincide. For a scalar
+$f$, `Integral(f, D)` has the value of that sum:
 
 ```python
 D_j = cell_domain(D, j)
@@ -2420,10 +2435,14 @@ index_sum(integral(pull_back(f, D_j) * density(D_j), P_j), indices_j)
 - An array-valued $f$ integrates component by component, with the density
   written into each component in index notation.
 - For a parameter domain $P_j$ of dimension $k = 0$, the density is
-  `Integer(1)`, so the integral over a set of points is the sum of the values.
+  `Integer(1)`, so coincident but distinct points each contribute their value.
 
-The density needs no orientation, so an integral of a positive $f$ is
-positive.
+For fields on the ambient coordinate domain, this equals integration over
+the geometric union when each member is injective almost everywhere and
+distinct images overlap only in sets of zero $k$-dimensional measure.
+
+The density needs no orientation, so an integral of a nonnegative $f$ is
+nonnegative.
 
 #### Integrands on the ambient domain
 
@@ -2488,7 +2507,9 @@ $\nu = w / \lvert w \rvert$, with $w = m_{B_i}(\hat m)$, where:
 - $\hat m$ is `reference_normal` of the side tables of the side $s$ of group
   $i$ (see [Side tables](#side-tables)), a normal of the cell of $E$ in $K_j$.
 
-The composition is `w / square_root(w @ w)`.
+The composition is `w / square_root(w @ w)`. It requires full column rank
+of the cell Jacobian and $w \ne 0$ wherever evaluated; construction does not
+check these assumptions.
 
 The core needs no numbering of the facets and no vertices of $K_j$, because
 the library of the topology gives $\hat m$.
