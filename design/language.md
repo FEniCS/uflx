@@ -247,7 +247,7 @@ Three kinds of code produce objects:
 
 | Kind                                               | When the code runs              | Inspects arguments to choose what to build                                | Validates construction arguments |
 | -------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- | ----------------------------- |
-| Constructor                                        | Whenever an object is made      | No, a constructor inspects arguments only to validate                     | Yes                           |
+| Constructor                                        | Whenever an object is made      | To validate and compute derived data; never to simplify the expression | Yes                           |
 | Construction free function, such as `transpose`  | While the user builds the graph | Expression static type and explicit non-expression arguments; canonical forms for spaces | May validate documented inputs |
 | Pass, such as differentiation, lowering or `units` | After construction              | Yes, and a pass may rewrite the graph                                     | No                            |
 
@@ -4002,9 +4002,12 @@ of [point evaluations](#point-evaluation), including any quadrature for
 moments. The supplied rule defines interpolation even when the moments are
 not exact. Interpolation is linear for a fixed rule and geometry.
 
-On a physical cell, interpolation applies the target's inverse
-[transformation law](#transformationlaw) to the pulled-back input, then
-maps the reference interpolant to the physical cell by the target's law.
+For a target obtained from a reference element by a
+[transformation law](#transformationlaw), interpolation on a physical cell
+applies the target's inverse law to the pulled-back input, then maps the
+reference interpolant to the physical cell by the target's law.
+Geometry-dependent basis construction and interpolation belong to the library
+and are outside this description.
 A `PullBack` alone does not transform value components.
 
 For a source field `u` in `U` and `l` in `dual_space(V)`, the dual pairing is:
