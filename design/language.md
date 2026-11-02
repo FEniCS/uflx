@@ -4279,16 +4279,17 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 | ------------------------ | ---------------------------------- | --------------------------------- |
 | `ImaginaryUnit`          | None                               | Complex                           |
 | `Zero`                   | None                               | Real                              |
-| `Absolute`               | The default                        | Real                              |
-| `RealPart`, `ImaginaryPart` | The default                     | Real                              |
-| `Coordinate`, `Gradient`, `Divergence`, `Curl` | The domain $P$               | The default                       |
+| `Absolute`               | The support of the operand         | Real                              |
+| `RealPart`, `ImaginaryPart` | The support of the operand      | Real                              |
+| `Coordinate`             | The domain $P$                     | Real                              |
+| `Gradient`, `Divergence`, `Curl` | The domain $P$               | The scalar type of the expression |
 | `DirectionalDerivative`  | The support of $f$                 | The scalar type of $f$            |
 | `GateauxDerivative`      | The support of $F$                 | The scalar type of $F$ for a real $x$, and complex otherwise |
-| `Integral`               | None                               | The default                       |
-| `PullBack`               | The parameter domain of the domain | The default                       |
+| `Integral`               | None                               | The scalar type of the integrand  |
+| `PullBack`               | The parameter domain of the domain | The scalar type of the expression |
 | `Normal`                 | $E$                                | Real                              |
 | `Function`               | The domain of the space, or none   | The scalar type of the space      |
-| `PushForward`            | The mesh $D$                       | The default                       |
+| `PushForward`            | The mesh $D$                       | The scalar type of the expression |
 | `Form`                   | The support of the expression      | The scalar type of the expression |
 | `Action`                 | The support of the form            | The scalar type of the form       |
 
