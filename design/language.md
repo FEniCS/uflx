@@ -871,7 +871,7 @@ row = component_tensor(entry, (k,))
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                                                                 | `AbstractExpression` |
 | Free function                                                           | `component_tensor(expression, indices)`, `index_sum(expression, indices)`                                                                                                                                         |
-| Takes                                                                   | `expression: AbstractExpression`, `indices: tuple[Index, ...]` |
+| Takes                                                                   | `expression: AbstractExpression`, `indices: tuple[Index \| EllipsisIndex, ...]` |
 | Properties                                                              | `expression`, a scalar, and `indices`, a non-empty `tuple` of distinct `Index` and `EllipsisIndex` entries free in the expression                                                                                 |
 | Static type                                                             | The free indices of the expression without the indices. `ComponentTensor` has the value shape of the extents of the indices in order, with every extent of an `EllipsisIndex`, and `IndexSum` the value shape `()` |
 | Raises                                                                  | `ValueError` if a requirement fails                                                                                                                                                                               |
@@ -1351,9 +1351,16 @@ domain $P$, with $n$ the dimension of its ambient coordinate domain.
 | Raises        | `TypeError` for $P$ and `ValueError` for $u$ if a requirement fails |
 
 The value of `Divergence(u, P)` is the trace of `gradient(u, P)` over the last
-axis of $u$ and the axis of the gradient. The value of `Curl(u, P)` is the
-curl of `gradient(u, P)`. `Gradient` stays the one derivative that defines the
-others. The two node classes are in the core so that the identity of Piola
+axis of $u$ and the axis of the gradient. With `G = gradient(u, P)`, so
+$G_{ij}=\partial_j u_i$, `Curl(u, P)` is the antisymmetric contraction:
+
+| Ambient dimension | Value |
+| ----------------- | ----- |
+| 2 | `G[1, 0] - G[0, 1]` |
+| 3 | `tensor((G[2, 1] - G[1, 2], G[0, 2] - G[2, 0], G[1, 0] - G[0, 1]))` |
+
+`Gradient` stays the one derivative that defines the others. The two node
+classes are in the core so that the identity of Piola
 holds structurally (see [`PushForward`](#pushforward)).
 
 ### `DirectionalDerivative`
@@ -1803,6 +1810,10 @@ coordinates.
   a solver.
 - `sides` is `()`, or the sides of [Sides of a topology](#sides-of-a-topology).
 
+A cell-group number `j` for a topology `T` is an `int` satisfying
+`0 <= j < len(T.cell_types)`. This applies to cell maps, side triples and
+`side_tables`; negative numbers do not select groups from the end.
+
 A topology whose cell types are reference cells may be the support of an
 expression and the domain of a space, as the cell complex of its cells (see
 [`CellMap`](#cellmap)). A topology is not an `AbstractDomain`, so
@@ -2009,7 +2020,7 @@ selected by an entry $e$. A `CellMap` has no parameterisation.
 | Extends            | `Base` |
 | Takes              | `T: AbstractTopology`, `j: int`, `e: Index \| GatheredIndex` |
 | Properties         | `topology` $T$, `cell_type` $j$ and `entry` $e$                                                     |
-| Requires           | Cell type $j$ of $T$ a reference cell $K_j$, and the extent `T.num_cells[j]` for $e$ or for the table of $e$ |
+| Requires           | $j$ a valid cell-group number of $T$, cell type $j$ a reference cell $K_j$, and the extent `T.num_cells[j]` for $e$ or for the table of $e$ |
 | Derived            | `parameter_domain` $K_j$, `ambient_domain` $T$, and `free_indices`, $e$ with the extent `T.num_cells[j]` or the free indices of the `GatheredIndex` $e$ |
 | Raises             | `TypeError` for $T$, and `ValueError` if another requirement fails                                  |
 
@@ -2081,6 +2092,9 @@ $x$.
 | ------------- | -------- | ----- | ------- |
 | `cell_domain(D, j)` | | `D: DecomposedDomain`, `j: int` | `DomainMap` of the cells of type `j` |
 | `cell_domain(D, j, e)` | | `D: DecomposedDomain`, `j: int`, `e: Index \| GatheredIndex` | `DomainMap` of the cells of type `j` selected by `e` |
+
+Both forms require `0 <= j < len(D.pieces)`. The three-argument form also
+requires `D` to be a mesh.
 
 `cell_domain(D, j)` returns piece $j$ with the ambient domain $D$,
 `domain_map(P_j, psi_j, D)`, with the free indices of piece $j$. For a mesh
@@ -3018,8 +3032,8 @@ In legacy UFL, the arguments of a form are the test functions and the trial func
 | Extends                  | `AbstractExpression` |
 | Free function            | `action(f, position, g)`                                                                                                                               |
 | Takes                    | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]` |
-| Properties               | `form`, an expression with more than `position` argument spaces, `position`, an `int`, and `argument`, the expression $g$, or a `tuple` of expressions |
-| Requires                 | The conditions below                                                                                                                                   |
+| Properties               | `form` $f$, `position`, an `int`, and `argument`, the expression $g$, or a `tuple` of expressions |
+| Requires                 | `0 <= position < len(f.argument_spaces)` and the conditions below |
 | Static type              | That of $f$, with the free indices of $f$ followed by those of $g$, each `Index` taken once, and the argument spaces of $f$ without the entry at `position` |
 | Raises                   | `ValueError` if a requirement fails                                                                                                                    |
 
@@ -4397,8 +4411,8 @@ classDiagram
 |                             | [`tensor(entries)`](#tensor)                                             |                               | `entries: tuple[AbstractExpression, ...]`                                                                              | `Tensor`                                                                                                                                                                        |
 |                             | [`indexed(expression, indices)`](#indexed)                               |                               | `expression: AbstractExpression`, `indices: tuple`                                                                     | `Indexed`                                                                                                                                                                       |
 |                             | [`component(f, entries)`](#partial-indexing)                             | `[]`                          | `f: AbstractExpression`, `entries: tuple`                                                                              | `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$ and contain no `EllipsisIndex`, otherwise `indexed(f, entries)`                    |
-|                             | [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                                         | `ComponentTensor`                                                                                                                                                               |
-|                             | [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                                         | `IndexSum`                                                                                                                                                                      |
+|                             | [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |                               | `expression: AbstractExpression`, `indices: tuple[Index \| EllipsisIndex, ...]`                                        | `ComponentTensor`                                                                                                                                                               |
+|                             | [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |                               | `expression: AbstractExpression`, `indices: tuple[Index \| EllipsisIndex, ...]`                                        | `IndexSum`                                                                                                                                                                      |
 |                             | [`ellipsis_index(label)`](#ellipsisindex)                                |                               | `label: str \| tuple`                                                                                                  | `EllipsisIndex`                                                                                                                                                                 |
 |                             | [`gathered_index(table, indices)`](#gatheredindex)                       |                               | `table: AbstractIndexValue`, `indices: tuple`                                                                          | `GatheredIndex`                                                                                                                                                                 |
 |                             | [`add(first, second)`](#tensor-arithmetic)                               | `+`                           | `first, second: AbstractExpression`                                                                                    | `component_tensor(first[K] + second[K], K)` if both operands have rank 1 or more, otherwise `Sum(first, second)`                                                                |
