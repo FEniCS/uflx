@@ -1678,9 +1678,9 @@ $$
 which is `integral(index_sum(pull_back(F, e)[i] * jacobian(e)[i, 0], (i,)), S)`,
 and the circulation changes sign when $\psi$ runs the other way. Where the
 cells of a decomposed domain must be oriented consistently, such as for the
-flux through a surface in $R^3$, the orientation of the topology gives a
-sign $+1$ or $-1$ for each cell (see [`AbstractTopology`](#abstracttopology)
-and [The flux through a surface](examples/surfaces.md#the-flux-through-a-surface)).
+flux through a surface in $R^3$, a separately supplied scalar field gives
+a sign $+1$ or $-1$ for each cell (see
+[The flux through a surface](examples/surfaces.md#the-flux-through-a-surface)).
 
 ### Points and point evaluation
 
@@ -1772,7 +1772,7 @@ coordinates.
 | `AbstractTopology` |                                                                                             |
 | ------------------ | ------------------------------------------------------------------------------------------- |
 | Extends            | `Base` |
-| Provides           | `cell_types`, `num_cells`, `sides` and `orientation`, and `side_tables(i, side)` for a topology with sides |
+| Provides           | `cell_types`, `num_cells`, `sides`, and `side_tables(i, side)` for a topology with sides |
 | Derived            | `dimension`, the dimension of the cell types                                                |
 | Defined by         | A subclass outside the core, such as the topology of the mesh of a solver                   |
 
@@ -1785,10 +1785,6 @@ coordinates.
   such as for a macro element, or an `AbstractExtent`, such as for the mesh of
   a solver.
 - `sides` is `()`, or the sides of [Sides of a topology](#sides-of-a-topology).
-- `orientation` is `None`, or an expression on $T$ of value shape `()` with
-  the values $+1$ and $-1$. The orientation gives the unit normal field of a
-  hypersurface, the flux of an ambient field through a surface and signed
-  top forms.
 
 A topology whose cell types are reference cells may be the support of an
 expression and the domain of a space, as the cell complex of its cells (see
@@ -2530,8 +2526,8 @@ the library of the topology gives $\hat m$.
 
 `Normal` is the normal of a cell on a side, not the unit normal field of a
 domain of dimension $n - 1$, such as of a surface in $R^3$. The unit normal
-field uses the orientation of the topology (see
-[`AbstractTopology`](#abstracttopology)).
+field uses a separately supplied orientation field (see
+[The flux through a surface](examples/surfaces.md#the-flux-through-a-surface)).
 
 #### Examples
 

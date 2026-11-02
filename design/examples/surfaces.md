@@ -50,9 +50,9 @@ in three dimensions. The domain dimensions determine the surface gradient.
 
 Flux through a closed surface needs an outward orientation; area does not.
 Let `T` be a triangle topology with reference cell `K = ReferenceSimplex(2)`,
-and `x` its coordinate function of value shape `(3,)`. The library provides
-`T.orientation`, with signs $\pm1$ telling whether each cell's vertex order
-agrees with the outward orientation.
+and `x` its coordinate function of value shape `(3,)`. The library supplies
+`orientation`, a real, scalar, cellwise-constant field on `T`. Its values
+$\pm1$ tell whether each cell's vertex order agrees with the outward orientation.
 
 ```python
 K = ReferenceSimplex(2)
@@ -70,7 +70,7 @@ def cross(a, b):
 
 nu = cross(component_tensor(J[r, 0], (r,)), component_tensor(J[r, 1], (r,)))
 
-o = pull_back(T.orientation, cell_map(T, 0))
+o = pull_back(orientation, cell_map(T, 0))
 
 flux = index_sum(
     integral(o * index_sum(pull_back(coordinate(M), cells)[l] * nu[l], (l,)), K),
@@ -88,8 +88,8 @@ the position field's flux is three times the enclosed volume.
 Consistently outward vertex ordering makes `o` unnecessary. Arbitrary ordering
 without the signs instead lets contributions cancel incorrectly. `area` uses
 $\sqrt{\det(J^T J)}$ and is independent of ordering. On a nonorientable
-surface such as a Möbius strip, orientation is `None`: area remains defined,
-but a global outward flux does not.
+surface such as a Möbius strip, no consistent global orientation exists:
+area remains defined, but a global oriented normal flux does not.
 
 ## A deformed domain
 
