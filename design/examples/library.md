@@ -165,15 +165,29 @@ row `K.vertices[w_v]` for point $v$. For example:
 | Unit triangle | `(1, 2)` | Unit interval | $t\mapsto(1-t,t)$ |
 | Unit interval | `(1,)` | Reference point | The endpoint $1$ |
 
-For group $i$ with reference cell `F_i`, the provider chooses an ordinary
-index `e` shared by its side tables. Let
-`positions[e, v]` be the position of vertex `v` in the side's reference cell
-`K_j`. With derived indices `v` and `k`, its inclusion is:
+For group $i$ of topology `S` with reference cell `F_i`, the library
+supplies `owners` as an `IndexValue` table of shape `(S.num_cells[i],)`
+and target extent `T.num_cells[j]`. Let `positions[e, v]` be the position
+of vertex `v` of cell `e` in the side's reference cell `K_j`; `positions`
+has shape `(S.num_cells[i], m, k)` with `m = F_i.num_vertices` and
+`k = K_j.dimension`.
+
+The library constructs an inclusion for a symbolic cell, then binds its
+index as the family axis. Each side can choose its own internal index:
 
 ```python
-points = component_tensor(positions[e, v, k], (v, k))
+e = Index(("library.side_tables", S, i, side, 0))
+v = Index(("library.side_tables", S, i, side, 1))
+r = Index(("library.side_tables", S, i, side, 2))
+points = component_tensor(positions[e, v, r], (v, r))
 inclusion = domain_map(F_i, affine_map(F_i, points), K_j)
+inclusions = component_tensor(inclusion, (e,))
 ```
+
+`inclusions` has shape `(S.num_cells[i],)`, endpoints `F_i` and `K_j`, and
+no free indices. An external selector `h` uses `inclusions[h]`; it does not
+refer to the bound `e`, even if it has the same label. Zero cells give a
+zero-length family through the same construction without an empty literal.
 
 For a group of facets, the reference normal is the cofactor vector of the
 Jacobian of the inclusion, turned away from the centroid of $K_j$:
@@ -188,11 +202,15 @@ m0 = tensor((determinant(C_0), ..., determinant(C_(k - 1))))
 centroid = (V[0] + V[1] + ... + V[m_j - 1]) / integer(m_j)
 away = m0 @ (points[0] - centroid)
 reference_normal = away / absolute(away) * m0
+reference_normals = component_tensor(reference_normal, (e,))
 ```
 
 Here `V = K_j.vertices`, $m_j$ is its vertex count, and the sums nest to the
-left. All sides preserve the vertex order of cell `e`, so their inclusions
-parameterise it in the same way.
+left. `reference_normals` has shape `(S.num_cells[i], k)` and no free
+indices. For non-facet groups the library supplies `None` instead. The
+method `side_tables(i, side)` returns `(owners, inclusions, reference_normals)`.
+All sides preserve the vertex order of each cell, so their selected
+inclusions parameterise it in the same way.
 
 ## The unit simplex as a reference cell
 

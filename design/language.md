@@ -2061,35 +2061,60 @@ topology](examples/library.md#a-static-topology)):
 
 #### Side tables
 
-A concrete topology with sides also provides `side_tables(i, side)`, the
-triple `(cells, inclusion, reference_normal)` for the side named `side` of
-group $i$, with the side `(side, T, j)`, the cell type $F_i$ of group $i$ and
-`e` an ordinary `Index` chosen by the provider for this group:
+A concrete topology with sides provides `side_tables(i, side)`, the triple
+`(owners, inclusions, reference_normals)` for the side named `side` of group
+$i$. For the side `(side, T, j)`, let $F_i$ be the reference cell of group $i$,
+$K_j$ the reference cell of group $j$ of $T$, $k_j$ its dimension, and
+`n = S.num_cells[i]`. The entries are explicit families:
 
-- `cells` is an [`AbstractIndexValue`](#abstractindexvalue) of the shape
-  `(S.num_cells[i],)` and the extent `T.num_cells[j]`. Entry $e$ is the cell of
-  type $j$ of $T$ on the side of the cell $e$ of $S$.
-- `inclusion` is a [`DomainMap`](#domainmap) from $F_i$ into $K_j$ with the
-  free index `e`. Member $e$ is the inclusion of the cell $e$ into the cell on
-  the side.
-- `reference_normal` is an expression with the support $F_i$ or no support,
-  the value shape `(k_j,)` and the free index `e`, for a group of cells of
-  dimension $k_j - 1$, and `None` for any other group. A normal that varies
-  along the cell, such as on a curved piece, has the support $F_i$. Member $e$ is a normal in $K_j$ of
-  the image of the cell $e$. The normal points out of $K_j$ for an image on the
-  boundary of $K_j$, and away from the centroid of $K_j$ for an image inside
-  $K_j$.
+| Entry | Interface | Value shape | Member properties |
+| ----- | --------- | ----------- | ----------------- |
+| `owners` | `IndexValue` | `(n,)` | Target extent `T.num_cells[j]` |
+| `inclusions` | `Map` | `(n,)` | Parameter domain $F_i$, ambient domain $K_j$ |
+| `reference_normals`, for a group of dimension $k_j - 1$ | `Expression` | `(n, k_j)` | Real, support $F_i$ or no support, argument spaces `()` |
 
-The provider uses the same index `e`, of extent `S.num_cells[i]`, for all
-sides of one group. It is a free index in the inclusion and reference normal,
-not a property of the topology or cell-map family. The
-[restriction rules](#restriction) substitute the caller's selector for it.
+For any other group dimension, `reference_normals` is `None`. Each supplied
+family has no free indices. The common leading axis enumerates cells of
+$S$ in the same order on every side; it is an ordinary shape axis, not a
+specially named index. The vector axis of `reference_normals` is part of the
+same numerical value shape.
 
-The inclusions of the sides of one group parameterise each cell $e$ in the same
-way: a point of $F_i$ is the same point of the cell $e$ from every side, so the
+For a selector `e`, ordinary indexing gives:
+
+- `owners[e]`, a scalar bounded index value naming the cell of group $j$ of
+  $T$ on the side of cell `e` of $S$.
+- `inclusions[e]`, an individual map from $F_i$ into $K_j$, giving the
+  inclusion of cell `e` into its owner cell.
+- `reference_normals[e]`, a vector of shape `(k_j,)` normal to the image of
+  cell `e` in $K_j$. A normal that varies along the reference cell has
+  support $F_i$. It points out of $K_j$ for an image on its boundary, and
+  away from the centroid of $K_j$ for an image inside $K_j$.
+
+These selections use the shared `Indexed` and partial-indexing rules.
+An ordinary `Index` takes extent `n`; a literal must be in range, and a
+scalar `IndexValue` selector must have target extent `n`. The selected owner
+retains its own target extent `T.num_cells[j]`, independently of `n`.
+There is no provider-chosen free index to discover or substitute. Families
+may be built with `ComponentTensor` or other shared constructions; their
+internal binders are lexical and may use unrelated index names.
+
+For example, with `e = index("e")` and `h = index("h")`,
+`inclusions[e]` and `inclusions[h]` have independent free indices.
+`cell_maps(T, j)[owners[e]]` and `inclusions[e]` share the free index `e`
+of extent `n`. Repeated owners are allowed: two cells of $S$ may have the
+same owner with different inclusions. Selecting one member does not
+require evaluation of any other member. Empty groups use families with a
+zero-length leading axis; symbolic selections and binding over that axis
+are valid and evaluate no members when summed.
+
+The inclusions on all sides parameterise each cell of $S$ in the same way:
+a point of $F_i$ is the same point of that cell from every side, so the
 difference of two restrictions is the jump (see [Restriction](#restriction)).
-[Restriction](#restriction) and [`Normal`](#normal) read the tables. The core
-does not check the sides or the tables.
+[Restriction](#restriction) and [`Normal`](#normal) select these families.
+The library supplies families satisfying the static contracts above;
+shared constructors enforce their usual static rules. The core does not
+check geometric incidence, normal direction or agreement of the physical
+parameterisations on different sides.
 
 #### What the concrete mesh decides
 
@@ -2451,34 +2476,35 @@ domain $E$ (see [`SideMap`](#sidemap)).
 
 Notation, for the group $i$ of $S$ with the side `(s, T, j)`:
 
-- `(cells, inclusion, reference_normal)` are the side tables of the side $s$
-  of group $i$.
-- $F_i$ is the cell type of group $i$, and $K_j$ the reference cell of cell
-  type $j$ of $T$.
-- `e` is the provider's side-table index and `g = cells[e]`.
+- `(owners, inclusions, reference_normals)` are the side-table families of
+  the side $s$ of group $i$.
+- $F_i$ is the reference cell of group $i$, and $K_j$ the reference cell of
+  group $j$ of $T$.
+- `h` selects a cell of group $i$ of $S$, and `g = owners[h]` selects its
+  owner cell on the side.
 
 #### The inclusion
 
-Two families of maps with the free index `e` make the inclusion of the cells
-of group $i$:
+The selected maps make the inclusion of cell `h` of group $i$:
 
-- $B_i$, the cell on the side, is `cell_maps(T, j)[g]` on $T$, and
-  `cell_domains(D, j)[g]` on a mesh $D$ with the topology $T$.
-- $A_i$, the inclusion into the cell on the side, is `inclusion` of the side
-  tables, a domain map from $F_i$ into $K_j$. $F_i$ must be a reference cell.
+- $B_i$, the owner cell, is `cell_maps(T, j)[owners[h]]` on $T$, and
+  `cell_domains(D, j)[owners[h]]` on a mesh $D$ with topology $T$.
+- $A_i$, the inclusion into that cell, is `inclusions[h]`, a map from $F_i$
+  into $K_j$.
 
-The restriction of $f$ to group $i$ from the side $s$ is
-`pull_back(pull_back(f, B_i), A_i)`, an expression on $F_i$ with the free index
-`e`.
+The restriction of $f$ to the selected cell from side $s$ is
+`pull_back(pull_back(f, B_i), A_i)`. For `h = index("h")` it is an expression
+on $F_i$ with free index `h` of extent `S.num_cells[i]`, in addition to the
+free indices of $f$. A literal selector introduces no free index; a scalar
+`IndexValue` selector contributes its free indices. The shared rules require
+matching extents for any index occurring in both $f$ and the selector.
 
-When the cell of $S$ is selected by `h`, substitute `h` for the provider's
-`e` in $A_i$, $B_i$ and the reference normal, avoiding capture. The selector
-may be an `Index`, an `int` or a scalar `IndexValue`; its free indices and
-bounds obey shared indexing. The side-table index does not escape the
-rewrite. This also applies when `h` is the internal index of an `image`
-piece during integral expansion.
+The same selector selects owners, inclusions and reference normals. Lowering
+constructs these shared selections directly and applies the usual map-family
+rules, with capture avoidance for internal binders. This also applies when
+`h` is the internal index of an `image` piece during integral expansion.
 
-All sides parameterise cell $e$ in the same way (see [Side tables](#side-tables)).
+All sides parameterise cell `h` in the same way (see [Side tables](#side-tables)).
 Two restrictions therefore share $F_i$ and its coordinates, and their difference
 is the jump. A cell with more than two sides has no jump; a form uses each
 side's restriction separately.
@@ -2554,9 +2580,9 @@ jump = pull_back(u, plus) - pull_back(u, minus)
 E = side_domain(D, diagonal)
 ```
 
-From `"+"`, the side tables are the cells `(0,)` and the inclusion
+From `"+"`, the owner family has values `(0,)` and the selected inclusion
 $A_+(t) = (1 - t, t)$, through the local vertices 1 and 2 of `K`. From
-`"-"`, the side tables are the cells `(1,)` and the inclusion
+`"-"`, the owner family has values `(1,)` and the selected inclusion
 $A_-(t) = (0, t)$, through the local vertices 0 and 2. The coordinates of
 `E` are $(1 - t, t)$.
 
@@ -2605,9 +2631,12 @@ therefore a topology with a side.
 The mesh library locates the cells and inverts the map of each cell outside
 the language, for example by Newton's method, when the mesh library builds the
 topology $S$ of the points, as the mesh library computes every side table.
-`cells` has the shape `(m,)` and the extent `T.num_cells[j]`. The inclusion
-of each point is the constant map onto the position of the point in $K_j$,
-and the points have no reference normal.
+`owners` has shape `(m,)` and target extent `T.num_cells[j]`, and
+`inclusions` is a map family of shape `(m,)` from the point reference cell
+$F_0$ of $S$ into $K_j$. Its selected member is the constant map onto the
+reference position of that point. The reference-normal entry is `None`
+when $k_j > 1$; for $k_j = 1$ the general facet contract requires a family
+of shape `(m, 1)`. Point evaluation does not use these normals.
 
 An expression $f$ on $D$ is evaluated at the points through the
 [restriction](#restriction) to the points, with $P$ = `side_domain(D, S)` the
@@ -2636,7 +2665,7 @@ library, which rewrites the pull-back as the restriction to the topology of
 the points, with the index $i$ of the family in place of the cell index:
 
 ```python
-g = cells[i]
+g = owners[i]
 R = domain_map(RD(0), positions[i], K_j)
 pull_back(pull_back(f, cell_domains(D, j)[g]), R)
 ```
@@ -2731,7 +2760,8 @@ The normal of `sm` belongs to the same side as the restriction
 
 Notation, for `sm` = `SideMap(D, E, s)` and the piece $i$ of $E$:
 
-- $B_i$ and $A_i$ are the maps of [Restriction](#restriction) for the side $s$.
+- $B_i$ and $A_i$ are the maps of [Restriction](#restriction) for side $s$,
+  both selected with `h`.
 - $K_j$ is the reference cell of the cell on the side.
 - $k$ is the dimension of $D$, and $n$ is the dimension of the ambient
   coordinate domain.
@@ -2744,8 +2774,9 @@ $\nu = w / \lvert w \rvert$, with $w = m_{B_i}(\hat m)$, where:
 - $m$ is `transformation_law(("covariant",), 0)`, applied with the Jacobian
   of the cell $B_i$ on the side at the points of $A_i$ (see
   [`TransformationLaw`](#transformationlaw)).
-- $\hat m$ is `reference_normal` of the side tables of the side $s$ of group
-  $i$, with the provider's index replaced by `h` avoiding capture (see [Side tables](#side-tables)), a normal of the cell of $E$ in $K_j$.
+- $\hat m$ is `reference_normals[h]` from the side-table families of side
+  $s$ of group $i$ (see [Side tables](#side-tables)), a vector normal to the
+  selected cell of $E$ in $K_j$.
 
 The composition is `w / square_root(w @ w)`.
 
@@ -3920,9 +3951,10 @@ of $\psi$. For $\psi$ a cell $D_j$ = `cell_domains(D, j)[e]` of a mesh $D$ with
 the topology $T$, $\hat f$ is `pull_back(f, cell_maps(T, j)[e])` and $m_\psi$
 is the law $m$ on $\psi$ (see [`TransformationLaw`](#transformationlaw)). For
 $\psi$ = `cell_maps(S, i)[h]` or `cell_domains(E, i)[h]` and a side $s$, $B_i$ and
-$A_i$ are the maps of [Restriction](#restriction), with the provider's
-side-table index substituted by `h`, avoiding capture. The same substitution
-is applied to the reference normal.
+$A_i$ are the maps of [Restriction](#restriction), constructed by selecting
+`owners[h]` and `inclusions[h]`. The normal rule likewise selects
+`reference_normals[h]`. Map-family lowering avoids capture of indices by
+internal binders.
 
 | `PullBack(f, ψ)` | Rewrite |
 | ---------------- | ------- |

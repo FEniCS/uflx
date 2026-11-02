@@ -97,19 +97,23 @@ form(
 )
 ```
 
-The side tables supply the neighbouring cell numbers `cells_p`, `cells_m`
-and the reference coordinates of the facet vertices `positions_p`,
-`positions_m`. The latter define the affine inclusions $A_\pm$ through
-[affine_map](library.md#side-tables-of-a-static-topology). For example, the `"+"` trace
-lowers to:
+The side tables supply owner-cell families, inclusion-map families and
+reference-normal families. The library builds the affine inclusions from
+facet-vertex position arrays `positions_p` and `positions_m` through
+[affine_map](library.md#side-tables-of-a-static-topology). For example, the
+`"+"` trace lowers by selecting the owner and inclusion with the same `e`:
 
 ```python
-g_p = cells_p[e]
+owners_p, inclusions_p, reference_normals_p = diagonal.side_tables(0, "+")
+g_p = owners_p[e]
 C_p = cell_maps(square, 0)[g_p]
-t = coordinate(I)[0]
-A_p = domain_map(I, tensor((integer(1) - t, t)), K)
+A_p = inclusions_p[e]
 pull_back(pull_back(u, C_p), A_p)
 ```
+
+For this diagonal, `A_p` has the value
+`domain_map(I, tensor((integer(1) - t, t)), K)` with `t = coordinate(I)[0]`.
+The reference normal is `reference_normals_p[e]`, of shape `(2,)`.
 
 The coordinate trace follows the same route, so the facet parameterisation is `pull_back(pull_back(x, C_p), A_p)`;
 its Jacobian gives the facet density.
