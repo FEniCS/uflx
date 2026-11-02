@@ -1005,10 +1005,7 @@ the label there would substitute into $s_1, \dots, s_n$ again, which may
 contain the binding node, so the substitution would not terminate.
 
 The edges of an index to the objects in the label of the index identify the
-index and are not operands. Evaluation does not descend into the label, and
-expressions stored there do not enter the lowering grammars (see
-[Evaluation traversal](#evaluation-traversal)). Rebuilding a label during
-substitution does not evaluate the expressions it contains.
+index and are not operands (see [Evaluation traversal](#evaluation-traversal)).
 
 A free function or a pass of the core derives one `Index` for each axis, and
 never an `EllipsisIndex`. `component_tensor(e, K)[J]` is $e$ with each index
@@ -3318,8 +3315,8 @@ example. Exposed expressions are visited; stored geometry is unchanged.
 Each expression exposed from geometry must belong to $N_4$ as a separate
 root. The supplier runs the first four passes before building the geometry
 if necessary. This is a pass precondition, not a constructor restriction;
-it also applies to parameterisations of maps that rewrites build. Reducible
-gradients and pull-backs may remain until the lowering stage exposes them.
+it also applies to parameterisations of maps that rewrites build. The lowering
+stage evaluates exposed gradients and pull-backs.
 
 The enclosing expression's normal form makes no claim about expressions
 retained in geometry, spaces or metadata. Consumers evaluate these separately
@@ -3444,12 +3441,9 @@ the pass, such as $N_1$ of
 [`apply_gateaux_derivatives`](#applying-gateaux-derivatives), and [The core
 normal form](#the-core-normal-form) lists what the last of them allows.
 
-For example, a `Function` on a domain whose stored parameterisation contains
-a reducible `Gradient` is in $N_5$: the traversal stops at the function.
-That gradient is checked and lowered if the parameterisation is evaluated as
-a separate root, or if a rewrite exposes it in the evaluated expression.
-Likewise, an old expression retained in a derived-index label does not keep
-the enclosing expression out of $N_5$.
+For example, a `Function` is in $N_5$ even if its domain's parameterisation
+contains a reducible `Gradient`: traversal stops at the function. The
+parameterisation is checked separately when exposed or evaluated.
 
 ### Applying Gateaux derivatives
 
@@ -3469,7 +3463,7 @@ derivative](#gateaux-derivative) and
 | -------------------------- | ------- |
 | A real space | `Form(δF[w], (w,))` |
 | A complex space, $F$ holomorphic in $x$, entry `w` | `Form(δF[w], (w,))` |
-| A complex space, $F$ holomorphic in $x$, entry `conjugate(w)` | `Zero` with the static type of the derivative |
+| A complex space, $F$ holomorphic in $x$, entry `conjugate(w)` | Zero with the type of the derivative |
 | A complex space, entry `w` | `Form(Integer(1) / Integer(2) * (δF[w] - i_unit * δF[i_unit * w]), (w,))` |
 | A complex space, entry `conjugate(w)` | `Form(Integer(1) / Integer(2) * (δF[w] + i_unit * δF[i_unit * w]), (conjugate(w),))` |
 
@@ -3499,10 +3493,7 @@ derivative](#gateaux-derivative) and
 The pass rewrites every `Action(f, p, g)`, inner actions first, with the first
 row that matches the form $f$, and keeps the value of [`Action`](#action).
 It applies the rules again to actions created by a rewrite, including those
-created by substituting a symbolic form for a dual function. Each replacement
-uses [type completion](#type-compatibility-of-rewrites), including when
-substitution removes dependence on an indexed argument or gives a real value
-for a complex form.
+created by substituting a symbolic form for a dual function.
 
 | Form $f$ | Rewrite of `Action(f, p, g)` |
 | -------- | ---------------------------- |
@@ -3511,8 +3502,7 @@ for a complex form.
 | `Product(a, b)`, with $n$ the arity of $a$ | `Product(Action(a, p, g), b)` for $p < n$, otherwise `Product(a, Action(b, p - n, g))` |
 | `Gradient`, `PullBack` | Remains; the operation transforms the form's output |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the action moved into the listed operands |
-| `Zero` | `Zero` with the free indices of $g$ added and the entry at $p$ removed |
-| `Complex` | `Complex(z, z)`, with `z` the `Zero` with the value shape, free indices and remaining argument spaces of the action |
+| `Zero`, `Complex` | Zero with the type of the action |
 | `Function` | Remains, for the supplying library |
 | `Action` | Remains, as a further application of a remaining action |
 | Any other class of the core | Cannot occur, because the argument spaces are `()` |
@@ -3581,8 +3571,8 @@ remains in $N_2$ and contains no `DirectionalDerivative`.
 
 | Expression $f$ | Rewrite of the derivative at $a$ |
 | -------------- | -------------------------------- |
-| No function of $x$ free in $f$ | `Zero`, with the value shape and the argument spaces of $f$, and the free indices of $f$ followed by those of the members of $a$ and $h$ |
-| $f$ equal to the member $x_k$ of $x$ | $h_k$, or $h$ for a function $x$, with [type completion](#type-compatibility-of-rewrites) |
+| No function of $x$ free in $f$ | Zero with the type of the derivative |
+| $f$ equal to the member $x_k$ of $x$ | $h_k$, or $h$ for a function $x$ |
 | `Action(b, p, g)` | `Action(Db, p, g) + Action(b, p, Dg)`, with undifferentiated operands evaluated at $a$ |
 | Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \mathrm{D} b$ |
 | `DirectionalDerivative` | Cannot occur, because the inner derivative is rewritten first |
@@ -3591,7 +3581,7 @@ remains in $N_2$ and contains no `DirectionalDerivative`.
   does not depend on $x$, and a terminal other than a function of $x$ needs no
   row. An operand is constant for the pass if no function of $x$ is free in
   the operand.
-- A `Form` that binds $x$ has no free $x$, so the first row gives `Zero`.
+- A `Form` that binds $x$ has no free $x$, so the first row gives zero.
 - A dual variable can occur in the functional operand of a pairing. Its
   direction and substitution point may be symbolic forms; their actions
   are evaluated by `apply_actions`.
@@ -3601,17 +3591,11 @@ remains in $N_2$ and contains no `DirectionalDerivative`.
 For real scalar functions `u` and `a` in a space of constants,
 `directional_derivative(u * u, u, a, u)` rewrites to `u * a + a * u`.
 
-For a real scalar function `u` in a space of constants, a constant array `a`
-of shape `(m,)` and an index `i`, the identity derivative is:
-
-```python
-directional_derivative(u, u, a[i], Integer(1))
-```
-
-Its value is one for every `i`, so its lowered result is
-`Integer(1) + Zero((), ((i, m),), ())`. Returning `Integer(1)` alone would
-lose the family index supplied by the evaluation point. The same completion
-retains indices of unused members of a tuple point or direction.
+For a real scalar function `u` in a space of constants and a constant array
+`a` of shape `(m,)`, `directional_derivative(u, u, a[i], Integer(1))` lowers
+to `Integer(1) + Zero((), ((i, m),), ())`: its value is one for every `i`.
+Type completion retains indices even from unused members of tuple points
+and directions.
 
 ### Expanding integrals
 
@@ -3731,10 +3715,6 @@ $A_i$ are the maps of [Restriction](#restriction).
 - The `Action` row transforms only the form's output. The last row moves the
   pull-back into the expression operands of the other unmatched node classes,
   with a binding node made fresh for $\psi$ first.
-- Type completion uses `Zero` to retain free indices without depending on
-  their values. Thus `f + Zero(…)` is $f$ for each member of the family
-  $\psi$, including when $f$ is nonzero. The result may have no support,
-  representing a constant field on $P$.
 - A restriction is a pull-back by a `SideMap` (see
   [Restriction](#restriction)), so this pass also lowers restrictions. A
   pull-back by a `SideMap` that no pull-back by a cell encloses, such as on an
@@ -3785,15 +3765,12 @@ The following table lists all allowed node classes and their conditions:
 | [Variational forms](#variational-forms) | `Action` | Its form is a `Function`, a `Gradient`, a `PullBack` or another such `Action`, with each operand in the core normal form |
 | | A terminal of a downstream library | Always |
 
-The objects of an expression that are not expressions, such as an `Index`, an
-`EllipsisIndex`, a `GatheredIndex`, a domain, a `DomainMap`, a `SideMap`, a
-`CellMap` and a space, occur as in any expression. Expressions reachable only
-through those dependencies or through terminal metadata are outside this
-normal-form claim (see [Evaluation traversal](#evaluation-traversal)).
+Dependencies outside the [evaluation traversal](#evaluation-traversal), such
+as geometry and labels, are outside this normal-form claim.
 
 The code that assembles receives the form layer (see [Grammars](#grammars)):
-sums and products of forms, `Zero`, forms whose expression may be a form,
-with the order of the arguments from the static type (see [`Form`](#form)),
+sums and products of forms, real and complex zeros, forms whose expression
+may be a form, with the order of the arguments from the static type (see [`Form`](#form)),
 and actions on supplied or spatially transformed forms. Libraries evaluate
 supplied functions and their spatial transformations.
 
