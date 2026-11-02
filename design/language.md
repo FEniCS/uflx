@@ -248,7 +248,7 @@ Three kinds of code produce objects:
 | Kind                                               | When the code runs              | Inspects arguments to choose what to build                                | Validates construction arguments |
 | -------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- | ----------------------------- |
 | Constructor                                        | Whenever an object is made      | No, a constructor inspects arguments only to validate                     | Yes                           |
-| Construction free function, such as `transpose`  | While the user builds the graph | Static type for expression compositions; canonical forms for spaces | May validate documented inputs |
+| Construction free function, such as `transpose`  | While the user builds the graph | Expression static type and explicit non-expression arguments; canonical forms for spaces | May validate documented inputs |
 | Pass, such as differentiation, lowering or `units` | After construction              | Yes, and a pass may rewrite the graph                                     | No                            |
 
 A construction free function rejects invalid inputs itself or through the
@@ -451,14 +451,16 @@ forms](#variational-forms)).
 
 An expression operation must be a construction free function, not a node class, if it can
 build the concept as one fixed composition of existing node classes for each
-static type of the arguments. The static type of an expression is the value
+expression static type and choice of explicit non-expression arguments.
+The static type of an expression is the value
 shape, the free indices, the scalar type, the support and the argument
 spaces. The static type of a domain is the stored and the derived
 properties of the domain, such as the dimension of a coordinate domain or the pieces of a
 decomposed domain. A construction free function chooses the composition from
-the static type, never from argument structure, such as the class, the edges
-or the values. Choosing a composition from argument structure requires a node
-class; inspecting it to validate inputs does not. A concept that is evaluated
+expression static types and the documented interfaces of explicit non-expression
+arguments. Choosing a composition from expression structure, such as the class,
+the edges or the values, requires a node class; inspecting it to validate
+inputs does not. A concept that is evaluated
 by a numerical algorithm that the user supplies also
 gets its own node class, even if a fixed composition exists, because the
 composition would fix the algorithm. A concept that a pass must
@@ -845,9 +847,9 @@ entries than the rank and indexes the leading axes:
 
 `K` is the `tuple` of the derived indices
 `Index(("uflx.component", f, entries, m))`, one for each axis that the entries
-do not cover (see [Derived indices](#derived-indices)). `component` reads only
-the rank of $f$ and the number of entries. `Indexed` validates the entries, so
-too many entries raise `IndexError` from `Indexed`.
+do not cover (see [Derived indices](#derived-indices)). `component` reads
+the rank of $f$, the number of entries and whether any is an `EllipsisIndex`.
+`Indexed` validates the entries, so too many entries raise `IndexError`.
 
 A free function of the core calls `indexed`, never `component`, so a
 composition in this document that writes `f[K]` is `indexed(f, K)`, and an
@@ -2176,15 +2178,17 @@ $T$.
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `push_forward(f, D, m)` | | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw` | `PushForward(f, D, m)` |
-| `push_forward(u, D)` | | `u: Function`, `D: DecomposedDomain` | `PushForward(u, D, u.space.transformation_law)` |
 
 The pull-back of `PushForward(f, D, m)` by `cell_domain(D, j, e)` is
 $m_\psi(\hat f)$, with $\psi$ the cell and $\hat f$ =
 `pull_back(f, cell_map(T, j, e))`. The push-forward of the coordinate function
 $x$ of $D$ by `transformation_law((), 0)` is `coordinate(D)`.
 
-The core keeps the push-forward explicit. The arguments of a form, the
-variable and the direction of a derivative, and the keys of the data are the
+The transformation law is always explicit, for example
+`push_forward(u, D, transformation_law(V))` for `u` in `V`, where the
+one-argument `transformation_law` is supplied by the library of `V`.
+The arguments of a form, the variable and the direction of a derivative,
+and the keys of the data are the
 functions on $T$. A library may wrap `push_forward`, as the
 [classic FEniCS layer](examples/forms.md#a-classic-fenics-layer-for-the-poisson-problem) does.
 
@@ -2378,7 +2382,7 @@ the cell on the side at the position of the point, so point evaluation needs
 no pass outside the core.
 
 The core does not rewrite `pull_back(f, M)` for a field `f` on $D$ such as
-`push_forward(u, D)`, because the library of the space of `u` defines `u` on
+`push_forward(u, D, m)`, because the library of the space of `u` defines `u` on
 the cells only (see [`AbstractFunctionSpace`](#abstractfunctionspace)), and
 such a pull-back remains in the core normal form. A family of points known in advance is
 therefore written as the topology of the points, not as $M$. Points known only
@@ -2454,7 +2458,7 @@ family with the index `i`.
 The examples use the following objects:
 
 - `D` and `square` of the [`DecomposedDomain`](#decomposeddomain) example.
-- A field `f` on `D`, such as `push_forward(u, D)` for a function `u` on
+- A field `f` on `D`, such as `push_forward(u, D, m)` for a function `u` on
   `square` (see [`PushForward`](#pushforward)).
 - The decomposed domain `B` of the boundary facets of `D`, with the side
   `"inside"`.
@@ -2567,10 +2571,14 @@ with or without a domain or topology.
 | `AbstractFunctionSpace` |                                                                                                                                                       |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                 | `Base` |
-| Provides                | `domain`, an [`AbstractDomain`](#abstractdomain), an [`AbstractTopology`](#abstracttopology) or `None`, `value_shape`, `scalar_type`, `argument_spaces`, `()` for a space of fields, and `transformation_law`, a [`TransformationLaw`](#transformationlaw) for a space on a topology and otherwise `None` |
+| Provides                | `domain`, an [`AbstractDomain`](#abstractdomain), an [`AbstractTopology`](#abstracttopology) or `None`, `value_shape`, `scalar_type`, and `argument_spaces`, `()` for a space of fields |
 | Defined by              | A subclass outside the core, such as a subclass for the finite element spaces of Basix, and [`DualSpace`](#dualspace) in the core                           |
 
 A space with the domain `None` has functions that do not depend on a domain.
+
+A library may supply `transformation_law(V)` for spaces with a
+[`TransformationLaw`](#transformationlaw). This is not a required space property
+or a core overload; the core constructor remains `transformation_law(variances, weight)`.
 
 #### Functions in a space
 
@@ -2638,7 +2646,7 @@ The examples use a topology `T` of `ReferenceSimplex(2)` cells and the mesh
 ```{dropdown} Legacy UFL
 The legacy UFL `Real` space is a space of constants, and the legacy UFL `Constant` is constant data.
 
-In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, a space holds a topology and states its transformation law, and the push-forward to a mesh is explicit.
+In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, a space may be defined on a topology, with an explicit law for its push-forward to a mesh, or on the mesh itself.
 ```
 
 ### `Function`
@@ -2773,7 +2781,7 @@ product and belongs to the supplying library.
 | Extends | `AbstractFunctionSpace` |
 | Takes | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` |
 | Properties | `space` $S$, a space other than a `DualSpace`, or a `tuple` of at least two spaces with the same scalar type |
-| Derived | `domain`, `value_shape`, `scalar_type`, `argument_spaces` and `transformation_law`, below |
+| Derived | `domain`, `value_shape`, `scalar_type` and `argument_spaces`, below |
 | Raises | `TypeError` for an $S$ of another type, and `ValueError` for a `DualSpace` or an invalid tuple |
 
 | Free function | Overload | Takes | Returns |
@@ -2782,7 +2790,7 @@ product and belongs to the supplying library.
 
 `DualSpace(S)` provides:
 
-- No domain or transformation law, and value shape `()`.
+- No domain, and value shape `()`.
 - The argument spaces `(S',)`, with $S'$ = `conjugate_space(S)` for a
   space, or the tuple of the conjugate spaces for a `tuple` $S$.
 - The scalar type of $S$, common to the members of a `tuple`.
@@ -4404,7 +4412,6 @@ classDiagram
 |                             | [`cell_domain(D, j, e)`](#cell-domains)                                  |                               | `D: DecomposedDomain`, `j: int`, `e: Index \| GatheredIndex`                                                           | `DomainMap` of the cells of type `j` selected by `e`                                                                                                                            |
 |                             | [`transformation_law(variances, weight)`](#transformationlaw)            |                               | `variances: tuple[str, ...]`, `weight: int`                                                                            | `TransformationLaw`                                                                                                                                                             |
 |                             | [`push_forward(f, D, m)`](#pushforward)                                  |                               | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw`                                                 | `PushForward(f, D, m)`                                                                                                                                                          |
-|                             | [`push_forward(u, D)`](#pushforward)                                     |                               | `u: Function`, `D: DecomposedDomain`                                                                                   | `PushForward(u, D, u.space.transformation_law)`                                                                                                                                 |
 |                             | [`side_map(X, P, s)`](#sidemap)                                          |                               | `X, P: AbstractTopology \| DecomposedDomain`, `s: str`                                                                 | `SideMap(X, P, s)`                                                                                                                                                              |
 |                             | [`side_domain(D, S, s)`](#side-domains)                                  |                               | `D: DecomposedDomain`, `S: AbstractTopology`, `s: str`                                                                 | `image(pull_back(x, side_map(T, S, s)), Q)`                                                                                                                                     |
 |                             | [`normal(sm)`](#normal)                                                  |                               | `sm: SideMap`                                                                                                          | `Normal`                                                                                                                                                                        |
@@ -4483,6 +4490,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 11    |
 | Concrete classes                | 44    |
 | Expression node classes         | 33    |
-| Free functions                  | 54    |
+| Free functions                  | 53    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

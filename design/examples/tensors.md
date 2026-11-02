@@ -57,7 +57,10 @@ two = Integer(2)
 c = function(K, "c")
 stiffness = component_tensor(c[gathered_index(packed, (i, j, k, l))], (i, j, k, l))
 
-grad_u, grad_v = gradient(push_forward(u, D), D), gradient(push_forward(v, D), D)
+grad_u, grad_v = (
+    gradient(push_forward(u, D, transformation_law(V)), D),
+    gradient(push_forward(v, D, transformation_law(V)), D),
+)
 eps_u = (grad_u + transpose(grad_u)) / two
 eps_v = (grad_v + transpose(grad_v)) / two
 elastic = form(

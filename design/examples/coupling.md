@@ -38,7 +38,7 @@ E = side_domain(D, diagonal, "+")
 e = cell_index(diagonal, 0)
 
 u, v = function(V, "u"), function(V, "v")
-u_D, v_D = push_forward(u, D), push_forward(v, D)
+u_D, v_D = push_forward(u, D, transformation_law(V)), push_forward(v, D, transformation_law(V))
 grad_u, grad_v = gradient(u_D, D), gradient(v_D, D)
 ```
 
@@ -215,9 +215,12 @@ p, q = function(Q, "p"), function(Q, "q")
 d, w, d_old = function(W, "d"), function(W, "w"), function(W, "d_old")
 lam, mu = function(L, "lam"), function(L, "mu")
 
-u_F, v_F, p_F, q_F = (push_forward(f, F) for f in (u, v, p, q))
-d_S, w_S, d_old_S = (push_forward(f, S) for f in (d, w, d_old))
-lam_G, mu_G = push_forward(lam, G), push_forward(mu, G)
+u_F, v_F, p_F, q_F = (push_forward(f, F, transformation_law(f.space)) for f in (u, v, p, q))
+d_S, w_S, d_old_S = (push_forward(f, S, transformation_law(f.space)) for f in (d, w, d_old))
+lam_G, mu_G = (
+    push_forward(lam, G, transformation_law(L)),
+    push_forward(mu, G, transformation_law(L)),
+)
 
 nu, mu_s, lam_s = runtime_array("nu", ()), runtime_array("mu_s", ()), runtime_array("lam_s", ())
 dt, g = runtime_array("dt", ()), runtime_array("g", (2,))
@@ -321,10 +324,10 @@ p1, q1 = function(V1, "p1"), function(V1, "q1")
 beta = runtime_array("beta", ())
 m = index("m")
 
-grad_p3 = gradient(push_forward(p3, D3), D3)
-grad_q3 = gradient(push_forward(q3, D3), D3)
-grad_p1 = gradient(push_forward(p1, D1), D1)
-grad_q1 = gradient(push_forward(q1, D1), D1)
+grad_p3 = gradient(push_forward(p3, D3, transformation_law(V3)), D3)
+grad_q3 = gradient(push_forward(q3, D3, transformation_law(V3)), D3)
+grad_p1 = gradient(push_forward(p1, D1, transformation_law(V1)), D1)
+grad_q1 = gradient(push_forward(q1, D1, transformation_law(V1)), D1)
 tissue = integral(index_sum(grad_p3[m] * grad_q3[m], (m,)), D3)
 vessel = integral(index_sum(grad_p1[m] * grad_q1[m], (m,)), D1)
 
@@ -379,8 +382,8 @@ x1 = D1.coordinate_function
 ring = domain_map(
     T1, component_tensor(x1[m] + R * (cs[l, 0] * n1[m] + cs[l, 1] * n2[m]), (m,)), D3
 )
-p3_avg = index_sum(w[l] * pull_back(push_forward(p3, D3), ring), (l,))
-q3_avg = index_sum(w[l] * pull_back(push_forward(q3, D3), ring), (l,))
+p3_avg = index_sum(w[l] * pull_back(push_forward(p3, D3, transformation_law(V3)), ring), (l,))
+q3_avg = index_sum(w[l] * pull_back(push_forward(q3, D3, transformation_law(V3)), ring), (l,))
 
 exchange_avg = push_forward(beta * (p1 - p3_avg) * (q1 - q3_avg), D1, identity)
 coupling_avg = integral(exchange_avg, D1)

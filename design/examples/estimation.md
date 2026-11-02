@@ -56,12 +56,16 @@ on `square`:
 ```python
 u_h, f, g = function(V, "u_h"), function(F, "f"), function(F, "g")
 e, v = function(W, "e"), function(W, "v")
-f_D, g_D, v_D = push_forward(f, D), push_forward(g, D), push_forward(v, D)
+f_D, g_D, v_D = (
+    push_forward(f, D, transformation_law(F)),
+    push_forward(g, D, transformation_law(F)),
+    push_forward(v, D, transformation_law(W)),
+)
 i = index("i")
 half = Integer(1) / Integer(2)
 
 # Local bilinear form.
-grad_e = gradient(push_forward(e, D), D)
+grad_e = gradient(push_forward(e, D, transformation_law(W)), D)
 grad_v = gradient(v_D, D)
 a = form(integral(index_sum(grad_e[i] * grad_v[i], (i,)), D), (v, e))
 ```
@@ -70,7 +74,7 @@ The right-hand side combines the cell residual with facet contributions:
 
 ```python
 # Cell residual; lap_u vanishes for degree 1.
-grad_u = gradient(push_forward(u_h, D), D)
+grad_u = gradient(push_forward(u_h, D, transformation_law(V)), D)
 lap_u = divergence(grad_u, D)
 r_cell = integral((f_D + lap_u) * v_D, D)
 
@@ -149,16 +153,20 @@ For advection–diffusion, build the primal form, goal and adjoint:
 D = image(x, RD(2))
 u, v, u_h, z_h = function(V, "u"), function(V, "v"), function(V, "u_h"), function(V, "z_h")
 z = function(W, "z")
-f, psi = push_forward(function(F, "f"), D), push_forward(function(F, "psi"), D)
-b = push_forward(function(B, "b"), D)
+f, psi = (
+    push_forward(function(F, "f"), D, transformation_law(F)),
+    push_forward(function(F, "psi"), D, transformation_law(F)),
+)
+b = push_forward(function(B, "b"), D, transformation_law(B))
 i = index("i")
+identity = transformation_law((), 0)
 
 def a_expr(w, y):
-    w_D, y_D = push_forward(w, D), push_forward(y, D)
+    w_D, y_D = push_forward(w, D, identity), push_forward(y, D, identity)
     grad_w, grad_y = gradient(w_D, D), gradient(y_D, D)
     return index_sum(grad_w[i] * grad_y[i], (i,)) + index_sum(b[i] * grad_w[i], (i,)) * y_D
 
-v_D = push_forward(v, D)
+v_D = push_forward(v, D, transformation_law(V))
 a = form(integral(a_expr(u, v), D), (v, u))
 L = form(integral(f * v_D, D), (v,))
 goal = form(integral(psi * v_D, D), (v,))
@@ -176,7 +184,8 @@ eta = action(R, 0, z - z_h)
 
 `R` has one argument in `V`. An action accepts any expression with the static
 type of a function in `V`, so `z-z_h` from the richer space is allowed.
-Substitution into `push_forward(v, D)` uses `V`'s transformation law.
+Substitution into `push_forward(v, D, transformation_law(V))` retains the
+explicit law.
 Galerkin orthogonality makes the action on `z_h` zero in value; `eta` is a
 functional, one number after assembly.
 

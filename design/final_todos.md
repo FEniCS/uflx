@@ -72,7 +72,7 @@ Nothing. Integrals over cells and facets use the induced density in
 
 - The Laplacian, as `integral` over `D` of
   `index_sum(grad_u[i] * grad_v[i], (i,))`, with
-  `grad_u = gradient(push_forward(u, D), D)`, in the Euclidean frame of
+  `grad_u = gradient(push_forward(u, D, transformation_law(u.space)), D)`, in the Euclidean frame of
   `RD(n)`.
 - The volume and the size $h$ of each cell, and the area of each facet, as an
   `Integral` over the reference cell of the density, with the free cell index.

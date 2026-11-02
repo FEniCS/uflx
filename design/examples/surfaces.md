@@ -15,7 +15,11 @@ The library supplies the topology, space and coordinate values:
 M = image(x, RD(3))
 
 u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
-u_M, v_M, f_M = push_forward(u, M), push_forward(v, M), push_forward(f, M)
+u_M, v_M, f_M = (
+    push_forward(u, M, transformation_law(V)),
+    push_forward(v, M, transformation_law(V)),
+    push_forward(f, M, transformation_law(V)),
+)
 
 i = index("i")
 grad_u = gradient(u_M, M)
@@ -112,7 +116,10 @@ D_s = image(x + s, RD(2))
 volume = integral(Integer(1), D_s)
 
 u, v = function(V, "u"), function(V, "v")
-grad_u, grad_v = gradient(push_forward(u, D_s), D_s), gradient(push_forward(v, D_s), D_s)
+grad_u, grad_v = (
+    gradient(push_forward(u, D_s, transformation_law(V)), D_s),
+    gradient(push_forward(v, D_s, transformation_law(V)), D_s),
+)
 a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D_s), (v, u))
 ```
 
@@ -163,7 +170,7 @@ The solver supplies coordinate values for `x`.
 ```python
 x, h, v = function(X, "x"), function(X, "h"), function(X, "v")
 D = image(x, RD(2))
-grad_u = gradient(push_forward(function(V, "u"), D), D)
+grad_u = gradient(push_forward(function(V, "u"), D, transformation_law(V)), D)
 i = index("i")
 energy = integral(index_sum(grad_u[i] * grad_u[i], (i,)), D)
 

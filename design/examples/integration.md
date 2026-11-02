@@ -251,8 +251,8 @@ c = runtime_array("c", (T.num_cells[0], 3))
 
 u, v = function(V, "u"), function(V, "v")
 sample = domain_map(RD(0), points[q], K)
-u_q = pull_back(pull_back(push_forward(u, D), cells), sample)
-v_q = pull_back(pull_back(push_forward(v, D), cells), sample)
+u_q = pull_back(pull_back(push_forward(u, D, transformation_law(V)), cells), sample)
+v_q = pull_back(pull_back(push_forward(v, D, transformation_law(V)), cells), sample)
 rho_q = pull_back(density(cells), sample)
 
 a = form(

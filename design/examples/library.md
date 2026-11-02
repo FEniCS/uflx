@@ -4,6 +4,13 @@ These supporting classes are outside the core. The simplex cell type,
 static topology and reference-simplex definitions carry the original draft's
 LLM-generated-content designation; the centroid example was also LLM-proposed.
 
+## Transformation laws
+
+The examples use the library overload `transformation_law(V)` to obtain a
+law for a supported space. It derives the law from the space's definition
+and raises `TypeError` for an unsupported space. The two-argument form
+`transformation_law(variances, weight)` is the core constructor.
+
 ## The unit simplex
 
 Define the unit simplex in $R^n$,
@@ -280,15 +287,19 @@ def VectorFunctionSpace(mesh, family, degree):
 
 
 def TestFunction(V):
-    return push_forward(function(V.space, ("argument", 0)), V.mesh.domain)
+    return push_forward(
+        function(V.space, ("argument", 0)), V.mesh.domain, transformation_law(V.space)
+    )
 
 
 def TrialFunction(V):
-    return push_forward(function(V.space, ("argument", 1)), V.mesh.domain)
+    return push_forward(
+        function(V.space, ("argument", 1)), V.mesh.domain, transformation_law(V.space)
+    )
 
 
 def Coefficient(V, name):
-    return push_forward(function(V.space, name), V.mesh.domain)
+    return push_forward(function(V.space, name), V.mesh.domain, transformation_law(V.space))
 
 
 def Constant(name, shape=()):

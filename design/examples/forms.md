@@ -13,7 +13,11 @@ of value shape `(2,)`, and a real scalar continuous Lagrange space `V` on `T`:
 ```python
 D = image(x, RD(2))
 u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
-u_D, v_D, f_D = push_forward(u, D), push_forward(v, D), push_forward(f, D)
+u_D, v_D, f_D = (
+    push_forward(u, D, transformation_law(V)),
+    push_forward(v, D, transformation_law(V)),
+    push_forward(f, D, transformation_law(V)),
+)
 grad_u, grad_v = gradient(u_D, D), gradient(v_D, D)
 i = index("i")
 
@@ -45,13 +49,13 @@ Use multipliers for the mean pressure on `F` and mean volume change on `S`:
 ```python
 p, q = function(Q, "p"), function(Q, "q")
 d, w = function(W, "d"), function(W, "w")
-p_F, q_F = push_forward(p, F), push_forward(q, F)
-d_S, w_S = push_forward(d, S), push_forward(w, S)
+p_F, q_F = push_forward(p, F, transformation_law(Q)), push_forward(q, F, transformation_law(Q))
+d_S, w_S = push_forward(d, S, transformation_law(W)), push_forward(w, S, transformation_law(W))
 div_d, div_w = divergence(d_S, S), divergence(w_S, S)
 
 r, s = function(R, "r"), function(R, "s")
 k, z = function(R_S, "k"), function(R_S, "z")
-k_S, z_S = push_forward(k, S), push_forward(z, S)
+k_S, z_S = push_forward(k, S, transformation_law(R_S)), push_forward(z, S, transformation_law(R_S))
 means = integral(p_F * s + q_F * r, F) + integral(k_S * div_w + z_S * div_d, S)
 mean_form = form(means, ((q, w, s, z), (p, d, r, k)))
 ```
@@ -76,10 +80,12 @@ grad_d, grad_w = gradient(d_S, S), gradient(w_S, S)
 eps_d = (grad_d[i, j] + grad_d[j, i]) / two
 eps_w = (grad_w[i, j] + grad_w[j, i]) / two
 
-e = integral(two * push_forward(mu_s, S) * index_sum(eps_d * eps_w, (i, j)), S)
+e = integral(
+    two * push_forward(mu_s, S, transformation_law(R_S)) * index_sum(eps_d * eps_w, (i, j)), S
+)
 de_dmu = form(directional_derivative(e, mu_s, mu_s, Integer(1)), (w, d))
 
-grad_u = gradient(push_forward(u, F), F)
+grad_u = gradient(push_forward(u, F, transformation_law(V)), F)
 dissipation = integral(nu * index_sum(grad_u[i, j] * grad_u[i, j], (i, j)), F)
 g_nu = form(directional_derivative(dissipation, nu, nu, h), (h,))
 ```
@@ -105,13 +111,20 @@ The solver sets `sigma_x` and `sigma_y` to zero outside the layer:
 ```python
 D = image(x, RD(2))
 k0 = function(C, "k0")
-sigma_x, sigma_y = push_forward(function(F, "sigma_x"), D), push_forward(function(F, "sigma_y"), D)
+sigma_x, sigma_y = (
+    push_forward(function(F, "sigma_x"), D, transformation_law(F)),
+    push_forward(function(F, "sigma_y"), D, transformation_law(F)),
+)
 one, i_unit = Integer(1), Complex(Integer(0), Integer(1))
 s_x = one + i_unit * sigma_x / k0
 s_y = one + i_unit * sigma_y / k0
 
 u, v, f = function(V, "u"), function(V, "v"), function(F, "f")
-u_D, v_D, f_D = push_forward(u, D), push_forward(v, D), push_forward(f, D)
+u_D, v_D, f_D = (
+    push_forward(u, D, transformation_law(V)),
+    push_forward(v, D, transformation_law(V)),
+    push_forward(f, D, transformation_law(F)),
+)
 grad_u, grad_v = gradient(u_D, D), gradient(v_D, D)
 j = index("j")
 
@@ -151,8 +164,15 @@ Lagrange space `DG` of degree 0, both on `T`:
 D = image(x, RD(2))
 sigma, tau = function(RT, "sigma"), function(RT, "tau")
 u, v, f = function(DG, "u"), function(DG, "v"), function(DG, "f")
-sigma_D, tau_D = push_forward(sigma, D), push_forward(tau, D)
-u_D, v_D, f_D = push_forward(u, D), push_forward(v, D), push_forward(f, D)
+sigma_D, tau_D = (
+    push_forward(sigma, D, transformation_law(RT)),
+    push_forward(tau, D, transformation_law(RT)),
+)
+u_D, v_D, f_D = (
+    push_forward(u, D, transformation_law(DG)),
+    push_forward(v, D, transformation_law(DG)),
+    push_forward(f, D, transformation_law(DG)),
+)
 i = index("i")
 
 e = (
@@ -170,7 +190,7 @@ the `v` member, which joint linearity permits. Replacing `sigma` and `v` by
 `Zero` in the integrand isolates the `tau`–`u` block,
 `u_D * divergence(tau_D, D)`.
 
-The space supplies the transformation law:
+The library's `transformation_law` selects these laws:
 
 | Space | Law | Cell value |
 | ----- | --- | ---------- |
@@ -200,13 +220,16 @@ I = tensor((tensor((one, zero)), tensor((zero, one))))
 i, j, k, l, a = index("i"), index("j"), index("k"), index("l"), index("a")
 
 u, v, w = function(V, "u"), function(V, "v"), function(V, "w")
-mu, lmbda = push_forward(function(M, "mu"), D), push_forward(function(M, "lambda"), D)
+mu, lmbda = (
+    push_forward(function(M, "mu"), D, transformation_law(M)),
+    push_forward(function(M, "lambda"), D, transformation_law(M)),
+)
 
 def strain_energy(C):
     E = (C - I) / two
     return lmbda / two * index_sum(E[a, a], (a,)) ** two + mu * index_sum(E[i, j] * E[i, j], (i, j))
 
-F = I + gradient(push_forward(u, D), D)
+F = I + gradient(push_forward(u, D, transformation_law(V)), D)
 C = transpose(F) @ F
 psi = strain_energy(C)
 ```
