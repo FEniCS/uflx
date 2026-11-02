@@ -59,9 +59,8 @@ class Simplex(AbstractCellType):
 ## A static topology
 
 `StaticTopology(cell_types, cells, sides)` stores fixed connectivity, mainly
-for testing UFLx ideas, including Alfeld splits. It has no coordinates and
-does not check its sides; vertex positions come from a mesh's coordinate
-function.
+for testing UFLx ideas, including Alfeld splits. Vertex positions come from a
+mesh's coordinate function.
 
 | Convention | Meaning |
 | ---------- | ------- |

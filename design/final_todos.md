@@ -36,8 +36,6 @@ Nothing. Integrals over cells and facets use the induced density in
 1. **Complex conventions.** The antilinear position 0 and the Wirtinger parts
    differ from the conventions of `jax.grad` and `jax.vjp`. Document the
    conjugate at the boundary.
-1. **Non-smooth points.** `abs`, `square_root` and `ImaginaryPart` give NaN
-   in derivatives, and the core has no `conditional` to guard them.
 1. **Lowering.** Fuse an `IndexSum` of a `Product` into one contraction, lower
    a repeated index as a diagonal gather, and gather with in-bounds indices,
    because tables are never negative.

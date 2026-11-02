@@ -24,6 +24,12 @@ languages for variational forms, such as UFL and ngsolve.
 | **Open** | A question the authors have not decided. |
 | **Legacy UFL** dropdown | A comparison with legacy UFL, not a rule. |
 
+### Mathematical admissibility
+
+Construction checks structural validity. Values and rewrites assume the required
+mathematical hypotheses; the core neither verifies them nor extends formulas
+through singularities.
+
 ### Glossary
 
 | Term | Meaning |
@@ -143,7 +149,7 @@ Objects must satisfy the following rules:
    Structural equality does not decide mathematical equality: $a + b$ and
    $b + a$ are not structurally equal. Mathematical equalities are applied
    in later graph algorithms.
-8. All validation happens in the object's constructor. A construction free
+8. Structural validation happens in the object's constructor. A construction free
    function only reads derived properties and constructs objects; it never
    validates or converts arguments. The first constructor made invalid by an
    argument rejects it. Unless a class states otherwise, an unacceptable type or class
@@ -234,7 +240,7 @@ and the user of the core chooses which passes run and in what order.
 
 Three kinds of code produce objects:
 
-| Kind                                               | When the code runs              | Inspects arguments to choose what to build                                | Validates                     |
+| Kind                                               | When the code runs              | Inspects arguments to choose what to build                                | Validates construction arguments |
 | -------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- | ----------------------------- |
 | Constructor                                        | Whenever an object is made      | No, a constructor inspects arguments only to validate                     | Yes, and only constructors do |
 | Construction free function, such as `determinant`  | While the user builds the graph | Only the static type, to build one fixed composition for each static type | No                            |
@@ -1119,8 +1125,7 @@ with more rows than columns.
 
 `Inverse(A)` is the pseudo-inverse $A^+ = (A^T A)^{-1} A^T$ of a matrix $A$
 of matrix rank $k$, the left inverse of $A$ with $A^+ A$ the identity. For
-$k = n$, $A^+$ is the inverse matrix $A^{-1}$. If $A$ has matrix rank less
-than $k$, `Inverse(A)` is undefined. Construction does not check matrix rank.
+$k = n$, $A^+$ is the inverse matrix $A^{-1}$.
 
 A pass chooses how to evaluate `Inverse`, in closed form for a small matrix or
 by a factorisation. The definition fixes the value and not the algorithm: the
@@ -1153,9 +1158,8 @@ of a square matrix $A$.
 | `determinant(A)` | | `A: AbstractExpression` | The Leibniz formula for $\det A$ |
 
 `determinant(A)` requires $A$ with value shape `(n, n)` and an `int` extent
-$n$ (see [Extents](#extents)), which selects the composition. This requirement is
-not checked during construction; the result for any other operand is undefined.
-The Leibniz formula is
+$n$ (see [Extents](#extents)), which selects the composition. The Leibniz
+formula is
 
 $$
 \det A = \sum_\sigma \operatorname{sgn}(\sigma) \prod_{i=0}^{n-1} A_{i, \sigma(i)},
@@ -1497,9 +1501,7 @@ $D$. The 'topological dimension' of $D$ is $k$,
 `D.parameter_domain.dimension`, and the 'geometric dimension' is $n$, the
 dimension of the ambient coordinate domain of $Q$.
 
-The supplier must ensure that $\psi(P)$ lies in $Q$ and that geometry is
-sufficiently differentiable for each requested operation. These are semantic
-assumptions, not constructor checks. Maps need not be injective.
+Maps need not be injective.
 
 $P$ is a coordinate domain, such as a reference cell, or a topology. With a
 topology $T$ as $P$, `pull_back(g, domain_map(T, x, D))` pulls a field $g$
@@ -1657,10 +1659,8 @@ $$
 which is `integral(pull_back(f, D) * density(D), P)` for a scalar $f$. The
 integral does not depend on the direction in which $\psi$ traverses $D$.
 
-For positive-dimensional parameter domains, assume locally Lipschitz
-parameterisations and integrability of $(f \circ \psi)\rho$. Coverage is counted
-with multiplicity. The result equals the ordinary integral over the geometric
-image when the parameterisation is injective almost everywhere.
+Coverage is counted with multiplicity. The result equals the ordinary integral
+over the geometric image when the parameterisation is injective almost everywhere.
 
 The core has no orientation of a domain. An integral that depends on a
 direction, such as a circulation or a flux, is written with the Jacobian
@@ -1888,8 +1888,7 @@ group $i$, with the side `(side, T, j)`, the cell type $F_i$ of group $i$ and
 The inclusions of the sides of one group parameterise each cell $e$ in the same
 way: a point of $F_i$ is the same point of the cell $e$ from every side, so the
 difference of two restrictions is the jump (see [Restriction](#restriction)).
-[Restriction](#restriction) and [`Normal`](#normal) read the tables. The core
-does not check the sides or the tables.
+[Restriction](#restriction) and [`Normal`](#normal) read the tables.
 
 #### What the concrete mesh decides
 
@@ -1933,9 +1932,7 @@ entity meets several cells:
 The concrete mesh computes which parts of an entity meet which cells, outside
 the language, as the concrete mesh locates the cell that contains a point (see
 [A family of points in a mesh](#a-family-of-points-in-a-mesh)). The inclusion of
-a piece of a curved cell may be an approximation, as a quadrature rule is. The
-core does not check that the image of a cell of $S$ lies in the cell on the
-side.
+a piece of a curved cell may be an approximation, as a quadrature rule is.
 
 #### Examples
 
@@ -2277,8 +2274,8 @@ for a side domain, is `pull_back(pull_back(f, B_i), A_i)`.
 
 For a mesh $D$ = `image(x, Q)` with the topology $T$, the side domain of $S$
 is the image of the trace of $x$, so the side domain moves with $x$. The
-topology of the result is $S$. The core does not check that the other sides
-have the same geometry.
+topology of the result is $S$; the side selected by `side_map` supplies its
+geometry.
 
 #### Traces and normals
 
@@ -2510,8 +2507,7 @@ $\nu = w / \lvert w \rvert$, with $w = m_{B_i}(\hat m)$, where:
   $i$ (see [Side tables](#side-tables)), a normal of the cell of $E$ in $K_j$.
 
 The composition is `w / square_root(w @ w)`. It requires full column rank
-of the cell Jacobian and $w \ne 0$ wherever evaluated; construction does not
-check these assumptions.
+of the cell Jacobian and $w \ne 0$ wherever evaluated.
 
 The core needs no numbering of the facets and no vertices of $K_j$, because
 the library of the topology gives $\hat m$.
@@ -2864,8 +2860,8 @@ An argument's position is its index in `arguments`. An entry `v` declares
 linearity in `v`; `conjugate(v)` declares linearity in $\bar v$, hence
 antilinearity in `v`. They give the same argument space for a real space.
 A `tuple` entry declares joint linearity in its members, so a term may depend
-on only one member. Construction does not check these declarations; a
-[linearity pass](#checking-linearity) may do so.
+on only one member. A [linearity pass](#checking-linearity) can check these
+declarations.
 
 Binding is lexical: an occurrence refers to the innermost enclosing `Form`
 that binds the function, and is fixed otherwise. Thus a function may be an
@@ -2952,9 +2948,8 @@ stokes = form(e, ((v, q), (u, p)))
 wrong_arity = form(e, (v, q, u, p))
 ```
 
-`stokes` has argument spaces `((V, Q), (V, Q))`. Construction also accepts
-`wrong_arity`, but a linearity check rejects it: no term is linear in all four
-functions.
+`stokes` has argument spaces `((V, Q), (V, Q))`. A linearity check rejects
+`wrong_arity`: no term is linear in all four functions.
 
 #### Checking linearity
 
@@ -3203,14 +3198,12 @@ an expression of other node classes with that value. The lazy classes are
 `DirectionalDerivative`, `Integral` over a decomposed domain, `PullBack`,
 `Gradient`, `Divergence`, `Curl` and `PushForward`.
 
-A rewrite preserves value and [type compatibility](#type-compatibility-of-rewrites),
+A rewrite preserves value under the [mathematical admissibility](#mathematical-admissibility)
+convention and preserves [type compatibility](#type-compatibility-of-rewrites),
 using the renaming of [Substitution and binding](#substitution-and-binding).
 
 Passes never simplify, so zero terms remain in the graph, and zero times an
-undefined value is undefined. A rule must not introduce a product whose
-factor may be undefined where the original node is defined, even if another
-factor may be zero. The logarithm in a power derivative is one such case
-(see [Derivatives of the node classes](#derivatives-of-the-node-classes)).
+undefined value is undefined.
 
 `Action` and `DirectionalDerivative` commute with the following node classes
 in the listed operands, when the other operands do not depend on what the
@@ -3432,10 +3425,10 @@ questions](#new-questions)), built from rule tables as any other pass (see
   $e$. The grammar $N_0$ is the set of the
   expressions $e$ in which every expression node is an instance of a concrete
   class of the core or a terminal of a downstream library (see [Leaves and
-  subclassing](#leaves-and-subclassing)). Every object is valid, so $N_0$
-  needs no other condition. A node class of a language extension is not in
-  $N_0$, and an extension that adds node classes states the grammars that
-  contain them.
+  subclassing](#leaves-and-subclassing)). Every object is structurally valid,
+  so $N_0$ needs no other structural condition. A node class of a language
+  extension is not in $N_0$, and an extension that adds node classes states
+  the grammars that contain them.
 - A pass maps a source grammar into a target grammar if, for every
   expression of the source grammar satisfying the pass's preconditions, the
   result belongs to the target grammar. The core pass contracts also require
@@ -3559,12 +3552,8 @@ its own rows first, for the terminals of the expression, and then the rows below
 | `Conjugate(b)`, `RealPart(b)`, `ImaginaryPart(b)` | The same node applied to $\delta b$ |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the derivative moved into the listed operands |
 
-- `Power` has two rows. The general row multiplies by $\log(b)$, which is
-  undefined for a negative base, so the row for a constant exponent avoids
-  the logarithm. That row is undefined at a zero base when the value of the
-  exponent is 0, which occurs when an integer power is differentiated more
-  times than its degree, and is the one known exception to the principle of
-  [Evaluation](#evaluation).
+- The constant-exponent row for `Power` avoids the logarithm of the general
+  row, allowing negative real bases where the power is differentiable.
 - A commuting row applies only to an operand that no row of the pass
   matches first, so each pass decides through its own rows which node classes
   the derivative moves into, as [`apply_gradients`](#applying-gradients) does

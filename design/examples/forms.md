@@ -124,8 +124,8 @@ L = form(integral(f_D * conjugate(v_D), D), (conjugate(v),))
 
 The entries `(conjugate(v), u)` make `a` antilinear in `v` and linear in `u`;
 `L` has the matching test argument. Binding `(v, u)` would declare the wrong
-linearity: construction accepts that declaration, but a linearity check
-rejects it. Replacing both stretch factors by one gives the ordinary
+linearity, which a linearity check rejects. Replacing both stretch factors
+by one gives the ordinary
 Helmholtz form, real when `V` is real.
 
 `DomainMap` is real, so the complex coordinate change is performed
