@@ -341,7 +341,7 @@ an independently stored tag or a mutable registry. The core rules are:
 | ---- | ---------------- |
 | Numerical terminals, arithmetic, calculus and variational-form nodes | `Expression` |
 | `DomainMap`, `CellMap`, `SideMap` | `Map` |
-| `AbstractIndexValue` implementations, `GatheredIndex` | `IndexValue` |
+| `AbstractIndexValue` implementations | `IndexValue` |
 | `Indexed`, `ComponentTensor` | The operand's result interface |
 | `Tensor` | The common result interface of its entries |
 
@@ -516,7 +516,9 @@ Example:
 An axis whose length depends on another index, such as the quadrature points
 of each cut cell, cannot be written. A dependent extent, an `AbstractExtent`
 whose label contains the other index, would cover the case. An index value
-read from a table is a [`GatheredIndex`](#gatheredindex).
+read from a table is an `IndexValue` produced by shared
+[`Indexed`](#indexed) selection; its target extent does not describe an axis
+whose length varies with another index.
 ```
 
 ### `Index`
@@ -901,11 +903,11 @@ With `i, j = index("i"), index("j")` and a matrix `A` of value shape `(2, 3)`:
   of the squares of the entries of `A`, with no free index.
 
 The sections below give the rules. An [`EllipsisIndex`](#ellipsisindex)
-covers any number of axes, so one composition serves tensors of every rank. A
-[`GatheredIndex`](#gatheredindex) reads an index value from a table that the
-solver gives, such as the cell of each facet. A free function or a pass that
-needs a fresh index derives the index from the operands (see [Derived
-indices](#derived-indices)).
+covers any number of axes, so one composition serves tensors of every rank.
+`Indexed` also reads an index value from a table that the solver gives, such
+as the cell of each facet, preserving its `IndexValue` interface and target
+extent. A free function or a pass that needs a fresh index derives the index
+from the operands (see [Derived indices](#derived-indices)).
 
 ### `Indexed`
 
@@ -1077,31 +1079,17 @@ integral. The values are fixed but not known during construction. Its public val
 Each member is an `int` $v$ with $0 \le v <$ `extent`. A library factory
 returns `wrap(node)` for its supplied table node. Ordinary indexing
 `table[i]` returns an `IndexValue` with that target extent; a value of shape
-`()` is already a selector and needs no gather. Existing providers define
-`shape`; the node exposes it as `value_shape` for the common value interface.
+`()` is already a selector and is used directly. Providers define `shape`;
+the node exposes it as `value_shape` for the common value interface.
 
-### `GatheredIndex`
-
-`GatheredIndex` is the existing index-table read, retained while callers
-migrate to `Indexed`. Its public result is an `IndexValue`; its table
-indices determine its free indices. Shared `Indexed` also supports index-valued
-operands, so no further gather-specific machinery is needed.
-
-| `GatheredIndex(table, indices)` |                                                                                                                                    |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Extends                         | `AbstractValueNode` |
-| Free function                   | `gathered_index(table, indices)`                                                                                                   |
-| Takes                           | `table: IndexValue`, `indices: tuple` |
-| Properties                      | `table`, an index-valued node, and `indices`, an `int`, an `Index` or a scalar `IndexValue` for each axis of the shape of the table |
-| Static type                     | Result interface `IndexValue`, value shape `()`, and `extent` and `free_indices` below |
-| Raises                          | The errors of the entries of an [`Indexed`](#indexed)                                                                              |
-
-The entries follow the rules and errors of [`Indexed`](#indexed), except that
-`EllipsisIndex` is not accepted and an empty selector tuple is allowed for a
-scalar table. Gathers may nest. The result has the table's extent, and its
-free indices are those of the table, then the `Index` entries with their axis extents,
-followed by the free indices of the `IndexValue` entries, taking each index
-once.
+All selections use the shared [`Indexed`](#indexed) rules, including nested
+selection, partial indexing and `EllipsisIndex`. Selecting an index-valued
+family preserves its target extent, independently of the extents of its
+axes. Its free indices follow the same rules as any other selection. Binding
+free indices with `ComponentTensor` or stacking compatible index values with
+`Tensor` also preserves that target extent. These operations do not inspect
+the supplied table entries during construction; the library guarantees the
+bounds of every entry.
 
 #### Examples
 
@@ -1114,7 +1102,7 @@ The examples use the following objects:
 
 ```python
 e = index("e")
-g = gathered_index(cells, (e,))
+g = cells[e]
 
 # The value of a on the triangle of each edge, with the free index e of extent 4.
 a_e = a[g]
@@ -1124,10 +1112,19 @@ b = component_tensor(a_e, (e,))
 ```
 
 - Let `cell_vertices` be a table of the vertices of each triangle, of the shape
-  `(2, 3)` and the extent 4. `gathered_index(cell_vertices, (g, w))` is the
+  `(2, 3)` and the extent 4. `cell_vertices[g, w]` is the
   vertex `w` of the triangle of edge `e`, with the free indices `e` and `w`.
 - For an array `c` of value shape `(3,)`, `c[g]` raises `IndexError`, because
   the extent 2 of `g` differs from the extent 3 of the axis.
+- With `j = index("j")`, `cell_vertices[j]` selects a row of shape `(3,)`,
+  with target extent 4 and free index `j` of extent 2. `cell_vertices[j][w]`
+  and `cell_vertices[j, w]` have the same value and free indices.
+- `component_tensor(cells[e], (e,))` has shape `(4,)`, target extent 2 and no
+  free indices. The selected `cells[e]` is a bounded value, not an `Index`,
+  so it cannot itself be bound by `ComponentTensor` or `IndexSum`.
+- A supplied scalar index value `owner` with target extent 2 can select
+  `a[owner]` directly. Under the shared `Indexed` rules,
+  `indexed(owner, ())` raises `ValueError` for an empty selector tuple.
 
 ### Derived indices
 
@@ -2400,9 +2397,9 @@ other `Divergence` and `Curl` lowers to its composition of `Gradient`.
 The restriction of an expression $f$ on a topology $T$ or a mesh $D$ to the
 cells of a topology $S$ with sides, from the side $s$, is the pull-back of $f$
 along the inclusion of each cell of $S$ into the cell on the side $s$. The
-side tables of $S$ give the cell on the side, through a
-[`GatheredIndex`](#gatheredindex) entry, and the inclusion of each cell of $S$
-into that cell. The restriction is `pull_back(f, side_map(T, S, s))` for $f$
+side tables of $S$ give the cell on the side, through an
+[`IndexValue`](#indexvalue) selected from the cell table, and the inclusion
+of each cell of $S$ into that cell. The restriction is `pull_back(f, side_map(T, S, s))` for $f$
 on $T$, and `pull_back(f, side_map(D, E, s))` for $f$ on $D$ and a side
 domain $E$ (see [`SideMap`](#sidemap)).
 
@@ -2412,7 +2409,7 @@ Notation, for the group $i$ of $S$ with the side `(s, T, j)`:
   of group $i$.
 - $F_i$ is the cell type of group $i$, and $K_j$ the reference cell of cell
   type $j$ of $T$.
-- `e = cell_index(S, i)` and `g = gathered_index(cells, (e,))`.
+- `e = cell_index(S, i)` and `g = cells[e]`.
 
 #### The inclusion
 
@@ -2586,7 +2583,7 @@ library, which rewrites the pull-back as the restriction to the topology of
 the points, with the index $i$ of the family in place of the cell index:
 
 ```python
-g = gathered_index(cells, (i,))
+g = cells[i]
 R = domain_map(RD(0), positions[i], K_j)
 pull_back(pull_back(f, cell_domain(D, j, g)), R)
 ```
@@ -3920,7 +3917,6 @@ classes and their conditions:
 | [Algebra](#algebra) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
 | [Algebra](#algebra) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of a `ComponentTensor`, which the compiler rewrites (see [Evaluation](#evaluation)) |
 | [Algebra](#algebra) | `Inverse` | Always, for the compiler to evaluate |
-| [Algebra](#algebra) | `GatheredIndex` | Always, with the `IndexValue` result interface |
 | [Calculus on a domain](#calculus-on-a-domain) | `Coordinate` | Always |
 | [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
 | [Calculus on a domain](#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
@@ -4344,7 +4340,6 @@ classDiagram
     AbstractValueNode <|-- IndexSum
     Base <|-- EllipsisIndex
     AbstractValueNode <|-- AbstractIndexValue
-    AbstractValueNode <|-- GatheredIndex
     AbstractValueNode <|-- Inverse
 ```
 
@@ -4517,7 +4512,6 @@ classDiagram
 |                             | [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |                | `expression: AbstractValue`, `indices: tuple`                                                                 | `ComponentTensor`                                                                                                                                                               |
 |                             | [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |                | `expression: Expression`, `indices: tuple`                                                                    | `IndexSum`                                                                                                                                                                      |
 |                             | [`ellipsis_index(label)`](#ellipsisindex)                                |                | `label: str \| tuple`                                                                                         | `EllipsisIndex`                                                                                                                                                                 |
-|                             | [`gathered_index(table, indices)`](#gatheredindex)                       |                | `table: IndexValue`, `indices: tuple`                                                                         | `GatheredIndex`                                                                                                                                                                 |
 |                             | [`add(first, second)`](#tensor-arithmetic)                               | `+`            | `first, second: Expression`                                                                                   | `component_tensor(first[K] + second[K], K)` if both operands have rank 1 or more, otherwise `Sum(first, second)`                                                                |
 |                             | [`multiply(first, second)`](#tensor-arithmetic)                          | `*`            | `first, second: Expression`                                                                                   | `component_tensor(first * second[K], K)` if only `first` is a scalar, `component_tensor(first[K] * second, K)` if only `second` is a scalar, otherwise `Product(first, second)` |
 |                             | [`divide(first, second)`](#tensor-arithmetic)                            | `/`            | `first, second: Expression`                                                                                   | `component_tensor(first[K] / second, K)` if `first` has rank 1 or more and `second` is a scalar, otherwise `Division(first, second)`                                            |
@@ -4596,7 +4590,6 @@ and are not added to the enclosing expression's argument spaces.
 | `Integral`                               | Those of the integrand                                         |
 | `PullBack`                               | Those of the expression                                        |
 | `DomainMap`, `CellMap`, `SideMap`         | Not applicable: map-valued                                     |
-| `GatheredIndex`                          | Not applicable: index-valued                                   |
 
 The value shape and the free indices of each node class are in the section
 of the class. The support and the scalar type of numerical node classes that differ
@@ -4627,10 +4620,10 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 57    |
+| Classes                         | 56    |
 | Abstract classes                | 11    |
-| Concrete classes                | 46    |
-| Value node classes              | 36    |
-| Free functions                  | 60    |
+| Concrete classes                | 45    |
+| Value node classes              | 35    |
+| Free functions                  | 59    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

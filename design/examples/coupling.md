@@ -103,7 +103,7 @@ and the reference coordinates of the facet vertices `positions_p`,
 lowers to:
 
 ```python
-g_p = gathered_index(cells_p, (e,))
+g_p = cells_p[e]
 C_p = cell_map(square, 0, g_p)
 t = coordinate(I)[0]
 A_p = domain_map(I, tensor((integer(1) - t, t)), K)
