@@ -3881,10 +3881,13 @@ identities: scalar `f[K]` is `f`, and a retained scalar gradient component is
 | $b$ with no domain | `Zero`, with the value shape and the argument spaces of $b$, and the free indices of $b$ followed by $j$ |
 | `Coordinate(P)`, $P$ of the dimension of its ambient coordinate domain | `component_tensor(I[i, j], (i,))`, with $I$ the identity matrix of value shape `(n, n)` and a derived index $i$ |
 | A terminal, a `Gradient`, a `PushForward`, a node that the identity of Piola matches, or a `PullBack` by a cell or a `SideMap` | `component_tensor(gradient(b, P)[a_1, …, a_s, j], (a_1, …, a_s))`, with $s$ the rank of $b$, so the gradient remains |
-| `PullBack(g, φ)`, φ a `DomainMap` | The chain rule $(\nabla_Q g \circ \varphi) \, \nabla_P \varphi$, `pull_back(gradient(g, Q), φ)[a_1, …, a_s, l] * jacobian(φ)[l, j]` summed over a derived index $l$, with $Q$ the ambient domain of φ |
+| `PullBack(g, φ)`, φ a `DomainMap` | `component_tensor(index_sum(H[A + (l,)] * J[l, j], (l,)), A)`, with `H = pull_back(gradient(g, Q), φ)`, `J = jacobian(φ)`, and $Q$ the ambient domain of φ |
 | `Action(A, p, g)` | `Action(∂_j A, p, g)`, with $g$ unchanged |
 | Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \partial_j b$ |
 
+- In the chain-rule row, `A` contains one derived index per value axis of
+  `g`, and `l` is a distinct derived contraction index. The result retains
+  the value shape of `g`, with `j` free. For scalar `g`, `A == ()`.
 - An operand is constant for the pass if the operand has no domain.
 - The gradient of a terminal remains for the library of the terminal, so the
   Hessian of a function is a gradient of a gradient.
