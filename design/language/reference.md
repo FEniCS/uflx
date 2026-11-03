@@ -2,14 +2,15 @@
 
 ## Appendix: Node-class rationale
 
-The rules are in the class sections; this table explains why each operation needs a node.
+This table explains why each concrete expression node is needed. The rules
+are in the class sections.
 
 | Node class                                       | Why a node class                                                                                              |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
 | `Integer`, `Float`                                | A number written down is a terminal |
 | `Complex`                                        | A scalar complex constant retains its two real literals without arithmetic construction |
 | `Zero`                                           | A zero carries its shape, free indices, argument spaces and scalar type without edges to other expressions                              |
-| `Sum`, `Product`, `Power`, `Absolute`             | Operations of the scalar field, which nothing else composes                                                 |
+| `Sum`, `Product`, `Power`, `Absolute`             | Primitive scalar operations |
 | `Conjugate`                                      | An operation of the scalar field, and `Form` meets `conjugate(v)` of a function of any value shape as written |
 | `RealPart`                                       | `(f + conjugate(f)) / Integer(2)` has the value of the real part but is complex, and the real part is real    |
 | `ImaginaryPart`                                  | `real_part(Complex(Integer(0), Integer(1)) * conjugate(f))` multiplies the real part by zero, which is NaN for an infinite real part |
@@ -20,9 +21,11 @@ The rules are in the class sections; this table explains why each operation need
 | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | The primitives of index notation                                                                            |
 | `Coordinate`, `Function`, `Normal`               | Terminals: the coordinate function of a domain, a member of a space, the unit side conormal |
 | `Gradient`                                       | Nothing composes to differentiate                                                                             |
+| `Divergence`, `Curl` | Retain the operators so lowering can apply Piola identities before expanding them into gradients |
 | `DirectionalDerivative`                          | Nothing composes to differentiate with respect to an expression                                               |
 | `Integral`                                       | Nothing composes to integrate over a coordinate domain, and over a mesh a pass must meet the integral as written |
 | `PullBack`                                       | Nothing composes to move an expression between domains                                                        |
+| `PushForward` | Represents a topology field on a mesh and retains its transformation law for cellwise lowering and Piola identities |
 | `Form`, `Action`                                 | Binding arguments and giving an expression to an argument are not compositions                                |
 
 ## Appendix: Class hierarchy
