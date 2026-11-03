@@ -3565,6 +3565,21 @@ so the new names are distinct.
 The core pass `replace(e, mapping)` performs this simultaneous substitution,
 replacing each key of the `dict` `mapping` with its value.
 
+Match whole original nodes first, subject to binding scope. A match stops
+descent; inserted values and rebuilt nodes are not searched. Otherwise,
+recurse according to the binding and label rules. Overlapping keys are
+allowed: the outermost eligible match wins.
+
+Order replacement pairs by the structural key order of
+[`Base`](#the-base-object-base), preserving that order through scope filtering
+and in fresh-name labels. Dictionary insertion order has no effect.
+
+```python
+replace(a + b, {a + b: c, a: d})  # c
+replace(a + b, {a: d, d + b: c})  # d + b; no match after rebuilding
+replace(a, {a: b, b: c})  # b; inserted values are not searched
+```
+
 For example, substituting an expression with a free index requires renaming:
 
 ```python
