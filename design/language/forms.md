@@ -13,7 +13,7 @@ with or without a domain or topology.
 | `AbstractFunctionSpace` |                                                                                                                                                       |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                 | `Base` |
-| Provides                | `domain`, an [`AbstractDomain`](rules.md#abstractdomain), an [`AbstractTopology`](geometry.md#abstracttopology) or `None`, `value_shape`, `scalar_type`, and `argument_spaces`, `()` for a space of fields |
+| Provides                | `domain`, an [`AbstractDomain`](geometry.md#abstractdomain), an [`AbstractTopology`](geometry.md#abstracttopology) or `None`, `value_shape`, `scalar_type`, and `argument_spaces`, `()` for a space of fields |
 | Defined by              | A subclass outside the core, such as a subclass for the finite element spaces of Basix, and [`DualSpace`](#dualspace) in the core                           |
 
 A space with the domain `None` has functions that do not depend on a domain.
@@ -106,7 +106,7 @@ with those argument spaces.
 | Extends              | `AbstractExpression` |
 | Free function        | `function(V, label)`                                                                                                         |
 | Takes                | `V: AbstractFunctionSpace`, `label: str \| tuple` |
-| Properties           | `space` $V$, an `AbstractFunctionSpace`, and `label`, a `str` or a `tuple` with the rules of the label of an [`Index`](rules.md#index) |
+| Properties           | `space` $V$, an `AbstractFunctionSpace`, and `label`, a `str` or a `tuple` with the rules of the label of an [`Index`](expressions.md#index) |
 | Static type          | The value shape, scalar type and argument spaces of $V$, the domain of $V$, and no free indices |
 | Raises               | `TypeError` if a requirement fails                                                                                           |
 

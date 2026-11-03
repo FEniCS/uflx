@@ -45,11 +45,11 @@ config:
 classDiagram
     direction LR
     accTitle: Abstract class hierarchy
-    Base <|-- AbstractDomain
-    AbstractDomain <|-- AbstractCoordinateDomain
     Base <|-- AbstractExpression
     Base <|-- AbstractExtent
     Base <|-- AbstractIndexTable
+    Base <|-- AbstractDomain
+    AbstractDomain <|-- AbstractCoordinateDomain
     Base <|-- AbstractCellType
     Base <|-- AbstractTopology
     AbstractCoordinateDomain <|-- AbstractReferenceCell
@@ -57,17 +57,11 @@ classDiagram
     Base <|-- AbstractFunctionSpace
 ```
 
-### Domains
-
-Extend `AbstractCoordinateDomain`:
-
-[`RD`](rules.md#rd).
-
 ### Expressions and static type
 
 Extend `Base`:
 
-[`Index`](rules.md#index).
+[`Index`](expressions.md#index).
 
 ### Numbers and scalar operations
 
@@ -96,6 +90,12 @@ Extend `AbstractExpression`:
 Extend `AbstractExpression`:
 
 [`Coordinate`](expressions.md#coordinate), [`Gradient`](expressions.md#gradient), [`Divergence`](expressions.md#divergence-and-curl), [`Curl`](expressions.md#divergence-and-curl), [`DirectionalDerivative`](expressions.md#directionalderivative), [`Integral`](expressions.md#integral).
+
+### Domains
+
+Extend `AbstractCoordinateDomain`:
+
+[`RD`](geometry.md#rd).
 
 ### Maps between domains
 
@@ -149,9 +149,9 @@ Extend `AbstractExpression`:
 <!-- generated: free-functions, run design/appendices.py to update -->
 ### Expressions and static type
 
-| Function                         | Overload | Takes                 | Returns |
-| -------------------------------- | -------- | --------------------- | ------- |
-| [`index(label)`](rules.md#index) |          | `label: str \| tuple` | `Index` |
+| Function                               | Overload | Takes                 | Returns |
+| -------------------------------------- | -------- | --------------------- | ------- |
+| [`index(label)`](expressions.md#index) |          | `label: str \| tuple` | `Index` |
 
 ### Numbers and scalar operations
 
@@ -293,7 +293,7 @@ and are not added to the enclosing expression's argument spaces.
 
 The value shape and the free indices of each node class are in the section
 of the class. The domain and the scalar type of the node classes that differ
-from the default rules of [Domain](rules.md#domain) and [Scalar type](rules.md#scalar-type):
+from the default rules of [Domain](expressions.md#domain) and [Scalar type](expressions.md#scalar-type):
 
 | Class                    | Domain of the node                | Scalar type of the node           |
 | ------------------------ | ---------------------------------- | --------------------------------- |

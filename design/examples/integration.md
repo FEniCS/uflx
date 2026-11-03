@@ -228,7 +228,7 @@ a = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
 The level set determines the solver's quadrature data; it does not appear in
 the expression, since the core has no conditional. Point counts may differ
 between cells. Representing all such rules in one topology-wide expression
-requires the still-open [ragged indexing](../language/rules.md#extents) convention.
+requires the still-open [ragged indexing](../language/expressions.md#extents) convention.
 
 ## A quadrature-point coefficient
 

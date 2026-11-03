@@ -1,5 +1,71 @@
 # Geometry
 
+## Domains
+
+Function spaces and operators use a domain's dimension, boundary and cell
+decomposition. The only metric is the ambient Euclidean metric, which defines
+the tangential [gradient](expressions.md#gradient), integration [density](#jacobian-and-density)
+and unit [normal](#normal).
+
+### `AbstractDomain`
+
+`AbstractDomain` represents a domain, the set on which an expression is defined.
+A domain is a coordinate domain supplied by a library (see
+[`AbstractCoordinateDomain`](#abstractcoordinatedomain)), or a mesh with a
+topology and coordinate expression (see [`Mesh`](#mesh)). Every node class
+taking a domain accepts either kind; its section defines its value on a mesh
+through its cells.
+
+| `AbstractDomain` |                                                                             |
+| ---------------- | --------------------------------------------------------------------------- |
+| Extends          | `Base` |
+| Provides         | `dimension`, an `int` $k \ge 0$, and `ambient_domain`, an `AbstractDomain` |
+| Defined by       | `AbstractCoordinateDomain` and `Mesh`                           |
+
+The ambient domain of $D$ supplies the coordinates naming its points. The
+first coordinate domain reached by following `ambient_domain` repeatedly is
+the *ambient coordinate domain*, of dimension $n \ge k$. A coordinate domain
+is its own ambient domain.
+
+### `AbstractCoordinateDomain`
+
+A coordinate domain is a subset of $R^n$ with non-empty interior in $R^n$ whose
+points are named by the coordinates of the points themselves. The core cannot
+build the set from smaller objects. A library defines a new coordinate domain,
+such as a reference cell, by extending this abstract class. On a coordinate
+domain the coordinates are canonical: the coordinate function is the identity
+(see [`Coordinate`](expressions.md#coordinate)), and the integral is the Lebesgue integral in
+the coordinates (see [`Integral`](expressions.md#integral)). Every other domain gets these by
+pull-back.
+
+| `AbstractCoordinateDomain` |                                              |
+| -------------------------- | -------------------------------------------- |
+| Extends                    | `AbstractDomain` |
+| Provides                   | `dimension`, an `int` $n \ge 0$              |
+| Derived                    | `ambient_domain`, the coordinate domain itself |
+| Defined by                 | A subclass, such as `RD` or a reference cell |
+
+Examples:
+
+- The unit simplex in $R^n$ is a coordinate domain. A codimension-1 face is
+  not: it has empty interior in $R^n$ and is instead the image of a domain map
+  from the unit simplex in $R^{n-1}$.
+- A mesh of triangles is *not* a coordinate domain, because the core builds the
+  mesh from a topology and a coordinate expression; its cells are parameterised
+  by reference triangles.
+
+### `RD`
+
+`RD(n)` is the whole of $R^n$.
+
+| `RD(n)`    |                                                                 |
+| ---------- | --------------------------------------------------------------- |
+| Extends    | `AbstractCoordinateDomain` |
+| Properties | `dimension`, an `int` $n \ge 0$                                 |
+| Raises     | `TypeError` if $n$ is not an `int`, and `ValueError` if $n < 0$ |
+
+Worked examples for this chapter: [the unit simplex](../examples/library.md#the-unit-simplex).
+
 ## Maps between domains
 
 ### `DomainMap`
@@ -14,7 +80,7 @@ or its parameterised image, retaining multiplicity. A `DomainMap` is not an
 | Extends                          | `Base` |
 | Free function                    | `domain_map(P, psi, Q)`                                                                                                                                                                           |
 | Takes                            | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain` |
-| Properties                       | `parameter_domain` $P$, an [`AbstractCoordinateDomain`](rules.md#abstractcoordinatedomain) or an [`AbstractTopology`](#abstracttopology) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractCoordinateDomain`                                                   |
+| Properties                       | `parameter_domain` $P$, an [`AbstractCoordinateDomain`](#abstractcoordinatedomain) or an [`AbstractTopology`](#abstracttopology) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractCoordinateDomain`                                                   |
 | Requires                         | $\psi$ with the domain $P$ or no domain, $\psi$ real with value shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$ and the argument spaces `()`, and $k \le n$ |
 | Derived                          | `free_indices`, the free indices of $\psi$ |
 | Raises                           | `TypeError` for $P$ or $Q$, and `ValueError` if another requirement fails                                                                                                                                   |

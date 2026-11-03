@@ -1,5 +1,169 @@
 # Expressions
 
+## Expressions and static type
+
+### `AbstractExpression`
+
+| `AbstractExpression` |                                                                                      |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| Extends              | `Base`                                                                               |
+| Provides             | `value_shape`, `free_indices`, `scalar_type`, `domain`, `argument_spaces` |
+
+These five derived properties form the static type (see
+[Argument spaces](forms.md#argument-spaces)). The value shape is a `tuple` of
+[extents](#extents), one per axis; `()` denotes a scalar. The array rank,
+written simply as rank, is the number of axes.
+
+### Extents
+
+An extent is the length of an axis of a value shape, or the extent of a free
+index. An extent is an `int` $n \ge 0$ or an `AbstractExtent`.
+
+`AbstractExtent` represents an extent whose value is not known during
+construction. Its supplied value must be a nonnegative integer.
+An `AbstractExtent` is not an expression. A concrete
+`AbstractExtent` is a subclass outside the core, such as `RuntimeExtent` in the
+[cut cell example](../examples/integration.md#integrating-over-a-cut-cell).
+
+| `AbstractExtent` |                                      |
+| ---------------- | ------------------------------------ |
+| Extends          | `Base`                               |
+| Defined by       | A subclass outside the core          |
+
+An `AbstractExtent` has no arithmetic and no ordering, so the rules of the
+core, which compare extents by equality, accept an `AbstractExtent` unchanged.
+A concrete `AbstractExtent` stores the arguments that identify the extent, such
+as a label.
+
+Example:
+
+- With an `AbstractExtent` `q`, an expression `points` of value shape `(q, 2)`
+  and an expression `weights` of value shape `(q,)` share the extent `q`, so
+  `weights[i] * points[i, 0]` is accepted. With a second `AbstractExtent` `r`,
+  an expression `weights` of value shape `(r,)` raises `ValueError` in
+  `weights[i] * points[i, 0]`, because the index `i` has two extents.
+
+```{dropdown} Open: ragged indexing
+An axis whose length depends on another index, such as the quadrature points
+of each cut cell, cannot be written. A dependent extent, an `AbstractExtent`
+whose label contains the other index, would cover the case. An index value
+read from a table is a [`GatheredIndex`](#gatheredindex).
+```
+
+### `Index`
+
+`Index` is a free index, not an expression. An `Index` names an axis of a
+tensor, as `i` and `j` in `A[i, j]` (see [Index notation](#index-notation)).
+
+| `Index(label)` |                                                                                                 |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| Extends        | `Base` |
+| Free function  | `index(label)`                                                                                  |
+| Takes          | `label: str \| tuple` |
+| Properties     | `label`, a `str` for a user index, or a `tuple` that contains graph objects for a derived index |
+| Raises         | `TypeError` if the label is neither a `str` nor a `tuple`                                       |
+
+An `Index` takes its extent from the indexed axis; it has no extent of its own.
+
+A user index has a `str` label, which the user chooses. Two free occurrences
+of one `Index` in one scope are the same index, so an index that the user
+means to be new needs a new name. The scope of an index is given in
+[`ComponentTensor` and `IndexSum`](#componenttensor-and-indexsum).
+
+A derived index has a `tuple` label, which a free function or a pass builds
+from the operands, so that the index is fresh without a global counter (see
+[Derived indices](#derived-indices)).
+
+### Free indices
+
+Every `AbstractExpression` derives the free indices, a `tuple` of pairs. Each
+pair is an `Index` and an extent. The order is the order of first occurrence, never the
+order of a `set`.
+
+Unless a node class states otherwise, the free indices of a node are derived
+from the edges of the node that are expressions:
+
+- The free indices of the edges are taken in edge order, with each `Index`
+  taken once, at the first occurrence.
+- An `Index` that occurs in two edges must have the same extent in both edges,
+  or construction raises `ValueError`.
+
+Summation is never implicit. `a[i] * b[i]` has the free index `i` and denotes
+the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], (i,))`.
+The operands of a node may have different free indices, so `a[i] + b[j]` has
+the free indices `i` and `j` and denotes the outer sum.
+
+### Scalar type
+
+The scalar type is real or complex. Unless the [static type
+table](reference.md#appendix-static-type-table) states otherwise, an expression is complex
+if and only if at least one edge is a complex expression.
+
+The scalar type is the arithmetic in which the expression is evaluated, not a
+statement about the value. A real `SquareRoot`, `Logarithm` or `Power` whose
+value is not a real number, such as `square_root(Integer(-1))`, is undefined.
+
+### Domain
+
+An expression's `domain` is where it is defined: an
+[`AbstractDomain`](geometry.md#abstractdomain), or an [`AbstractTopology`](geometry.md#abstracttopology)
+whose cell types are reference cells. It is `None` for an expression independent
+of a domain, such as a literal.
+
+Unless the [static type table](reference.md#appendix-static-type-table) states otherwise,
+a node inherits the domain of its expression operands with a domain. All such
+operands must have the same domain, or construction raises `ValueError`. A node
+with no such operand has domain `None`.
+
+The property always describes the resulting expression. An `Integral` stores
+its region as `integration_domain` but has domain `None`; a `PullBack` stores
+its `map` and has that map's `parameter_domain`. A `PushForward` stores its
+`mesh`, which is also its domain. For `Coordinate`, `Gradient`, `Divergence`
+and `Curl`, the stored domain is also the result's domain.
+
+### Expressions as functions
+
+An expression denotes an array-valued function on the domain of the
+expression. An expression on a topology denotes a function on the reference
+cell of each cell of the topology (see [`CellMap`](geometry.md#cellmap)). An expression
+with no domain denotes a single array. An expression with argument spaces other than `()` denotes a multilinear map from
+the argument spaces to such functions (see [Variational
+forms](forms.md#variational-forms)).
+
+### Node class or free function
+
+An operation uses a construction free function when it has a fixed
+composition under the [construction policy](rules.md#construction-policy). A node
+class is needed when choosing the result requires expression structure, when
+the compiler must choose a numerical algorithm, or when a pass must retain
+the operation as written. In the last case, the node's section states its
+composition; `Integral` over a mesh is an example.
+
+For example, the transpose is always `component_tensor(A[k, l], (l, k))`,
+so it is a free function. `Inverse` and `Determinant` keep the algorithm
+choice for the compiler.
+
+A construction free function is part of the core only if a definition or a
+rule of the core uses it, such as `density` in [`Integral` over a
+mesh](geometry.md#integral-over-a-mesh) and `cell_map` in
+[Restriction](geometry.md#restriction), or if a Python operator calls the free function
+as an overload, such as `matrix_product` for `@` (see [Operator
+overloads](rules.md#operator-overloads)). `transpose` is in the core because the rule
+for `Inverse` of [Applying derivatives](evaluation.md#applying-derivatives) uses it. Every
+other construction free function belongs to a library, such as the operations
+of [Tensor algebra](../examples/tensors.md#tensor-algebra).
+
+A node class is part of the core only if a definition or a rule of the core
+needs the node class, or if the node class is an operation of the scalar
+field, such as conjugation. A rule for the node class itself does not count.
+Otherwise the node class belongs to a
+[language extension](extensions.md#language-extensions). For example, the core writes a
+rational number as the `Division` of two `Integer`s, so `Division` is part of
+the core.
+
+The [node-class rationale](reference.md#appendix-node-class-rationale) explains the
+individual choices.
+
 ## Numbers and scalar operations
 
 ### Literals
@@ -62,7 +226,7 @@ spaces and scalar type (real or complex).
 | `Zero(value_shape, free_indices, argument_spaces, scalar_type)` |                                                                                                                                |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Extends                                            | `AbstractExpression` |
-| Properties                                         | `value_shape`, `free_indices`, `argument_spaces` and `scalar_type`, as in [Extents](rules.md#extents), [Free indices](rules.md#free-indices) [Argument spaces](forms.md#argument-spaces) and [Scalar type](rules.md#scalar-type) |
+| Properties                                         | `value_shape`, `free_indices`, `argument_spaces` and `scalar_type`, as in [Extents](#extents), [Free indices](#free-indices) [Argument spaces](forms.md#argument-spaces) and [Scalar type](#scalar-type) |
 | Static type                                        | The stored properties, with no domain                                                                                         |
 | Raises                                             | `TypeError` for an argument of another type, and `ValueError` for a negative extent or an index that occurs twice |
 
@@ -75,7 +239,7 @@ For example, `Zero((3,), (), (), real)` is a real zero vector and
 `Sum`, `Product`, `Division` and `Power` denote the sum, product, quotient and
 power of two scalar expressions. Both operands must have value shape `()`, or
 construction raises `ValueError`; the result has value shape `()`. Free indices
-follow the [default rule](rules.md#free-indices).
+follow the [default rule](#free-indices).
 
 The free functions below construct these nodes for scalar operands. `add`,
 `multiply` and `divide` also support [tensor arithmetic](#tensor-arithmetic).
@@ -188,7 +352,7 @@ meaning is `conjugate(f)[e]` = `conjugate(f[e])` in value.
 
 These nodes and `Absolute` are the only nodes that take a complex operand to
 a real expression. The composition `(f + conjugate(f)) / Integer(2)` has the
-value of the real part but remains complex by the [scalar-type rule](rules.md#scalar-type).
+value of the real part but remains complex by the [scalar-type rule](#scalar-type).
 
 Their free functions apply entrywise to tensors (see
 [Tensor arithmetic](#tensor-arithmetic)).
@@ -257,7 +421,7 @@ tensor from scalars, `Indexed` selects one component, and `ComponentTensor`
 and `IndexSum` bind the free indices of a scalar, as axes or as a sum. Tensor
 rearrangements and contractions are compositions of these, so `transpose`,
 `dot` and `inner` are free functions, not node classes (see [Node class or
-free function](rules.md#node-class-or-free-function)).
+free function](#node-class-or-free-function)).
 
 With `i, j = index("i"), index("j")` and a matrix `A` of value shape `(2, 3)`:
 
@@ -301,7 +465,7 @@ the following kinds:
 | Entry                                | Covers                                | Rule                                                                                               | Raises       |
 | ------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------ |
 | An `int` $k$                         | One axis, of extent $n_j$             | $n_j$ is an `int`, and $0 \le k < n_j$                                                             | `IndexError` |
-| An [`Index`](rules.md#index)                 | One axis, of extent $n_j$             | The `Index` takes the extent $n_j$                                                                 |              |
+| An [`Index`](#index)                 | One axis, of extent $n_j$             | The `Index` takes the extent $n_j$                                                                 |              |
 | A [`GatheredIndex`](#gatheredindex)  | One axis, of extent $n_j$             | The extent of the `GatheredIndex` equals $n_j$                                                     | `IndexError` |
 
 The free indices of the `Indexed` are the free indices of the expression,
@@ -694,7 +858,7 @@ For example, `coordinate(RD(3))` has value shape `(3,)` and domain `RD(3)`.
 ### Valid pair
 
 An expression and a domain $(f, P)$ are a valid pair if $P$ is an
-[`AbstractDomain`](rules.md#abstractdomain) and $f$ has the domain $P$ or no domain.
+[`AbstractDomain`](geometry.md#abstractdomain) and $f$ has the domain $P$ or no domain.
 Otherwise construction raises `TypeError` for $P$ or `ValueError` for $f$. An
 $f$ with no domain is a constant on $P$.
 

@@ -129,7 +129,7 @@ et al.:
 A downstream library builds a new operation from existing node classes, as a
 construction free function. As in the core, it may read the static type of
 the operands, such as a value shape, to choose the composition (see
-[Node class or free function](rules.md#node-class-or-free-function)). For example,
+[Node class or free function](expressions.md#node-class-or-free-function)). For example,
 `cross(a, b)` checks that both operands have value shape `(3,)` and returns:
 
 ```python
