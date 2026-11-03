@@ -290,6 +290,18 @@ pairing = action(l, 0, conjugate(v))
 `l` has argument spaces `(conjugate_space(V),)`, and `pairing` is
 $\langle l, v \rangle$.
 
+For scalar fields `f` and `v` on `D`, with `v` in `V`, a residual form
+and an assembled load have compatible argument spaces:
+
+```python
+R = form(integral(f * conjugate(v), D), (conjugate(v),))
+residual = R - l
+```
+
+Both have argument spaces `(conjugate_space(V),)`. For complex `V`, the
+linearly bound form `form(integral(f * v, D), (v,))` has `(V,)`; subtracting
+`l` from it raises `ValueError`.
+
 For a product of spaces, the argument is a tuple:
 
 ```python
@@ -349,20 +361,6 @@ A dual argument accepts a terminal load or a symbolic form with the same
 functional signature. Substituting a symbolic form into a pairing creates
 an action on that form (see [Applying actions](evaluation.md#applying-actions)).
 
-```{dropdown} Open: operator composition for preconditioning
-A linear preconditioner maps residuals in $V^\star$ to corrections in $V$.
-An auxiliary-space construction is $P B_W P^\star$, with $P: W \to V$ and
-$B_W: W^\star \to W$. Dual arguments and typed operator composition could
-express this construction. It is open whether arbitrary operator-valued
-arguments are also useful, or composition belongs in the solver layer.
-
-A concrete finite element implementation should establish how the symbolic
-operations connect to assembly, matrix-free application and auxiliary solves
-before extending `Form` further. Preconditioner construction need not be
-linear in its operator inputs, even when its residual-to-correction action is
-linear.
-```
-
 Tuple arguments express mixed problems without mixed spaces. Their members may
 have different value shapes and domains, such as a Raviart–Thomas field and a
 discontinuous field, or a boundary Lagrange multiplier. A library may assemble
@@ -383,32 +381,7 @@ B = form(a, (v, u))
 `L` binds `v` and keeps `u` fixed. `B` binds both, giving argument spaces
 `(V, V)`. The sum `B + L` raises `ValueError` because their arities differ.
 
-A conjugated entry gives a sesquilinear form:
-
-```python
-m = integral(u * conjugate(v), D)
-M = form(m, (conjugate(v), u))
-```
-
-`M` has argument spaces `(conjugate_space(V), V)`.
-
-A form and an assembled load can have the same argument spaces. For a fixed
-scalar field `f` on `D`:
-
-```python
-r = integral(f * conjugate(v), D)
-R = form(r, (conjugate(v),))
-l = function(dual_space(V), "l")
-residual = R - l
-```
-
-`residual` has argument spaces `(conjugate_space(V),)`. For complex `V`,
-binding `v` linearly instead gives incompatible argument spaces:
-
-```python
-linear_load = form(integral(f * v, D), (v,))
-linear_load - l  # Raises ValueError.
-```
+For conjugated arguments and assembled loads, see [DualSpace](#dualspace).
 
 For a mixed problem, let `u`, `v` belong to a velocity space `V`, and `p`, `q`
 to a pressure space `Q`. Let `e` be the Stokes expression with terms
@@ -522,56 +495,21 @@ For a conjugated dual binder, the same substitution rule applies: supplying
 
 #### Examples
 
-Let `u`, `v` and `w` be scalar functions in a space `V` on `D`.
-An action supplies a value for one argument:
+For scalar functions `u`, `v` and `w` in `V` on `D`, set:
 
 ```python
-a = integral(u * v, D)
-F = form(a, (v, u))
-result = action(F, 1, w)
+F = form(integral(u * v, D), (v, u))
+M = form(integral(u * conjugate(v), D), (conjugate(v), u))
 ```
 
-The result has the value:
+| Action | Value |
+| ------ | ----- |
+| `action(F, 1, w)` | `form(integral(w * v, D), (v,))` |
+| `action(F, 1, v)` | `form(integral(v * v_fresh, D), (v_fresh,))`, renaming the binder to keep the supplied `v` free |
+| `action(M, 0, conjugate(w))` | `form(integral(u * conjugate(w), D), (u,))` |
 
-```python
-form(integral(w * v, D), (v,))
-```
-
-Supplying `v` instead requires renaming the bound argument to avoid capture:
-
-```python
-result = action(F, 1, v)
-```
-
-With `v_fresh` the renamed bound function, the result has the value:
-
-```python
-form(integral(v * v_fresh, D), (v_fresh,))
-```
-
-For a conjugated argument:
-
-```python
-m = integral(u * conjugate(v), D)
-M = form(m, (conjugate(v), u))
-result = action(M, 0, conjugate(w))
-```
-
-The result has the value:
-
-```python
-form(integral(u * conjugate(w), D), (u,))
-```
-
-Supplying `conjugate(w)` to the conjugated entry replaces `v` by `w`.
-
-Actions distribute over sums: `action(F + G, 1, w)` has value
-`action(F, 1, w) + action(G, 1, w)` for compatible forms.
-
-An indexed argument gives a family: `action(F, 1, directions[k])` retains
-`k` as a free index.
-
-For `stokes = form(e, ((v, q), (u, p)))`, the action
+Actions distribute over compatible sums. `action(F, 1, directions[k])`
+retains the free index `k`. For `stokes = form(e, ((v, q), (u, p)))`,
 `action(stokes, 1, (w, r))` supplies both members of the second argument
 and leaves a linear form in `(v, q)`.
 
@@ -638,27 +576,16 @@ part $J_-[h]$ of the real differential. Binding follows the ordinary scopes
 of `Form` and `DirectionalDerivative`; no separate derivative-form binding
 rule or evaluation pass is needed.
 
-$\delta F = J_+ + J_-$, and the two parts are unique. For a real functional
-$\Pi$ on a complex space, $J_-$ with the entry `conjugate(h)` is the
-Wirtinger derivative $\partial \Pi / \partial \bar u$, a function in
-`dual_space(V)` (see [Antilinear forms](#antilinear-forms)), so $J_-$ minus a
-load is a residual. If the differential is complex-linear in its direction,
-$J_+$ is $\delta F$ and $J_-$ is zero. If it is complex-antilinear,
-$J_+$ is zero and $J_-$ is $\delta F$. Implementations may recognise these
-cases during lowering, but no detector is required. A user who knows the
-appropriate dependence may construct the corresponding forms directly.
+The decomposition $\delta F = J_+ + J_-$ is unique. If the differential
+is complex-linear, $J_- = 0$; if complex-antilinear, $J_+ = 0$.
+Recognising these cases during lowering is optional. Users who know the
+dependence may construct the corresponding forms directly.
 
-The Jacobian of a complex-linear residual, such as that of the Helmholtz
-equation, has only $J_+$. In general the Jacobian is the pair of forms $J_+$ and $J_-$, which do not add
-because the argument spaces differ, and Newton's method solves
-$J_+ \, \delta u + J_- \, \overline{\delta u} = -R$ with an algorithm that the
-solver chooses.
+The derivative form binds $w$ after the arguments of $F$. An action on that
+new argument gives the selected differential part. For complex variables,
+recover the full real differential by acting on $J_+$ with $h$ and on $J_-$
+with $\overline h$, then adding the results. The two forms themselves have
+different argument spaces and cannot be added.
 
-The value is a form that binds $w$ after the arguments of $F$, so the
-derivative of a residual form is the tangent form, and an action on the new
-argument gives the selected part in a fixed direction. For complex variables,
-the full real differential is recovered by acting on $J_+$ with $h$ and on
-$J_-$ with $\overline h$, then adding the results. The real Hessian is symmetric
-when the functional is twice continuously differentiable.
-On a complex space, repeated Gateaux derivatives select its Wirtinger blocks.
-The graph does not record symmetry.
+See [Complex residuals and Hessians](../examples/forms.md#complex-residuals-and-hessians)
+for Wirtinger derivatives and Newton's method.

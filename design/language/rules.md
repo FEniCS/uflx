@@ -108,15 +108,12 @@ Objects must satisfy the following rules:
    `1`, `1.0` and `True` are distinct, `0.0` and `-0.0` are distinct, and every
    value is equal to itself. Construction raises `TypeError` for an argument of
    any other type, and `ValueError` for a `float` that is not finite.
-2. Construction must depend only on the construction arguments, not on global
-   state.
-3. The state of an object is immutable after construction. Every result that
-   the object produces after construction depends only on the class and the
-   construction arguments.
-4. An object must be reconstructible from its class and construction arguments,
-   with the result equal to the original. The base object records these arguments
-   and returns them in order as the `tuple` `construction_arguments`. A subclass
-   constructor validates them and may store data derived from them.
+2. Construction and all results depend only on the class and construction
+   arguments, never on global state.
+3. Objects are immutable after construction.
+4. Reconstructing an object from its class and construction arguments must give
+   an equal object. `construction_arguments` records those arguments in order
+   as a `tuple`. A constructor may also store derived data.
 5. The edges of an object must be exactly the base objects among its
    construction arguments, including the base objects nested in `tuple`s, in
    order.
@@ -126,8 +123,9 @@ Objects must satisfy the following rules:
    A pass states which edges it visits. Where unrelated objects must be sorted,
    the sort uses a total order defined by the class and the construction
    arguments alone.
-7. Equality (`==`) must be structural and return a `bool`. Whether `is` is
-   structural is implementation dependent. An implementation in which `is` is
+7. Equality (`==`) returns a `bool`: objects are equal exactly when their
+   classes and construction arguments are equal. Whether `is` is structural
+   is implementation dependent. An implementation in which `is` is
    structural must intern objects, so that equal objects are the same object.
    Structural equality does not decide mathematical equality: $a + b$ and
    $b + a$ are not structurally equal. Mathematical equalities are applied
@@ -149,11 +147,7 @@ Objects must satisfy the following rules:
     the identifiers of different libraries apart, and a library keeps the
     identifiers of the classes of the library distinct.
 
-Hence two objects are equal if and only if the two objects have the same class
-and equal construction arguments.
-
-Because objects are immutable, an object need only be validated once, at
-construction. Every object that exists is therefore structurally valid.
+Construction validates immutable objects once; every existing object is structurally valid.
 
 ### Leaves and subclassing
 
@@ -202,29 +196,17 @@ user, may rewrite it.
 
 ### Passes
 
-A pass is a pure free function that walks a graph after construction and
-returns a value, such as a unit, or a new graph. To build a new graph, it
-constructs replacement nodes and reconstructs dependent objects up to
-the root along the edges it visits (see [The base object](#the-base-object-base)).
-The dependency graph includes every construction argument; the
-[evaluation traversal](evaluation.md#evaluation-traversal) follows only expression operands.
-A substitution follows dependencies, so replacing an object also
-reconstructs an [`Index`](expressions.md#index) whose label contains the object, other than
-a renamed name (see [Derived indices](expressions.md#derived-indices)). Substitution
-commutes with a fixed expression composition when its static-type choice is
-unchanged: replacing `A` by `B` in `transpose(A)` gives `transpose(B)`, with
-the derived indices of `B`. A pass
-may cache results for each object, because objects are immutable.
+A pass is a pure free function that walks a graph after construction and returns
+an analysis result or a rewritten graph. A rewrite reconstructs dependent
+objects along the visited edges up to the root. Immutable objects allow
+results to be cached per object.
 
-Substitution is simultaneous and respects lexical scope, renaming bound names to
-avoid capture (see [Substitution and binding](evaluation.md#substitution-and-binding)). The
-core pass `replace(e, mapping)` performs this substitution.
+Each pass states its traversal and purpose. Passes compose; the caller chooses
+which run and in what order. The core substitution pass is
+[`replace(e, mapping)`](evaluation.md#substitution-and-binding).
 
-A pass does one thing, such as differentiating or lowering. Passes compose,
-and the user of the core chooses which passes run and in what order.
-
-A pass fails with `TypeError` for a node class it has no rule for, or with an
-error of the pass, such as inconsistent units.
+A pass raises `TypeError` for a node class it has no rule for, or a
+pass-specific error, such as inconsistent units.
 
 ### Operator overloads
 
@@ -239,8 +221,7 @@ the grouping and the precedence of Python, and construction never regroups
 (see [No simplification during
 construction](#no-simplification-during-construction)). For example,
 `a + b + c` is `Sum(Sum(a, b), c)` and `a + (b + c)` is `Sum(a, Sum(b, c))`,
-and the two are not equal. `a ** b ** c` is `power(a, power(b, c))`, and
-`-a ** b` is `negate(power(a, b))`.
+and the two are not equal.
 
 Python passes `f[i]` to `__getitem__` as `i`, but `f[i, j]` as `(i, j)`.
 `__getitem__` wraps a single entry in a `tuple` and calls `component` (see

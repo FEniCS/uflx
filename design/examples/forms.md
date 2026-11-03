@@ -396,3 +396,45 @@ Mixed-space helpers, `derivative` and interior-facet restriction syntax are
 not implemented here. They would collect tuple arguments, construct Gateaux
 derivatives and pull back through named sides respectively. Boundary
 conditions, assembly and solving remain outside the language.
+
+## Complex residuals and Hessians
+
+For a real functional $\Pi$ on a complex space $V$, the
+[Gateaux derivative](../language/forms.md#gateaux-derivative) with entry
+`conjugate(h)` selects $J_-$, the Wirtinger derivative
+$\partial\Pi/\partial\bar u$. It represents an element of `dual_space(V)`;
+subtracting a load gives a residual.
+
+A complex-linear residual, such as that of the Helmholtz equation, has only
+$J_+$. In general its Jacobian is the pair of forms $J_+$ and $J_-$. Newton's
+method solves
+
+$$
+J_+\,\delta u + J_-\,\overline{\delta u} = -R,
+$$
+
+using an algorithm chosen by the solver. The two forms have different argument
+spaces; their actions, rather than the forms themselves, are added.
+
+Differentiating a residual form gives a tangent form. Repeated Gateaux
+derivatives on a complex space select Wirtinger blocks. The real Hessian is
+symmetric when the functional is twice continuously differentiable; the graph
+does not record symmetry.
+
+## Dual transfer through interpolation
+
+Use the library [cell-local interpolation](../language/extensions.md#cell-local-interpolation)
+with spaces `U` and `V` on the same reference cell. The library supplies the
+target sampling rule and basis.
+
+For a source field `u` in `U` and `l` in `dual_space(V)`, the dual pairing is:
+
+```python
+B = form(action(l, 0, conjugate(interpolate(u, V))), (l, conjugate(u)))
+```
+
+`B` has argument spaces `(dual_space(V), conjugate_space(U))`. Supplying a
+target load at position 0 gives its dual transfer to `U`. Supplying
+`conjugate(u0)` at position 1 leaves a linear functional of the target load.
+Its conjugate represents `interpolate(u0, V)` through the double-dual
+identification; pointwise evaluation uses the interpolant itself.

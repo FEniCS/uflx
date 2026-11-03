@@ -132,36 +132,22 @@ forms](forms.md#variational-forms)).
 
 ### Node class or free function
 
-An operation uses a construction free function when it has a fixed
-composition under the [construction policy](rules.md#construction-policy). A node
-class is needed when choosing the result requires expression structure, when
-the compiler must choose a numerical algorithm, or when a pass must retain
-the operation as written. In the last case, the node's section states its
-composition; `Integral` over a mesh is an example.
+Use a construction free function for a fixed composition permitted by the
+[construction policy](rules.md#construction-policy). Use a node class when
+choosing the result requires inspecting expression structure, the compiler
+must choose an algorithm, or a pass must retain the operation as written.
+In the last case, the node's section states its composition.
+For example, transpose is the fixed composition
+`component_tensor(A[k, l], (l, k))`; `Inverse` retains the algorithm choice.
 
-For example, the transpose is always `component_tensor(A[k, l], (l, k))`,
-so it is a free function. `Inverse` and `Determinant` keep the algorithm
-choice for the compiler.
+A construction free function belongs to the core only if a core definition,
+rule or Python overload uses it. A node class belongs to the core only if
+another core definition or rule needs it, or it is an operation of the scalar
+field. Its own rules do not establish that need.
 
-A construction free function is part of the core only if a definition or a
-rule of the core uses it, such as `density` in [`Integral` over a
-mesh](geometry.md#integral-over-a-mesh) and `cell_map` in
-[Restriction](geometry.md#restriction), or if a Python operator calls the free function
-as an overload, such as `matrix_product` for `@` (see [Operator
-overloads](rules.md#operator-overloads)). `transpose` is in the core because the rule
-for `Inverse` of [Applying derivatives](evaluation.md#applying-derivatives) uses it. Every
-other construction free function belongs to a library, such as the operations
-of [Tensor algebra](../examples/tensors.md#tensor-algebra).
-
-A node class is part of the core only if a definition or a rule of the core
-needs the node class, or if the node class is an operation of the scalar
-field, such as conjugation. A rule for the node class itself does not count.
-Otherwise the node class belongs to a
-[language extension](extensions.md#language-extensions). For example, the core writes a
-rational number as the `Division` of two `Integer`s, so `Division` is part of
-the core.
-
-The [node-class rationale](reference.md#appendix-node-class-rationale) explains the
+Other compositions belong to libraries; other node classes belong to
+[language extensions](extensions.md#language-extensions). The
+[node-class rationale](reference.md#appendix-node-class-rationale) explains
 individual choices.
 
 ## Numbers and scalar operations
@@ -648,10 +634,13 @@ label `("uflx.rename", i, body, (s_1, ..., s_n))`.
 A label refers only to objects that the index is fresh for, and never to an
 object that contains the index. A replacement rebuilds a derived index whose
 label contains a replaced object, so that the replacement commutes with the
-free functions. A renamed name keeps its label. The substitution that renames
-a name continues into the operands that contain the new name, and rebuilding
-the label there would substitute into $s_1, \dots, s_n$ again, which may
-contain the binding node, so the substitution would not terminate.
+free functions. A renamed name keeps its label.
+
+```{dropdown} Why renamed labels are fixed
+Renaming continues into operands containing the new name. Rebuilding its
+label there would substitute into $s_1, \dots, s_n$ again; these may contain
+the binding node, preventing termination.
+```
 
 The edges of an index to the objects in the label of the index identify the
 index and are not operands (see [Evaluation traversal](evaluation.md#evaluation-traversal)).
@@ -682,28 +671,21 @@ The free functions read operand ranks to choose the compositions below.
 | `matrix_product(first, second)` | `@` | `first, second: AbstractExpression` | The contraction of the last axis of `first` with the first axis of `second`, below |
 | `transpose(A)` | | `A: AbstractExpression` | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2 |
 
-In each composition, `K` is the `tuple` of the derived indices
-`Index((name, first, second, m))`, or `Index((name, f, m))`, for
-$m = 0, \dots, n - 1$, with `name` the identifier of the free function, such
-as `"uflx.add"` (see [Derived indices](#derived-indices)). For addition and
-division, $n$ is the rank of `first`; for real and imaginary parts, the rank
-of `f`; for multiplication, the rank of the operand indexed in the selected
-composition. Thus `K == ()` for scalar operands, and the empty-index factory
-identities give the scalar operation directly. Explicit scalar constructors
-inside the compositions avoid recursive calls to the tensor factories. The
-indices of `K` are fresh with respect to the operands, so the free indices
-of the operands remain free in the result.
+In each composition, `K` contains one [derived index](#derived-indices)
+per axis of the indexed operand: `Index((name, first, second, m))` for binary
+operations, or `Index((name, f, m))` for unary operations. `name` is the
+qualified function identifier and `m` runs from zero to rank minus one.
+For addition and division, use the rank of `first`.
+The empty-index factory identities give scalar operations when `K == ()`.
+Scalar constructors inside the compositions avoid recursive factory calls.
+Operand free indices remain free.
 
-The free functions read only the ranks; constructors reject incompatible
-operands (see [The base object `Base`](rules.md#the-base-object-base)). There is no
-broadcasting, and no product of two tensors other than `@`:
+There is no broadcasting. Constructors enforce compatibility:
 
-- `A + B` for ranks that differ raises `IndexError` from `Indexed`, and for
-  extents that differ raises `ValueError` from `Sum`, because an index of `K`
-  has two extents.
-- `a + T` for a scalar `a` and a tensor `T` also raises `IndexError`: there is no scalar broadcasting.
-- `A * B` for two tensors raises `ValueError` from `Product`, and `a / T`
-  raises `ValueError` from `Division`.
+- Addition with unequal ranks raises `IndexError` from `Indexed`; unequal
+  extents raise `ValueError` from `Sum`.
+- Multiplication of two tensors raises `ValueError` from `Product`.
+- Division by a tensor raises `ValueError` from `Division`.
 
 A scalar operation's free function accepts tensors only when the operation has
 no competing tensor meaning. Thus `conjugate`, `real_part` and `imaginary_part`
@@ -716,17 +698,14 @@ apply entrywise. The following remain scalar and raise `ValueError` for tensors:
 | `square_root` | The matrix square root |
 | `logarithm` | The matrix logarithm |
 
-An elementary function added later, such as the exponential, stays scalar for
-the same reason, because the matrix exponential is a second meaning. The
-entry-by-entry application of a scalar operation `op` is written as
-`component_tensor(op(T[K]), K)`, with one index in `K` for each axis of `T`. This
-also applies to scalar `T`, with `K == ()`. A full contraction similarly uses
-`index_sum(indexed(A, K) * indexed(B, K), K)` for equal-shaped operands;
-for scalars it is their product.
+The same policy applies to future elementary functions, such as the
+exponential. Entrywise application is
+`component_tensor(op(indexed(T, K)), K)`, with one index per axis of `T`.
+A full contraction is `index_sum(indexed(A, K) * indexed(B, K), K)` for
+equal-shaped operands. Both also work for scalars, with `K == ()`.
 
-The graph of `A + B` is the composition, with no node for the sum of tensors.
-A language extension adds such a node if a pass must meet `A + B` as written
-(see [Language extensions](extensions.md#language-extensions)).
+These operations construct their compositions. Retaining a tensor operation
+as a node requires a [language extension](extensions.md#language-extensions).
 
 `matrix_product(A, B)` takes operands `A` and `B` each of rank 1 or 2. With
 the derived indices $i$, $k$ and $j$ =
@@ -746,11 +725,9 @@ rank 0 or of rank 3 or more. Unequal inner extents raise `ValueError` from
 `Product`, because $k$ has two extents. Neither operand is conjugated, so
 `x @ y` of two complex vectors is not the inner product.
 
-For ranks 1 and 2, `matrix_product` agrees with `@` of NumPy. NumPy treats an
-operand of rank 3 or more as a stack of matrices, so the core rejects such an
-operand and does not give `@` a second meaning. A contraction of higher rank
-is written in index notation, or with a free function of a library, such as
-`dot` (see [Tensor algebra](../examples/tensors.md#tensor-algebra)).
+For ranks 1 and 2, `@` agrees with NumPy. Higher-rank contractions use index
+notation or a library function such as [dot](../examples/tensors.md#tensor-algebra);
+NumPy's stacked-matrix convention is not supported.
 
 Examples, with a scalar `a`, vectors `x` and `y` of value shape `(3,)`,
 a matrix `A` of value shape `(2, 3)` and `i = index("i")`:

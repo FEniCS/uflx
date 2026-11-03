@@ -100,6 +100,20 @@ classes for that composition, as with `Divergence` and `Curl` in the core
 [Shape derivatives](#shape-derivatives) give an example of an extension whose
 pass runs between two lowering stages.
 
+```{dropdown} Open: operator composition for preconditioning
+A linear preconditioner maps residuals in $V^\star$ to corrections in $V$.
+An auxiliary-space construction is $P B_W P^\star$, with $P: W \to V$ and
+$B_W: W^\star \to W$. Dual arguments and typed operator composition could
+express this construction. It is open whether arbitrary operator-valued
+arguments are also useful, or composition belongs in the solver layer.
+
+A concrete finite element implementation should establish how the symbolic
+operations connect to assembly, matrix-free application and auxiliary solves
+before extending `Form` further. Preconditioner construction need not be
+linear in its operator inputs, even when its residual-to-correction action is
+linear.
+```
+
 ### New questions
 
 A downstream library asks a new question of an expression with a pass. The pass
@@ -108,21 +122,10 @@ library. A pass that meets a node class of a language extension also has a
 table for that class before the table of the core, such as the lowering table
 (see [Rule tables](#rule-tables)).
 
-For example, a library that checks physical units, such as the work of Habera
-et al.:
-
-1. Assigns a unit to terminals in a table of the library. For example, with
-   `X = coordinate(RD(2))`, the table `{X: "m"}` states that the coordinates
-   are in metres. A terminal that is not in the table, such as a literal, is
-   dimensionless.
-2. Writes passes, such as `units(expression, table)`, which returns the unit of
-   any expression. `units` derives the unit of an expression from the units of
-   the terminals, in the same way as the core derives the value shape.
-   `X[0] * X[1]` is in square metres. The gradient
-   `gradient(X[0], RD(2))` is in metres divided
-   by metres, so the gradient is dimensionless.
-   `X[0] + X[0] * X[1]` is an error of the units library.
-3. Calls `units` on an expression whenever the library needs the check.
+For example, a units library assigns metres to `X = coordinate(RD(2))`
+and treats unlisted terminals as dimensionless. Its pass derives square
+metres for `X[0] * X[1]`, a dimensionless value for `gradient(X[0], RD(2))`,
+and an error for `X[0] + X[0] * X[1]`. The library calls the pass when needed.
 
 ### New operations
 
@@ -173,17 +176,8 @@ Geometry-dependent basis construction and interpolation belong to the library
 and are outside this description.
 A `PullBack` alone does not transform value components.
 
-For a source field `u` in `U` and `l` in `dual_space(V)`, the dual pairing is:
-
-```python
-B = form(action(l, 0, conjugate(interpolate(u, V))), (l, conjugate(u)))
-```
-
-`B` has argument spaces `(dual_space(V), conjugate_space(U))`. Supplying a
-target load at position 0 gives its dual transfer to `U`. Supplying
-`conjugate(u0)` at position 1 leaves a linear functional of the target load.
-Its conjugate represents `interpolate(u0, V)` through the double-dual
-identification; pointwise evaluation uses the interpolant itself.
+See [Dual transfer through interpolation](../examples/forms.md#dual-transfer-through-interpolation)
+for a pairing with a target load.
 
 Only value sampling and affine, invertible cell maps between equal dimensions
 are covered. Derivative sampling is not yet covered.

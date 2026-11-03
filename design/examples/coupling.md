@@ -82,6 +82,42 @@ $(1-t, t)$. The cell Jacobians are $J_+ = I_2$ and
 $J_- = \begin{pmatrix}0 & -1 \\ 1 & 1\end{pmatrix}$, so the normal is
 $(1,1)/\sqrt{2}$ and the facet density is $\sqrt{2}$.
 
+### Evaluating a trace
+
+Use the topology `square`, diagonal and reference coordinate `X = coordinate(K)`
+above. For a scalar field `u` on `square`, set
+`plus_T = side_map(square, diagonal, "+")` and
+`minus_T = side_map(square, diagonal, "-")`. The traces are
+`pull_back(u, plus_T)` and `pull_back(u, minus_T)`.
+
+From `"+"`, the side tables are the cells `(0,)` and the inclusion
+$A_+(t) = (1 - t, t)$, through the local vertices 1 and 2 of `K`. From
+`"-"`, the side tables are the cells `(1,)` and the inclusion
+$A_-(t) = (0, t)$, through the local vertices 0 and 2. The coordinates of
+`E` are $(1 - t, t)$.
+
+Suppose the reference-cell value `pull_back(u, cell_map(square, 0))` is:
+
+```python
+a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]
+```
+
+Here `c = cell_index(square, 0)` and `X = coordinate(K)`. Substituting the cell
+number and inclusion from each side gives:
+
+$$
+\begin{aligned}
+u_+(t) &= a_{0,0} + a_{0,1}(1 - t) + a_{0,2}t, \\
+u_-(t) &= a_{1,0} + a_{1,2}t.
+\end{aligned}
+$$
+
+The two are mathematically equal for all $t$ if `u` is continuous at vertices 1 and 2.
+
+Listing the diagonal as `(2, 1)` changes the inclusion from `"+"` to
+$A_+(t) = (t, 1 - t)$. Both restrictions then run the other way along the
+diagonal, leaving the jump at each point unchanged.
+
 ### From the facet integral to a kernel
 
 `expand_integrals` expresses the integral on the reference interval:
@@ -392,3 +428,27 @@ segments, a point-location pass identifies the tetrahedron and reference
 position of each ring point. The family has segment, quadrature-point and
 ring-point indices; a segment kernel therefore reads a list of tissue cells
 rather than one cell. Its interface follows from the expression.
+
+## Side topology examples
+
+The examples use a triangle topology `T` with cell types `(K,)`,
+`I = Simplex(1)` and `P = Simplex(0)`. For restriction, use reference cells
+instead, such as `ReferenceSimplex(1)` for `I`.
+
+- A boundary topology `B` has cell types `(I,)` and one side,
+  `((("inside", T, 0),),)`. Its facet index is `cell_index(B, 0)`.
+- Interior facets have two sides: `((("+", T, 0), ("-", T, 0)),)`.
+- Corners of the boundary have cell types `(P,)` and sides
+  `((("+", B, 0), ("-", B, 0)),)`: a side topology can itself have sides.
+- For a boundary submesh `M` with cell types `(I,)`, the sides
+  `((("mesh", T, 0), ("submesh", M, 0)),)` refer to different topologies.
+- A periodic left boundary has sides `((("left", T, 0), ("right", T, 0)),)`.
+  From `"right"`, each vertex is located one period to the right.
+- For a topology `M` of triangles and quadrilaterals, interior facets have
+  cell types `(I, I, I)` and sides
+  `((("+", M, 0), ("-", M, 0)), (("+", M, 0), ("-", M, 1)), (("+", M, 1), ("-", M, 1)))`.
+  The same facet type occurs in three groups, distinguished by the adjacent
+  cell types. An integral has one term per group.
+- For a prism topology `U3` with cell types `(W,)`, the boundary has two
+  different facet types `(K, Q)`, triangular and quadrilateral, with sides
+  `((("inside", U3, 0),), (("inside", U3, 0),))`.

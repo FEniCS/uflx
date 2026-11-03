@@ -2,10 +2,7 @@
 
 ## Appendix: Node-class rationale
 
-This catalogue explains the design choices; the rules are in the class sections.
-
-The node classes of the core, and why each is a node class and not a
-composition:
+The rules are in the class sections; this table explains why each operation needs a node.
 
 | Node class                                       | Why a node class                                                                                              |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |

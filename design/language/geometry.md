@@ -342,43 +342,19 @@ or its parameterised image, retaining multiplicity. A `DomainMap` is not an
 | Derived                          | `free_indices`, the free indices of $\psi$ |
 | Raises                           | `TypeError` for $P$ or $Q$, and `ValueError` if another requirement fails                                                                                                                                   |
 
-The coordinates of $Q$ locate the image of
-$D$. The 'topological dimension' of $D$ is $k$,
-`D.parameter_domain.dimension`, and the 'geometric dimension' is $n$, the
-dimension of the ambient coordinate domain of $Q$.
-
-Maps need not be injective.
-
-$P$ is a coordinate domain, such as a reference cell, or a topology. The
-target $Q$ is a coordinate domain, never a topology or a mesh. Coordinates
-alone do not select a cell or a reference preimage in a mesh; evaluation of
-mesh fields uses explicit cell or side maps (see [A family of points in a
-mesh](#a-family-of-points-in-a-mesh)).
+The topological dimension is `P.dimension`; the geometric dimension is
+that of the ambient coordinate domain of $Q$. Maps need not be injective.
+Coordinates alone do not select a cell or reference preimage in a mesh;
+mesh-field evaluation uses [cell or side maps](#a-family-of-points-in-a-mesh).
 
 A $\psi$ with free indices makes $D$ a family of domains, with one domain for
 each value of the free indices. For example, with an array `x` of value shape
 `(m, n)` and an index `i`, `domain_map(RD(0), x[i], RD(n))` is a family of $m$
 points in `RD(n)`, retaining distinct members even at identical coordinates.
 
-$Q$ is usually `RD(n)`. $Q$ may be smaller, such as the unit triangle for an
-edge of the unit triangle.
-
-Examples:
-
-- The hypotenuse of the unit triangle is the image of a domain map with $k = 1$
-  and $n = 2$. $P$ is the unit interval in $R^1$, and
-  $\psi(X) = (1 - X_0, X_0)$. $Q$ is `RD(2)` for the hypotenuse in the plane,
-  and `UnitSimplex(2)` for the hypotenuse in the unit triangle.
-
-A curved example is the paraboloid, with $k = 2$ and $n = 3$:
-
-```python
-P = RD(2)
-X = coordinate(P)
-h = X[0] ** Integer(2) + X[1] ** Integer(2)
-psi = tensor((X[0], X[1], h))
-paraboloid = domain_map(P, psi, RD(3))
-```
+For example, the hypotenuse of the unit triangle has parameter domain
+$P = [0,1]$ and parameterisation $\psi(t) = (1-t,t)$. Choose `Q = RD(2)`
+for the edge in the plane, or `Q = UnitSimplex(2)` for the edge in the triangle.
 
 ### `PullBack`
 
@@ -395,8 +371,6 @@ specifies its coordinate parameterisation $\psi$.
 | Requires         | $f$ with the domain $Q$ or no domain, and an equal extent for an `Index` free in both $f$ and $D$          |
 | Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
 | Raises           | `TypeError` for $D$, and `ValueError` if another requirement fails                                         |
-
-The second operand is a map that identifies its source $P$ and target $Q$.
 
 For a `DomainMap`, the pull-back is the composition $f \circ \psi$, the
 expression on $P$ with the value $f(\psi(p))$ at each point $p$ of $P$.
@@ -419,39 +393,24 @@ of $D$, their composition is the domain map with the parameterisation
 ambient domain of $D$, such as `E` in the example below. Composition through
 a cell map instead keeps nested pull-backs, preserving the cell selection.
 
-This example maps an edge of the unit triangle `T` into a triangle `K` in
-`RD(2)`:
+For an edge of the reference triangle `T` and a coordinate map `psi` from
+`T` into `RD(2)`:
 
 ```python
-T = UnitSimplex(2)
-X = coordinate(T)
-one, two = Integer(1), Integer(2)
-psi = tensor((one + two * X[0] + X[1], one + two * X[1]))
-
-# The unit interval, the parameter domain of the edge, with coordinate t.
-S = UnitSimplex(1)
-t = coordinate(S)[0]
-
-# The edge of T from (1, 0) to (0, 1), as a domain in T.
+T, S = UnitSimplex(2), UnitSimplex(1)
+X, t = coordinate(T), coordinate(S)[0]
+one = Integer(1)
 e = domain_map(S, tensor((one - t, t)), T)
-
-# PullBack(f, e), with the domain UnitSimplex(1) and value shape ().
 f = X[0] * X[1]
-fe = pull_back(f, e)
-
-# The edge of K from (3, 1) to (2, 3), as a domain in RD(2).
+fe = pull_back(f, e)  # Value (1 - t) * t.
 E = domain_map(S, pull_back(psi, e), RD(2))
 ```
 
-- A later pass evaluates `fe` to $(1 - t) t$, and the parameterisation of `E`
-  to $(3 - t, 1 + 2 t)$.
-
-Changing the ambient domain makes this pull-back invalid: `f` has domain
-`T`, not `RD(2)`.
+Changing the target to `RD(2)` makes the pull-back of `f` invalid:
 
 ```python
 edge_in_plane = domain_map(S, tensor((one - t, t)), RD(2))
-pull_back(f, edge_in_plane)  # Raises ValueError.
+pull_back(f, edge_in_plane)  # Raises ValueError: f has domain T.
 ```
 
 ### Jacobian and density
@@ -723,24 +682,12 @@ Notation, for the group $i$ of $S$ with a side `(name, T, j)`:
 
 #### The image of a cell on a side
 
-On each side, a cell of group $i$ of $S$ is the image of the cell type $F_i$
-of group $i$ under the inclusion of the side tables, a map into $K_j$ (see
-[Restriction](#restriction)). The image is one of the following:
-
-- A sub-entity of the cell on the side. The sub-entity is the cell itself, with
-  the vertices in the order of the cell, a facet, or a sub-entity of lower
-  dimension, such as an edge of a tetrahedron or a vertex.
-- A piece of the cell on the side that is not a sub-entity, such as half of a
-  facet at a hanging node or a segment of a line through the cell.
-
-The concrete mesh gives the inclusion of each cell of $S$ into the cell on
-each side. A mesh library may build the inclusion as the affine map through
-the positions of the vertices of the cell in $K_j$ (see [A static
-topology](../examples/library.md#a-static-topology)):
-
-- For a matching facet, the position is that of the same vertex.
-- For a periodic boundary, the position is that of the vertex one period away.
-- For a piece, the position is that of a point of the cell.
+Each side inclusion maps the cell type $F_i$ into the parent reference cell
+$K_j$. Its image may be the whole cell, a sub-entity, or a piece such as half
+a facet or a cut through the cell. A whole-cell inclusion preserves vertex
+order. The mesh library supplies the map; an affine inclusion can be built
+from the vertex positions in $K_j$ (see [A static topology](../examples/library.md#a-static-topology)).
+For periodic sides, those positions refer to the corresponding periodic image.
 
 #### Side tables
 
@@ -770,71 +717,27 @@ periodic and mortar couplings may pair distinct physical points.
 
 #### What the concrete mesh decides
 
-The concrete mesh decides the following:
-
-- Which sub-entities or pieces are the cells of $S$. For example, the cells of
-  $S$ may be the facets of a marked boundary or the cells of a marked
-  subdomain.
-- From which cells on each side each cell of $S$ is seen. For example, a facet
-  of two cells may be seen from one cell only.
-- For a sub-entity of lower dimension than a facet, such as a vertex of a
-  triangle mesh, which one of the several cells that contain the sub-entity is
-  on a side. A function that is continuous across the cells has the same
-  restriction from each of the cells. The restriction of any other function
-  depends on the choice.
-- The names of the sides, and which cell is on which side. For example, the
-  facets of an interface between fluid and solid triangles of the one cell
-  type 0 of `T` have the sides `(("fluid", T, 0), ("solid", T, 0))`. The cell
-  on the side `"fluid"` is the fluid triangle.
-
-The sides may have different topologies, such as a mesh and a submesh, or two
-meshes that meet. The topology of a side may itself have sides, so the cells
-of $S$ may be facets of facets.
+The mesh library chooses the cells or pieces of $S$, the side names, and
+one parent cell on each side. For a lower-dimensional entity shared by several
+cells, this choice affects the restriction of a discontinuous field.
+Sides may refer to different topologies, and a side topology may itself have
+sides, allowing facets of facets.
 
 #### Cells that are pieces
 
-A cell of $S$ that is a piece of the cell on a side covers the cases where one
-entity meets several cells:
-
-- At a hanging node, the facet of the small cell is half of a facet of the
-  large cell. The large cell sees the half facet through a vertex and an edge
-  midpoint of $K_j$.
-- At a mortar interface between two meshes, the cells of $S$ are the pieces of
-  the intersections of the facets. Each piece is seen from one cell of each
-  mesh.
-- For a line through the cells of a 3D mesh, the cells of $S$ are the segments
-  of the line inside one cell each. Each segment is seen from the cell of the
-  line and from the cell of the mesh (see [A 1D network in a 3D
-  mesh](../examples/coupling.md#a-1d-network-in-a-3d-mesh)).
-
-The concrete mesh computes which parts of an entity meet which cells, outside
-the language, as the concrete mesh locates the cell that contains a point (see
-[A family of points in a mesh](#a-family-of-points-in-a-mesh)). The inclusion of
-a piece of a curved cell may be an approximation, as a quadrature rule is.
+Pieces cover hanging facets, mortar intersections and segments of a network
+inside mesh cells. The mesh library computes these intersections and their
+inclusions; a curved inclusion may be approximate. See the
+[network example](../examples/coupling.md#a-1d-network-in-a-3d-mesh).
 
 #### Examples
 
-The examples use a triangle topology `T` with cell types `(K,)`,
-`I = Simplex(1)` and `P = Simplex(0)`. For restriction, use reference cells
-instead, such as `ReferenceSimplex(1)` for `I`.
+For a triangle topology `T` and facet cell type `I`, a boundary topology has
+cell types `(I,)` and sides `((("inside", T, 0),),)`. Interior facets instead
+have sides `((("+", T, 0), ("-", T, 0)),)`.
 
-- A boundary topology `B` has cell types `(I,)` and one side,
-  `((("inside", T, 0),),)`. Its facet index is `cell_index(B, 0)`.
-- Interior facets have two sides: `((("+", T, 0), ("-", T, 0)),)`.
-- Corners of the boundary have cell types `(P,)` and sides
-  `((("+", B, 0), ("-", B, 0)),)`: a side topology can itself have sides.
-- For a boundary submesh `M` with cell types `(I,)`, the sides
-  `((("mesh", T, 0), ("submesh", M, 0)),)` refer to different topologies.
-- A periodic left boundary has sides `((("left", T, 0), ("right", T, 0)),)`.
-  From `"right"`, each vertex is located one period to the right.
-- For a topology `M` of triangles and quadrilaterals, interior facets have
-  cell types `(I, I, I)` and sides
-  `((("+", M, 0), ("-", M, 0)), (("+", M, 0), ("-", M, 1)), (("+", M, 1), ("-", M, 1)))`.
-  The same facet type occurs in three groups, distinguished by the adjacent
-  cell types. An integral has one term per group.
-- For a prism topology `U3` with cell types `(W,)`, the boundary has two
-  different facet types `(K, Q)`, triangular and quadrilateral, with sides
-  `((("inside", U3, 0),), (("inside", U3, 0),))`.
+See [Side topology examples](../examples/coupling.md#side-topology-examples)
+for corners, submeshes, periodic boundaries and mixed cell types.
 
 ```{dropdown} Legacy UFL
 The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
@@ -1203,33 +1106,11 @@ jump = pull_back(u, plus) - pull_back(u, minus)
 E = side_domain(D, diagonal, "+")
 ```
 
-From `"+"`, the side tables are the cells `(0,)` and the inclusion
-$A_+(t) = (1 - t, t)$, through the local vertices 1 and 2 of `K`. From
-`"-"`, the side tables are the cells `(1,)` and the inclusion
-$A_-(t) = (0, t)$, through the local vertices 0 and 2. The coordinates of
-`E` are $(1 - t, t)$.
-
-Suppose the reference-cell value `pull_back(u, cell_map(square, 0))` is:
-
-```python
-a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]
-```
-
-Here `c = cell_index(square, 0)` and `X = coordinate(K)`. Substituting the cell
-number and inclusion from each side gives:
-
-$$
-\begin{aligned}
-u_+(t) &= a_{0,0} + a_{0,1}(1 - t) + a_{0,2}t, \\
-u_-(t) &= a_{1,0} + a_{1,2}t.
-\end{aligned}
-$$
-
-The two are mathematically equal for all $t$ if `u` is continuous at vertices 1 and 2.
-
-Listing the diagonal as `(2, 1)` changes the inclusion from `"+"` to
-$A_+(t) = (t, 1 - t)$. Both restrictions then run the other way along the
-diagonal, leaving the jump at each point unchanged.
+The `"+"` side selects cell 0 with inclusion $A_+(t) = (1-t,t)$.
+For a reference-cell field $u_0(X) = a_{0,0} + a_{0,1}X_0 + a_{0,2}X_1$,
+its trace is $u_+(t) = a_{0,0} + a_{0,1}(1-t) + a_{0,2}t$.
+See [Evaluating a trace](../examples/coupling.md#evaluating-a-trace) for both
+sides and the effect of reversing the facet vertices.
 
 ```{dropdown} Legacy UFL
 The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on the topology $S$ of the interior facets, whose sides are named `'+'` and `'-'`.
@@ -1419,20 +1300,14 @@ the library of the topology gives $\hat m$.
 
 #### The direction of the normal
 
-- For a cell of $E$ on the boundary of $K_j$, such as a facet or a piece of a
-  facet, $\hat m$ points out of $K_j$ (see [Side tables](#side-tables)).
-- For a cell of $E$ inside $K_j$, such as a cut through the cell, $\hat m$
-  has the orientation chosen by the supplying library.
-- For $k = n$, outward normals are opposite when the two regions adjoin on
-  opposite sides of the interface. Coincident geometry or side names alone
-  do not imply this relation.
-- For $k < n$, the same conclusion also requires matching tangent spaces.
-  On a surface, a jump therefore uses each side's conormal, as in
-  `u_p * n_p + u_m * n_m`.
+Orientation follows the [side-table contract](#side-tables). For $k=n$,
+normals are opposite when the two regions adjoin on opposite sides of the
+interface; coincident geometry or side names alone do not imply this.
+For $k<n$, matching tangent spaces are also required. On a surface, a jump
+therefore uses each side's conormal, as in `u_p * n_p + u_m * n_m`.
 
-`Normal` is the normal of a cell on a side, not the unit normal field of a
-domain of dimension $n - 1$, such as of a surface in $R^3$. The unit normal
-field uses a separately supplied orientation field (see
+`Normal` is a side conormal. A unit normal field to a surface in $R^3$
+requires a separately supplied orientation field (see
 [The flux through a surface](../examples/surfaces.md#the-flux-through-a-surface)).
 
 #### Examples

@@ -53,10 +53,8 @@ actions on transformed forms, as in [`Action`](forms.md#action).
 
 A transformation changes an expression using the rules below. A recipe
 coordinates transformations. A contract describes an accepted representation
-and can be checked without transforming it. These are separate responsibilities;
-a contract does not choose a recipe.
-
-Consumers may compose transformations and stop at a suitable boundary:
+and can be checked without transforming it. Consumers choose a recipe that
+satisfies its transformations' preconditions and the required output contract:
 
 | Contract | Required representation |
 | -------- | ----------------------- |
@@ -86,10 +84,7 @@ result violates core normal form, identifying the offending nodes. It assumes
 the geometry precondition of [Evaluation traversal](#evaluation-traversal).
 Extension nodes require an extension recipe before entering this core operation.
 
-The standard recipe takes a core expression to core normal form. The table gives
-one schedule and names its intermediate grammars for the rule tables below.
-Consumers need not follow this schedule when targeting another contract, but must
-satisfy the preconditions of the transformations they use.
+The standard recipe uses the following schedule and intermediate grammars:
 
 | Pass | Evaluates | Output grammar |
 | ---- | --------- | -------------- |
@@ -110,11 +105,9 @@ which the form states the gradient, such as `gradient(coordinate(D), D)`, the
 identity matrix for $D$ of the dimension of its ambient coordinate domain, and
 not as the product of $J$ and $K$ on the reference cell.
 
-The recipe checks its output against core normal form. Constructs allowed there
-remain for later processing; a construct outside that contract is reported,
-not silently accepted as a completed lowering. Other recipes may have weaker
-output contracts. A transformation's own postcondition is the one in its rule
-table, not necessarily the contract of the complete recipe.
+Each transformation guarantees its table's postcondition. `lower` checks the
+complete result against core normal form; permitted constructs remain for
+later processing.
 
 The passes use the [evaluation traversal](#evaluation-traversal). A substitution
 of indices also enters domains, domain maps and spaces. Extensions coordinate
@@ -219,13 +212,15 @@ A binding node is made fresh for expressions $s_1, \dots, s_n$ by renaming,
 in the operands in which the names are bound, each bound name that is free in
 some $s_k$, so that the binding node does not capture the name.
 
-A substitution replaces expressions $r_1, \dots, r_n$ by $s_1, \dots, s_n$
-simultaneously, so a substituted $s_k$ is not searched for the other $r_l$.
-Inside a binding node, the substitution goes into the other operands as
-anywhere else. For the operands in which the names are bound, the substitution
-drops each pair whose $r_k$ has a bound name free in it, because every
-occurrence of that $r_k$ there refers to the bound name, makes the binding node
-fresh for the remaining $s_k$, and substitutes the remaining pairs.
+Substitution replaces $r_1, \dots, r_n$ by $s_1, \dots, s_n$
+simultaneously. Within a binding scope:
+
+1. Drop each pair whose key $r_k$ has a bound name free in it.
+2. Make the binding node fresh for the remaining replacement values $s_k$.
+3. Substitute the remaining pairs into the operands in that scope.
+
+Operands outside the binding scope use the original pairs. Inserted values
+are never searched for further matches.
 
 When a binding node is made fresh for $s_1, \dots, s_n$, the new name of a
 bound index `i` is the derived index
@@ -255,41 +250,18 @@ replace(a + b, {a: d, d + b: c})  # d + b; no match after rebuilding
 replace(a, {a: b, b: c})  # b; inserted values are not searched
 ```
 
-For example, substituting an expression with a free index requires renaming:
+Examples, with `j` a fresh index:
 
-```python
-e = index_sum(a[i] * c, (i,))
-result = replace(e, {c: b[i]})
-```
+| Substitution | Result |
+| ------------ | ------ |
+| `replace(index_sum(a[i] * c, (i,)), {c: b[i]})` | `index_sum(a[j] * b[i], (j,))`; `i` remains free |
+| `replace(form(a, (v,)), {v: w})` | The original form; `v` is bound |
+| `replace(DirectionalDerivative(f, u, u, h), {u: u0})` | `DirectionalDerivative(f, u, u0, h)`; the point is outside the binding scope |
 
-With `j` the renamed index, the result is:
-
-```python
-index_sum(a[j] * b[i], (j,))
-```
-
-The index `i` remains free. Without renaming, it would be captured by the sum.
-
-A bound function is not replaced:
-
-```python
-F = form(a, (v,))
-replace(F, {v: w})  # Leaves the bound v unchanged.
-```
-
-The point of a derivative is not bound, even when it is the same function as
-the variable:
-
-```python
-d = DirectionalDerivative(f, u, u, h)
-result = replace(d, {u: u0})
-```
-
-The result is the derivative at `u0`:
-
-```python
-DirectionalDerivative(f, u, u0, h)
-```
+Substitution follows all construction dependencies, including domains, maps,
+spaces and derived labels. It commutes with a fixed composition when the
+static-type choice is unchanged: replacing `A` by `B` in `transpose(A)`
+gives `transpose(B)`, with the derived indices of `B`.
 
 ### Grammars
 
@@ -656,18 +628,11 @@ A form compiler receives the integrand layer: integrals over reference cells
 and points, with arithmetic and index notation over constants, reference
 coordinates and the library reads of [Functions in a space](forms.md#functions-in-a-space).
 
+```{dropdown} Reusing geometry calculations
 Every expression that a pass builds from domain maps, such as the Jacobian,
 the inverse Jacobian, the density and the normal of a side, depends only on
 those domain maps and remains a subexpression of the result. A form compiler
 can therefore evaluate such an expression once for the values that the domain
 maps read, such as the coordinates of a mesh, and use the value in every
 integral that contains the expression.
-
-In particular, the core normal form may still contain:
-
-- A pull-back by a `SideMap` that no pull-back by a cell encloses, such as a
-  restriction that is not integrated.
-- A `Gradient` of the coordinates of a mesh of lower dimension
-  than its ambient coordinate domain, the projection $\Pi$, and a
-  `Gradient`, a `PushForward` or a node of the identity of Piola on a mesh
-  not yet read through a cell map, including under an unexpanded side restriction.
+```
