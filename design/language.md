@@ -328,7 +328,7 @@ Worked examples for this chapter: [the unit simplex](examples/library.md#the-uni
 | `AbstractExpression` |                                                                                      |
 | -------------------- | ------------------------------------------------------------------------------------ |
 | Extends              | `Base`                                                                               |
-| Provides             | `value_shape`, `free_indices`, `scalar_type`, `support`, `argument_spaces` |
+| Provides             | `value_shape`, `free_indices`, `scalar_type`, `domain`, `argument_spaces` |
 
 These five derived properties form the static type (see
 [Argument spaces](#argument-spaces)). The value shape is a `tuple` of
@@ -341,7 +341,8 @@ An extent is the length of an axis of a value shape, or the extent of a free
 index. An extent is an `int` $n \ge 0$ or an `AbstractExtent`.
 
 `AbstractExtent` represents an extent whose value is not known during
-construction. An `AbstractExtent` is not an expression. A concrete
+construction. Its supplied value must be a nonnegative integer.
+An `AbstractExtent` is not an expression. A concrete
 `AbstractExtent` is a subclass outside the core, such as `RuntimeExtent` in the
 [cut cell example](examples/integration.md#integrating-over-a-cut-cell).
 
@@ -426,22 +427,30 @@ The scalar type is the arithmetic in which the expression is evaluated, not a
 statement about the value. A real `SquareRoot`, `Logarithm` or `Power` whose
 value is not a real number, such as `square_root(Integer(-1))`, is undefined.
 
-### Support
+### Domain
 
-The support is an [`AbstractDomain`](#abstractdomain), or an
-[`AbstractTopology`](#abstracttopology) whose cell types are reference cells.
-The support is absent for an expression with no support, such as a literal. Unless the [static type
-table](#appendix-static-type-table) states otherwise, the support
-of a node is the support of the edges of the node that are expressions with a support.
-All such edges must have the same support, or construction raises `ValueError`. A
-node with no such edge has no support.
+An expression's `domain` is where it is defined: an
+[`AbstractDomain`](#abstractdomain), or an [`AbstractTopology`](#abstracttopology)
+whose cell types are reference cells. It is `None` for an expression independent
+of a domain, such as a literal.
+
+Unless the [static type table](#appendix-static-type-table) states otherwise,
+a node inherits the domain of its expression operands with a domain. All such
+operands must have the same domain, or construction raises `ValueError`. A node
+with no such operand has domain `None`.
+
+The property always describes the resulting expression. An `Integral` stores
+its region as `integration_domain` but has domain `None`; a `PullBack` stores
+its `map` and has that map's `parameter_domain`. A `PushForward` stores its
+`mesh`, which is also its domain. For `Coordinate`, `Gradient`, `Divergence`
+and `Curl`, the stored domain is also the result's domain.
 
 ### Expressions as functions
 
-An expression denotes an array-valued function on the support of the
+An expression denotes an array-valued function on the domain of the
 expression. An expression on a topology denotes a function on the reference
 cell of each cell of the topology (see [`CellMap`](#cellmap)). An expression
-with no support denotes a single array. An expression with argument spaces other than `()` denotes a multilinear map from
+with no domain denotes a single array. An expression with argument spaces other than `()` denotes a multilinear map from
 the argument spaces to such functions (see [Variational
 forms](#variational-forms)).
 
@@ -451,7 +460,7 @@ An expression operation must be a construction free function, not a node class, 
 build the concept as one fixed composition of existing node classes for each
 expression static type and choice of explicit non-expression arguments.
 The static type of an expression is the value
-shape, the free indices, the scalar type, the support and the argument
+shape, the free indices, the scalar type, the domain and the argument
 spaces. The static type of a domain is the stored and the derived
 properties of the domain, such as the dimension of a coordinate domain or the pieces of a
 mesh. A construction free function chooses the composition from
@@ -507,7 +516,7 @@ A literal is a number written in an expression, such as `Integer(2) * u`.
 | `AbstractRealLiteral` | |
 | --------------------- | - |
 | Extends               | `AbstractExpression` |
-| Static type           | Value shape `()`, real, no free indices, no support and the argument spaces `()` |
+| Static type           | Value shape `()`, real, no free indices, no domain and the argument spaces `()` |
 
 | `Integer(v)` |                       |
 | ------------ | --------------------- |
@@ -539,7 +548,7 @@ terminal, and its value is
 | Extends               | `AbstractExpression` |
 | Takes                 | `real, imag: Integer \| Float` |
 | Properties            | `real` and `imag`, the real and imaginary parts |
-| Static type           | Value shape `()`, complex, no free indices, no support and argument spaces `()` |
+| Static type           | Value shape `()`, complex, no free indices, no domain and argument spaces `()` |
 | Raises                | `TypeError` for a part of another class |
 
 ```python
@@ -554,7 +563,7 @@ is zero. As a terminal, it has no evaluation operands (see
 General real expressions `a` and `b` form a complex expression through
 `a + Complex(Integer(0), Integer(1)) * b`. A real expression `r` is embedded
 in complex arithmetic by `Complex(Integer(1), Integer(0)) * r`, preserving
-its value shape, free indices, support and argument spaces.
+its value shape, free indices, domain and argument spaces.
 
 ### `Zero`
 
@@ -565,7 +574,7 @@ spaces and scalar type (real or complex).
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Extends                                            | `AbstractExpression` |
 | Properties                                         | `value_shape`, `free_indices`, `argument_spaces` and `scalar_type`, as in [Extents](#extents), [Free indices](#free-indices) [Argument spaces](#argument-spaces) and [Scalar type](#scalar-type) |
-| Static type                                        | The stored properties, with no support                                                                                         |
+| Static type                                        | The stored properties, with no domain                                                                                         |
 | Raises                                             | `TypeError` for an argument of another type, and `ValueError` for a negative extent or an index that occurs twice |
 
 For example, `Zero((3,), (), (), real)` is a real zero vector and
@@ -623,7 +632,7 @@ The free functions below construct these nodes for scalar operands. `add`,
 | Raises                 | `ValueError` if a requirement fails                                         |
 
 Complex powers use the principal value, consistent with `Logarithm`.
-The exponent may have support. The [derivative rules](#derivatives-of-the-node-classes)
+The exponent may have domain. The [derivative rules](#derivatives-of-the-node-classes)
 distinguish constant and variable exponents.
 
 ### Negation and subtraction
@@ -860,6 +869,11 @@ row = component_tensor(entry, (k,))
 ### `ComponentTensor` and `IndexSum`
 
 `ComponentTensor` binds free indices as tensor axes; `IndexSum` sums over them.
+
+If any summed index has extent zero, `IndexSum` has value zero with the
+result's static type, without evaluating its summand. This also applies when
+a symbolic extent is supplied as zero; it is an evaluation rule, not a
+construction simplification.
 
 | `ComponentTensor(expression, indices)`, `IndexSum(expression, indices)` |                                                                                                                                                                                                                   |
 | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1166,7 +1180,7 @@ J = tensor((tensor((one,)), tensor((one,))))
 
 The extent $n$ may be an `int` or an `AbstractExtent`; the two axes must
 have equal extents. The empty determinant, of shape `(0, 0)`, has value 1.
-Support, free indices and scalar type follow the operand.
+Domain, free indices and scalar type follow the operand.
 
 The node remains in the core normal form. The compiler chooses its evaluation,
 such as an explicit formula for a small matrix or a factorisation. The
@@ -1222,7 +1236,7 @@ coordinate domain. It is a terminal.
 | Free function   | `coordinate(P)`                                    |
 | Takes           | `P: AbstractDomain` |
 | Properties      | `domain`, an `AbstractDomain` $P$                  |
-| Static type     | Value shape `(n,)`, real, the support $P$          |
+| Static type     | Value shape `(n,)`, real, the domain $P$          |
 | Raises          | `TypeError` if $P$ is not an `AbstractDomain`      |
 
 $n$ is the dimension of the ambient coordinate domain of $P$. For a
@@ -1237,14 +1251,14 @@ the stored coordinate expression on the topology.
 For a mesh `image(x, Q)`, the pull-back by `cell_map(D, j, e)` is
 `pull_back(x, cell_map(T, j, e))`.
 
-For example, `coordinate(RD(3))` has value shape `(3,)` and support `RD(3)`.
+For example, `coordinate(RD(3))` has value shape `(3,)` and domain `RD(3)`.
 
 ### Valid pair
 
 An expression and a domain $(f, P)$ are a valid pair if $P$ is an
-[`AbstractDomain`](#abstractdomain) and $f$ has the support $P$ or no support.
+[`AbstractDomain`](#abstractdomain) and $f$ has the domain $P$ or no domain.
 Otherwise construction raises `TypeError` for $P$ or `ValueError` for $f$. An
-$f$ with no support is a constant on $P$.
+$f$ with no domain is a constant on $P$.
 
 ### `Gradient`
 
@@ -1317,7 +1331,7 @@ f = x * y * z
   on `M`. `gradient(w, M)` is the surface gradient of `w`, with value shape
   `(3,)`. `gradient(coordinate(M), M)` is the orthogonal projection onto the
   tangent plane of `M`, with value shape `(3, 3)`.
-- `gradient(X, RD(2))` raises `ValueError`, because `X` has the support
+- `gradient(X, RD(2))` raises `ValueError`, because `X` has the domain
   `RD(3)`.
 
 ### `Divergence` and `Curl`
@@ -1403,7 +1417,7 @@ fixed. A shape derivative, with respect to the coordinates of a mesh, is a
 language extension (see [Shape derivatives](#shape-derivatives)).
 
 The derivative is real-linear in $h$. The gradient of a direction with no
-support is zero, so the derivative with respect to a function `u` in a constant
+domain is zero, so the derivative with respect to a function `u` in a constant
 direction holds `gradient(u, P)` fixed. A direction that is a function in the
 space of `u` gives the Gateaux derivative (see [Gateaux
 derivative](#gateaux-derivative)).
@@ -1466,9 +1480,9 @@ needs no topological notion of the domain.
 | Extends          | `AbstractExpression` |
 | Free function    | `integral(f, P)`                                                                            |
 | Takes            | `f: AbstractExpression`, `P: AbstractDomain` |
-| Properties       | `expression` $f$ and `domain` $P$                                                           |
-| Requires         | A [valid pair](#valid-pair) $(f, P)$, or $P$ a mesh and $f$ with the support `P.ambient_domain` |
-| Static type      | The value shape and free indices of $f$, with no support |
+| Properties       | `expression` $f$ and `integration_domain` $P$                                                           |
+| Requires         | A [valid pair](#valid-pair) $(f, P)$, or $P$ a mesh and $f$ with the domain `P.ambient_domain` |
+| Static type      | The value shape and free indices of $f$, with no domain |
 | Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                         |
 
 For a coordinate domain $P$ of dimension $n$, `Integral(f, P)` is the
@@ -1495,7 +1509,7 @@ With `T = UnitSimplex(2)` and `X = coordinate(T)`:
   the integral to $1/6$.
 - `integral(Integer(1), T)` is the area $1/2$ of `T`.
 - `integral(X[0], T) * integral(X[1], T)` is a product of two integrals, with
-  value shape `()` and no support.
+  value shape `()` and no domain.
 
 ## Maps between domains
 
@@ -1504,7 +1518,7 @@ With `T = UnitSimplex(2)` and `X = coordinate(T)`:
 `DomainMap` is a map $\psi$ from a parameter domain $P$ into an ambient coordinate domain
 $Q$, with geometric image $\psi(P)$. The sections below write $D$ for the map
 or its parameterised image, retaining multiplicity. A `DomainMap` is not an
-`AbstractDomain` and is not the support of an expression.
+`AbstractDomain` and is not the domain of an expression.
 
 | `DomainMap(P, psi, Q)` |                                                                                                                                                                                                             |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1512,7 +1526,7 @@ or its parameterised image, retaining multiplicity. A `DomainMap` is not an
 | Free function                    | `domain_map(P, psi, Q)`                                                                                                                                                                           |
 | Takes                            | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain` |
 | Properties                       | `parameter_domain` $P$, an [`AbstractCoordinateDomain`](#abstractcoordinatedomain) or an [`AbstractTopology`](#abstracttopology) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractCoordinateDomain`                                                   |
-| Requires                         | $\psi$ with the support $P$ or no support, $\psi$ real with value shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$ and the argument spaces `()`, and $k \le n$ |
+| Requires                         | $\psi$ with the domain $P$ or no domain, $\psi$ real with value shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$ and the argument spaces `()`, and $k \le n$ |
 | Derived                          | `free_indices`, the free indices of $\psi$ |
 | Raises                           | `TypeError` for $P$ or $Q$, and `ValueError` if another requirement fails                                                                                                                                   |
 
@@ -1565,8 +1579,8 @@ specifies its coordinate parameterisation $\psi$.
 | Extends          | `AbstractExpression` |
 | Free function    | `pull_back(f, D)`                                                                                          |
 | Takes            | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap` |
-| Properties       | `expression` $f$, and `domain` $D$, a `DomainMap`, a [`SideMap`](#sidemap) or a [`CellMap`](#cellmap) |
-| Requires         | $f$ with the support $Q$ or no support, and an equal extent for an `Index` free in both $f$ and $D$          |
+| Properties       | `expression` $f$, and `map` $D$, a `DomainMap`, a [`SideMap`](#sidemap) or a [`CellMap`](#cellmap) |
+| Requires         | $f$ with the domain $Q$ or no domain, and an equal extent for an `Index` free in both $f$ and $D$          |
 | Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
 | Raises           | `TypeError` for $D$, and `ValueError` if another requirement fails                                         |
 
@@ -1613,7 +1627,7 @@ t = coordinate(S)[0]
 # The edge of T from (1, 0) to (0, 1), as a domain in T.
 e = domain_map(S, tensor((one - t, t)), T)
 
-# PullBack(f, e), with the support UnitSimplex(1) and value shape ().
+# PullBack(f, e), with the domain UnitSimplex(1) and value shape ().
 f = X[0] * X[1]
 fe = pull_back(f, e)
 
@@ -1624,7 +1638,7 @@ E = domain_map(S, pull_back(psi, e), RD(2))
 - A later pass evaluates `fe` to $(1 - t) t$, and the parameterisation of `E`
   to $(3 - t, 1 + 2 t)$.
 
-Changing the ambient domain makes this pull-back invalid: `f` has support
+Changing the ambient domain makes this pull-back invalid: `f` has domain
 `T`, not `RD(2)`.
 
 ```python
@@ -1743,7 +1757,7 @@ integral(pull_back(f, p), RD(0))
 ```
 
 `p` has parameter domain `RD(0)`, and `f` is defined at its points. The
-result has no support, preserves the value shape, scalar type and argument
+result has no domain, preserves the value shape, scalar type and argument
 spaces of `f`, and carries the free indices of `f` followed by those of `p`,
 each taken once. Point indices are retained, not summed.
 
@@ -1781,7 +1795,7 @@ third = Integer(1) / Integer(3)
 # DomainMap: the centroid of T, as a point in T.
 c = domain_map(RD(0), tensor((third, third)), T)
 
-# The value at the centroid: 1/9, with no support and value shape ().
+# The value at the centroid: 1/9, with no domain and value shape ().
 fc = integral(pull_back(f, c), RD(0))
 ```
 
@@ -1821,21 +1835,27 @@ coordinates.
 | Derived            | `dimension`, the dimension of the cell types                                                |
 | Defined by         | A subclass outside the core, such as the topology of the mesh of a solver                   |
 
-- `cell_types` is a `tuple` of `AbstractCellType`s $C_0, C_1, \dots$ of the
+- `cell_types` is a nonempty `tuple` of `AbstractCellType`s $C_0, C_1, \dots$ of the
   same dimension, one for each group of cells. A cell of type $j$, a cell of
   group $j$, has the vertices of $C_j$, numbered as in $C_j$.
   The cell types are distinct, except that two groups with different sides may
   have the same cell type (see [Sides of a topology](#sides-of-a-topology)).
-- `num_cells` is a `tuple` with the number of cells of each type, an `int`,
-  such as for a macro element, or an `AbstractExtent`, such as for the mesh of
-  a solver.
+- `num_cells` is a `tuple` of the same length as `cell_types`, with the number
+  of cells in each group: a nonnegative `int`, such as for a macro element,
+  or an `AbstractExtent`, such as for the mesh of a solver.
 - `sides` is `()`, or the sides of [Sides of a topology](#sides-of-a-topology).
+
+Zero-cell groups are valid, including when every group is empty. An empty
+topology retains its cell types, which determine its dimension. An empty
+boundary selection likewise retains its facet types and side declarations;
+its side tables have zero entries along the cell axis. The supplying library
+must satisfy these contracts, including for counts supplied at evaluation.
 
 A cell-group number `j` for a topology `T` is an `int` satisfying
 `0 <= j < len(T.cell_types)`. This applies to cell maps, side triples and
 `side_tables`; negative numbers do not select groups from the end.
 
-A topology whose cell types are reference cells may be the support of an
+A topology whose cell types are reference cells may be the domain of an
 expression and the domain of a space, as the cell complex of its cells (see
 [`CellMap`](#cellmap)). A topology is not an `AbstractDomain`, so
 `Coordinate`, `Gradient` and `Integral` reject a topology.
@@ -1928,10 +1948,10 @@ group $i$, with the side `(side, T, j)`, the cell type $F_i$ of group $i$ and
 - `inclusion` is a [`DomainMap`](#domainmap) from $F_i$ into $K_j$ with the
   free index `e`. Member $e$ is the inclusion of the cell $e$ into the cell on
   the side.
-- `reference_normal` is an expression with the support $F_i$ or no support,
+- `reference_normal` is an expression with the domain $F_i$ or no domain,
   the value shape `(k_j,)` and the free index `e`, for a group of cells of
   dimension $k_j - 1$, and `None` for any other group. A normal that varies
-  along the cell, such as on a curved piece, has the support $F_i$. Member $e$ is a normal in $K_j$ of
+  along the cell, such as on a curved piece, has the domain $F_i$. Member $e$ is a normal in $K_j$ of
   the image of the cell $e$. The normal points out of $K_j$ for an image on the
   boundary of $K_j$. For an image inside $K_j$, the supplying library chooses
   its orientation.
@@ -2085,9 +2105,9 @@ coordinate values; those remain with the topology and coordinate-function librar
 | Free function | `image(x, Q)` |
 | Takes | `x: AbstractExpression`, `Q: AbstractCoordinateDomain` |
 | Properties | `coordinate_function` $x$, and `ambient_domain` $Q$ |
-| Requires | $x$ supported on a topology $T$ whose cell types are reference cells; $x$ real, with value shape `(n,)` for the ambient coordinate dimension of $Q$, free indices `()` and argument spaces `()`; `T.dimension <= n` |
-| Derived | `topology` $T$ = `x.support`, `dimension` = `T.dimension`, and `pieces`, below |
-| Raises | `TypeError` for an invalid coordinate support or ambient-domain type, and `ValueError` if another requirement fails |
+| Requires | $x$ with domain $T$, a topology whose cell types are reference cells; $x$ real, with value shape `(n,)` for the ambient coordinate dimension of $Q$, free indices `()` and argument spaces `()`; `T.dimension <= n` |
+| Derived | `topology` $T$ = `x.domain`, `dimension` = `T.dimension`, and `pieces`, below |
+| Raises | `TypeError` for an invalid coordinate domain or ambient-domain type, and `ValueError` if another requirement fails |
 
 `image(x, Q)` returns `Mesh(x, Q)`. The topology is determined by $x$ and is
 not a separate construction argument. Mesh identity depends on $x$ and $Q$;
@@ -2223,9 +2243,9 @@ $T$.
 | ---------------------- | ------------------------------------------------------------------- |
 | Extends                | `AbstractExpression` |
 | Takes                  | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw` |
-| Properties             | `expression` $f$, `domain` $D$ and `law` $m$                        |
-| Requires               | $D$ a mesh with the topology $T$, $f$ with the support $T$ or no support, and the last axes of $f$, one for each variance of $m$, of the extent $k$ |
-| Static type            | The value shape of $f$ with the extent $n$ for each transformed axis, the support $D$ |
+| Properties             | `expression` $f$, `mesh` $D$ and `law` $m$                        |
+| Requires               | $D$ a mesh with the topology $T$, $f$ with the domain $T$ or no domain, and the last axes of $f$, one for each variance of $m$, of the extent $k$ |
+| Static type            | The value shape of $f$ with the extent $n$ for each transformed axis, the domain $D$ |
 | Raises                 | `TypeError` for $D$ or $m$, and `ValueError` if another requirement fails |
 
 | Free function | Overload | Takes | Returns |
@@ -2319,7 +2339,7 @@ side domain $E$ into a mesh $D$, through the side $s$.
 
 A side map of a mesh takes a side domain, so that a coupling of two meshes
 shares one side domain. `pull_back(f, side_map(X, P, s))` is an expression
-with the support $P$, the restriction of $f$ to all the groups at once. The
+with the domain $P$, the restriction of $f$ to all the groups at once. The
 pull-back of that expression by `cell_map(S, i)`, or by `cell_map(P, i)`
 for a side domain, is `pull_back(pull_back(f, B_i), A_i)`.
 
@@ -2473,10 +2493,15 @@ pull-backs above, without constructing a point topology.
 ### `Integral` over a mesh
 
 `Integral(f, D)` sums over all cells of mesh $D$, counting coincident cells
-separately. The integrand has support $D$, support `D.ambient_domain`, or no
-support. Every free index of $f$ remains free in the result. The cell indices
+separately. The integrand has domain $D$, domain `D.ambient_domain`, or no
+domain. Every free index of $f$ remains free in the result. The cell indices
 used by integration are internal to the expansion; a matching name in $f$
 does not make that index a cell selector.
+
+If all cell counts are zero, the mesh is empty and the integral has value
+zero with its declared static type. Each zero-cell group contributes an empty
+index sum, without evaluating the integrand or geometry for any cell. This
+also applies when symbolic cell counts are supplied as zero.
 
 #### Expansion over cells
 
@@ -2490,7 +2515,7 @@ index_sum(integral(pull_back(f, D_j) * density(D_j), K_j), (e_j,))
 ```
 
 For a field on `D.ambient_domain`, use the map with the same parameterisation
-and that ambient domain in the pull-back. A support-free integrand is also
+and that ambient domain in the pull-back. A domain-free integrand is also
 pulled back, so the internal cell index is present even for zero-dimensional
 cells, whose density is `Integer(1)`. Array-valued integrands are integrated
 component by component.
@@ -2502,7 +2527,7 @@ almost everywhere and distinct images overlap only on sets of zero measure.
 #### Cell data and indexed loads
 
 Cell-dependent data are fields on the topology or mesh. A field equal to 2
-on one unit cell and 7 on another has integral 9. In contrast, a support-free
+on one unit cell and 7 on another has integral 9. In contrast, a domain-free
 indexed load with values `[2, 7]` is integrated over the whole two-cell mesh
 for each index value, giving `[4, 14]`. Its index remains free, even when it
 has the name `cell_index(D.topology, j)`.
@@ -2544,7 +2569,7 @@ It points outward on boundary pieces.
 | Takes        | `sm: SideMap` |
 | Properties   | `side_map`, a [`SideMap`](#sidemap) `SideMap(D, E, s)`                                               |
 | Requires     | $D$ a mesh, and $E$ of the dimension $k - 1$ for the dimension $k$ of $D$                             |
-| Static type  | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the support $E$, real      |
+| Static type  | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the domain $E$, real      |
 | Raises       | `TypeError` for an `sm` that is not a `SideMap`, and `ValueError` if the requirement fails           |
 
 The normal of `sm` belongs to the same side as the restriction
@@ -2640,7 +2665,7 @@ or a core overload; the core constructor remains `transformation_law(variances, 
 
 #### Functions in a space
 
-`Function(V, label)` uses the support of the domain of $V$ and the value
+`Function(V, label)` uses the domain of $V$ and the value
 shape, scalar type and argument spaces of $V$. These describe its expression
 representation; a form may represent the same space element differently
 (see [The double dual](#the-double-dual)). For a field,
@@ -2673,14 +2698,14 @@ data, not additional properties required by `AbstractFunctionSpace`.
 #### Spaces of constants
 
 A space with the domain `None` and the argument spaces `()` is a space of
-constants. A function in the space is an expression with no support, a
+constants. A function in the space is an expression with no domain, a
 single array with the value shape and the scalar type of $V$.
 
 The integrals of a form decide the cells on which a constant acts.
 
 A constant unknown, such as a Lagrange multiplier, needs a space because form
 arguments come from spaces. Constant data needs none: a literal or kernel-input
-array with no support is already a constant.
+array with no domain is already a constant.
 
 #### Mixed and Sobolev spaces
 
@@ -2719,7 +2744,7 @@ with those argument spaces.
 | Free function        | `function(V, label)`                                                                                                         |
 | Takes                | `V: AbstractFunctionSpace`, `label: str \| tuple` |
 | Properties           | `space` $V$, an `AbstractFunctionSpace`, and `label`, a `str` or a `tuple` with the rules of the label of an [`Index`](#index) |
-| Static type          | The value shape, scalar type and argument spaces of $V$, the support of its domain or none, and no free indices |
+| Static type          | The value shape, scalar type and argument spaces of $V$, the domain of $V$, and no free indices |
 | Raises               | `TypeError` if a requirement fails                                                                                           |
 
 The label identifies the function, so two functions are the same only if the
@@ -2733,7 +2758,7 @@ transformations of its output are evaluated.
 The [form](#form), rather than the function, decides whether a function is an
 argument or fixed data.
 
-For a scalar space `V` on a topology `T`, `u = function(V, "u")` has support
+For a scalar space `V` on a topology `T`, `u = function(V, "u")` has domain
 `T` and value shape `()`.
 
 For a matrix, a library may provide `matrix_space(V, U)` with argument
@@ -2981,8 +3006,8 @@ discontinuous field, or a boundary Lagrange multiplier. A library may assemble
 one system or separate blocks. A block retains one member of each argument
 and replaces the other members by `Zero`.
 
-The expression may have any value shape and support. A form of a field is a
-linear operator; a form of integrals has no support, even if its arguments do.
+The expression may have any value shape and domain. A form of a field is a
+linear operator; a form of integrals has no domain, even if its arguments do.
 
 Let `u` and `v` be scalar functions in a space `V` on `D`:
 
@@ -3076,7 +3101,7 @@ Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
 
 - For a space $V$, $g$ has the value shape and the argument spaces of a
   function in $V$, the scalar type of that function or the real scalar type,
-  and the support of that function or no support.
+  and the domain of that function or no domain.
 - For `ConjugateSpace(V)`, $g$ has the type of the conjugate of an admissible
   value for $V$, including conjugating its argument spaces. It supplies the
   value of an entry `conjugate(v)`.
@@ -3432,14 +3457,14 @@ A replacement $r$ is type-compatible with the expression $e$ it replaces if:
 - Their value shapes, scalar types and ordered argument spaces are equal.
 - Their free indices have the same names and extents, up to order and the
   consistent renaming of bound names.
-- Their supports are equal, or $r$ has no support. In the latter case,
-  $r$ represents a constant field on the support of $e$, for each assignment
+- Their domains are equal, or $r$ has no domain. In the latter case,
+  $r$ represents a constant field on the domain of $e$, for each assignment
   of the free indices and form arguments.
 
-The replacement must preserve the value on the original support. A pull-back
+The replacement must preserve the value on the original domain. A pull-back
 of `Integer(2)` may become `Integer(2)`, and the gradient of coordinates on a
 full-dimensional domain may become a literal identity matrix. These results
-lose support; a consumer needing the original domain must retain it.
+lose domain; a consumer needing the original domain must retain it.
 
 Before returning a table's result `r` or rebuilding its parent, complete its
 type against the replaced expression `e`. Let
@@ -3474,6 +3499,8 @@ operands, in construction order:
 
 - A terminal has no expression operands, even if its construction arguments
   contain expressions, as a derived `Function` label may.
+- A `Form` has only its body as a value operand. Its `arguments` are binding
+  declarations, not value operands; evaluation does not visit them.
 - Every other core expression has as operands its `AbstractExpression`
   construction arguments, including those nested in `tuple`s. Traversal
   stops at non-expression `Base` objects.
@@ -3754,8 +3781,8 @@ needed, preserving shared geometry for ordinary integrands. Set
 | `Integral(f, D)`, $f$ of rank $r \ge 1$ | `component_tensor(Integral(f[K], D), K)`, with `K` one derived `Index` for each axis |
 | `Integral(f, D)`, $f$ scalar | The sum over groups $j$ of `index_sum(integral(g_j * density(D_j), K_j), (e_j,))` |
 
-$g_j$ is `pull_back(f, piece_j)` when $f$ has support `D.ambient_domain`,
-and `pull_back(f, D_j)` otherwise, including support-free $f$.
+$g_j$ is `pull_back(f, piece_j)` when $f$ has domain `D.ambient_domain`,
+and `pull_back(f, D_j)` otherwise, including domain-free $f$.
 The pull-back introduces the internal cell index; `IndexSum` consumes it and
 retains every free index of $f$. The remaining integrals have coordinate domains.
 
@@ -3790,14 +3817,14 @@ coordinate domain of $P$. $\partial_j$ applies the first row that matches:
 
 | Expression $b$ | $\partial_j b$ |
 | -------------- | -------------- |
-| $b$ with no support | `Zero`, with the value shape and the argument spaces of $b$, and the free indices of $b$ followed by $j$ |
+| $b$ with no domain | `Zero`, with the value shape and the argument spaces of $b$, and the free indices of $b$ followed by $j$ |
 | `Coordinate(P)`, $P$ of the dimension of its ambient coordinate domain | `component_tensor(I[i, j], (i,))`, with $I$ the identity matrix of value shape `(n, n)` and a derived index $i$ |
 | A terminal, a `Gradient`, a `PushForward`, a node that the identity of Piola matches, or a `PullBack` by a cell or a `SideMap` | `component_tensor(gradient(b, P)[a_1, …, a_s, j], (a_1, …, a_s))`, with $s$ the rank of $b$, so the gradient remains |
 | `PullBack(g, φ)`, φ a `DomainMap` | The chain rule $(\nabla_Q g \circ \varphi) \, \nabla_P \varphi$, `pull_back(gradient(g, Q), φ)[a_1, …, a_s, l] * jacobian(φ)[l, j]` summed over a derived index $l$, with $Q$ the ambient domain of φ |
 | `Action(A, p, g)` | `Action(∂_j A, p, g)`, with $g$ unchanged |
 | Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \partial_j b$ |
 
-- An operand is constant for the pass if the operand has no support.
+- An operand is constant for the pass if the operand has no domain.
 - The gradient of a terminal remains for the library of the terminal, so the
   Hessian of a function is a gradient of a gradient.
 - On a mesh $P$ of lower dimension than its ambient coordinate
@@ -3830,8 +3857,9 @@ $A_i$ are the maps of [Restriction](#restriction).
 | `PullBack(f, ψ)` | Rewrite |
 | ---------------- | ------- |
 | `Action(A, p, g)` | `Action(PullBack(A, ψ), p, g)`, with $g$ unchanged |
-| $\psi$ a `SideMap`, $f$ with a support | Remains until a pull-back by a cell of $P$ |
-| $f$ with no support | $f$, with [type completion](#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
+| `Form(e, arguments)` | Make the form fresh for $\psi$, obtaining `Form(e_new, arguments_new)`; return `Form(PullBack(e_new, ψ), arguments_new)` |
+| $\psi$ a `SideMap`, $f$ with a domain | Remains until a pull-back by a cell of $P$ |
+| $f$ with no domain | $f$, with [type completion](#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
 | `Coordinate(Q)` | The parameterisation of $\psi$ |
 | `PullBack(g, SideMap(X, P, s))`, $\psi$ = `cell_map(S, i)` or `cell_map(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
 | `PullBack(g, φ)`, φ a `SideMap` or a cell | Remains, so a pull-back nests only inside a read on a cell |
@@ -3846,6 +3874,10 @@ $A_i$ are the maps of [Restriction](#restriction).
 | A terminal | Remains, for the library of the terminal |
 | Any other node class | The node of the pull-backs of the operands that are expressions |
 
+- The `Form` row pulls back only the body, retaining the declarations after
+  capture avoidance (see [Substitution and binding](#substitution-and-binding)).
+  Its argument spaces are unchanged. Substitution still visits the body and
+  declarations according to their binding scopes.
 - The `Action` row transforms only the form's output. The last row moves the
   pull-back into the expression operands of the other unmatched node classes,
   with a binding node made fresh for $\psi$ first.
@@ -3889,7 +3921,7 @@ The following table lists all allowed node classes and their conditions:
 | [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
 | [Calculus on a domain](#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
 | [Calculus on a domain](#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `RD(0)` |
-| [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap` of an expression other than an `Action`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
+| [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap` of an expression other than an `Action` or `Form`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
 | [Meshes](#meshes) | `Normal` | Always |
 | [Meshes](#meshes) | `PushForward` | Under no pull-back by a cell |
 | [Function spaces](#function-spaces) | `Function` | Always |
@@ -4088,8 +4120,8 @@ sampling rule to `f`.
 | `interpolate(f, V)` | |
 | ------------------- | --- |
 | Takes | `f: AbstractExpression`, `V: AbstractFunctionSpace` |
-| Requires | `V` a finite element space on a reference cell, `f` with that support or no support and the value shape and scalar type of `V`, both with argument spaces `()`, and `f` defined at every sampling point |
-| Static type | The support, value shape and scalar type of `V`, the free indices of `f`, and argument spaces `()` |
+| Requires | `V` a finite element space on a reference cell, `f` with that domain or no domain and the value shape and scalar type of `V`, both with argument spaces `()`, and `f` defined at every sampling point |
+| Static type | The domain, value shape and scalar type of `V`, the free indices of `f`, and argument spaces `()` |
 
 The library of `V` defines each degree of freedom as a weighted combination
 of [point evaluations](#point-evaluation), including any quadrature for
@@ -4553,25 +4585,25 @@ and are not added to the enclosing expression's argument spaces.
 | `PullBack`                               | Those of the expression                                        |
 
 The value shape and the free indices of each node class are in the section
-of the class. The support and the scalar type of the node classes that differ
-from the default rules of [Support](#support) and [Scalar type](#scalar-type):
+of the class. The domain and the scalar type of the node classes that differ
+from the default rules of [Domain](#domain) and [Scalar type](#scalar-type):
 
-| Class                    | Support of the node                | Scalar type of the node           |
+| Class                    | Domain of the node                | Scalar type of the node           |
 | ------------------------ | ---------------------------------- | --------------------------------- |
 | `Complex`          | None                               | Complex                           |
 | `Zero`                   | None                               | Real                              |
-| `Absolute`               | The support of the operand         | Real                              |
-| `RealPart`, `ImaginaryPart` | The support of the operand      | Real                              |
+| `Absolute`               | The domain of the operand         | Real                              |
+| `RealPart`, `ImaginaryPart` | The domain of the operand      | Real                              |
 | `Coordinate`             | The domain $P$                     | Real                              |
 | `Gradient`, `Divergence`, `Curl` | The domain $P$               | The scalar type of the expression |
-| `DirectionalDerivative`  | The support of $f$                 | The scalar type of $f$            |
+| `DirectionalDerivative`  | The domain of $f$                 | The scalar type of $f$            |
 | `Integral`               | None                               | The scalar type of the integrand  |
-| `PullBack`               | The parameter domain of the domain | The scalar type of the expression |
+| `PullBack`               | The parameter domain of the map | The scalar type of the expression |
 | `Normal`                 | $E$                                | Real                              |
 | `Function`               | The domain of the space, or none   | The scalar type of the space      |
 | `PushForward`            | The mesh $D$                       | The scalar type of the expression |
-| `Form`                   | The support of the expression      | The scalar type of the expression |
-| `Action`                 | The support of the form            | The scalar type of the form       |
+| `Form`                   | The domain of the expression      | The scalar type of the expression |
+| `Action`                 | The domain of the form            | The scalar type of the form       |
 
 ## Appendix: Summary
 

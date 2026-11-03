@@ -47,6 +47,7 @@ e_reversed = domain_map(S, tensor((t, one - t)), T)
 F = tensor((Integer(0), X[0]))
 l = index("l")
 
+
 def circulation(edge):
     return integral(index_sum(pull_back(F, edge)[l] * jacobian(edge)[l, 0], (l,)), S)
 ```
@@ -184,6 +185,7 @@ kernel could be:
 weights = (1 / 6, 1 / 6, 1 / 6)
 points = ((1 / 2, 0.0), (1 / 2, 1 / 2), (0.0, 1 / 2))
 
+
 def kernel() -> float:
     q = 0.0
     for i in range(3):
@@ -205,7 +207,7 @@ core:
 | Input | Meaning |
 | ----- | ------- |
 | `RuntimeExtent(label)` | An `AbstractExtent` known at run time. |
-| `RuntimeArray(label, value_shape)` | An expression with no support holding quadrature data, coefficients or constants. |
+| `RuntimeArray(label, value_shape)` | An expression with no domain holding quadrature data, coefficients or constants. |
 | `RuntimeIndex(label, extent)` | An `AbstractIndexValue` of shape `()`, such as a local facet number; read with `gathered_index(value, ())`. |
 
 With their lower-case construction functions, the cut-cell integral is:

@@ -120,14 +120,10 @@ square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
 alfeld = StaticTopology((K,), (((0, 1, 3), (1, 2, 3), (2, 0, 3)),), ())
 
 # Four boundary facets, each seen from one triangle.
-boundary = StaticTopology(
-    (I,), (((0, 1), (1, 3), (3, 2), (2, 0)),), ((("inside", square, 0),),)
-)
+boundary = StaticTopology((I,), (((0, 1), (1, 3), (3, 2), (2, 0)),), ((("inside", square, 0),),))
 
 # One diagonal facet, seen from two triangles.
-diagonal = StaticTopology(
-    (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
-)
+diagonal = StaticTopology((I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),))
 ```
 
 Facets are matched by vertex sets, using the facets of `K`. The square's
@@ -186,10 +182,9 @@ of the inclusion's Jacobian, turned away from the centroid of $K_j$:
 
 ```python
 J_A = jacobian(inclusion)  # value shape (k, k - 1)
-C_r = tensor(tuple(
-    tensor((Integer(1 if q == r else 0), J_A[q, 0], ..., J_A[q, k - 2]))
-    for q in range(k)
-))
+C_r = tensor(
+    tuple(tensor((Integer(1 if q == r else 0), J_A[q, 0], ..., J_A[q, k - 2])) for q in range(k))
+)
 m0 = tensor((determinant(C_0), ..., determinant(C_(k - 1))))
 centroid = (V[0] + V[1] + ... + V[m_j - 1]) / Integer(m_j)
 away = m0 @ (points[0] - centroid)
@@ -317,15 +312,15 @@ def is_facet_normal(obj):
 
 
 def grad(f):
-    return gradient(f, f.support)
+    return gradient(f, f.domain)
 
 
 def div(w):
-    return divergence(w, w.support)
+    return divergence(w, w.domain)
 
 
 def curl(w):
-    return core_curl(w, w.support)
+    return core_curl(w, w.domain)
 
 
 def inner(a, b):
@@ -371,13 +366,13 @@ def restrict(obj, E):
     # mesh are pulled back to E, and the facet normal of the mesh becomes the
     # normal of E.
     if is_facet_normal(obj):
-        return normal(side_map(obj.support, E, "inside"))
+        return normal(side_map(obj.domain, E, "inside"))
     if isinstance(obj, tuple):
         return tuple(restrict(item, E) for item in obj)
-    if not isinstance(obj, AbstractExpression) or obj.support is None:
+    if not isinstance(obj, AbstractExpression) or obj.domain is None:
         return obj
     if not contains(obj, is_facet_normal):
-        return pull_back(obj, side_map(obj.support, E, "inside"))
+        return pull_back(obj, side_map(obj.domain, E, "inside"))
     return obj.__class__(*restrict(obj.construction_arguments, E))
 
 
@@ -411,8 +406,8 @@ class Measure:
         elif self.integral_type == "ds":
             E = side_domain(mesh.domain, mesh.boundary, "inside")
         else:
-            E = integrand.support if mesh is None else mesh.domain
-        if E != integrand.support:
+            E = integrand.domain if mesh is None else mesh.domain
+        if E != integrand.domain:
             integrand = restrict(integrand, E)
         expression = integral(integrand, E)
         args = arguments(expression)

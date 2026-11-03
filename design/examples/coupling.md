@@ -19,16 +19,14 @@ and [StaticTopology](library.md#a-static-topology):
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
 square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
-diagonal = StaticTopology(
-    (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
-)
+diagonal = StaticTopology((I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),))
 ```
 
 The library supplies `X_space`, a vector Lagrange space of degree 1 and value
 shape `(2,)`, and `V`, a real scalar discontinuous Lagrange space, both on `square`.
 The solver gives the coordinate function `x` the vertex values
 `((0, 0), (1, 0), (0, 1), (1, 1))`, in vertex-number order.
-`runtime_array` supplies an array of solver data with no support (see
+`runtime_array` supplies an array of solver data with no domain (see
 [kernel inputs](integration.md#integrating-over-a-cut-cell)).
 
 ```python
@@ -74,7 +72,7 @@ a_facet = form(integral(f, E), (v, u))
 ```
 
 `a_facet` binds the functions `v` and `u` on `square`. Its integrand has
-support `E` and the free index `e` from the penalty array; the traces themselves
+domain `E` and the free index `e` from the penalty array; the traces themselves
 have no free index. Swapping the sides negates the normal and both jumps,
 leaving every term unchanged.
 
@@ -122,7 +120,7 @@ reference normal supplied by the side tables. The lowering stage gives:
 | `u_p` | $\hat u_+(A_+(t))$ |
 | `du_p` | $J_+^{-T}\widehat\nabla\hat u_+(A_+(t))$ |
 | `n` | $J_+^{-T}\hat m_+ / \lvert J_+^{-T}\hat m_+\rvert$ |
-| `alpha[e]` | Unchanged: it has no support and shares the facet index. |
+| `alpha[e]` | Unchanged: it has no domain and shares the facet index. |
 
 The `"-"` traces follow the same rules on the other cell. Here
 $\hat m_+ = (1,1)/\sqrt{2}$. The compiler's `reduce_component_tensors` pass
@@ -234,9 +232,7 @@ The bulk terms are the usual Stokes and linear-elasticity integrals:
 grad_u = gradient(u_F, F)
 grad_v = gradient(v_F, F)
 div_u, div_v = divergence(u_F, F), divergence(v_F, F)
-fluid = integral(
-    nu * index_sum(grad_u[i, j] * grad_v[i, j], (i, j)) - p_F * div_v - q_F * div_u, F
-)
+fluid = integral(nu * index_sum(grad_u[i, j] * grad_v[i, j], (i, j)) - p_F * div_v - q_F * div_u, F)
 
 grad_d = gradient(d_S, S)
 grad_w = gradient(w_S, S)
@@ -269,8 +265,8 @@ traction = integral(index_sum(g[i] * pull_back(v_F, side_map(F, G_in, "fluid"))[
 l = form(traction + integral(index_sum(mu_G[i] * d_old_G[i], (i,)) / dt, G), ((v, q, w, mu),))
 ```
 
-The fields on `F` and `S` cannot combine directly: their supports differ.
-Their traces share support `G`. The integrals have no support and can be
+The fields on `F` and `S` cannot combine directly: their domains differ.
+Their traces share domain `G`. The integrals have no domain and can be
 added; tuple arguments bind functions on all three topologies. No field is
 extended by zero onto the parent mesh.
 
@@ -311,7 +307,7 @@ The library supplies a tetrahedral topology `T3`, its coordinate function
 `x3` of value shape `(3,)`, and a topology `T1` of `ReferenceSimplex(1)`
 segments. Each segment is a tetrahedral edge, with side `(("tissue", T3, 0),)`.
 `V3` and `V1` are real scalar continuous Lagrange spaces on `T3` and `T1`.
-The library supplies `runtime_array` for solver data with no support and
+The library supplies `runtime_array` for solver data with no domain and
 `runtime_extent` for sizes known at run time.
 
 ```python
@@ -340,9 +336,9 @@ a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
 
 The gradient on `D1` is tangential, of value shape `(3,)`, so the vessel
 term uses the same construction as the tissue term. `p3` and `p1` cannot
-combine on their different supports. Restricting `p3` to `T1` makes the
+combine on their different domains. Restricting `p3` to `T1` makes the
 exchange possible; pushing it forward then gives a field on `D1`.
-The three integrals have no support and add into one form.
+The three integrals have no domain and add into one form.
 
 For each segment, the side tables select a containing tetrahedron and its
 reference-edge inclusion. Continuity of `p3` makes the trace independent of
@@ -379,9 +375,7 @@ n1, n2 = function(N, "n1"), function(N, "n2")
 cs, w = runtime_array("cs", (L, 2)), runtime_array("w", (L,))
 x1 = D1.coordinate_function
 
-ring = domain_map(
-    T1, component_tensor(x1[m] + R * (cs[l, 0] * n1[m] + cs[l, 1] * n2[m]), (m,)), D3
-)
+ring = domain_map(T1, component_tensor(x1[m] + R * (cs[l, 0] * n1[m] + cs[l, 1] * n2[m]), (m,)), D3)
 p3_avg = index_sum(w[l] * pull_back(push_forward(p3, D3, transformation_law(V3)), ring), (l,))
 q3_avg = index_sum(w[l] * pull_back(push_forward(q3, D3, transformation_law(V3)), ring), (l,))
 

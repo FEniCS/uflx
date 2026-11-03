@@ -33,9 +33,9 @@ the assembled system.
 
 ## Constants on a domain
 
-A constant can have no support, or belong to a space on one domain. The
+A constant can have no domain, or belong to a space on one domain. The
 first can act wherever it is integrated; the second retains that domain's
-support.
+domain.
 
 Let `F` and `S` be two meshes in `RD(2)`. The library supplies real spaces
 `Q` (scalar) and `V` (shape `(2,)`) on `F.topology`, `W` (shape `(2,)`) on `S.topology`,
@@ -60,8 +60,8 @@ means = integral(p_F * s + q_F * r, F) + integral(k_S * div_w + z_S * div_d, S)
 mean_form = form(means, ((q, w, s, z), (p, d, r, k)))
 ```
 
-`r` and `s` have no support; the integrals decide where they act. `k_S` and
-`z_S` have support `S`, so `k_S * q_F` raises `ValueError`. A coefficient
+`r` and `s` have no domain; the integrals decide where they act. `k_S` and
+`z_S` have domain `S`, so `k_S * q_F` raises `ValueError`. A coefficient
 that varies by cell marker instead belongs to a library space constant on
 each cell.
 
@@ -243,9 +243,11 @@ mu, lmbda = (
     push_forward(function(M, "lambda"), D, transformation_law(M)),
 )
 
+
 def strain_energy(C):
     E = (C - I) / two
     return lmbda / two * index_sum(E[a, a], (a,)) ** two + mu * index_sum(E[i, j] * E[i, j], (i, j))
+
 
 F = I + gradient(push_forward(u, D, transformation_law(V)), D)
 C = transpose(F) @ F
@@ -309,9 +311,7 @@ function on `square` with vertex values `((0,0), (1,0), (0,1), (1,1))`:
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
 square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
 D = image(x, RD(2))
-boundary = StaticTopology(
-    (I,), (((0, 1), (1, 3), (3, 2), (2, 0)),), ((("inside", square, 0),),)
-)
+boundary = StaticTopology((I,), (((0, 1), (1, 3), (3, 2), (2, 0)),), ((("inside", square, 0),),))
 lower = StaticTopology((K,), (((0, 1, 2),),), ((("inside", square, 0),),))
 left = StaticTopology((I,), (((2, 0),),), ((("inside", square, 0),),))
 ```
@@ -362,7 +362,7 @@ flux on the left edge.
 | `expr * dx` | An integral that binds the numbered arguments found in `expr`. |
 | `dx(1)`, `ds(1)` | Integrals over side domains of marked topologies. |
 | `FacetNormal(mesh)` | A placeholder replaced by the normal of each integration facet. |
-| `grad`, `div`, `curl` | Core operations using the expression's support. |
+| `grad`, `div`, `curl` | Core operations using the expression's domain. |
 
 For a real space `S = V.space`, `a` has argument spaces `(S, S)` and `L`
 has `(S,)`. For complex `S`, conjugating `inner`'s second operand and binding
@@ -370,7 +370,7 @@ the test function as `conjugate(v)` gives `(conjugate_space(S), S)` and
 `(conjugate_space(S),)`. An unconjugated test expression bound this way fails
 a linearity check. A measure with no arguments returns an `Integral`.
 
-The layer infers an unspecified `dx` domain from the integrand's support;
+The layer infers an unspecified `dx` domain from the integrand's domain;
 a constant integrand needs an explicit domain. `ds` needs a mesh because its
 boundary is library data. The four measure slots are integral type, domain,
 subdomain id and subdomain data; calling a measure fills them.
