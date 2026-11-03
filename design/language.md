@@ -2337,6 +2337,18 @@ The restriction of $f$ to group $i$ from the side $s$ is
 `pull_back(pull_back(f, B_i), A_i)`, an expression on $F_i$ with the free index
 `e`.
 
+For an explicit cell selection `q` (an `int`, `Index` or `GatheredIndex`),
+use the same side data with their cell index replaced:
+
+```python
+B_selected = replace(B_i, {e: q})
+A_selected = replace(A_i, {e: q})
+```
+
+The selected restriction is `pull_back(pull_back(f, B_selected), A_selected)`.
+Substitute only into the side data, not into `f`; its free indices remain
+independent. The default selection `q = e` leaves the maps unchanged.
+
 Restrictions are compared at paired points; their difference is an ordinary
 interface jump when those points physically coincide (see [Side tables](#side-tables)).
 A cell with more than two sides has no jump; a form uses each side's
@@ -2368,8 +2380,9 @@ side domain $E$ into a mesh $D$, through the side $s$.
 A side map of a mesh takes a side domain, so that a coupling of two meshes
 shares one side domain. `pull_back(f, side_map(X, P, s))` is an expression
 with the domain $P$, the restriction of $f$ to all the groups at once. The
-pull-back of that expression by `cell_map(S, i)`, or by `cell_map(P, i)`
-for a side domain, is `pull_back(pull_back(f, B_i), A_i)`.
+pull-back of that expression by `cell_map(P, i, q)` uses
+`pull_back(pull_back(f, B_selected), A_selected)`, with the selected maps
+defined above. This covers both topology and mesh targets.
 
 #### Side domains
 
@@ -2612,14 +2625,16 @@ Notation, for `sm` = `SideMap(D, E, s)` and the piece $i$ of $E$:
 
 #### The pull-back of `Normal`
 
-The pull-back of `Normal(SideMap(D, E, s))` by `cell_map(E, i)` is
-$\nu = w / \lvert w \rvert$, with $w = m_{B_i}(\hat m)$, where:
+The pull-back of `Normal(SideMap(D, E, s))` by `cell_map(E, i, q)` is
+$\nu = w / \lvert w \rvert$, with $w = m_{B_{\mathrm{selected}}}(\hat m)$,
+using the selected maps of [Restriction](#restriction), where:
 
 - $m$ is `transformation_law(("covariant",), 0)`, applied with the Jacobian
-  of the cell $B_i$ on the side at the points of $A_i$ (see
+  of `B_selected` on the side at the points of `A_selected` (see
   [`TransformationLaw`](#transformationlaw)).
-- $\hat m$ is `reference_normal` of the side tables of the side $s$ of group
-  $i$ (see [Side tables](#side-tables)), a normal of the cell of $E$ in $K_j$.
+- $\hat m$ is `replace(reference_normal, {cell_index(E.topology, i): q})`,
+  using the normal from the side tables of side $s$ of group $i$ (see
+  [Side tables](#side-tables)).
 
 The composition is `w / square_root(w @ w)`. It requires full column rank
 of the cell Jacobian and $w \ne 0$ wherever evaluated.
@@ -3915,8 +3930,9 @@ rewrite creates. $P$ and $Q$ are the parameter domain and the ambient domain
 of $\psi$. For $\psi$ a cell $D_j$ = `cell_map(D, j, e)` of a mesh $D$ with
 the topology $T$, $\hat f$ is `pull_back(f, cell_map(T, j, e))` and $m_\psi$
 is the law $m$ on $\psi$ (see [`TransformationLaw`](#transformationlaw)). For
-$\psi$ = `cell_map(S, i)` or `cell_map(E, i)` and a side $s$, $B_i$ and
-$A_i$ are the maps of [Restriction](#restriction).
+$\psi$ = `cell_map(Y, i, q)` for a topology or mesh $Y$ and a side $s$,
+`B_selected` and
+`A_selected` are the maps of [Restriction](#restriction), selected by `q`.
 
 | `PullBack(f, ψ)` | Rewrite |
 | ---------------- | ------- |
@@ -3925,7 +3941,7 @@ $A_i$ are the maps of [Restriction](#restriction).
 | $\psi$ a `SideMap`, $f$ with a domain | Remains until a pull-back by a cell of $P$ |
 | $f$ with no domain | $f$, with [type completion](#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
 | `Coordinate(Q)` | The parameterisation of $\psi$ |
-| `PullBack(g, SideMap(X, P, s))`, $\psi$ = `cell_map(S, i)` or `cell_map(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
+| `PullBack(g, SideMap(X, Y, s))`, $\psi$ = `cell_map(Y, i, q)` | `PullBack(PullBack(g, B_selected), A_selected)` |
 | `PullBack(g, φ)`, φ a `SideMap` or a cell | Remains, so a pull-back nests only inside a read on a cell |
 | `PullBack(g, φ)`, φ a `DomainMap` | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](#pullback)) |
 | `PushForward(f, D, m)`, $\psi$ a cell of $D$ | $m_\psi(\hat f)$ |
@@ -3934,7 +3950,7 @@ $A_i$ are the maps of [Restriction](#restriction).
 | `PushForward`, `Divergence` or `Curl` | Remains, read at the points of $P$ |
 | `Gradient(g, Q)`, $\psi$ a cell of $Q$ | $m_\psi(\nabla_P(\psi^* g))$, with $m$ = `transformation_law(("covariant",), 0)` |
 | `Gradient(g, Q)` | Remains, the gradient on $Q$ read at the points of $P$ |
-| `Normal(SideMap(D, E, s))`, $\psi$ = `cell_map(E, i)` | $w / \lvert w \rvert$ of [`Normal`](#normal) |
+| `Normal(SideMap(D, E, s))`, $\psi$ = `cell_map(E, i, q)` | $w / \lvert w \rvert$ of [`Normal`](#normal) |
 | A terminal | Remains, for the library of the terminal |
 | Any other node class | The node of the pull-backs of the operands that are expressions |
 
