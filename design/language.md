@@ -1027,6 +1027,11 @@ contain the binding node, so the substitution would not terminate.
 The edges of an index to the objects in the label of the index identify the
 index and are not operands (see [Evaluation traversal](#evaluation-traversal)).
 
+Label contents do not introduce free occurrences of functions or indices.
+This also applies to function labels: a function whose label mentions `u`
+is not thereby a function of `u`. Labels still determine identity and are
+rebuilt according to the substitution rules above.
+
 A free function or a pass of the core derives one `Index` for each axis, and
 never an `EllipsisIndex`. `component_tensor(e, K)[J]` is $e$ with each index
 of `K` replaced by the entry of `J` for the axis of the index. An
@@ -3418,7 +3423,7 @@ satisfy the preconditions of the transformations they use.
 
 | Pass | Evaluates | Output grammar |
 | ---- | --------- | -------------- |
-| [`apply_actions`](#applying-actions) | `Action`, except actions on a `Function`, `Gradient`, `PullBack` or another remaining `Action` | $N_1$ |
+| [`apply_actions`](#applying-actions) | `Action`, except actions on a `Function`, downstream terminal, `Gradient`, `PullBack` or another remaining `Action` | $N_1$ |
 | [`apply_derivatives`](#applying-derivatives) | `DirectionalDerivative`, then any actions it creates | $N_2$ |
 | [`expand_integrals`](#expanding-integrals) | `Integral` over a mesh | $N_3$ |
 | The lowering stage | `Gradient`, `Divergence`, `Curl`, `PushForward` and `PullBack` | $N_4$, [the core normal form](#the-core-normal-form) |
@@ -3649,12 +3654,17 @@ parameterisation is checked separately when exposed or evaluated.
 | ------------------ | - |
 | Evaluates          | `Action` |
 | Input grammar      | $N_0$ |
-| Output grammar     | $N_1 = N_0 \setminus \{$an `Action` whose form is not a `Function`, `Gradient`, `PullBack` or `Action`$\}$ |
+| Output grammar     | $N_1 = N_0 \setminus \{$an `Action` whose form is not a `Function`, downstream terminal, `Gradient`, `PullBack` or `Action`$\}$ |
 
 The pass rewrites every `Action(f, p, g)`, inner actions first, with the first
 row that matches the form $f$, and keeps the value of [`Action`](#action).
 It applies the rules again to actions created by a rewrite, including those
 created by substituting a symbolic form for a dual function.
+
+A downstream terminal may declare argument spaces, for example to represent
+an assembled vector or matrix held by its supplying library. Actions on it
+remain for that library to evaluate. The terminal must satisfy the ordinary
+argument-space and action contracts.
 
 | Form $f$ | Rewrite of `Action(f, p, g)` |
 | -------- | ---------------------------- |
@@ -3664,7 +3674,7 @@ created by substituting a symbolic form for a dual function.
 | `Gradient`, `PullBack` | Remains; the operation transforms the form's output |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the action moved into the listed operands |
 | `Zero` | Zero with the type of the action |
-| `Function` | Remains, for the supplying library |
+| `Function` or a downstream terminal | Remains, for the supplying library |
 | `Action` | Remains, as a further application of a remaining action |
 | Any other class of the core | Cannot occur, because the argument spaces are `()` |
 
@@ -3673,8 +3683,8 @@ created by substituting a symbolic form for a dual function.
   not differentiated.
 - A substituted form is a value with its own binders. Substitution preserves
   their scope and the scope of the enclosing form. The pass finishes when
-  every remaining action applies a `Function`, a `Gradient`, a `PullBack`
-  or another remaining action. Actions on `Gradient` and `PullBack` stay
+  every remaining action applies a `Function`, a downstream terminal, a
+  `Gradient`, a `PullBack` or another remaining action. Actions on `Gradient` and `PullBack` stay
   outside these operations, so spatial lowering does not rewrite in a cycle.
 
 ### Derivatives of the node classes
@@ -3740,6 +3750,9 @@ remains in $N_1$ and contains no `DirectionalDerivative`.
   does not depend on $x$, and a terminal other than a function of $x$ needs no
   row. An operand is constant for the pass if no function of $x$ is free in
   the operand.
+- This test follows value operands and respects binding scopes. A `Function`
+  contributes itself, not occurrences in its label or space. Domains and maps
+  are held fixed, as in the definition of `DirectionalDerivative`.
 - A `Form` that binds $x$ has no free $x$, so the first row gives zero.
 - A dual variable can occur in the functional operand of a pairing. Its
   direction and substitution point may be symbolic forms; their actions
@@ -3926,7 +3939,7 @@ The following table lists all allowed node classes and their conditions:
 | [Meshes](#meshes) | `PushForward` | Under no pull-back by a cell |
 | [Function spaces](#function-spaces) | `Function` | Always |
 | [Variational forms](#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](#form)) |
-| [Variational forms](#variational-forms) | `Action` | Its form is a `Function`, a `Gradient`, a `PullBack` or another such `Action`, with each operand in the core normal form |
+| [Variational forms](#variational-forms) | `Action` | Its form is a `Function`, a downstream terminal, a `Gradient`, a `PullBack` or another such `Action`, with each operand in the core normal form |
 | | A terminal of a downstream library | Always |
 
 Dependencies outside the [evaluation traversal](#evaluation-traversal), such
