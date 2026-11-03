@@ -3762,11 +3762,14 @@ its own rows first, for the terminals of the expression, and then the rows below
 | `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
 | `Logarithm(b)` | $\delta b / b$ |
 | `Determinant(A)` | $\det(A)\sum_{i,j}(A^{-1})_{ij}\,\delta A_{ji}$, with `inverse`, `index_sum` and derived indices $i,j$ |
-| `Inverse(A)` | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
+| `Inverse(A)`, square shape | `-inverse(A) @ delta_A @ inverse(A)`, with `delta_A` = $\delta A$ |
+| `Inverse(A)`, rectangular shape | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
 | `Conjugate(b)`, `RealPart(b)`, `ImaginaryPart(b)` | The same node applied to $\delta b$ |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the derivative moved into the listed operands |
 
 - The `Determinant` row applies where $A$ is invertible.
+- The square `Inverse` row applies when the two value-shape extents are equal,
+  including equal symbolic extents; otherwise use the rectangular row.
 - The constant-exponent row for `Power` avoids the logarithm of the general
   row, allowing negative real bases where the power is differentiable.
 - A commuting row applies only to an operand that no row of the pass
