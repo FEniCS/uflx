@@ -1557,12 +1557,8 @@ transformation from $T$ to the mesh $D$. With the identity law it reverses
 the pull-back cellwise; other laws also transform the values. It does not
 denote a dual or adjoint operator.
 
-A `PullBack` of a downstream terminal or of a [`Function`](#function) remains,
-and the library of the terminal evaluates it at the points identified by
-the map. For a function, the library evaluates the pull-back by a cell map
-of a topology or mesh (see [`AbstractFunctionSpace`](#abstractfunctionspace)),
-and evaluation at a reference position is a further pull-back within the
-selected cell (see [A family of points in a mesh](#a-family-of-points-in-a-mesh)).
+Pull-backs of terminals remain for their supplying libraries to evaluate
+(see [Functions in a space](#functions-in-a-space)).
 
 For coordinate maps $D$ and $E$, with $E$ mapping into the parameter domain
 of $D$, their composition is the domain map with the parameterisation
@@ -2389,11 +2385,8 @@ The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on th
 
 ### A family of points in a mesh
 
-The solver or mesh library locates physical points and supplies a selected
-cell and a reference position for each evaluation. At an interface or in
-an overlap, the selection is part of defining the value. UFLx does not
-represent a request to locate a point, and a coordinate-only `DomainMap`
-into a mesh is invalid.
+The following constructions use cells and reference positions supplied by
+the solver (see [Functions in a space](#functions-in-a-space)).
 
 For a mesh $D$ with topology $T$, suppose a family indexed by $i$ has selected
 cells in group $j$, with reference cell $K_j$. The solver supplies a table
@@ -2656,9 +2649,17 @@ the concrete subclass defines the function on the cells:
 - For a coordinate domain, such as a reference cell, a function is a terminal
   that the concrete subclass evaluates.
 
-The pull-back of a function on a mesh by any other domain map into the mesh,
-such as a family of points, is rewritten through these (see [A family of points
-in a mesh](#a-family-of-points-in-a-mesh)).
+The library evaluates these cell reads and their reference derivatives,
+including at supplied reference positions. It also evaluates actions on
+functional terminals and spatial transformations of their outputs. Core
+lowering leaves these reads for the library; it does not compute basis or
+coefficient values.
+
+The solver locates physical points and supplies the selected cells and
+reference positions before an evaluation is constructed. At interfaces or
+overlaps, the cell selection is part of defining the value. A coordinate-only
+`DomainMap` into a mesh is invalid (see [A family of points in a
+mesh](#a-family-of-points-in-a-mesh)).
 
 The concrete subclass owns the polynomials, degrees of freedom and basis of
 $V$, and stores the arguments identifying the space, such as the finite
@@ -2721,8 +2722,7 @@ spaces and the labels are equal. `Function(DualSpace(S), label)` is an
 antilinear form, such as a known load (see [DualSpace](#dualspace)).
 
 Multilinearity applies to the argument slots, not to spatial dependence.
-The supplying library defines how actions on the function and spatial
-transformations of its output are evaluated.
+Evaluation follows [Functions in a space](#functions-in-a-space).
 
 The [form](#form), rather than the function, decides whether a function is an
 argument or fixed data.
@@ -3905,13 +3905,8 @@ $\psi$ = `cell_map(Y, i, q)` for a topology or mesh $Y$ and a side $s$,
   reference cell, so the pass inverts the Jacobian of a cell only. The
   gradient of a pull-back by another map is the chain rule of
   [`apply_gradients`](#applying-gradients).
-- Every pull-back that remains reads a value of a library on a cell, possibly
-  at the points of a cell of $S$ through $A_i$, such as the reference
-  gradient of a function on the cell at the points of a facet. A pull-back of
-  a field on a mesh at a supplied reference position remains nested within
-  the selected cell read. Point location and the choice of a cell belong to
-  the solver before constructing the evaluation (see [A family of points
-  in a mesh](#a-family-of-points-in-a-mesh)).
+- Remaining cell reads are evaluated under the library contract in
+  [Functions in a space](#functions-in-a-space).
 
 ### The core normal form
 
@@ -3944,16 +3939,11 @@ as geometry and labels, are outside this normal-form claim.
 The code that assembles receives the form layer (see [Grammars](#grammars)):
 sums and products of forms, real and complex zeros, forms whose expression
 may be a form, with the order of the arguments from the static type (see [`Form`](#form)),
-and actions on supplied or spatially transformed forms. Libraries evaluate
-supplied functions and their spatial transformations.
+and actions on supplied or spatially transformed forms.
 
 A form compiler receives the integrand layer: integrals over reference cells
-and over points, whose integrands are arithmetic and index notation of
-constants, of the coordinates of the reference cell, and of the values that
-the pull-backs read from libraries on the cells. Such a value is a function
-pulled back by a cell, the reference gradient of one, or either at the points
-of a cell of a topology with sides through the inclusion of a side (see
-[Expanding pull-backs](#expanding-pull-backs)).
+and points, with arithmetic and index notation over constants, reference
+coordinates and the library reads of [Functions in a space](#functions-in-a-space).
 
 Every expression that a pass builds from domain maps, such as the Jacobian,
 the inverse Jacobian, the density and the normal of a side, depends only on
@@ -3964,8 +3954,6 @@ integral that contains the expression.
 
 In particular, the core normal form may still contain:
 
-- A read on an explicitly selected cell at supplied reference positions
-  (see [A family of points in a mesh](#a-family-of-points-in-a-mesh)).
 - A pull-back by a `SideMap` that no pull-back by a cell encloses, such as a
   restriction that is not integrated.
 - A `Gradient` of the coordinates of a mesh of lower dimension
