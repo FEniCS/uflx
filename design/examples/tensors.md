@@ -67,7 +67,7 @@ with minor and major symmetries has 16 entries but only six stored values.
 Let `T` be a triangle topology, `x` its coordinate function of value shape
 `(2,)`, `V` a real vector space of the same value shape on `T`, and `K` a
 real space of constants of value shape `(6,)`. The library supplies an
-`AbstractIndexValue` table `packed`, of shape `(2,2,2,2)` and extent 6,
+`AbstractIndexTable` table `packed`, of shape `(2,2,2,2)` and extent 6,
 selecting the stored value for each tensor entry:
 
 ```python

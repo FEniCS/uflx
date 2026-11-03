@@ -915,21 +915,21 @@ For a square matrix `A`, `index_sum(A[i, i], (i,))` is its trace, and
 `component_tensor(A[i, i], (i,))` is its diagonal. Both work when the extent is
 an `AbstractExtent`, without knowing its value during construction.
 
-### `AbstractIndexValue`
+### `AbstractIndexTable`
 
-`AbstractIndexValue` represents a table of index values supplied by the solver,
+`AbstractIndexTable` represents a table of index values supplied by the solver,
 such as the cell on one side of each facet, or the local facet number in a facet
 integral. The values are fixed but not known during construction. An
-`AbstractIndexValue` is not an expression and not a free index.
+`AbstractIndexTable` is not an expression and not a free index.
 
-| `AbstractIndexValue` |                                                        |
+| `AbstractIndexTable` |                                                        |
 | -------------------- | ------------------------------------------------------ |
 | Extends              | `Base` |
 | Provides             | `extent`, an extent, and `shape`, a `tuple` of extents |
 | Defined by           | A subclass outside the core                            |
 
 The table has the shape `shape`, and each value is an `int` $v$ with
-$0 \le v <$ `extent`. An `AbstractIndexValue` with the shape `()` is one
+$0 \le v <$ `extent`. An `AbstractIndexTable` with the shape `()` is one
 value. An expression reads the table only through a
 [`GatheredIndex`](#gatheredindex), so one value is read as
 `gathered_index(v, ())`.
@@ -943,8 +943,8 @@ nor a free index; its table indices determine its free indices.
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                         | `Base` |
 | Free function                   | `gathered_index(table, indices)`                                                                                                   |
-| Takes                           | `table: AbstractIndexValue`, `indices: tuple` |
-| Properties                      | `table`, an `AbstractIndexValue`, and `indices`, an `int`, an `Index` or a `GatheredIndex` for each axis of the shape of the table |
+| Takes                           | `table: AbstractIndexTable`, `indices: tuple` |
+| Properties                      | `table`, an `AbstractIndexTable`, and `indices`, an `int`, an `Index` or a `GatheredIndex` for each axis of the shape of the table |
 | Derived                         | `extent` and `free_indices`, below |
 | Raises                          | `TypeError` for an invalid table or entry type, `IndexError` for an incorrect number of entries or invalid bounds or gather extent, and `ValueError` for inconsistent extents of a repeated index |
 
@@ -1830,8 +1830,8 @@ coordinates.
 | Defined by         | A subclass outside the core, such as the topology of the mesh of a solver                   |
 
 - `cell_types` is a nonempty `tuple` of `AbstractCellType`s $C_0, C_1, \dots$ of the
-  same dimension, one for each group of cells. A cell of type $j$, a cell of
-  group $j$, has the vertices of $C_j$, numbered as in $C_j$.
+  same dimension, one for each group of cells. A cell of group $j$ has type
+  $C_j$ and its vertices are numbered as in $C_j$.
   The cell types are distinct, except that two groups with different sides may
   have the same cell type (see [Sides of a topology](#sides-of-a-topology)).
 - `num_cells` is a `tuple` of the same length as `cell_types`, with the number
@@ -1858,9 +1858,8 @@ Topology identity is structural: a concrete `AbstractTopology` stores its
 identifying arguments, such as a label.
 
 The free function `cell_index(T, j)` returns the derived index
-`Index(("uflx.cell_index", T, j, 0))` for the cells of type $j$, numbered from
-0. The index differs between types
-and between topologies, even if the numbers of cells are equal.
+`Index(("uflx.cell_index", T, j, 0))` for the cells of group $j$, numbered from
+0. The index differs between groups and between topologies, even if the numbers of cells are equal.
 
 `cell_index` checks that $T$ is a topology and $j$ is an `int` with
 `0 <= j < len(T.cell_types)`.
@@ -1870,7 +1869,7 @@ and between topologies, even if the numbers of cells are equal.
 | `cell_index(T, j)` | | `T: AbstractTopology`, `j: int` | `Index` |
 
 An expression with the free index `cell_index(T, j)` has one value per cell of
-type $j$.
+group $j$.
 
 Examples:
 
@@ -1894,23 +1893,23 @@ $S$ by the side name.
 
 `S.sides` describes the sides of $S$:
 
-- `S.sides` has one entry for each cell type of $S$.
+- `S.sides` has one entry for each cell group of $S$.
 - Entry $i$ is a `tuple` of one or more sides with distinct names.
 - Each side is a triple `(name, T, j)` of a side name, a `str`, a topology
-  $T$ and a cell type number $j$ of $T$.
-- Two entries of the same cell type of $S$ differ. A group of cells of $S$ is
+  $T$ and a cell-group number $j$ of $T$.
+- Entries for groups with the same cell type must differ. A group of cells of $S$ is
   therefore fixed by the cell type and the sides together.
 - A topology whose cells are not seen from other cells has the sides `()`.
 
 Notation, for the group $i$ of $S$ with a side `(name, T, j)`:
 
-- $K_j$ is the reference cell of cell type $j$ of $T$, and $k_j$ is the
+- $K_j$ is the reference cell of group $j$ of $T$, and $k_j$ is the
   dimension of $K_j$.
-- $m$ is the number of vertices of cell type $i$ of $S$.
+- $m$ is the number of vertices of the cell type of group $i$ of $S$.
 
 #### The image of a cell on a side
 
-On each side, a cell of type $i$ of $S$ is the image of the cell type $F_i$
+On each side, a cell of group $i$ of $S$ is the image of the cell type $F_i$
 of group $i$ under the inclusion of the side tables, a map into $K_j$ (see
 [Restriction](#restriction)). The image is one of the following:
 
@@ -1936,9 +1935,9 @@ triple `(cells, inclusion, reference_normal)` for the side named `side` of
 group $i$, with the side `(side, T, j)`, the cell type $F_i$ of group $i$ and
 `e = cell_index(S, i)`:
 
-- `cells` is an [`AbstractIndexValue`](#abstractindexvalue) of the shape
-  `(S.num_cells[i],)` and the extent `T.num_cells[j]`. Entry $e$ is the cell of
-  type $j$ of $T$ on the side of the cell $e$ of $S$.
+- `cells` is an [`AbstractIndexTable`](#abstractindextable) of the shape
+  `(S.num_cells[i],)` and the extent `T.num_cells[j]`. Entry $e$ selects a cell of
+  group $j$ of $T$ on the side of the cell $e$ of $S$.
 - `inclusion` is a [`DomainMap`](#domainmap) from $F_i$ into $K_j$ with the
   free index `e`. Member $e$ is the inclusion of the cell $e$ into the cell on
   the side.
@@ -2057,7 +2056,7 @@ coordinates coincide.
 | Extends | `Base` |
 | Takes | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` |
 | Properties | `ambient_domain` $X$, `cell_group` $j$, and `entry` $e$ |
-| Requires | $j$ a valid cell-group number of $T$, cell type $j$ a reference cell $K_j$; an integer $e$ satisfies `0 <= e < T.num_cells[j]`, and a `GatheredIndex` has extent `T.num_cells[j]` |
+| Requires | $j$ a valid cell-group number of $T$, `T.cell_types[j]` a reference cell $K_j$; an integer $e$ satisfies `0 <= e < T.num_cells[j]`, and a `GatheredIndex` has extent `T.num_cells[j]` |
 | Derived | `topology` $T$, `parameter_domain` $K_j$, `free_indices` and, for a mesh, `parameterisation`, as below |
 | Raises | `TypeError` for an invalid argument type, and `ValueError` if another requirement fails |
 
@@ -2170,8 +2169,8 @@ D = image(x, RD(2))
   evaluates on triangle 1 to $(1 - X_1, X_0 + X_1)$.
 
 For a topology `M` of triangles and quadrilaterals, with the cell types
-`(Kt, Kq)`, `image(x, RD(2))` has one piece for each cell type. A function `u`
-on `M` is one expression, pulled back through each cell type:
+`(Kt, Kq)`, `image(x, RD(2))` has one piece for each cell group. A function `u`
+on `M` is one expression, pulled back through each cell group:
 
 ```python
 # On Kt with the free index cell_index(M, 0), and on Kq with cell_index(M, 1).
@@ -2285,8 +2284,8 @@ Notation, for the group $i$ of $S$ with the side `(s, T, j)`:
 
 - `(cells, inclusion, reference_normal)` are the side tables of the side $s$
   of group $i$.
-- $F_i$ is the cell type of group $i$, and $K_j$ the reference cell of cell
-  type $j$ of $T$.
+- $F_i$ is the cell type of group $i$, and $K_j$ the reference cell of
+  group $j$ of $T$.
 - `e = cell_index(S, i)` and `g = gathered_index(cells, (e,))`.
 
 #### The inclusion
@@ -2682,7 +2681,7 @@ the concrete subclass defines the function on the cells:
 
 - A space whose values on the reference cell do not depend on the geometry is
   on a topology $T$. The concrete subclass defines
-  `pull_back(u, cell_map(T, j, e))` for every cell type $j$ and every entry
+  `pull_back(u, cell_map(T, j, e))` for every cell group $j$ and every entry
   $e$, such as with one finite element for each cell type. The field on a
   mesh is a [`PushForward`](#pushforward).
 - A space whose values on the reference cell depend on the geometry is on a
@@ -4386,7 +4385,7 @@ classDiagram
     accTitle: Algebra class hierarchy (3 of 3)
     AbstractExpression <|-- ComponentTensor
     AbstractExpression <|-- IndexSum
-    Base <|-- AbstractIndexValue
+    Base <|-- AbstractIndexTable
     Base <|-- GatheredIndex
     AbstractExpression <|-- Inverse
     AbstractExpression <|-- Determinant
@@ -4554,7 +4553,7 @@ classDiagram
 |                             | [`component(f, entries)`](#partial-indexing)                             | `[]`                          | `f: AbstractExpression`, `entries: tuple`                                                                              | `f` if `entries == ()`; otherwise `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$, otherwise `indexed(f, entries)`                        |
 |                             | [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                                         | `ComponentTensor`                                                                                                                                                                      |
 |                             | [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                                         | `IndexSum`                                                                                                                                                                             |
-|                             | [`gathered_index(table, indices)`](#gatheredindex)                       |                               | `table: AbstractIndexValue`, `indices: tuple`                                                                          | `GatheredIndex`                                                                                                                                                                        |
+|                             | [`gathered_index(table, indices)`](#gatheredindex)                       |                               | `table: AbstractIndexTable`, `indices: tuple`                                                                          | `GatheredIndex`                                                                                                                                                                        |
 |                             | [`add(first, second)`](#tensor-arithmetic)                               | `+`                           | `first, second: AbstractExpression`                                                                                    | `component_tensor(Sum(first[K], second[K]), K)`                                                                                                                                        |
 |                             | [`multiply(first, second)`](#tensor-arithmetic)                          | `*`                           | `first, second: AbstractExpression`                                                                                    | `component_tensor(Product(first, second[K]), K)` if `first` is scalar, `component_tensor(Product(first[K], second), K)` if only `second` is scalar, otherwise `Product(first, second)` |
 |                             | [`divide(first, second)`](#tensor-arithmetic)                            | `/`                           | `first, second: AbstractExpression`                                                                                    | `component_tensor(Division(first[K], second), K)`                                                                                                                                      |

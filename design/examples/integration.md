@@ -208,7 +208,7 @@ core:
 | ----- | ------- |
 | `RuntimeExtent(label)` | An `AbstractExtent` known at run time. |
 | `RuntimeArray(label, value_shape)` | An expression with no domain holding quadrature data, coefficients or constants. |
-| `RuntimeIndex(label, extent)` | An `AbstractIndexValue` of shape `()`, such as a local facet number; read with `gathered_index(value, ())`. |
+| `RuntimeIndex(label, extent)` | An `AbstractIndexTable` of shape `()`, such as a local facet number; read with `gathered_index(value, ())`. |
 
 With their lower-case construction functions, the cut-cell integral is:
 

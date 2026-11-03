@@ -92,7 +92,7 @@ class StaticTopology(AbstractTopology):
         sides: tuple[tuple[tuple[str, AbstractTopology, int], ...], ...],
     ):
         if len(cells) != len(cell_types):
-            raise ValueError("Need one tuple of cells for each cell type.")
+            raise ValueError("Need one tuple of cells for each cell group.")
         self._cell_types = cell_types
         self._cells = cells
         self._sides = sides
