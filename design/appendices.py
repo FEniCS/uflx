@@ -200,7 +200,7 @@ def class_hierarchy(classes: list[ClassEntry]) -> str:
                 f"[`{entry.name}`](#{entry.anchor})"
             )
     for chapter, parents in groups.items():
-        out.extend([f"### Concrete classes: {chapter}", ""])
+        out.extend([f"### {chapter}", ""])
         for bases, members in parents.items():
             out.append(f"Extend {', '.join(f'`{base}`' for base in bases)}:")
             out.extend(["", ", ".join(members) + ".", ""])
@@ -237,7 +237,7 @@ def free_functions(functions: list[FreeFunction]) -> str:
     header = ["Function", "Overload", "Takes", "Returns"]
     out = []
     for chapter, rows in groups.items():
-        out.extend([f"### Functions: {chapter}", "", table(header, rows)])
+        out.extend([f"### {chapter}", "", table(header, rows)])
     return "\n".join(out)
 
 

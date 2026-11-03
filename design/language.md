@@ -671,7 +671,8 @@ For `z = Complex(Integer(1), Integer(2))`, `real_part(z)` and
 ### Elementary functions
 
 `SquareRoot` and `Logarithm` give the square root and natural logarithm of a
-scalar. These are the elementary functions provided by the core.
+scalar. The core provides these two; other layers are expected to provide
+a wider range of elementary functions.
 
 | `SquareRoot(f)`, `Logarithm(f)` |                                     |
 | ------------------------------- | ----------------------------------- |
@@ -4178,19 +4179,19 @@ classDiagram
     Base <|-- AbstractFunctionSpace
 ```
 
-### Concrete classes: Domains
+### Domains
 
 Extend `AbstractCoordinateDomain`:
 
 [`RD`](#rd).
 
-### Concrete classes: Expressions and static type
+### Expressions and static type
 
 Extend `Base`:
 
 [`Index`](#index).
 
-### Concrete classes: Algebra
+### Algebra
 
 Extend `AbstractExpression`:
 
@@ -4200,13 +4201,13 @@ Extend `Base`:
 
 [`GatheredIndex`](#gatheredindex).
 
-### Concrete classes: Calculus on a domain
+### Calculus on a domain
 
 Extend `AbstractExpression`:
 
 [`Coordinate`](#coordinate), [`Gradient`](#gradient), [`Divergence`](#divergence-and-curl), [`Curl`](#divergence-and-curl), [`DirectionalDerivative`](#directionalderivative), [`Integral`](#integral).
 
-### Concrete classes: Maps between domains
+### Maps between domains
 
 Extend `Base`:
 
@@ -4216,13 +4217,13 @@ Extend `AbstractExpression`:
 
 [`PullBack`](#pullback).
 
-### Concrete classes: Reference cells
+### Reference cells
 
 Extend `Base`:
 
 [`CellMap`](#cellmap).
 
-### Concrete classes: Meshes
+### Meshes
 
 Extend `AbstractDomain`:
 
@@ -4236,13 +4237,13 @@ Extend `AbstractExpression`:
 
 [`PushForward`](#pushforward), [`Normal`](#normal).
 
-### Concrete classes: Function spaces
+### Function spaces
 
 Extend `AbstractExpression`:
 
 [`Function`](#function).
 
-### Concrete classes: Variational forms
+### Variational forms
 
 Extend `AbstractFunctionSpace`:
 
@@ -4256,13 +4257,13 @@ Extend `AbstractExpression`:
 ## Appendix: Free functions
 
 <!-- generated: free-functions, run design/appendices.py to update -->
-### Functions: Expressions and static type
+### Expressions and static type
 
 | Function                 | Overload | Takes                 | Returns |
 | ------------------------ | -------- | --------------------- | ------- |
 | [`index(label)`](#index) |          | `label: str \| tuple` | `Index` |
 
-### Functions: Algebra
+### Algebra
 
 | Function                                                                 | Overload | Takes                                                          | Returns                                                                                                                                                                                |
 | ------------------------------------------------------------------------ | -------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -4289,7 +4290,7 @@ Extend `AbstractExpression`:
 | [`inverse(A)`](#inverse)                                                 |          | `A: AbstractExpression`                                        | `Inverse`                                                                                                                                                                              |
 | [`determinant(A)`](#determinant)                                         |          | `A: AbstractExpression`                                        | `Determinant`                                                                                                                                                                          |
 
-### Functions: Calculus on a domain
+### Calculus on a domain
 
 | Function                                                       | Overload | Takes                                                                                | Returns                             |
 | -------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------ | ----------------------------------- |
@@ -4300,7 +4301,7 @@ Extend `AbstractExpression`:
 | [`directional_derivative(f, x, a, h)`](#directionalderivative) |          | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple` | `DirectionalDerivative(f, x, a, h)` |
 | [`integral(f, P)`](#integral)                                  |          | `f: AbstractExpression`, `P: AbstractDomain`                                         | `Integral`                          |
 
-### Functions: Maps between domains
+### Maps between domains
 
 | Function                                       | Overload | Takes                                                                                                       | Returns                                            |
 | ---------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
@@ -4310,20 +4311,20 @@ Extend `AbstractExpression`:
 | [`inverse_jacobian(D)`](#jacobian-and-density) |          | `D: DomainMap \| CellMap`                                                                                   | `inverse(jacobian(D))`                             |
 | [`density(D)`](#jacobian-and-density)          |          | `D: DomainMap \| CellMap`                                                                                   | The density $\rho$ below                           |
 
-### Functions: Topology
+### Topology
 
 | Function                                | Overload | Takes                           | Returns |
 | --------------------------------------- | -------- | ------------------------------- | ------- |
 | [`cell_index(T, j)`](#abstracttopology) |          | `T: AbstractTopology`, `j: int` | `Index` |
 
-### Functions: Reference cells
+### Reference cells
 
 | Function                        | Overload | Takes                                                                       | Returns                                                         |
 | ------------------------------- | -------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | [`cell_map(X, j, e)`](#cellmap) |          | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` | `CellMap(X, j, e)`                                              |
 | [`cell_map(X, j)`](#cellmap)    |          | `X: AbstractTopology \| Mesh`, `j: int`                                     | `CellMap(X, j, cell_index(T, j))`, with $T$ the topology of $X$ |
 
-### Functions: Meshes
+### Meshes
 
 | Function                                                      | Overload | Takes                                                      | Returns                                     |
 | ------------------------------------------------------------- | -------- | ---------------------------------------------------------- | ------------------------------------------- |
@@ -4334,13 +4335,13 @@ Extend `AbstractExpression`:
 | [`side_domain(D, S, s)`](#side-domains)                       |          | `D: Mesh`, `S: AbstractTopology`, `s: str`                 | `image(pull_back(x, side_map(T, S, s)), Q)` |
 | [`normal(sm)`](#normal)                                       |          | `sm: SideMap`                                              | `Normal`                                    |
 
-### Functions: Function spaces
+### Function spaces
 
 | Function                          | Overload | Takes                                             | Returns    |
 | --------------------------------- | -------- | ------------------------------------------------- | ---------- |
 | [`function(V, label)`](#function) |          | `V: AbstractFunctionSpace`, `label: str \| tuple` | `Function` |
 
-### Functions: Variational forms
+### Variational forms
 
 | Function                                                | Overload | Takes                                                                                                                  | Returns                                                                                 |
 | ------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -4350,7 +4351,7 @@ Extend `AbstractExpression`:
 | [`action(f, position, g)`](#action)                     |          | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                |
 | [`gateaux_derivative(F, x, a, w)`](#gateaux-derivative) |          | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | The `Form` constructed below                                                            |
 
-### Functions: Evaluation
+### Evaluation
 
 | Function                                | Overload | Takes                   | Returns                                      |
 | --------------------------------------- | -------- | ----------------------- | -------------------------------------------- |
