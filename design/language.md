@@ -1936,9 +1936,9 @@ group $i$, with the side `(side, T, j)`, the cell type $F_i$ of group $i$ and
   boundary of $K_j$. For an image inside $K_j$, the supplying library chooses
   its orientation.
 
-The inclusions of the sides of one group parameterise each cell $e$ in the same
-way: a point of $F_i$ is the same point of the cell $e$ from every side, so the
-difference of two restrictions is the jump (see [Restriction](#restriction)).
+Side inclusions pair points across sides. Physical coincidence is a
+library-supplied assumption for ordinary interfaces, not a core requirement;
+periodic and mortar couplings may pair distinct physical points.
 [Restriction](#restriction) and [`Normal`](#normal) read the tables.
 
 #### What the concrete mesh decides
@@ -2289,10 +2289,10 @@ The restriction of $f$ to group $i$ from the side $s$ is
 `pull_back(pull_back(f, B_i), A_i)`, an expression on $F_i$ with the free index
 `e`.
 
-All sides parameterise cell $e$ in the same way (see [Side tables](#side-tables)).
-Two restrictions therefore share $F_i$ and its coordinates, and their difference
-is the jump. A cell with more than two sides has no jump; a form uses each
-side's restriction separately.
+Restrictions are compared at paired points; their difference is an ordinary
+interface jump when those points physically coincide (see [Side tables](#side-tables)).
+A cell with more than two sides has no jump; a form uses each side's
+restriction separately.
 
 #### `SideMap`
 
@@ -2332,6 +2332,9 @@ for a side domain, is `pull_back(pull_back(f, B_i), A_i)`.
 For a mesh $D$ = `image(x, Q)` with the topology $T$, the side domain of $S$
 is the image of the trace of $x$ from side $s$, so the side domain moves with
 $x$. The result has topology $S$ and geometry supplied by that side.
+
+The chosen side supplies the integration measure. Any measure conversion
+belongs in the integrand.
 
 #### Traces and normals
 
