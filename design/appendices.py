@@ -172,43 +172,38 @@ def core(classes: list[ClassEntry]) -> list[ClassEntry]:
 
 
 def class_hierarchy(classes: list[ClassEntry]) -> str:
-    """Render Mermaid inheritance diagrams grouped by chapter."""
-    out = []
-    chapters = []
+    """Render the abstract hierarchy and concrete classes by subject."""
     entries = core(classes)
-    for c in entries:
-        if c.extends and c.chapter not in chapters:
-            chapters.append(c.chapter)
-    for chapter in chapters:
-        members = [c for c in entries if c.chapter == chapter and c.extends]
-        out.extend([f"### {chapter}", ""])
-        # Limit diagram height so names remain legible in the PDF.
-        groups = [members[i : i + 8] for i in range(0, len(members), 8)]
-        for number, group in enumerate(groups, 1):
-            title = f"{chapter} class hierarchy"
-            if len(groups) > 1:
-                title += f" ({number} of {len(groups)})"
-            out.extend(
-                [
-                    "```mermaid",
-                    "---",
-                    "config:",
-                    "  theme: neutral",
-                    "  look: classic",
-                    "  class:",
-                    "    theme: neutral",
-                    "    look: classic",
-                    "    hideEmptyMembersBox: true",
-                    "---",
-                    "classDiagram",
-                    "    direction LR",
-                    f"    accTitle: {title}",
-                ]
+    out = [
+        "```mermaid",
+        "---",
+        "config:",
+        "  theme: neutral",
+        "  look: classic",
+        "  class:",
+        "    hideEmptyMembersBox: true",
+        "---",
+        "classDiagram",
+        "    direction LR",
+        "    accTitle: Abstract class hierarchy",
+    ]
+    for entry in entries:
+        if entry.abstract:
+            for parent in entry.extends:
+                out.append(f"    {parent} <|-- {entry.name}")
+    out.extend(["```", ""])
+    groups: dict[str, dict[tuple[str, ...], list[str]]] = {}
+    for entry in entries:
+        if not entry.abstract:
+            parents = groups.setdefault(entry.chapter, {})
+            parents.setdefault(tuple(entry.extends), []).append(
+                f"[`{entry.name}`](#{entry.anchor})"
             )
-            for c in group:
-                for parent in c.extends:
-                    out.append(f"    {parent} <|-- {c.name}")
-            out.extend(["```", ""])
+    for chapter, parents in groups.items():
+        out.extend([f"### Concrete classes: {chapter}", ""])
+        for bases, members in parents.items():
+            out.append(f"Extend {', '.join(f'`{base}`' for base in bases)}:")
+            out.extend(["", ", ".join(members) + ".", ""])
     return "\n".join(out)
 
 
@@ -225,17 +220,25 @@ def table(header: list[str], rows: list[list[str]]) -> str:
 
 
 def free_functions(functions: list[FreeFunction]) -> str:
-    """Render the table of free functions, grouped by chapter."""
-    rows = []
-    previous = None
-    for f in functions:
-        if f.chapter in EXCLUDED_CHAPTERS:
+    """Render a separate free-function table for each subject."""
+    groups: dict[str, list[list[str]]] = {}
+    for function in functions:
+        if function.chapter in EXCLUDED_CHAPTERS:
             continue
-        group = f.chapter if f.chapter != previous else ""
-        previous = f.chapter
-        rows.append([group, f"[`{f.signature}`](#{f.anchor})", f.overload, f.takes, f.returns])
-    header = ["Group", "Free function", "`AbstractExpression` overload", "Takes", "Returns"]
-    return table(header, rows)
+        groups.setdefault(function.chapter, []).append(
+            [
+                f"[`{function.signature}`](#{function.anchor})",
+                function.overload,
+                function.takes,
+                function.returns,
+            ]
+        )
+    # Distinguish appendix tables from the definition tables parsed above.
+    header = ["Function", "Overload", "Takes", "Returns"]
+    out = []
+    for chapter, rows in groups.items():
+        out.extend([f"### Functions: {chapter}", "", table(header, rows)])
+    return "\n".join(out)
 
 
 def opening_parents(entry: ClassEntry) -> list[str] | None:

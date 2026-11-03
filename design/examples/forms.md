@@ -279,6 +279,12 @@ $(G_{kl}+G_{lk})/2$. Binding `k, l` collects these symmetric entries into a
 matrix; multiplying by two gives $S=2\operatorname{sym}G$. The halves prevent
 doubling the off-diagonal entries.
 
+These are symmetrised coordinate directions, not an orthonormal basis. The
+field `C` stays in the expression while the constant increment `H` is varied.
+If `psi` is already built, form the perturbation as
+`psi_perturbed = replace(psi, {C: C + H})`. For the full derivative without
+symmetrisation, replace `N` by `component_tensor(I[i, k] * I[j, l], (i, j))`.
+
 `S` evaluates to $\lambda\operatorname{tr}(E)I+2\mu E$. Both `S` and the
 Cauchy stress `sigma` are fields on `D`, which the solver can interpolate or
 evaluate for output.

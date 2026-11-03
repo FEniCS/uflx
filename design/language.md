@@ -149,6 +149,7 @@ Objects must satisfy the following rules:
    must be checked by the free function or the constructors it calls. Unless
    stated otherwise, an unacceptable type or class raises `TypeError`, and an
    unacceptable value of an accepted type or class raises `ValueError`.
+   Class tables list only additional details or exceptions to these defaults.
 9. A constructor has no default values, so every construction argument is
    written at construction.
 10. A concrete class states an `identifier`, a `str` with the public name of
@@ -354,8 +355,6 @@ read from a table is a [`GatheredIndex`](#gatheredindex).
 ```
 
 ### `Index`
-
-> LLM generated content.
 
 `Index` is a free index, not an expression. An `Index` names an axis of a
 tensor, as `i` and `j` in `A[i, j]` (see [Index notation](#index-notation)).
@@ -565,7 +564,6 @@ The free functions below construct these nodes for scalar operands. `add`,
 | Takes                | `first, second: AbstractExpression` |
 | Properties           | `first` and `second` |
 | Requires             | The operands of [Arithmetic](#arithmetic)   |
-| Raises               | `ValueError` if a requirement fails         |
 
 ### `Product`
 
@@ -576,7 +574,6 @@ The free functions below construct these nodes for scalar operands. `add`,
 | Takes                    | `first, second: AbstractExpression` |
 | Properties               | `first` and `second` |
 | Requires                 | The operands of [Arithmetic](#arithmetic)        |
-| Raises                   | `ValueError` if a requirement fails              |
 
 ### `Power`
 
@@ -587,7 +584,6 @@ The free functions below construct these nodes for scalar operands. `add`,
 | Takes                  | `first, second: AbstractExpression` |
 | Properties             | `first` and `second` |
 | Requires               | The operands of [Arithmetic](#arithmetic)                                   |
-| Raises                 | `ValueError` if a requirement fails                                         |
 
 Complex powers use the principal value, consistent with `Logarithm`.
 The exponent may have domain. The [derivative rules](#derivatives-of-the-node-classes)
@@ -614,7 +610,6 @@ behaviour of `multiply` and `add` (see [Tensor arithmetic](#tensor-arithmetic)).
 | Takes                     | `first, second: AbstractExpression` |
 | Properties                | `first` and `second` |
 | Requires                  | The operands of [Arithmetic](#arithmetic)                                              |
-| Raises                    | `ValueError` if a requirement fails                                                    |
 
 ### `Absolute`
 
@@ -628,7 +623,6 @@ behaviour of `multiply` and `add` (see [Tensor arithmetic](#tensor-arithmetic)).
 | Properties    | `operand` $f$ |
 | Requires      | A scalar $f$                              |
 | Static type   | Value shape `()`, real                    |
-| Raises        | `ValueError` if a requirement fails       |
 
 ### `Conjugate`
 
@@ -659,7 +653,6 @@ meaning is `conjugate(f)[e]` = `conjugate(f[e])` in value.
 | Properties                        | `operand` $f$ |
 | Requires                          | A scalar $f$                          |
 | Static type                       | Value shape `()`, real                |
-| Raises                            | `ValueError` if a requirement fails   |
 
 These nodes and `Absolute` are the only nodes that take a complex operand to
 a real expression. The composition `(f + conjugate(f)) / Integer(2)` has the
@@ -675,10 +668,10 @@ of a real $f$ is not $f$, and `imaginary_part(f)` of a real $f$ is not
 For `z = Complex(Integer(1), Integer(2))`, `real_part(z)` and
 `imaginary_part(z)` are real expressions with the values 1 and 2, respectively.
 
-### Elementary functions (very incomplete)
+### Elementary functions
 
 `SquareRoot` and `Logarithm` give the square root and natural logarithm of a
-scalar.
+scalar. These are the elementary functions provided by the core.
 
 | `SquareRoot(f)`, `Logarithm(f)` |                                     |
 | ------------------------------- | ----------------------------------- |
@@ -688,7 +681,6 @@ scalar.
 | Properties      | `operand` $f$ |
 | Requires        | A scalar $f$                        |
 | Static type     | Value shape `()`                    |
-| Raises          | `ValueError` if a requirement fails |
 
 For a complex operand, `Logarithm` is the principal branch, with the imaginary
 part in $(-\pi, \pi]$, and `SquareRoot` is the principal square root.
@@ -710,7 +702,6 @@ rounded power, so the result of `power` depends on the math library.
 | Takes             | `entries: tuple[AbstractExpression, ...]` |
 | Properties        | `entries`, a non-empty `tuple` of `AbstractExpression`s with the same value shape `s`                     |
 | Static type       | Value shape `(n,) + s`, with $n$ the number of entries                                                    |
-| Raises            | `ValueError` if a requirement fails                                                                       |
 
 A matrix is a `Tensor` of `Tensor`s.
 
@@ -725,8 +716,6 @@ Examples, with `one, two = Integer(1), Integer(2)`:
   have different value shapes.
 
 ### Index notation
-
-> LLM generated content.
 
 Index notation writes tensor algebra with four node classes. `Tensor` builds a
 tensor from scalars, `Indexed` selects one component, and `ComponentTensor`
@@ -752,8 +741,6 @@ needs a fresh index derives the index from the operands (see [Derived
 indices](#derived-indices)).
 
 ### `Indexed`
-
-> LLM generated content.
 
 `Indexed` selects one component of a tensor. The overload `[]` calls
 [`component`](#partial-indexing), which also supports partial indexing.
@@ -844,7 +831,6 @@ construction simplification.
 | Takes                                                                   | `expression: AbstractExpression`, `indices: tuple[Index, ...]` |
 | Properties                                                              | `expression`, a scalar, and `indices`, a non-empty `tuple` of distinct `Index` entries free in the expression                                                                                 |
 | Static type                                                             | The free indices of the expression without the indices. `ComponentTensor` has the value shape of the extents of the indices in order, and `IndexSum` the value shape `()` |
-| Raises                                                                  | `ValueError` if a requirement fails                                                                                                                                                                               |
 
 The factories `component_tensor(f, ())` and `index_sum(f, ())` return the
 scalar expression `f` directly, preserving its entire static type. They raise
@@ -942,8 +928,6 @@ b = component_tensor(a_e, (e,))
   the extent 2 of `g` differs from the extent 3 of the axis.
 
 ### Derived indices
-
-> LLM generated content.
 
 A free function that needs fresh indices derives the indices from the
 operands. The label of a derived index is a `tuple` of the identifier of the
@@ -1087,7 +1071,6 @@ with more rows than columns.
 | Properties    | `operand` $A$ |
 | Requires      | $A$ with value shape `(n, k)`; either `n == k`, or both extents are integers with `k < n` and $A$ is real |
 | Static type   | Value shape `(k, n)`                                                                    |
-| Raises        | `ValueError` if a requirement fails                                                     |
 
 Equal extents establish the square case even when they are symbolic.
 Unequal extents must both be integers; symbolic extents cannot be ordered.
@@ -1379,49 +1362,18 @@ For `u`, `a` and `h` in a real scalar space of constants,
 `directional_derivative(u * u, u, a, h)` has the value $2 a h$. The variable
 is `u`, the evaluation point is `a`, and the direction is `h`.
 
-The derivative with respect to a tensor is a composition over unit
-directions. The direction states the symmetry, and the core has none. With a
-Python function `strain_energy` that builds the strain energy from a tensor,
-the right Cauchy–Green tensor `C`, an increment `H` in a real space of
-constants of value shape `(3, 3)`, the identity matrix `I` of value shape
-`(3, 3)` and indices `i`, `j`, `k` and `l`:
+An indexed direction gives a family of derivatives. For scalar constants
+`h0` and `h1` in the same space:
 
 ```python
-E = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / Integer(2), (i, j))
-zero = Zero((3, 3), (), (), real)
-psi_perturbed = strain_energy(C + H)
-dpsi = directional_derivative(psi_perturbed, H, zero, E)
-S = Integer(2) * component_tensor(dpsi, (k, l))
+i = index("i")
+directions = tensor((h0, h1))
+d = directional_derivative(u * u, u, a, directions[i])
 ```
 
-`E` is a family of matrix directions, with free indices `k` and `l`:
-
-$$
-E^{kl}_{ij}=\tfrac12(\delta_{ik}\delta_{jl}+\delta_{il}\delta_{jk}).
-$$
-
-For `k == l`, it has a single diagonal entry of one. Otherwise it has entries
-of one half at `(k, l)` and `(l, k)`, so the perturbation stays symmetric.
-Writing $G=\partial\psi/\partial C$, the directional derivative is
-$G:E^{kl}=(G_{kl}+G_{lk})/2$. Thus `component_tensor(dpsi, (k, l))`
-collects the entries of $\operatorname{sym}G$, and the factor two gives the
-second Piola–Kirchhoff stress $S=2\operatorname{sym}G$. The halves average
-the two off-diagonal derivatives; these directions are symmetrised coordinate
-directions, not an orthonormal basis.
-
-The field `C` stays in the expression; the constant increment is differentiated
-at zero. If the strain energy `psi` is already built from `C`, construct the
-perturbed expression by substitution:
-
-```python
-psi_perturbed = replace(psi, {C: C + H})
-```
-
-For the full derivative without `sym`, use the direction:
-
-```python
-E_full = component_tensor(I[i, k] * I[j, l], (i, j))
-```
+`d` has free index `i` and value `Integer(2) * a * directions[i]`. Tensor derivatives
+use families of unit directions; the directions specify any symmetry. See
+[Hyperelasticity and the stress](examples/forms.md#hyperelasticity-and-the-stress).
 
 ### `Integral`
 
@@ -2286,7 +2238,6 @@ side domain $E$ into a mesh $D$, through the side $s$.
 | Properties         | `ambient_domain` $X$, `parameter_domain` $P$, and `side` $s$ |
 | Derived            | `free_indices`, always `()` |
 | Requires           | Conditions 1 to 3 below                                                                                 |
-| Raises             | `ValueError` if a requirement fails                                                                     |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -3059,7 +3010,6 @@ In legacy UFL, the arguments of a form are the test functions and the trial func
 | Properties               | `form` $f$, `position`, an `int`, and `argument`, the expression $g$, or a `tuple` of expressions |
 | Requires                 | `0 <= position < len(f.argument_spaces)` and the conditions below |
 | Static type              | That of $f$, with the free indices of $f$ followed by those of $g$, each `Index` taken once, and the argument spaces of $f$ without the entry at `position` |
-| Raises                   | `ValueError` if a requirement fails                                                                                                                    |
 
 Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
 
@@ -3167,39 +3117,15 @@ form(integral(u * conjugate(w), D), (u,))
 
 Supplying `conjugate(w)` to the conjugated entry replaces `v` by `w`.
 
-Actions distribute over sums. For bilinear forms `F` and `G` with the same
-argument spaces:
+Actions distribute over sums: `action(F + G, 1, w)` has value
+`action(F, 1, w) + action(G, 1, w)` for compatible forms.
 
-```python
-result = action(F + G, 1, w)
-```
+An indexed argument gives a family: `action(F, 1, directions[k])` retains
+`k` as a free index.
 
-The result has the value:
-
-```python
-action(F, 1, w) + action(G, 1, w)
-```
-
-An argument with a free index gives a family of actions. With fixed functions
-`w0` and `w1` in `V`:
-
-```python
-k = index("k")
-directions = tensor((w0, w1))
-family = action(F, 1, directions[k])
-```
-
-`family` has the free index `k`: its members are the actions on `w0` and `w1`.
-
-For the Stokes expression `e` of the [`Form`](#form) examples, with fixed
-functions `w` in `V` and `r` in `Q`:
-
-```python
-stokes = form(e, ((v, q), (u, p)))
-residual = action(stokes, 1, (w, r))
-```
-
-`residual` is a linear form in `(v, q)`.
+For `stokes = form(e, ((v, q), (u, p)))`, the action
+`action(stokes, 1, (w, r))` supplies both members of the second argument
+and leaves a linear form in `(v, q)`.
 
 ```{dropdown} Legacy UFL
 Legacy UFL operations are actions and rebindings. The action on the last argument of a bilinear form is `action(f, 1, w)`. The adjoint of `form(e, (conjugate(v), u))` is `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in `v` and antilinear in `u`. The Gateaux derivative with respect to a function adds an argument (see [Gateaux derivative](#gateaux-derivative)).
@@ -4225,319 +4151,210 @@ composition:
 
 ## Appendix: Class hierarchy
 
-Every object in the graph extends `Base`. Diagrams are grouped by chapter;
-larger chapters span several diagrams. An arrow points from a subclass to its
-parent. A class with multiple parents has an arrow to each.
+Every object extends `Base`. The diagram shows the abstract bases; the lists
+below give concrete classes and their parents. Arrows point to parents.
 
 <!-- generated: class-hierarchy, run design/appendices.py to update -->
-### Domains
-
 ```mermaid
 ---
 config:
   theme: neutral
   look: classic
   class:
-    theme: neutral
-    look: classic
     hideEmptyMembersBox: true
 ---
 classDiagram
     direction LR
-    accTitle: Domains class hierarchy
+    accTitle: Abstract class hierarchy
     Base <|-- AbstractDomain
     AbstractDomain <|-- AbstractCoordinateDomain
-    AbstractCoordinateDomain <|-- RD
-```
-
-### Expressions and static type
-
-```mermaid
----
-config:
-  theme: neutral
-  look: classic
-  class:
-    theme: neutral
-    look: classic
-    hideEmptyMembersBox: true
----
-classDiagram
-    direction LR
-    accTitle: Expressions and static type class hierarchy
     Base <|-- AbstractExpression
     Base <|-- AbstractExtent
-    Base <|-- Index
-```
-
-### Algebra
-
-```mermaid
----
-config:
-  theme: neutral
-  look: classic
-  class:
-    theme: neutral
-    look: classic
-    hideEmptyMembersBox: true
----
-classDiagram
-    direction LR
-    accTitle: Algebra class hierarchy (1 of 3)
-    AbstractExpression <|-- Integer
-    AbstractExpression <|-- Float
-    AbstractExpression <|-- Complex
-    AbstractExpression <|-- Zero
-    AbstractExpression <|-- Sum
-    AbstractExpression <|-- Product
-    AbstractExpression <|-- Power
-    AbstractExpression <|-- Division
-```
-
-```mermaid
----
-config:
-  theme: neutral
-  look: classic
-  class:
-    theme: neutral
-    look: classic
-    hideEmptyMembersBox: true
----
-classDiagram
-    direction LR
-    accTitle: Algebra class hierarchy (2 of 3)
-    AbstractExpression <|-- Absolute
-    AbstractExpression <|-- Conjugate
-    AbstractExpression <|-- RealPart
-    AbstractExpression <|-- ImaginaryPart
-    AbstractExpression <|-- SquareRoot
-    AbstractExpression <|-- Logarithm
-    AbstractExpression <|-- Tensor
-    AbstractExpression <|-- Indexed
-```
-
-```mermaid
----
-config:
-  theme: neutral
-  look: classic
-  class:
-    theme: neutral
-    look: classic
-    hideEmptyMembersBox: true
----
-classDiagram
-    direction LR
-    accTitle: Algebra class hierarchy (3 of 3)
-    AbstractExpression <|-- ComponentTensor
-    AbstractExpression <|-- IndexSum
     Base <|-- AbstractIndexTable
-    Base <|-- GatheredIndex
-    AbstractExpression <|-- Inverse
-    AbstractExpression <|-- Determinant
-```
-
-### Calculus on a domain
-
-```mermaid
----
-config:
-  theme: neutral
-  look: classic
-  class:
-    theme: neutral
-    look: classic
-    hideEmptyMembersBox: true
----
-classDiagram
-    direction LR
-    accTitle: Calculus on a domain class hierarchy
-    AbstractExpression <|-- Coordinate
-    AbstractExpression <|-- Gradient
-    AbstractExpression <|-- Divergence
-    AbstractExpression <|-- Curl
-    AbstractExpression <|-- DirectionalDerivative
-    AbstractExpression <|-- Integral
-```
-
-### Maps between domains
-
-```mermaid
----
-config:
-  theme: neutral
-  look: classic
-  class:
-    theme: neutral
-    look: classic
-    hideEmptyMembersBox: true
----
-classDiagram
-    direction LR
-    accTitle: Maps between domains class hierarchy
-    Base <|-- DomainMap
-    AbstractExpression <|-- PullBack
-```
-
-### Topology
-
-```mermaid
----
-config:
-  theme: neutral
-  look: classic
-  class:
-    theme: neutral
-    look: classic
-    hideEmptyMembersBox: true
----
-classDiagram
-    direction LR
-    accTitle: Topology class hierarchy
     Base <|-- AbstractCellType
     Base <|-- AbstractTopology
-```
-
-### Reference cells
-
-```mermaid
----
-config:
-  theme: neutral
-  look: classic
-  class:
-    theme: neutral
-    look: classic
-    hideEmptyMembersBox: true
----
-classDiagram
-    direction LR
-    accTitle: Reference cells class hierarchy
     AbstractCoordinateDomain <|-- AbstractReferenceCell
     AbstractCellType <|-- AbstractReferenceCell
-    Base <|-- CellMap
-```
-
-### Meshes
-
-```mermaid
----
-config:
-  theme: neutral
-  look: classic
-  class:
-    theme: neutral
-    look: classic
-    hideEmptyMembersBox: true
----
-classDiagram
-    direction LR
-    accTitle: Meshes class hierarchy
-    AbstractDomain <|-- Mesh
-    Base <|-- TransformationLaw
-    AbstractExpression <|-- PushForward
-    Base <|-- SideMap
-    AbstractExpression <|-- Normal
-```
-
-### Function spaces
-
-```mermaid
----
-config:
-  theme: neutral
-  look: classic
-  class:
-    theme: neutral
-    look: classic
-    hideEmptyMembersBox: true
----
-classDiagram
-    direction LR
-    accTitle: Function spaces class hierarchy
     Base <|-- AbstractFunctionSpace
-    AbstractExpression <|-- Function
 ```
 
-### Variational forms
+### Concrete classes: Domains
 
-```mermaid
----
-config:
-  theme: neutral
-  look: classic
-  class:
-    theme: neutral
-    look: classic
-    hideEmptyMembersBox: true
----
-classDiagram
-    direction LR
-    accTitle: Variational forms class hierarchy
-    AbstractFunctionSpace <|-- ConjugateSpace
-    AbstractFunctionSpace <|-- DualSpace
-    AbstractExpression <|-- Form
-    AbstractExpression <|-- Action
-```
+Extend `AbstractCoordinateDomain`:
+
+[`RD`](#rd).
+
+### Concrete classes: Expressions and static type
+
+Extend `Base`:
+
+[`Index`](#index).
+
+### Concrete classes: Algebra
+
+Extend `AbstractExpression`:
+
+[`Integer`](#literals), [`Float`](#literals), [`Complex`](#complex), [`Zero`](#zero), [`Sum`](#sum), [`Product`](#product), [`Power`](#power), [`Division`](#division), [`Absolute`](#absolute), [`Conjugate`](#conjugate), [`RealPart`](#realpart-and-imaginarypart), [`ImaginaryPart`](#realpart-and-imaginarypart), [`SquareRoot`](#elementary-functions), [`Logarithm`](#elementary-functions), [`Tensor`](#tensor), [`Indexed`](#indexed), [`ComponentTensor`](#componenttensor-and-indexsum), [`IndexSum`](#componenttensor-and-indexsum), [`Inverse`](#inverse), [`Determinant`](#determinant).
+
+Extend `Base`:
+
+[`GatheredIndex`](#gatheredindex).
+
+### Concrete classes: Calculus on a domain
+
+Extend `AbstractExpression`:
+
+[`Coordinate`](#coordinate), [`Gradient`](#gradient), [`Divergence`](#divergence-and-curl), [`Curl`](#divergence-and-curl), [`DirectionalDerivative`](#directionalderivative), [`Integral`](#integral).
+
+### Concrete classes: Maps between domains
+
+Extend `Base`:
+
+[`DomainMap`](#domainmap).
+
+Extend `AbstractExpression`:
+
+[`PullBack`](#pullback).
+
+### Concrete classes: Reference cells
+
+Extend `Base`:
+
+[`CellMap`](#cellmap).
+
+### Concrete classes: Meshes
+
+Extend `AbstractDomain`:
+
+[`Mesh`](#mesh).
+
+Extend `Base`:
+
+[`TransformationLaw`](#transformationlaw), [`SideMap`](#sidemap).
+
+Extend `AbstractExpression`:
+
+[`PushForward`](#pushforward), [`Normal`](#normal).
+
+### Concrete classes: Function spaces
+
+Extend `AbstractExpression`:
+
+[`Function`](#function).
+
+### Concrete classes: Variational forms
+
+Extend `AbstractFunctionSpace`:
+
+[`ConjugateSpace`](#conjugatespace), [`DualSpace`](#dualspace).
+
+Extend `AbstractExpression`:
+
+[`Form`](#form), [`Action`](#action).
 <!-- end generated: class-hierarchy -->
 
 ## Appendix: Free functions
 
 <!-- generated: free-functions, run design/appendices.py to update -->
-| Group                       | Free function                                                            | `AbstractExpression` overload | Takes                                                                                                                  | Returns                                                                                                                                                                                |
-| --------------------------- | ------------------------------------------------------------------------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Expressions and static type | [`index(label)`](#index)                                                 |                               | `label: str \| tuple`                                                                                                  | `Index`                                                                                                                                                                                |
-| Algebra                     | [`power(first, second)`](#power)                                         | `**`                          | `first, second: AbstractExpression`                                                                                    | `Power`                                                                                                                                                                                |
-|                             | [`negate(f)`](#negation-and-subtraction)                                 | `-f`                          | `f: AbstractExpression`                                                                                                | `multiply(Integer(-1), f)`                                                                                                                                                             |
-|                             | [`subtract(f, g)`](#negation-and-subtraction)                            | `f - g`                       | `f, g: AbstractExpression`                                                                                             | `add(f, negate(g))`                                                                                                                                                                    |
-|                             | [`absolute(f)`](#absolute)                                               | `abs(f)`                      | `f: AbstractExpression`                                                                                                | `Absolute`                                                                                                                                                                             |
-|                             | [`conjugate(f)`](#conjugate)                                             |                               | `f: AbstractExpression`                                                                                                | `Conjugate`                                                                                                                                                                            |
-|                             | [`square_root(f)`](#elementary-functions-very-incomplete)                |                               | `f: AbstractExpression`                                                                                                | `SquareRoot`                                                                                                                                                                           |
-|                             | [`logarithm(f)`](#elementary-functions-very-incomplete)                  |                               | `f: AbstractExpression`                                                                                                | `Logarithm`                                                                                                                                                                            |
-|                             | [`tensor(entries)`](#tensor)                                             |                               | `entries: tuple[AbstractExpression, ...]`                                                                              | `Tensor`                                                                                                                                                                               |
-|                             | [`indexed(expression, indices)`](#indexed)                               |                               | `expression: AbstractExpression`, `indices: tuple`                                                                     | `Indexed`                                                                                                                                                                              |
-|                             | [`component(f, entries)`](#partial-indexing)                             | `[]`                          | `f: AbstractExpression`, `entries: tuple`                                                                              | `f` if `entries == ()`; otherwise `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$, otherwise `indexed(f, entries)`                        |
-|                             | [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                                         | `ComponentTensor`                                                                                                                                                                      |
-|                             | [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |                               | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                                                         | `IndexSum`                                                                                                                                                                             |
-|                             | [`gathered_index(table, indices)`](#gatheredindex)                       |                               | `table: AbstractIndexTable`, `indices: tuple`                                                                          | `GatheredIndex`                                                                                                                                                                        |
-|                             | [`add(first, second)`](#tensor-arithmetic)                               | `+`                           | `first, second: AbstractExpression`                                                                                    | `component_tensor(Sum(first[K], second[K]), K)`                                                                                                                                        |
-|                             | [`multiply(first, second)`](#tensor-arithmetic)                          | `*`                           | `first, second: AbstractExpression`                                                                                    | `component_tensor(Product(first, second[K]), K)` if `first` is scalar, `component_tensor(Product(first[K], second), K)` if only `second` is scalar, otherwise `Product(first, second)` |
-|                             | [`divide(first, second)`](#tensor-arithmetic)                            | `/`                           | `first, second: AbstractExpression`                                                                                    | `component_tensor(Division(first[K], second), K)`                                                                                                                                      |
-|                             | [`real_part(f)`](#tensor-arithmetic)                                     |                               | `f: AbstractExpression`                                                                                                | `component_tensor(RealPart(f[K]), K)`                                                                                                                                                  |
-|                             | [`imaginary_part(f)`](#tensor-arithmetic)                                |                               | `f: AbstractExpression`                                                                                                | `component_tensor(ImaginaryPart(f[K]), K)`                                                                                                                                             |
-|                             | [`matrix_product(first, second)`](#tensor-arithmetic)                    | `@`                           | `first, second: AbstractExpression`                                                                                    | The contraction of the last axis of `first` with the first axis of `second`, below                                                                                                     |
-|                             | [`transpose(A)`](#tensor-arithmetic)                                     |                               | `A: AbstractExpression`                                                                                                | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2                                                                                                            |
-|                             | [`inverse(A)`](#inverse)                                                 |                               | `A: AbstractExpression`                                                                                                | `Inverse`                                                                                                                                                                              |
-|                             | [`determinant(A)`](#determinant)                                         |                               | `A: AbstractExpression`                                                                                                | `Determinant`                                                                                                                                                                          |
-| Calculus on a domain        | [`coordinate(P)`](#coordinate)                                           |                               | `P: AbstractDomain`                                                                                                    | `Coordinate`                                                                                                                                                                           |
-|                             | [`gradient(f, P)`](#gradient)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                           | `Gradient`                                                                                                                                                                             |
-|                             | [`divergence(u, P)`](#divergence-and-curl)                               |                               | `u: AbstractExpression`, `P: AbstractDomain`                                                                           | `Divergence`                                                                                                                                                                           |
-|                             | [`curl(u, P)`](#divergence-and-curl)                                     |                               | `u: AbstractExpression`, `P: AbstractDomain`                                                                           | `Curl`                                                                                                                                                                                 |
-|                             | [`directional_derivative(f, x, a, h)`](#directionalderivative)           |                               | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple`                                   | `DirectionalDerivative(f, x, a, h)`                                                                                                                                                    |
-|                             | [`integral(f, P)`](#integral)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                           | `Integral`                                                                                                                                                                             |
-| Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain`            | `DomainMap`                                                                                                                                                                            |
-|                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap`                                                          | `PullBack`                                                                                                                                                                             |
-|                             | [`jacobian(D)`](#jacobian-and-density)                                   |                               | `D: DomainMap \| CellMap`                                                                                              | `gradient(D.parameterisation, D.parameter_domain)`                                                                                                                                     |
-|                             | [`inverse_jacobian(D)`](#jacobian-and-density)                           |                               | `D: DomainMap \| CellMap`                                                                                              | `inverse(jacobian(D))`                                                                                                                                                                 |
-|                             | [`density(D)`](#jacobian-and-density)                                    |                               | `D: DomainMap \| CellMap`                                                                                              | The density $\rho$ below                                                                                                                                                               |
-| Topology                    | [`cell_index(T, j)`](#abstracttopology)                                  |                               | `T: AbstractTopology`, `j: int`                                                                                        | `Index`                                                                                                                                                                                |
-| Reference cells             | [`cell_map(X, j, e)`](#cellmap)                                          |                               | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex`                                            | `CellMap(X, j, e)`                                                                                                                                                                     |
-|                             | [`cell_map(X, j)`](#cellmap)                                             |                               | `X: AbstractTopology \| Mesh`, `j: int`                                                                                | `CellMap(X, j, cell_index(T, j))`, with $T$ the topology of $X$                                                                                                                        |
-| Meshes                      | [`image(x, Q)`](#mesh)                                                   |                               | `x: AbstractExpression`, `Q: AbstractCoordinateDomain`                                                                 | `Mesh`                                                                                                                                                                                 |
-|                             | [`transformation_law(variances, weight)`](#transformationlaw)            |                               | `variances: tuple[str, ...]`, `weight: int`                                                                            | `TransformationLaw`                                                                                                                                                                    |
-|                             | [`push_forward(f, D, m)`](#pushforward)                                  |                               | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw`                                                             | `PushForward(f, D, m)`                                                                                                                                                                 |
-|                             | [`side_map(X, P, s)`](#sidemap)                                          |                               | `X, P: AbstractTopology \| Mesh`, `s: str`                                                                             | `SideMap(X, P, s)`                                                                                                                                                                     |
-|                             | [`side_domain(D, S, s)`](#side-domains)                                  |                               | `D: Mesh`, `S: AbstractTopology`, `s: str`                                                                             | `image(pull_back(x, side_map(T, S, s)), Q)`                                                                                                                                            |
-|                             | [`normal(sm)`](#normal)                                                  |                               | `sm: SideMap`                                                                                                          | `Normal`                                                                                                                                                                               |
-| Function spaces             | [`function(V, label)`](#function)                                        |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                                      | `Function`                                                                                                                                                                             |
-| Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                               | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise                                                                                                |
-|                             | [`dual_space(S)`](#dualspace)                                            |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                        | `S.space` for a `DualSpace`, otherwise `DualSpace(S)`                                                                                                                                  |
-|                             | [`form(expression, arguments)`](#form)                                   |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`  | `Form`                                                                                                                                                                                 |
-|                             | [`action(f, position, g)`](#action)                                      |                               | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                                                                                                               |
-|                             | [`gateaux_derivative(F, x, a, w)`](#gateaux-derivative)                  |                               | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | The `Form` constructed below                                                                                                                                                           |
-| Evaluation                  | [`lower(f)`](#standard-lowering-recipe)                                  |                               | `f: AbstractExpression`                                                                                                | An equivalent expression in core normal form                                                                                                                                           |
+### Functions: Expressions and static type
+
+| Function                 | Overload | Takes                 | Returns |
+| ------------------------ | -------- | --------------------- | ------- |
+| [`index(label)`](#index) |          | `label: str \| tuple` | `Index` |
+
+### Functions: Algebra
+
+| Function                                                                 | Overload | Takes                                                          | Returns                                                                                                                                                                                |
+| ------------------------------------------------------------------------ | -------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`power(first, second)`](#power)                                         | `**`     | `first, second: AbstractExpression`                            | `Power`                                                                                                                                                                                |
+| [`negate(f)`](#negation-and-subtraction)                                 | `-f`     | `f: AbstractExpression`                                        | `multiply(Integer(-1), f)`                                                                                                                                                             |
+| [`subtract(f, g)`](#negation-and-subtraction)                            | `f - g`  | `f, g: AbstractExpression`                                     | `add(f, negate(g))`                                                                                                                                                                    |
+| [`absolute(f)`](#absolute)                                               | `abs(f)` | `f: AbstractExpression`                                        | `Absolute`                                                                                                                                                                             |
+| [`conjugate(f)`](#conjugate)                                             |          | `f: AbstractExpression`                                        | `Conjugate`                                                                                                                                                                            |
+| [`square_root(f)`](#elementary-functions)                                |          | `f: AbstractExpression`                                        | `SquareRoot`                                                                                                                                                                           |
+| [`logarithm(f)`](#elementary-functions)                                  |          | `f: AbstractExpression`                                        | `Logarithm`                                                                                                                                                                            |
+| [`tensor(entries)`](#tensor)                                             |          | `entries: tuple[AbstractExpression, ...]`                      | `Tensor`                                                                                                                                                                               |
+| [`indexed(expression, indices)`](#indexed)                               |          | `expression: AbstractExpression`, `indices: tuple`             | `Indexed`                                                                                                                                                                              |
+| [`component(f, entries)`](#partial-indexing)                             | `[]`     | `f: AbstractExpression`, `entries: tuple`                      | `f` if `entries == ()`; otherwise `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$, otherwise `indexed(f, entries)`                        |
+| [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]` | `ComponentTensor`                                                                                                                                                                      |
+| [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]` | `IndexSum`                                                                                                                                                                             |
+| [`gathered_index(table, indices)`](#gatheredindex)                       |          | `table: AbstractIndexTable`, `indices: tuple`                  | `GatheredIndex`                                                                                                                                                                        |
+| [`add(first, second)`](#tensor-arithmetic)                               | `+`      | `first, second: AbstractExpression`                            | `component_tensor(Sum(first[K], second[K]), K)`                                                                                                                                        |
+| [`multiply(first, second)`](#tensor-arithmetic)                          | `*`      | `first, second: AbstractExpression`                            | `component_tensor(Product(first, second[K]), K)` if `first` is scalar, `component_tensor(Product(first[K], second), K)` if only `second` is scalar, otherwise `Product(first, second)` |
+| [`divide(first, second)`](#tensor-arithmetic)                            | `/`      | `first, second: AbstractExpression`                            | `component_tensor(Division(first[K], second), K)`                                                                                                                                      |
+| [`real_part(f)`](#tensor-arithmetic)                                     |          | `f: AbstractExpression`                                        | `component_tensor(RealPart(f[K]), K)`                                                                                                                                                  |
+| [`imaginary_part(f)`](#tensor-arithmetic)                                |          | `f: AbstractExpression`                                        | `component_tensor(ImaginaryPart(f[K]), K)`                                                                                                                                             |
+| [`matrix_product(first, second)`](#tensor-arithmetic)                    | `@`      | `first, second: AbstractExpression`                            | The contraction of the last axis of `first` with the first axis of `second`, below                                                                                                     |
+| [`transpose(A)`](#tensor-arithmetic)                                     |          | `A: AbstractExpression`                                        | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2                                                                                                            |
+| [`inverse(A)`](#inverse)                                                 |          | `A: AbstractExpression`                                        | `Inverse`                                                                                                                                                                              |
+| [`determinant(A)`](#determinant)                                         |          | `A: AbstractExpression`                                        | `Determinant`                                                                                                                                                                          |
+
+### Functions: Calculus on a domain
+
+| Function                                                       | Overload | Takes                                                                                | Returns                             |
+| -------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------ | ----------------------------------- |
+| [`coordinate(P)`](#coordinate)                                 |          | `P: AbstractDomain`                                                                  | `Coordinate`                        |
+| [`gradient(f, P)`](#gradient)                                  |          | `f: AbstractExpression`, `P: AbstractDomain`                                         | `Gradient`                          |
+| [`divergence(u, P)`](#divergence-and-curl)                     |          | `u: AbstractExpression`, `P: AbstractDomain`                                         | `Divergence`                        |
+| [`curl(u, P)`](#divergence-and-curl)                           |          | `u: AbstractExpression`, `P: AbstractDomain`                                         | `Curl`                              |
+| [`directional_derivative(f, x, a, h)`](#directionalderivative) |          | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple` | `DirectionalDerivative(f, x, a, h)` |
+| [`integral(f, P)`](#integral)                                  |          | `f: AbstractExpression`, `P: AbstractDomain`                                         | `Integral`                          |
+
+### Functions: Maps between domains
+
+| Function                                       | Overload | Takes                                                                                                       | Returns                                            |
+| ---------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| [`domain_map(P, psi, Q)`](#domainmap)          |          | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain` | `DomainMap`                                        |
+| [`pull_back(f, D)`](#pullback)                 |          | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap`                                               | `PullBack`                                         |
+| [`jacobian(D)`](#jacobian-and-density)         |          | `D: DomainMap \| CellMap`                                                                                   | `gradient(D.parameterisation, D.parameter_domain)` |
+| [`inverse_jacobian(D)`](#jacobian-and-density) |          | `D: DomainMap \| CellMap`                                                                                   | `inverse(jacobian(D))`                             |
+| [`density(D)`](#jacobian-and-density)          |          | `D: DomainMap \| CellMap`                                                                                   | The density $\rho$ below                           |
+
+### Functions: Topology
+
+| Function                                | Overload | Takes                           | Returns |
+| --------------------------------------- | -------- | ------------------------------- | ------- |
+| [`cell_index(T, j)`](#abstracttopology) |          | `T: AbstractTopology`, `j: int` | `Index` |
+
+### Functions: Reference cells
+
+| Function                        | Overload | Takes                                                                       | Returns                                                         |
+| ------------------------------- | -------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [`cell_map(X, j, e)`](#cellmap) |          | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` | `CellMap(X, j, e)`                                              |
+| [`cell_map(X, j)`](#cellmap)    |          | `X: AbstractTopology \| Mesh`, `j: int`                                     | `CellMap(X, j, cell_index(T, j))`, with $T$ the topology of $X$ |
+
+### Functions: Meshes
+
+| Function                                                      | Overload | Takes                                                      | Returns                                     |
+| ------------------------------------------------------------- | -------- | ---------------------------------------------------------- | ------------------------------------------- |
+| [`image(x, Q)`](#mesh)                                        |          | `x: AbstractExpression`, `Q: AbstractCoordinateDomain`     | `Mesh`                                      |
+| [`transformation_law(variances, weight)`](#transformationlaw) |          | `variances: tuple[str, ...]`, `weight: int`                | `TransformationLaw`                         |
+| [`push_forward(f, D, m)`](#pushforward)                       |          | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw` | `PushForward(f, D, m)`                      |
+| [`side_map(X, P, s)`](#sidemap)                               |          | `X, P: AbstractTopology \| Mesh`, `s: str`                 | `SideMap(X, P, s)`                          |
+| [`side_domain(D, S, s)`](#side-domains)                       |          | `D: Mesh`, `S: AbstractTopology`, `s: str`                 | `image(pull_back(x, side_map(T, S, s)), Q)` |
+| [`normal(sm)`](#normal)                                       |          | `sm: SideMap`                                              | `Normal`                                    |
+
+### Functions: Function spaces
+
+| Function                          | Overload | Takes                                             | Returns    |
+| --------------------------------- | -------- | ------------------------------------------------- | ---------- |
+| [`function(V, label)`](#function) |          | `V: AbstractFunctionSpace`, `label: str \| tuple` | `Function` |
+
+### Functions: Variational forms
+
+| Function                                                | Overload | Takes                                                                                                                  | Returns                                                                                 |
+| ------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [`conjugate_space(V)`](#conjugatespace)                 |          | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise |
+| [`dual_space(S)`](#dualspace)                           |          | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                        | `S.space` for a `DualSpace`, otherwise `DualSpace(S)`                                   |
+| [`form(expression, arguments)`](#form)                  |          | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`  | `Form`                                                                                  |
+| [`action(f, position, g)`](#action)                     |          | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                |
+| [`gateaux_derivative(F, x, a, w)`](#gateaux-derivative) |          | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | The `Form` constructed below                                                            |
+
+### Functions: Evaluation
+
+| Function                                | Overload | Takes                   | Returns                                      |
+| --------------------------------------- | -------- | ----------------------- | -------------------------------------------- |
+| [`lower(f)`](#standard-lowering-recipe) |          | `f: AbstractExpression` | An equivalent expression in core normal form |
 <!-- end generated: free-functions -->
 
 ## Appendix: Static type table
