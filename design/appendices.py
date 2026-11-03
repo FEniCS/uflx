@@ -1,4 +1,4 @@
-"""Generate the appendices of language.md from the sections.
+"""Generate language/reference.md from the language pages.
 
 Run ``python3 design/appendices.py`` to rewrite the generated regions, or
 ``python3 design/appendices.py --check`` to fail when a region is stale or a
@@ -13,8 +13,9 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from language_pages import PAGES, REFERENCE
+
 HERE = Path(__file__).resolve().parent
-LANGUAGE = HERE / "language.md"
 
 # Classes of a language extension are not part of the core appendices.
 EXCLUDED_CHAPTERS = {"Extending the core"}
@@ -32,6 +33,7 @@ class ClassEntry:
     abstract: bool
     rows: dict[str, str]
     lead: str
+    source: str = ""
     extends: list[str] = field(default_factory=list)
 
 
@@ -45,6 +47,7 @@ class FreeFunction:
     overload: str
     takes: str
     returns: str
+    source: str = ""
 
 
 def slugify(heading: str) -> str:
@@ -131,7 +134,15 @@ class Document:
         if header == FREE_FUNCTION_HEADER:
             for signature, overload, takes, returns in rows:
                 self.functions.append(
-                    FreeFunction(signature.strip("`"), chapter, anchor, overload, takes, returns)
+                    FreeFunction(
+                        signature.strip("`"),
+                        chapter,
+                        anchor,
+                        overload,
+                        takes,
+                        returns,
+                        self.path.name,
+                    )
                 )
             return
         if len(header) != 2 or header[1] != "" or not code_names(header[0]):
@@ -148,6 +159,7 @@ class Document:
                 abstract="(" not in signature,
                 rows=values,
                 lead=lead,
+                source=self.path.name,
                 extends=code_names(values.get("Extends", "")),
             )
             self.classes.append(entry)
@@ -162,6 +174,7 @@ class Document:
                         overload.group(1) if overload else "",
                         values.get("Takes", ""),
                         values.get("Returns", f"`{name}`"),
+                        self.path.name,
                     )
                 )
 
@@ -169,6 +182,20 @@ class Document:
 def core(classes: list[ClassEntry]) -> list[ClassEntry]:
     """Return the classes of the core, without those of language extensions."""
     return [c for c in classes if c.chapter not in EXCLUDED_CHAPTERS]
+
+
+def language() -> Document:
+    """Collect definitions and reference checks from all language pages."""
+    result = Document(PAGES[0])
+    for path in PAGES[1:]:
+        page = Document(path)
+        result.classes.extend(page.classes)
+        result.functions.extend(page.functions)
+        for chapter, tables in page.tables.items():
+            result.tables.setdefault(chapter, []).extend(tables)
+        for anchor, tables in page.section_tables.items():
+            result.section_tables.setdefault(anchor, []).extend(tables)
+    return result
 
 
 def class_hierarchy(classes: list[ClassEntry]) -> str:
@@ -197,7 +224,7 @@ def class_hierarchy(classes: list[ClassEntry]) -> str:
         if not entry.abstract:
             parents = groups.setdefault(entry.chapter, {})
             parents.setdefault(tuple(entry.extends), []).append(
-                f"[`{entry.name}`](#{entry.anchor})"
+                f"[`{entry.name}`]({entry.source}#{entry.anchor})"
             )
     for chapter, parents in groups.items():
         out.extend([f"### {chapter}", ""])
@@ -227,7 +254,7 @@ def free_functions(functions: list[FreeFunction]) -> str:
             continue
         groups.setdefault(function.chapter, []).append(
             [
-                f"[`{function.signature}`](#{function.anchor})",
+                f"[`{function.signature}`]({function.source}#{function.anchor})",
                 function.overload,
                 function.takes,
                 function.returns,
@@ -333,7 +360,7 @@ def fill(text: str, regions: dict[str, str]) -> str:
         end = rf"<!-- end generated: {re.escape(name)} -->"
         pattern = re.compile(f"({start})(.*?)({end})", re.S)
         if not pattern.search(text):
-            raise SystemExit(f"language.md has no generated region {name}")
+            raise SystemExit(f"language/reference.md has no generated region {name}")
         text = pattern.sub(lambda m: m.group(1) + body + m.group(3), text)
     return text
 
@@ -344,11 +371,11 @@ def main() -> int:
     parser.add_argument("--check", action="store_true", help="fail instead of rewriting")
     parser.add_argument("--summary", action="store_true", help="print counts and exit")
     args = parser.parse_args()
-    lang = Document(LANGUAGE)
+    lang = language()
     if args.summary:
         print(summary(lang), end="")
         return 0
-    text = LANGUAGE.read_text()
+    text = REFERENCE.read_text()
     new = fill(text, render(lang))
     problems = checks(lang)
     for p in problems:
@@ -359,8 +386,8 @@ def main() -> int:
             return 1
         return 1 if problems else 0
     if new != text:
-        LANGUAGE.write_text(new)
-        print("updated the appendices of language.md")
+        REFERENCE.write_text(new)
+        print("updated language/reference.md")
     return 0
 
 

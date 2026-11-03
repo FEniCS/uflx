@@ -65,12 +65,16 @@ cells = cell_domain(M, 0)
 J = jacobian(cells)
 r, l = index("r"), index("l")
 
+
 def cross(a, b):
-    return tensor((
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ))
+    return tensor(
+        (
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        )
+    )
+
 
 nu = cross(component_tensor(J[r, 0], (r,)), component_tensor(J[r, 1], (r,)))
 
@@ -165,7 +169,7 @@ Let `T` be a triangle topology, `X` a real vector Lagrange space of degree 1
 and value shape `(2,)`, and `V` a real scalar Lagrange space, both on `T`.
 The solver supplies coordinate values for `x`.
 `shape_derivative` is the construction function of the
-[extension](../language.md#shape-derivatives):
+[extension](../language/extensions.md#shape-derivatives):
 
 ```python
 x, h, v = function(X, "x"), function(X, "h"), function(X, "v")

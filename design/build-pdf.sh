@@ -55,7 +55,7 @@ suffix=""
 if $proof; then
   # The commit in the footer ties each mark to the text that was printed.
   version="$(git -C "$here" rev-parse --short HEAD), $(date +%Y-%m-%d)"
-  if [[ -n "$(git -C "$here" status --porcelain -- "${notes[@]}")" ]]; then
+  if [[ -n "$(git -C "$here" status --porcelain -- "${notes[@]}" language)" ]]; then
     version="$version, with uncommitted changes"
   fi
   printf '\\newcommand{\\proofversion}{%s}\n' "$version" >"$out/proof-version.tex"
@@ -76,6 +76,9 @@ for note in "${notes[@]}"; do
   name="${note%.md}$suffix"
   source="$here/$note"
   mkdir -p "$out/$(dirname "$name")"
+  prepared="$out/$name-source.md"
+  python3 "$here/language_pages.py" "$source" "$prepared"
+  source="$prepared"
   contents=(--toc --toc-depth=2)
   if [[ "$note" == examples/index.md ]]; then
     # The examples landing page is itself a short contents guide.
@@ -92,7 +95,7 @@ for note in "${notes[@]}"; do
     source="$rendered"
   fi
   pandoc "$source" \
-    --resource-path "$(dirname "$source"):$out:$here" \
+    --resource-path "$(dirname "$source"):$out:$here:$(dirname "$here/$note")" \
     --from "$reader" \
     --standalone \
     --shift-heading-level-by=-1 \

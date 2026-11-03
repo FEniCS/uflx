@@ -15,7 +15,7 @@ l = Index(("uflx.transpose", A, 1))
 component_tensor(A[k, l], (l, k))
 ```
 
-The [derived indices](../language.md#derived-indices) keep the labels tied to `A`.
+The [derived indices](../language/expressions.md#derived-indices) keep the labels tied to `A`.
 Using user indices instead gives a mathematically equal expression with a
 different graph. `Indexed` rejects an operand of array rank other than 2,
 including a scalar, with `IndexError`.

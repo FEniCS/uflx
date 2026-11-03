@@ -29,6 +29,10 @@ The site builds with [Jupyter Book](https://jupyterbook.org) into
 `design/_build/html/`, and the PDFs build with pandoc and xelatex into
 `design/build/`.
 
+The language is split into pages under `design/language/`. Edit those pages;
+`python3 design/appendices.py` updates `language/reference.md`. Building
+`language.md` as a PDF combines all seven pages into `build/language.pdf`.
+
 ```
 cd design && jupyter-book build --html   # the site
 cd design && jupyter-book start          # serve the site locally

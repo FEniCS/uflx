@@ -8,6 +8,14 @@ project:
   toc:
     - file: readme.md
     - file: language.md
+      children:
+        - file: language/rules.md
+        - file: language/expressions.md
+        - file: language/geometry.md
+        - file: language/forms.md
+        - file: language/evaluation.md
+        - file: language/extensions.md
+        - file: language/reference.md
     - file: examples/index.md
       children:
         - file: examples/tensors.md
