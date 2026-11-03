@@ -522,7 +522,7 @@ Worked examples for this chapter: [the Laplace-Beltrami operator](../examples/su
 
 `gateaux_derivative(F, x, a, w)` constructs a derivative form, adding an
 argument $w$ after the arguments of $F$. It composes `Form` and
-`DirectionalDerivative` with scalar arithmetic; it introduces no node class.
+`DirectionalDerivative` with tensor-aware arithmetic; it introduces no node class.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
