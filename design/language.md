@@ -539,9 +539,8 @@ A literal is a number written in an expression, such as `Integer(2) * u`.
 `TypeError`, and `Float(-0.0) != Float(0.0)`.
 
 A rational number is the `Division` of two `Integer`s, such as
-`Integer(1) / Integer(3)`. In floating-point arithmetic, the division of two
-integers rounds once, the same as the conversion of a rational number, so the
-core has no rational literal.
+`Integer(1) / Integer(3)`. The compiler chooses its numerical evaluation;
+the core has no rational literal.
 
 ### `Complex`
 
@@ -1896,7 +1895,7 @@ identifying arguments, such as a label.
 
 The free function `cell_index(T, j)` returns the derived index
 `Index(("uflx.cell_index", T, j, 0))` for the cells of type $j$, numbered from
-0. The index has the extent `T.num_cells[j]`. The index differs between types
+0. The index differs between types
 and between topologies, even if the numbers of cells are equal.
 
 `cell_index` checks that $T$ is a topology and $j$ is an `int` with
@@ -4302,7 +4301,7 @@ composition:
 | `Conjugate`                                      | An operation of the scalar field, and `Form` meets `conjugate(v)` of a function of any value shape as written |
 | `RealPart`                                       | `(f + conjugate(f)) / Integer(2)` has the value of the real part but is complex, and the real part is real    |
 | `ImaginaryPart`                                  | `real_part(Complex(Integer(0), Integer(1)) * conjugate(f))` multiplies the real part by zero, which is NaN for an infinite real part |
-| `Division`                                       | `multiply(f, power(g, Integer(-1)))` rounds twice, and the quotient the user wrote rounds once                |
+| `Division`                                       | Preserves the written quotient rather than replacing it with multiplication by a reciprocal |
 | `SquareRoot`                                     | IEEE 754 rounds the square root correctly and the power not, so `power(f, Integer(1) / Integer(2))` differs   |
 | `Logarithm`                                      | An elementary function, which nothing else composes                                                           |
 | `Inverse`, `Determinant`                         | The compiler chooses the numerical algorithm; construction retains the operation |
