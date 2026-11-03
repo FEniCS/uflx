@@ -2771,8 +2771,7 @@ of linear and antilinear forms.
 #### Bindable functions
 
 A `Function` is bindable if its argument spaces are `()` or its space is a
-`DualSpace`. `Form`, `DirectionalDerivative` and `GateauxDerivative` bind
-these functions. A dual of a product is one functional argument; a `tuple`
+`DualSpace`. `Form` and `DirectionalDerivative` bind these functions. A dual of a product is one functional argument; a `tuple`
 of binders is one jointly linear product-space argument.
 
 The argument spaces of a functional describe the values it accepts. Binding
@@ -2927,8 +2926,9 @@ An argument's position is its index in `arguments`. An entry `v` declares
 linearity in `v`; `conjugate(v)` declares linearity in $\bar v$, hence
 antilinearity in `v`. They give the same argument space for a real space.
 A `tuple` entry declares joint linearity in its members, so a term may depend
-on only one member. A [linearity pass](#checking-linearity) can check these
-declarations.
+on only one member. The user is responsible for these declarations. Construction checks the
+structural requirements above; an optional [linearity check](#checking-linearity)
+may help diagnose mistakes.
 
 Binding is lexical: an occurrence refers to the innermost enclosing `Form`
 that binds the function, and is fixed otherwise. Thus a function may be an
@@ -3015,22 +3015,28 @@ stokes = form(e, ((v, q), (u, p)))
 wrong_arity = form(e, (v, q, u, p))
 ```
 
-`stokes` has argument spaces `((V, Q), (V, Q))`. A linearity check rejects
-`wrong_arity`: no term is linear in all four functions.
+`stokes` has argument spaces `((V, Q), (V, Q))`. The declaration in
+`wrong_arity` is invalid: no term is linear in all four functions. An optional
+linearity check may diagnose this mistake.
 
 #### Checking linearity
 
-A linearity check is a pass that asks whether an expression is linear in a
-function `v`, or jointly in a `tuple` of functions (see [New
-questions](#new-questions)). The pass gives every node one of five classes:
-zero, constant, linear, antilinear or nonlinear in `v`. A `Form` is checked
-one entry at a time. The expression of the `Form` must be linear or zero in
-`v` for an entry `v`, and antilinear or zero in `v` for an entry
-`conjugate(v)`.
+Linearity is a mathematical requirement of a form declaration, not a property
+that construction must prove. For an entry `v`, the expression must be linear
+in `v`; for `conjugate(v)`, it must be antilinear in `v`. Zero satisfies either
+convention. A tuple entry declares joint dependence in its members.
 
-A pairing is linear in its functional operand and in the supplied argument
-of `Action`. The check considers dependence through both operands; a
-conjugated field argument makes the pairing antilinear in that field.
+A library may provide a structural check of these declarations (see [New
+questions](#new-questions)). The core does not require a checking pass or a
+classification API. An inconclusive check does not establish that a declaration
+is invalid. Checks may assume the stated contracts of opaque operations;
+libraries need not expose their implementations to prove linearity.
+
+An implementation may also recognise linearity to simplify an expression. For
+example, a complex-linear differential has a zero antilinear part. If the
+analysis is inconclusive, evaluation uses the general rules. This changes
+performance, not the meaning or admissibility of the expression. Users may
+construct known derivative forms directly with `Form`.
 
 ```{dropdown} Legacy UFL
 In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
@@ -3198,21 +3204,29 @@ Worked examples for this chapter: [the Laplace-Beltrami operator](examples/surfa
 
 ### Gateaux derivative
 
-`GateauxDerivative` differentiates an expression $F$ with respect to a variable
-$x$ at a point $a$, adding an argument $w$ after the arguments of $F$.
-
-| `GateauxDerivative(F, x, a, w)` |  |
-| ------------------------------- | - |
-| Extends     | `AbstractExpression` |
-| Takes       | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` |
-| Properties  | `expression` $F$, `variable` $x$, `point` $a$ and `argument` $w$, an entry as in [`Form`](#form) |
-| Requires    | $x$ a [bindable function](#bindable-functions) or a `tuple` of at least two distinct bindable functions; member by member, $a$ an admissible value for the space of $x$ as in [`Action`](#action), and the function underlying each entry of $w$ in that space; the members of a `tuple` $w$ all functions or all conjugates, no function of $w$ free in $F$ or $a$, and the members of a `tuple` $x$ all real or all complex |
-| Static type | The value shape of $F$, the free indices of $F$ followed by those of $a$, the argument spaces of $F$ followed by the space of the entry $w$, and the scalar type of $F$ for a real $x$, and complex for a complex $x$ |
-| Raises      | `TypeError` for an $x$ that is not a function, and `ValueError` if another requirement fails |
+`gateaux_derivative(F, x, a, w)` constructs a derivative form, adding an
+argument $w$ after the arguments of $F$. It composes `Form` and
+`DirectionalDerivative` with scalar arithmetic; it introduces no node class.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `gateaux_derivative(F, x, a, w)` | | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | `GateauxDerivative(F, x, a, w)` |
+| `gateaux_derivative(F, x, a, w)` | | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | The `Form` constructed below |
+
+The variable $x$ is a [bindable function](#bindable-functions), or a tuple of
+at least two distinct bindable functions. The point $a$ and entry $w$ match
+its tuple structure and length. Member by member, $a$ is an admissible value
+for the space of $x$ as in [`Action`](#action), and the function underlying
+$w$ belongs to that space. The functions of $w$ are distinct, none is free
+in $F$ or $a$, and tuple members of $w$ are either all plain functions or all
+conjugates. Shared free indices of $F$ and the points have matching extents.
+
+Construction raises `TypeError` if $F$ is not an expression or $x$ is not a
+function or tuple of functions, and `ValueError` if another requirement fails.
+It checks these structural requirements, not existence of the differential
+or holomorphicity. The resulting form has the value shape of $F$, the free
+indices of $F$ and $a$, and the argument spaces of $F$ followed by the space
+of entry $w$. Its scalar type is that of $F$ for real $x$, and complex for
+complex $x$.
 
 The members of a `tuple` $x$ have one scalar type, the scalar type of $x$.
 The linear and the antilinear parts below are defined only on a complex
@@ -3229,32 +3243,44 @@ The real differential in a direction $v$ is
 $\delta F[v]$ = `directional_derivative(F, x, a, v)`, with the members of a
 `tuple` variable substituted at once (see
 [`DirectionalDerivative`](#directionalderivative)). $\delta F$ is
-real-linear in $v$, and the value of the Gateaux derivative binds $w$ by the
-scalar type of the space of $x$:
+real-linear in $v$. Write $h$ for the function underlying $w$, member by
+member for a tuple; for a plain entry, $h=w$. Construction uses
+`i_unit = Complex(Integer(0), Integer(1))` and binds the entry as follows:
 
-| Space and entry | Value |
-| --------------- | ----- |
-| A real space | `Form(δF[w], (w,))` |
-| A complex space, entry `w` | `Form(J₊, (w,))`, with $J_+[w] = \tfrac12 (\delta F[w] - i \, \delta F[i w])$, the linear part |
-| A complex space, entry `conjugate(w)` | `Form(J₋, (conjugate(w),))`, with $J_-[w] = \tfrac12 (\delta F[w] + i \, \delta F[i w])$, the antilinear part |
+| Space and entry | Construction |
+| --------------- | ------------ |
+| A real space, either entry convention | `Form(δF[h], (w,))` |
+| A complex space, plain entry `w` | `Form(Integer(1) / Integer(2) * (δF[h] - i_unit * δF[i_unit * h]), (w,))` |
+| A complex space, conjugate entry `w` | `Form(Integer(1) / Integer(2) * (δF[h] + i_unit * δF[i_unit * h]), (w,))` |
+
+For a tuple direction, multiplication by `i_unit` is member by member. The
+complex bodies are respectively the linear part $J_+[h]$ and the antilinear
+part $J_-[h]$ of the real differential. Binding follows the ordinary scopes
+of `Form` and `DirectionalDerivative`; no separate derivative-form binding
+rule or evaluation pass is needed.
 
 $\delta F = J_+ + J_-$, and the two parts are unique. For a real functional
-$\Pi$ on a complex space, $J_-$ with the entry `conjugate(w)` is the
+$\Pi$ on a complex space, $J_-$ with the entry `conjugate(h)` is the
 Wirtinger derivative $\partial \Pi / \partial \bar u$, a function in
 `dual_space(V)` (see [Antilinear forms](#antilinear-forms)), so $J_-$ minus a
-load is a residual. If no occurrence of $x$ in $F$ is under a `Conjugate`, an
-`Absolute`, a `RealPart` or an `ImaginaryPart`, and the remaining operations
-are holomorphic in that dependence, $F$ is holomorphic in $x$:
-$J_+$ is $\delta F$ and $J_-$ is zero. The Jacobian of the residual of a
-sesquilinear problem, such as the Helmholtz equation, is such a $J_+$.
-Otherwise the Jacobian is the pair of forms $J_+$ and $J_-$, which do not add
+load is a residual. If the differential is complex-linear in its direction,
+$J_+$ is $\delta F$ and $J_-$ is zero. If it is complex-antilinear,
+$J_+$ is zero and $J_-$ is $\delta F$. Implementations may recognise these
+cases during lowering, but no detector is required. A user who knows the
+appropriate dependence may construct the corresponding forms directly.
+
+The Jacobian of a complex-linear residual, such as that of the Helmholtz
+equation, has only $J_+$. In general the Jacobian is the pair of forms $J_+$ and $J_-$, which do not add
 because the argument spaces differ, and Newton's method solves
 $J_+ \, \delta u + J_- \, \overline{\delta u} = -R$ with an algorithm that the
 solver chooses.
 
 The value is a form that binds $w$ after the arguments of $F$, so the
 derivative of a residual form is the tangent form, and an action on the new
-argument is the derivative in a fixed direction. The real Hessian is symmetric.
+argument gives the selected part in a fixed direction. For complex variables,
+the full real differential is recovered by acting on $J_+$ with $h$ and on
+$J_-$ with $\overline h$, then adding the results. The real Hessian is symmetric
+when the functional is twice continuously differentiable.
 On a complex space, repeated Gateaux derivatives select its Wirtinger blocks.
 The graph does not record symmetry.
 
@@ -3262,8 +3288,7 @@ The graph does not record symmetry.
 
 A lazy node class states its value in its section. A pass may rewrite it as
 an expression of other node classes with that value. The lazy classes are
-`GateauxDerivative`, `Action`,
-`DirectionalDerivative`, `Integral` over a mesh, `PullBack`,
+`Action`, `DirectionalDerivative`, `Integral` over a mesh, `PullBack`,
 `Gradient`, `Divergence`, `Curl` and `PushForward`.
 
 A rewrite preserves value under the [mathematical admissibility](#mathematical-admissibility)
@@ -3272,8 +3297,10 @@ using the renaming of [Substitution and binding](#substitution-and-binding).
 Value preservation is mathematical; it does not guarantee identical
 floating-point results after rewriting.
 
-Passes never simplify, so zero terms remain in the graph, and zero times an
-undefined value is undefined.
+The evaluation rules do not require algebraic simplification; zero terms may
+remain in the graph. Implementations may apply value- and type-preserving
+optimizations under the mathematical admissibility convention. No rule makes
+zero times an undefined value defined.
 
 `Action` and `DirectionalDerivative` commute with the following node classes
 in the listed operands, when the other operands do not depend on what the
@@ -3311,13 +3338,12 @@ one before, from $N_0$ (see [Grammars](#grammars)):
 
 | Pass | Evaluates | Output grammar |
 | ---- | --------- | -------------- |
-| [`apply_gateaux_derivatives`](#applying-gateaux-derivatives) | `GateauxDerivative` | $N_1$ |
-| [`apply_actions`](#applying-actions) | `Action`, except actions on a `Function`, `Gradient`, `PullBack` or another remaining `Action` | $N_2$ |
-| [`apply_derivatives`](#applying-derivatives) | `DirectionalDerivative`, then any actions it creates | $N_3$ |
-| [`expand_integrals`](#expanding-integrals) | `Integral` over a mesh | $N_4$ |
-| The lowering stage | `Gradient`, `Divergence`, `Curl`, `PushForward` and `PullBack` | $N_5$, [the core normal form](#the-core-normal-form) |
+| [`apply_actions`](#applying-actions) | `Action`, except actions on a `Function`, `Gradient`, `PullBack` or another remaining `Action` | $N_1$ |
+| [`apply_derivatives`](#applying-derivatives) | `DirectionalDerivative`, then any actions it creates | $N_2$ |
+| [`expand_integrals`](#expanding-integrals) | `Integral` over a mesh | $N_3$ |
+| The lowering stage | `Gradient`, `Divergence`, `Curl`, `PushForward` and `PullBack` | $N_4$, [the core normal form](#the-core-normal-form) |
 
-The first four passes keep this order. `apply_actions` evaluates actions
+The first three passes keep this order. `apply_actions` evaluates actions
 created by substitution, and `apply_derivatives` uses it to evaluate actions
 created by differentiation or substitution at the derivative's point.
 The lowering stage repeats [`apply_gradients`](#applying-gradients)
@@ -3397,8 +3423,8 @@ labels. Rules may inspect these dependencies and expose expressions from
 them: a pull-back of coordinates returns a map's parameterisation, for
 example. Exposed expressions are visited; stored geometry is unchanged.
 
-Each expression exposed from geometry must belong to $N_4$ as a separate
-root. The supplier runs the first four passes before building the geometry
+Each expression exposed from geometry must belong to $N_3$ as a separate
+root. The supplier runs the first three passes before building the geometry
 if necessary. This is a pass precondition, not a constructor restriction;
 it also applies to parameterisations of maps that rewrites build. The lowering
 stage evaluates exposed gradients and pull-backs.
@@ -3419,7 +3445,6 @@ operands:
 | [`ComponentTensor(e, indices)`, `IndexSum(e, indices)`](#componenttensor-and-indexsum) | The indices of `indices` | `e` and `indices` |
 | [`Form(e, arguments)`](#form) | The functions of `arguments` | `e` and `arguments` |
 | [`DirectionalDerivative(f, x, a, h)`](#directionalderivative) | $x$ | $f$ and $x$ |
-| [`GateauxDerivative(F, x, a, w)`](#gateaux-derivative) | The functions of $x$ and of $w$ | $F$, $x$ and $w$ |
 
 A binding node is made fresh for expressions $s_1, \dots, s_n$ by renaming,
 in the operands in which the names are bound, each bound name that is free in
@@ -3523,57 +3548,20 @@ consists of every `Action` and every node with argument spaces other than
 
 The section of each pass states the input grammar and the output grammar of
 the pass, such as $N_1$ of
-[`apply_gateaux_derivatives`](#applying-gateaux-derivatives), and [The core
+[`apply_actions`](#applying-actions), and [The core
 normal form](#the-core-normal-form) lists what the last of them allows.
 
-For example, a `Function` is in $N_5$ even if its domain's parameterisation
+For example, a `Function` is in $N_4$ even if its domain's parameterisation
 contains a reducible `Gradient`: traversal stops at the function. The
 parameterisation is checked separately when exposed or evaluated.
-
-### Applying Gateaux derivatives
-
-| `apply_gateaux_derivatives(f)` |  |
-| ------------------------------ | - |
-| Evaluates                      | `GateauxDerivative` |
-| Input grammar                  | $N_0$ |
-| Output grammar                 | $N_1 = N_0 \setminus \{$a `GateauxDerivative`$\}$ |
-
-The pass rewrites every `GateauxDerivative(F, x, a, w)`, inner derivatives
-first, as a `Form` that binds $w$ after the arguments of $F$, with
-$\delta F[v]$ the directional derivative of [Gateaux
-derivative](#gateaux-derivative) and
-`i_unit = Complex(Integer(0), Integer(1))`:
-
-| Space of $x$ and entry $w$ | Rewrite |
-| -------------------------- | ------- |
-| A real space | `Form(δF[w], (w,))` |
-| A complex space, $F$ holomorphic in $x$, entry `w` | `Form(δF[w], (w,))` |
-| A complex space, $F$ holomorphic in $x$, entry `conjugate(w)` | Zero with the type of the derivative |
-| A complex space, entry `w` | `Form(Integer(1) / Integer(2) * (δF[w] - i_unit * δF[i_unit * w]), (w,))` |
-| A complex space, entry `conjugate(w)` | `Form(Integer(1) / Integer(2) * (δF[w] + i_unit * δF[i_unit * w]), (conjugate(w),))` |
-
-- The holomorphic shortcut follows the criterion in [Gateaux
-  derivative](#gateaux-derivative). Its rows give $J_+$ and $J_-$ with no terms
-  that cancel.
-  An action is linear in its functional operand and supplied argument (see
-  [`Action`](#action)); conjugation of either is explicit in the expression.
-- For a `tuple` $w$, `i_unit * w` is the `tuple` of the products of
-  `i_unit` with each member.
-- The pass runs first, so the forms of $F$ may still be under actions, and
-  [`apply_actions`](#applying-actions) substitutes an argument for $w$ like
-  any other argument. An action on $w$ is then the derivative in a fixed
-  direction.
-- The terms of the last two rows are each real-linear in $w$, and are linear
-  or antilinear only in sum, so a linearity check that classifies each term
-  does not confirm the linearity of these rows.
 
 ### Applying actions
 
 | `apply_actions(f)` |  |
 | ------------------ | - |
 | Evaluates          | `Action` |
-| Input grammar      | $N_1$ |
-| Output grammar     | $N_2 = N_1 \setminus \{$an `Action` whose form is not a `Function`, `Gradient`, `PullBack` or `Action`$\}$ |
+| Input grammar      | $N_0$ |
+| Output grammar     | $N_1 = N_0 \setminus \{$an `Action` whose form is not a `Function`, `Gradient`, `PullBack` or `Action`$\}$ |
 
 The pass rewrites every `Action(f, p, g)`, inner actions first, with the first
 row that matches the form $f$, and keeps the value of [`Action`](#action).
@@ -3640,8 +3628,8 @@ its own rows first, for the terminals of the expression, and then the rows below
 | `apply_derivatives(f)` |  |
 | ---------------------- | - |
 | Evaluates              | `DirectionalDerivative` and actions created by its evaluation |
-| Input grammar          | $N_2$ |
-| Output grammar         | $N_3 = N_2 \setminus \{$a `DirectionalDerivative`$\}$ |
+| Input grammar          | $N_1$ |
+| Output grammar         | $N_2 = N_1 \setminus \{$a `DirectionalDerivative`$\}$ |
 
 The pass rewrites every `DirectionalDerivative(f, x, a, h)`, inner derivatives
 first, with the first row that matches $f$. $\mathrm{D} b$ is short for
@@ -3650,7 +3638,7 @@ at $a$: undifferentiated operands in the derivative formulas use the
 substitution $[x := a]$ of [`DirectionalDerivative`](#directionalderivative),
 while $h$ is inserted unchanged. Rules match the original operands, before
 substitution. The pass applies `apply_actions` to the result, so the output
-remains in $N_2$ and contains no `DirectionalDerivative`.
+remains in $N_1$ and contains no `DirectionalDerivative`.
 
 | Expression $f$ | Rewrite of the derivative at $a$ |
 | -------------- | -------------------------------- |
@@ -3685,8 +3673,8 @@ and directions.
 | `expand_integrals(f)` |  |
 | --------------------- | - |
 | Evaluates             | `Integral` over a mesh |
-| Input grammar         | $N_3$ |
-| Output grammar        | $N_4 = N_3 \setminus \{$an `Integral` whose domain is a `Mesh`$\}$ |
+| Input grammar         | $N_2$ |
+| Output grammar        | $N_3 = N_2 \setminus \{$an `Integral` whose domain is a `Mesh`$\}$ |
 
 The pass rewrites mesh integrals, inner integrals first. For group $j$ of
 `D.topology`, let $K_j$ be the reference cell and $c_j$ =
@@ -3720,8 +3708,8 @@ They must preserve the same value and free indices.
 | `apply_gradients(f)` |  |
 | -------------------- | - |
 | Evaluates            | `Gradient`, `Divergence` and `Curl` |
-| Input grammar        | $N_4$, in the lowering stage |
-| Output grammar       | $N_4 \setminus G$, with $G$ the grammar patterns of the rows below that rewrite |
+| Input grammar        | $N_3$, in the lowering stage |
+| Output grammar       | $N_3 \setminus G$, with $G$ the grammar patterns of the rows below that rewrite |
 
 A cell is a `CellMap` or a `cell_domain(D, j, e)`. The identity of Piola
 matches `Divergence(PushForward(f, D, m), D)` with $m$ =
@@ -3766,8 +3754,8 @@ coordinate domain of $P$. $\partial_j$ applies the first row that matches:
 | `expand_pull_backs(f)` |  |
 | ---------------------- | - |
 | Evaluates              | `PullBack` |
-| Input grammar          | $N_4$, in the lowering stage |
-| Output grammar         | $N_4 \setminus R$, with $R$ the grammar patterns of the rows below that rewrite |
+| Input grammar          | $N_3$, in the lowering stage |
+| Output grammar         | $N_3 \setminus R$, with $R$ the grammar patterns of the rows below that rewrite |
 
 The pass rewrites every `PullBack(f, ψ)`, inner pull-backs first, with the
 first row that matches, and applies the rows again to each `PullBack` that a
@@ -3827,7 +3815,7 @@ $A_i$ are the maps of [Restriction](#restriction).
 
 ### The core normal form
 
-The core normal form is $N_5 = N_4 \setminus (G \cup R)$, the output grammar of
+The core normal form is $N_4 = N_3 \setminus (G \cup R)$, the output grammar of
 the lowering stage. Its expression nodes, as visited by the evaluation
 traversal, are instances of concrete core classes or downstream terminals.
 The following table lists all allowed node classes and their conditions:
@@ -4143,7 +4131,6 @@ composition:
 | `Coordinate`, `Function`, `Normal`               | Terminals: the coordinate function of a domain, a member of a space, the unit side conormal |
 | `Gradient`                                       | Nothing composes to differentiate                                                                             |
 | `DirectionalDerivative`                          | Nothing composes to differentiate with respect to an expression                                               |
-| `GateauxDerivative`                              | The value depends on the forms in the expression, which a construction free function cannot read                           |
 | `Integral`                                       | Nothing composes to integrate over a coordinate domain, and over a mesh a pass must meet the integral as written |
 | `PullBack`                                       | Nothing composes to move an expression between domains                                                        |
 | `Form`, `Action`                                 | Binding arguments and giving an expression to an argument are not compositions                                |
@@ -4407,7 +4394,6 @@ classDiagram
     AbstractFunctionSpace <|-- DualSpace
     AbstractExpression <|-- Form
     AbstractExpression <|-- Action
-    AbstractExpression <|-- GateauxDerivative
 ```
 <!-- end generated: class-hierarchy -->
 
@@ -4467,7 +4453,7 @@ classDiagram
 |                             | [`dual_space(S)`](#dualspace)                                            |                               | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                        | `S.space` for a `DualSpace`, otherwise `DualSpace(S)`                                                                                                                           |
 |                             | [`form(expression, arguments)`](#form)                                   |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`  | `Form`                                                                                                                                                                          |
 |                             | [`action(f, position, g)`](#action)                                      |                               | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                                                                                                        |
-|                             | [`gateaux_derivative(F, x, a, w)`](#gateaux-derivative)                  |                               | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | `GateauxDerivative(F, x, a, w)`                                                                                                                                                 |
+|                             | [`gateaux_derivative(F, x, a, w)`](#gateaux-derivative)                  |                               | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | The `Form` constructed below                                                                                                                                                    |
 <!-- end generated: free-functions -->
 
 ## Appendix: Static type table
@@ -4500,7 +4486,6 @@ and are not added to the enclosing expression's argument spaces.
 | `Gradient`, `Divergence`, `Curl`         | Those of the operand                                           |
 | `PushForward`                            | Those of the expression                                        |
 | `DirectionalDerivative`                  | Those of the expression                                        |
-| `GateauxDerivative`                      | Those of the expression, followed by the space of the entry $w$ |
 | `Integral`                               | Those of the integrand                                         |
 | `PullBack`                               | Those of the expression                                        |
 
@@ -4517,7 +4502,6 @@ from the default rules of [Support](#support) and [Scalar type](#scalar-type):
 | `Coordinate`             | The domain $P$                     | Real                              |
 | `Gradient`, `Divergence`, `Curl` | The domain $P$               | The scalar type of the expression |
 | `DirectionalDerivative`  | The support of $f$                 | The scalar type of $f$            |
-| `GateauxDerivative`      | The support of $F$                 | The scalar type of $F$ for a real $x$, and complex otherwise |
 | `Integral`               | None                               | The scalar type of the integrand  |
 | `PullBack`               | The parameter domain of the domain | The scalar type of the expression |
 | `Normal`                 | $E$                                | Real                              |
@@ -4533,10 +4517,10 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 55    |
+| Classes                         | 54    |
 | Abstract classes                | 11    |
-| Concrete classes                | 44    |
-| Expression node classes         | 33    |
+| Concrete classes                | 43    |
+| Expression node classes         | 32    |
 | Free functions                  | 52    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->
