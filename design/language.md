@@ -265,18 +265,17 @@ and unit [normal](#normal).
 ### `AbstractDomain`
 
 `AbstractDomain` represents a domain, the set on which an expression is defined.
-A domain is a coordinate domain, a leaf that a library supplies (see
-[`AbstractCoordinateDomain`](#abstractcoordinatedomain)), or a decomposed
-domain, built from families of parameterised pieces
-(see [`DecomposedDomain`](#decomposeddomain)). Every node class taking a
-domain accepts either kind; its section defines its value on a decomposed
-domain through the pieces.
+A domain is a coordinate domain supplied by a library (see
+[`AbstractCoordinateDomain`](#abstractcoordinatedomain)), or a mesh with a
+topology and coordinate expression (see [`Mesh`](#mesh)). Every node class
+taking a domain accepts either kind; its section defines its value on a mesh
+through its cells.
 
 | `AbstractDomain` |                                                                             |
 | ---------------- | --------------------------------------------------------------------------- |
 | Extends          | `Base` |
 | Provides         | `dimension`, an `int` $k \ge 0$, and `ambient_domain`, an `AbstractDomain` |
-| Defined by       | `AbstractCoordinateDomain` and `DecomposedDomain`                           |
+| Defined by       | `AbstractCoordinateDomain` and `Mesh`                           |
 
 The ambient domain of $D$ supplies the coordinates naming its points. The
 first coordinate domain reached by following `ambient_domain` repeatedly is
@@ -307,8 +306,8 @@ Examples:
   not: it has empty interior in $R^n$ and is instead the image of a domain map
   from the unit simplex in $R^{n-1}$.
 - A mesh of triangles is *not* a coordinate domain, because the core builds the
-  mesh from the reference triangle and the maps of the cells. The mesh is a
-  decomposed domain.
+  mesh from a topology and a coordinate expression; its cells are parameterised
+  by reference triangles.
 
 ### `RD`
 
@@ -455,7 +454,7 @@ The static type of an expression is the value
 shape, the free indices, the scalar type, the support and the argument
 spaces. The static type of a domain is the stored and the derived
 properties of the domain, such as the dimension of a coordinate domain or the pieces of a
-decomposed domain. A construction free function chooses the composition from
+mesh. A construction free function chooses the composition from
 expression static types and the documented interfaces of explicit non-expression
 arguments. Choosing a composition from expression structure, such as the class,
 the edges or the values, requires a node class; inspecting it to validate
@@ -466,7 +465,7 @@ composition would fix the algorithm. A concept that a pass must
 meet as the user wrote the concept also gets its own node class, even if a
 fixed composition exists, and the section of the node class states the
 composition.
-`Integral` over a decomposed domain is such a concept (see
+`Integral` over a mesh is such a concept (see
 [`Integral`](#integral)).
 
 For example, the transpose is always `component_tensor(A[k, l], (l, k))`,
@@ -475,7 +474,7 @@ choice for the compiler.
 
 A construction free function is part of the core only if a definition or a
 rule of the core uses it, such as `density` in [`Integral` over a
-decomposed domain](#integral-over-a-decomposed-domain) and `cell_domain` in
+mesh](#integral-over-a-mesh) and `cell_domain` in
 [Restriction](#restriction), or if a Python operator calls the free function
 as an overload, such as `matrix_product` for `@` (see [Operator
 overloads](#operator-overloads)). `transpose` is in the core because the rule
@@ -1235,9 +1234,10 @@ coordinate domain $P$, the coordinate function is the identity,
 $X : P \to R^n$, $X(p) = p$, and the gradient of $X$ is the identity matrix
 (see [`Gradient`](#gradient)).
 
-The coordinate function of a decomposed domain $D$ is defined through the
-pieces of $D$. The pull-back of `coordinate(D)` by a piece is the
-parameterisation of the piece (see [`DecomposedDomain`](#decomposeddomain)).
+For a mesh $D$, `coordinate(D)` is the physical coordinate field on $D$.
+Its pull-back by a cell domain is that cell's parameterisation (see
+[`Mesh`](#mesh)). This differs from `D.coordinate_function`, which is
+the stored coordinate expression on the topology.
 For a mesh `image(x, Q)`, the pull-back by `cell_domain(D, j, e)` is
 `pull_back(x, cell_map(T, j, e))`.
 
@@ -1270,7 +1270,7 @@ The gradient acts on each component of an array-valued $f$. Entry `j` of the
 last axis of `Gradient(f, P)` is the partial derivative $\partial_j f$ in the
 coordinate $X_j$ of the frame.
 
-On a decomposed domain, `Gradient`, `Divergence` and `Curl` act cellwise.
+On a mesh, `Gradient`, `Divergence` and `Curl` act cellwise.
 They do not include distributional interface terms for discontinuous fields;
 traces and interface integrals are written explicitly.
 
@@ -1282,7 +1282,7 @@ $k = n$.
 
 - For $k = n$, $\partial_j$ is the partial derivative in the coordinate
   $X_j$ of $P$.
-- For $k < n$, such as a decomposed domain that is a surface in $R^3$, the
+- For $k < n$, such as a mesh that is a surface in $R^3$, the
   coordinate directions of the ambient coordinate domain are not tangent to
   $P$. `Gradient(f, P)` is then the tangential gradient, the gradient of an
   extension of $f$ off $P$, projected orthogonally onto the tangent space of
@@ -1317,7 +1317,7 @@ f = x * y * z
 | `gradient(gradient(f, P), P)`           | `(3, 3)`    | The Hessian of $f$                            |
 | `gradient(X, P)`                        | `(3, 3)`    | The identity matrix, after evaluation         |
 
-- Let `M` be a decomposed domain of dimension 2 in `RD(3)`, and `w` a field
+- Let `M` be a mesh of dimension 2 in `RD(3)`, and `w` a field
   on `M`. `gradient(w, M)` is the surface gradient of `w`, with value shape
   `(3,)`. `gradient(coordinate(M), M)` is the orthogonal projection onto the
   tangent plane of `M`, with value shape `(3, 3)`.
@@ -1471,8 +1471,8 @@ needs no topological notion of the domain.
 | Free function    | `integral(f, P)`                                                                            |
 | Takes            | `f: AbstractExpression`, `P: AbstractDomain` |
 | Properties       | `expression` $f$ and `domain` $P$                                                           |
-| Requires         | A [valid pair](#valid-pair) $(f, P)$, or $f$ with the support `P.ambient_domain`, and an `Index` free in both $f$ and a piece of $P$ with the same extent in both |
-| Static type      | The value shape of $f$, and the free indices of $f$ other than the free indices of the pieces of $P$, with no support |
+| Requires         | A [valid pair](#valid-pair) $(f, P)$, or $P$ a mesh and $f$ with the support `P.ambient_domain` |
+| Static type      | The value shape and free indices of $f$, with no support |
 | Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                         |
 
 For a coordinate domain $P$ of dimension $n$, `Integral(f, P)` is the
@@ -1484,8 +1484,8 @@ $$
 
 For $n = 0$, the integral is the value of $f$ at the single point of $R^0$.
 
-On a decomposed domain, the integral sums the integrals over its pieces with
-their induced densities (see [the expansion](#integral-over-a-decomposed-domain)).
+On a mesh, the integral sums the integrals over its pieces with
+their induced densities (see [the expansion](#integral-over-a-mesh)).
 
 An array-valued $f$ integrates component by component. A later pass might
 approximate an `Integral` over a coordinate domain by
@@ -1538,8 +1538,7 @@ each value of the free indices. For example, with an array `x` of value shape
 points in `RD(n)`, retaining distinct members even at identical coordinates.
 
 $Q$ is usually `RD(n)`. $Q$ may be smaller, such as the unit triangle for an
-edge of the unit triangle, or a decomposed domain for a cell of the decomposed
-domain (see [`PullBack`](#pullback)).
+edge of the unit triangle, or a mesh for a cell of the mesh (see [`PullBack`](#pullback)).
 
 Examples:
 
@@ -1700,10 +1699,31 @@ $$
 
 which is `integral(index_sum(pull_back(F, e)[i] * jacobian(e)[i, 0], (i,)), S)`,
 and the circulation changes sign when $\psi$ runs the other way. Where the
-cells of a decomposed domain must be oriented consistently, such as for the
+cells of a mesh must be oriented consistently, such as for the
 flux through a surface in $R^3$, a separately supplied scalar field gives
 a sign $+1$ or $-1$ for each cell (see
 [The flux through a surface](examples/surfaces.md#the-flux-through-a-surface)).
+
+### Mapped integration families
+
+An indexed `DomainMap` describes a family of maps and retains its indices.
+For a scalar field $f$ on $Q$ and `M = domain_map(P, psi[i, k], Q)`, with a
+coordinate parameter domain $P$:
+
+```python
+per_member = integral(pull_back(f, M) * density(M), P)
+per_configuration = index_sum(per_member, (i,))
+```
+
+The first expression retains `i` and `k`. The second sums only over `i` and
+retains `k`. For several unrelated maps, add their reference-domain integrals
+explicitly. No field domain is created by this construction. Integration counts
+each map member separately, including coincident members.
+
+For example, three segment maps of lengths 2, 3 and 5 give an indexed integral
+of `Integer(1)` with values 2, 3 and 5. An explicit sum over their member index
+gives 10. A topology-backed mesh of those segments also has total length 10,
+but additionally identifies a domain on which fields and spaces can be defined.
 
 ### Points and point evaluation
 
@@ -1746,7 +1766,7 @@ index_sum(w[i] * integral(pull_back(f, p), RD(0)), (i,))
 `integral(f, Q)` denotes the integral; this sum approximates it and is
 mathematically equal when the rule is exact for `f`. A quadrature pass
 applies a supplied rule. On a mapped domain, the integrand includes the density
-from [integral expansion](#integral-over-a-decomposed-domain).
+from [integral expansion](#integral-over-a-mesh).
 
 #### Examples
 
@@ -1844,7 +1864,7 @@ Examples:
   two `AbstractExtent`s as the numbers of cells.
 
 ```{dropdown} Legacy UFL
-In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and the measure `dx` hides the sum over the cells. In UFLx, the topology, the parameterisations of the pieces of a decomposed domain and the `IndexSum` over `cell_index(T, j)` are separate.
+In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and the measure `dx` hides the sum over the cells. In UFLx, the topology, the parameterisations of the pieces of a mesh and the `IndexSum` over `cell_index(T, j)` are separate.
 ```
 
 ### Sides of a topology
@@ -2036,75 +2056,71 @@ functions and constants, and the pull-back moves to them.
 
 Worked examples for this chapter: [the unit simplex as a reference cell](examples/library.md#the-unit-simplex-as-a-reference-cell).
 
-## Decomposed domains
+## Meshes
 
-### `DecomposedDomain`
+### `Mesh`
 
-`DecomposedDomain` consists of parameterised pieces, each a family of domain
-maps. Coincident coordinates do not identify distinct pieces or members.
+`Mesh(x, Q)` is one physical field domain, with coordinate expression $x$ on
+an `AbstractTopology` $T$ and ambient domain $Q$. Cells keep their identities
+when their physical coordinates coincide. The mesh stores no connectivity or
+coordinate values; those remain with the topology and coordinate-function library.
 
-| `DecomposedDomain(pieces)` |                                                                                                                         |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Extends                    | `AbstractDomain` |
-| Free function              | `decomposed_domain(pieces)`                                                                                             |
-| Takes                      | `pieces: tuple[DomainMap, ...]` |
-| Properties                 | `pieces`, a non-empty `tuple` of [`DomainMap`](#domainmap)s with coordinate domains as parameter domains, the same ambient domain $Q$ and the same dimension $k$ |
-| Derived                    | `ambient_domain` $Q$, `dimension` $k$, and `topology` and `coordinate_function`, below                                  |
-| Raises                     | `TypeError` for a piece that is not a `DomainMap`, and `ValueError` if another requirement fails                        |
+| `Mesh(x, Q)` | |
+| ------------ | - |
+| Extends | `AbstractDomain` |
+| Free function | `image(x, Q)` |
+| Takes | `x: AbstractExpression`, `Q: AbstractDomain` |
+| Properties | `coordinate_function` $x$, and `ambient_domain` $Q$ |
+| Requires | $x$ supported on a topology $T$ whose cell types are reference cells; $x$ real, with value shape `(n,)` for the ambient coordinate dimension of $Q$, free indices `()` and argument spaces `()`; `T.dimension <= n` |
+| Derived | `topology` $T$ = `x.support`, `dimension` = `T.dimension`, and `pieces`, below |
+| Raises | `TypeError` for an invalid coordinate support or ambient-domain type, and `ValueError` if another requirement fails |
 
-Notation, for the piece $j$ of $D$: $P_j$ is the parameter domain and
-$\psi_j$ is the parameterisation.
+`image(x, Q)` returns `Mesh(x, Q)`. The topology is determined by $x$ and is
+not a separate construction argument. Mesh identity depends on $x$ and $Q$;
+replacing the coordinates reconstructs the mesh from the new coordinates.
 
-#### Pieces
-
-A piece with free indices is a family, one domain for each value of the free
-indices. The geometric image of $D$ is the union of their images. $D$ may have a
-lower dimension than the ambient coordinate domain, such as a surface in $R^3$.
-A piece with an ordinary `Index`, such as a cloud of points, gives no
-topology. A single `DomainMap` with no free indices is a decomposed domain of
-one piece. A field on $D$ may differ on topologically distinct coincident
-members; a field on the ambient coordinate domain has one value at each point.
-
-The parameter domain of a piece is a coordinate domain, so decomposed domains
-do not nest. The ambient domain $Q$ may be a decomposed domain, such as a mesh
-in which a family of points lies.
-
-#### Meshes
-
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `image(x, Q)` | | `x: AbstractExpression`, `Q: AbstractDomain` | `DecomposedDomain` with the pieces `domain_map(K_j, pull_back(x, cell_map(T, j)), Q)` |
-
-A mesh is `image(x, Q)`, where $x$ is an expression on a topology $T$ with
-value shape `(n,)` for the ambient coordinate dimension of $Q$. The construction
-above gives one piece per cell type $K_j$. Its `topology` is $T$ and its
-`coordinate_function` is $x$; both properties are `None` for every other
-decomposed domain.
+A mesh describes one geometry, not an indexed family of geometries. Coordinates
+may depend on symbolic coefficients, deformation fields or scalar parameters,
+but have no free indices. Construction and reconstruction enforce this rule.
+A solver may evaluate a form for different coordinate values or manage several
+meshes outside the language. Shape differentiation does not require an indexed
+mesh (see [Shape derivatives](#shape-derivatives)).
 
 Deformed surfaces, isogeometric patches and analytic maps are meshes of
-coordinate functions. Continuity across groups is a property of the space of
-$x$.
+coordinate functions. Continuity across cells is a property of the space of
+$x$. Independent patches or points that support fields use a topology with
+independent cells; no sides are required. An indexed family used only for
+integration or sampling needs a `DomainMap`, not a mesh (see
+[Mapped integration families](#mapped-integration-families)).
+
+#### Cell maps and pieces
+
+For group $j$ of $T$, let $K_j$ be its reference cell. `pieces` is the derived
+`tuple` of maps
+`domain_map(K_j, pull_back(x, cell_map(T, j)), Q)`.
+These maps are views of the mesh, not construction arguments. They carry the
+cell index `cell_index(T, j)` and do not introduce extra geometry parameters.
+
+The ambient domain $Q$ may itself be a mesh, as for a curve or point mesh
+embedded in another mesh. Its coordinate domain determines the physical
+coordinate dimension.
 
 #### Cell domains
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `cell_domain(D, j)` | | `D: DecomposedDomain`, `j: int` | `DomainMap` of the cells of type `j` |
-| `cell_domain(D, j, e)` | | `D: DecomposedDomain`, `j: int`, `e: Index \| GatheredIndex` | `DomainMap` of the cells of type `j` selected by `e` |
+| `cell_domain(D, j)` | | `D: Mesh`, `j: int` | `cell_domain(D, j, cell_index(D.topology, j))` |
+| `cell_domain(D, j, e)` | | `D: Mesh`, `j: int`, `e: Index \| GatheredIndex` | `DomainMap` of the cells of group `j` selected by `e` |
 
-Both forms require `0 <= j < len(D.pieces)`. The three-argument form also
-requires `D` to be a mesh.
+Both forms require `0 <= j < len(D.topology.cell_types)`. For $D$ =
+`image(x, Q)`, with topology $T$, the selected cell domain is
+`domain_map(K_j, pull_back(x, cell_map(T, j, e)), D)`.
+Its ambient domain is $D$, whereas piece $j$ has ambient domain $Q$.
+A cell of a topology is a `CellMap`; a cell of a mesh is this `DomainMap`.
 
-`cell_domain(D, j)` returns piece $j$ with the ambient domain $D$,
-`domain_map(P_j, psi_j, D)`, with the free indices of piece $j$. For a mesh
-$D$ = `image(x, Q)` with the topology $T$, `cell_domain(D, j, e)` is
-`domain_map(K_j, pull_back(x, cell_map(T, j, e)), D)`, and `cell_domain(D, j)`
-is `cell_domain(D, j, cell_index(T, j))`. A cell of a mesh is a
-`cell_domain(D, j, e)`, and a cell of a topology is a `CellMap`.
-
-An expression $f$ with the support $D$ is defined through the pieces.
-`pull_back(f, cell_domain(D, j))` is an expression on $P_j$, the value of $f$
-on each domain of piece $j$. The pull-back of `coordinate(D)` is $\psi_j$.
+For a field $f$ on $D$, `pull_back(f, cell_domain(D, j))` is its local
+expression on $K_j$, indexed by the cells of group $j$. Pulling back
+`coordinate(D)` gives `pull_back(x, cell_map(T, j))`.
 
 #### Examples
 
@@ -2197,7 +2213,7 @@ $T$.
 | `PushForward(f, D, m)` |                                                                     |
 | ---------------------- | ------------------------------------------------------------------- |
 | Extends                | `AbstractExpression` |
-| Takes                  | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw` |
+| Takes                  | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw` |
 | Properties             | `expression` $f$, `domain` $D$ and `law` $m$                        |
 | Requires               | $D$ a mesh with the topology $T$, $f$ with the support $T$ or no support, and the last axes of $f$, one for each variance of $m$, of the extent $k$ |
 | Static type            | The value shape of $f$ with the extent $n$ for each transformed axis, the support $D$ |
@@ -2205,7 +2221,7 @@ $T$.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `push_forward(f, D, m)` | | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw` | `PushForward(f, D, m)` |
+| `push_forward(f, D, m)` | | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw` | `PushForward(f, D, m)` |
 
 The pull-back of `PushForward(f, D, m)` by `cell_domain(D, j, e)` is
 $m_\psi(\hat f)$, with $\psi$ the cell and $\hat f$ =
@@ -2277,7 +2293,7 @@ side domain $E$ into a mesh $D$, through the side $s$.
 | `SideMap(X, P, s)` |                                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------- |
 | Extends            | `Base` |
-| Takes              | `X, P: AbstractTopology \| DecomposedDomain`, `s: str` |
+| Takes              | `X, P: AbstractTopology \| Mesh`, `s: str` |
 | Properties         | `ambient_domain` $X$, `parameter_domain` $P$, and `side` $s$ |
 | Derived            | `free_indices`, always `()` |
 | Requires           | Conditions 1 to 3 below                                                                                 |
@@ -2285,7 +2301,7 @@ side domain $E$ into a mesh $D$, through the side $s$.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `side_map(X, P, s)` | | `X, P: AbstractTopology \| DecomposedDomain`, `s: str` | `SideMap(X, P, s)` |
+| `side_map(X, P, s)` | | `X, P: AbstractTopology \| Mesh`, `s: str` | `SideMap(X, P, s)` |
 
 1. $X$ is a topology $T$ and $P$ a topology $S$, or $X$ is a mesh with the
    topology $T$ and $P$ a side domain with the topology $S$.
@@ -2302,7 +2318,7 @@ for a side domain, is `pull_back(pull_back(f, B_i), A_i)`.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `side_domain(D, S, s)` | | `D: DecomposedDomain`, `S: AbstractTopology`, `s: str` | `image(pull_back(x, side_map(T, S, s)), Q)` |
+| `side_domain(D, S, s)` | | `D: Mesh`, `S: AbstractTopology`, `s: str` | `image(pull_back(x, side_map(T, S, s)), Q)` |
 
 For a mesh $D$ = `image(x, Q)` with the topology $T$, the side domain of $S$
 is the image of the trace of $x$ from side $s$, so the side domain moves with
@@ -2325,7 +2341,7 @@ boundary pieces.
 #### Example
 
 The example uses `D` and `square` of the
-[`DecomposedDomain`](#decomposeddomain) example, `I = ReferenceSimplex(1)`, a
+[`Mesh`](#mesh) example, `I = ReferenceSimplex(1)`, a
 function `u` on `square`, and the diagonal of `square`:
 
 ```python
@@ -2374,7 +2390,7 @@ The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on th
 
 Notation:
 
-- $D$ is a mesh with a topology $T$ (see [`DecomposedDomain`](#decomposeddomain)).
+- $D$ is a mesh with a topology $T$ (see [`Mesh`](#mesh)).
 - $M$ = `domain_map(RD(0), q, D)` is a family of points in $D$, with the free
   index $i$ of the family, of the extent $m$.
 - $j$ is the cell type of $T$ of the cells that contain the points, $K_j$ is
@@ -2395,7 +2411,7 @@ and the points have no reference normal.
 
 An expression $f$ on $D$ is evaluated at the points through the
 [restriction](#restriction) to the points, with $P$ = `side_domain(D, S, "inside")` the
-decomposed domain of the points:
+mesh of the points:
 
 ```python
 inside = side_map(D, P, "inside")
@@ -2430,7 +2446,7 @@ library computes.
 
 The pull-back of `u` by `cell_map(T, j, g)` is in the contract of the
 space. The maps below `f` may be a chain, such as a family of maps from a
-decomposed domain, pulled back by a cell of that domain and then by the
+mesh, pulled back by a cell of that domain and then by the
 quadrature points of the reference cell. The pass reads the chain as one
 family with all of its free indices (see [A 1D network in a 3D
 mesh](examples/coupling.md#a-1d-network-in-a-3d-mesh)).
@@ -2438,57 +2454,56 @@ mesh](examples/coupling.md#a-1d-network-in-a-3d-mesh)).
 A family whose points lie in cells of several types is not yet covered,
 because the family would need one piece for each cell type.
 
-### `Integral` over a decomposed domain
+### `Integral` over a mesh
 
-`Integral(f, D)` for a decomposed domain $D$ integrates $f$ against the
-density that the pieces induce. $f$ has the support $D$, the support
-`D.ambient_domain` or no support.
+`Integral(f, D)` sums over all cells of mesh $D$, counting coincident cells
+separately. The integrand has support $D$, support `D.ambient_domain`, or no
+support. Every free index of $f$ remains free in the result. The cell indices
+used by integration are internal to the expansion; a matching name in $f$
+does not make that index a cell selector.
 
-Notation, for the piece $j$ of $D$:
+#### Expansion over cells
 
-- $P_j$ is the parameter domain and $\psi_j$ is the parameterisation.
-- `indices_j` are the free indices of piece $j$.
-
-#### Expansion into pieces
-
-The integral is the sum over the pieces $j$ of the integrals over the domains
-of piece $j$, including every member even when images coincide. For a scalar
-$f$, `Integral(f, D)` has the value of that sum:
+For group $j$ of `D.topology`, let $K_j$ be its reference cell and $e_j$ an
+internal cell index fresh for $f$. The deterministic choice of $e_j$ is stated
+in [Expanding integrals](#expanding-integrals). Set
+`D_j = cell_domain(D, j, e_j)`. For a scalar field on $D$, the contribution is:
 
 ```python
-D_j = cell_domain(D, j)
-index_sum(integral(pull_back(f, D_j) * density(D_j), P_j), indices_j)
+index_sum(integral(pull_back(f, D_j) * density(D_j), K_j), (e_j,))
 ```
 
-- A piece with no free indices has no `IndexSum`.
-- An array-valued $f$ integrates component by component, with the density
-  written into each component in index notation.
-- For a parameter domain $P_j$ of dimension $k = 0$, the density is
-  `Integer(1)`, so coincident but distinct points each contribute their value.
+For a field on `D.ambient_domain`, use the map with the same parameterisation
+and that ambient domain in the pull-back. A support-free integrand is also
+pulled back, so the internal cell index is present even for zero-dimensional
+cells, whose density is `Integer(1)`. Array-valued integrands are integrated
+component by component.
 
-For fields on the ambient coordinate domain, this equals integration over
-the geometric union when each member is injective almost everywhere and
-distinct images overlap only in sets of zero $k$-dimensional measure.
+The density does not depend on orientation. For ambient fields, the result
+agrees with integration over the geometric union when each cell map is injective
+almost everywhere and distinct images overlap only on sets of zero measure.
 
-The density needs no orientation, so an integral of a nonnegative $f$ is
-nonnegative.
+#### Cell data and indexed loads
 
-#### Integrands on the ambient domain
+Cell-dependent data are fields on the topology or mesh. A field equal to 2
+on one unit cell and 7 on another has integral 9. In contrast, a support-free
+indexed load with values `[2, 7]` is integrated over the whole two-cell mesh
+for each index value, giving `[4, 14]`. Its index remains free, even when it
+has the name `cell_index(D.topology, j)`.
 
-An $f$ with the support `D.ambient_domain` is pulled back by piece $j$ itself
-in place of `cell_domain(D, j)`. $D$ may therefore be a set of points or of
-curves in a mesh. A free index of $f$ that is also a free index of piece $j$
-takes the value of the member. So `d[i]` pairs a datum with each point of a
-family with the index `i`.
+To pair a raw indexed datum with explicit cell maps, pull back to reference
+cells and use `IndexSum` explicitly. Mesh integration does not infer that
+pairing from the names. Substitution into a mesh integral therefore cannot
+capture an integrand index; the expansion enforces the same rule.
 
 #### Examples
 
 The examples use the following objects:
 
-- `D` and `square` of the [`DecomposedDomain`](#decomposeddomain) example.
+- `D` and `square` of the [`Mesh`](#mesh) example.
 - A field `f` on `D`, such as `push_forward(u, D, m)` for a function `u` on
   `square` (see [`PushForward`](#pushforward)).
-- The decomposed domain `B` of the boundary facets of `D`, with the side
+- The mesh `B` of the boundary facets of `D`, with the side
   `"inside"`.
 
 - `integral(Integer(1), D)` is the area 1 of the square, the sum of two
@@ -2497,7 +2512,7 @@ The examples use the following objects:
   boundary before integrating it.
 
 ```{dropdown} Legacy UFL
-`f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the decomposed domain of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
+`f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the mesh of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
 ```
 
 ### `Normal`
@@ -2565,9 +2580,8 @@ field uses a separately supplied orientation field (see
 
 The examples use the following objects:
 
-- `B` of the [`Integral` over a decomposed
-  domain](#integral-over-a-decomposed-domain) examples.
-- The decomposed domain `E` of the interior facets of `D`, with the sides
+- `B` of the [`Integral` over a mesh](#integral-over-a-mesh) examples.
+- The mesh `E` of the interior facets of `D`, with the sides
   `"+"` and `"-"`.
 - `grad_f = gradient(f, D)` and `i = index("i")`.
 
@@ -3249,7 +3263,7 @@ The graph does not record symmetry.
 A lazy node class states its value in its section. A pass may rewrite it as
 an expression of other node classes with that value. The lazy classes are
 `GateauxDerivative`, `Action`,
-`DirectionalDerivative`, `Integral` over a decomposed domain, `PullBack`,
+`DirectionalDerivative`, `Integral` over a mesh, `PullBack`,
 `Gradient`, `Divergence`, `Curl` and `PushForward`.
 
 A rewrite preserves value under the [mathematical admissibility](#mathematical-admissibility)
@@ -3300,7 +3314,7 @@ one before, from $N_0$ (see [Grammars](#grammars)):
 | [`apply_gateaux_derivatives`](#applying-gateaux-derivatives) | `GateauxDerivative` | $N_1$ |
 | [`apply_actions`](#applying-actions) | `Action`, except actions on a `Function`, `Gradient`, `PullBack` or another remaining `Action` | $N_2$ |
 | [`apply_derivatives`](#applying-derivatives) | `DirectionalDerivative`, then any actions it creates | $N_3$ |
-| [`expand_integrals`](#expanding-integrals) | `Integral` over a decomposed domain | $N_4$ |
+| [`expand_integrals`](#expanding-integrals) | `Integral` over a mesh | $N_4$ |
 | The lowering stage | `Gradient`, `Divergence`, `Curl`, `PushForward` and `PullBack` | $N_5$, [the core normal form](#the-core-normal-form) |
 
 The first four passes keep this order. `apply_actions` evaluates actions
@@ -3670,34 +3684,36 @@ and directions.
 
 | `expand_integrals(f)` |  |
 | --------------------- | - |
-| Evaluates             | `Integral` over a decomposed domain |
+| Evaluates             | `Integral` over a mesh |
 | Input grammar         | $N_3$ |
-| Output grammar        | $N_4 = N_3 \setminus \{$an `Integral` whose domain is a `DecomposedDomain`$\}$ |
+| Output grammar        | $N_4 = N_3 \setminus \{$an `Integral` whose domain is a `Mesh`$\}$ |
 
-The pass rewrites every `Integral(f, D)` with a decomposed domain $D$, inner
-integrals first, with the rows below, and applies the rows again to each
-`Integral` that a rewrite creates. For piece $j$ of $D$, $P_j$ is the parameter
-domain, `indices_j` are the free indices, and `D_j = cell_domain(D, j)`.
+The pass rewrites mesh integrals, inner integrals first. For group $j$ of
+`D.topology`, let $K_j$ be the reference cell and $c_j$ =
+`cell_index(D.topology, j)`.
+
+Choose the internal index without capturing $f$: form the template
+`index_sum(pull_back(Integer(1), cell_domain(D, j)), (c_j,))`, make its binder
+fresh for $f$ using [Substitution and binding](#substitution-and-binding), and
+let $e_j$ be its resulting bound index. This retains $c_j$ when no renaming is
+needed, preserving shared geometry for ordinary integrands. Set
+`D_j = cell_domain(D, j, e_j)` and
+`piece_j = domain_map(K_j, D_j.parameterisation, D.ambient_domain)`.
 
 | Integral | Rewrite |
 | -------- | ------- |
 | `Integral(f, D)`, $f$ of rank $r \ge 1$ | `component_tensor(Integral(f[K], D), K)`, with `K` one derived `Index` for each axis |
-| `Integral(f, D)`, $f$ scalar | The sum over the pieces $j$ of `index_sum(integral(g_j * density(D_j), P_j), indices_j)`, with no `IndexSum` for a piece with no free indices |
+| `Integral(f, D)`, $f$ scalar | The sum over groups $j$ of `index_sum(integral(g_j * density(D_j), K_j), (e_j,))` |
 
-$g_j$ is `pull_back(f, piece_j)` for $f$ with the support `D.ambient_domain`,
-and `pull_back(f, D_j)` otherwise. An $f$ with no support is pulled back too,
-so that $g_j$ has the free indices of piece $j$ when the density does not,
-such as for a family of points, whose density is `Integer(1)`.
+$g_j$ is `pull_back(f, piece_j)` when $f$ has support `D.ambient_domain`,
+and `pull_back(f, D_j)` otherwise, including support-free $f$.
+The pull-back introduces the internal cell index; `IndexSum` consumes it and
+retains every free index of $f$. The remaining integrals have coordinate domains.
 
-- The parameter domains of the pieces are coordinate domains, so the pass
-  terminates.
-- A free index of $f$ shared with piece $j$ is identified by the static type of
-  `PullBack`, and the `IndexSum` pairs each value of the index with a member of
-  the family, so the result has the static type of the `Integral`.
-- The density is the same for `cell_domain(D, j)` and for piece $j$, because
-  both have the parameterisation $\psi_j$.
-- The integrals that remain are over coordinate domains, which a form compiler
-  integrates by quadrature.
+Repeated expansion of the same input constructs the same graph. Paths involving
+capture-avoiding renaming may choose different bound names; the rule does not
+assert structural equality between every ordering of substitution and expansion.
+They must preserve the same value and free indices.
 
 ### Applying gradients
 
@@ -3735,7 +3751,7 @@ coordinate domain of $P$. $\partial_j$ applies the first row that matches:
 - An operand is constant for the pass if the operand has no support.
 - The gradient of a terminal remains for the library of the terminal, so the
   Hessian of a function is a gradient of a gradient.
-- On a decomposed domain $P$ of lower dimension than its ambient coordinate
+- On a mesh $P$ of lower dimension than its ambient coordinate
   domain, `Gradient` is the tangential gradient (see [`Gradient`](#gradient)),
   which obeys the same rows. The `Coordinate` row does not match, so
   `gradient(coordinate(P), P)`, the projection $\Pi$, remains, and a
@@ -3796,7 +3812,7 @@ $A_i$ are the maps of [Restriction](#restriction).
 - The rows of the identity of Piola read no derivative of $J$. A
   `PushForward` and a node of the identity of Piola under a map that is not a
   cell remain, as a function on a mesh does.
-- Only a pull-back by a cell moves a gradient on a decomposed domain to the
+- Only a pull-back by a cell moves a gradient on a mesh to the
   reference cell, so the pass inverts the Jacobian of a cell only. The
   gradient of a pull-back by another map is the chain rule of
   [`apply_gradients`](#applying-gradients).
@@ -3825,10 +3841,10 @@ The following table lists all allowed node classes and their conditions:
 | [Calculus on a domain](#calculus-on-a-domain) | `Coordinate` | Always |
 | [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
 | [Calculus on a domain](#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
-| [Calculus on a domain](#calculus-on-a-domain) | `Integral` | Over a domain that is not a `DecomposedDomain`, such as a reference cell or `RD(0)` |
+| [Calculus on a domain](#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `RD(0)` |
 | [Maps between domains](#maps-between-domains) | `PullBack` | By a `SideMap` of an expression other than an `Action`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
-| [Decomposed domains](#decomposed-domains) | `Normal` | Always |
-| [Decomposed domains](#decomposed-domains) | `PushForward` | Under no pull-back by a cell |
+| [Meshes](#meshes) | `Normal` | Always |
+| [Meshes](#meshes) | `PushForward` | Under no pull-back by a cell |
 | [Function spaces](#function-spaces) | `Function` | Always |
 | [Variational forms](#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](#form)) |
 | [Variational forms](#variational-forms) | `Action` | Its form is a `Function`, a `Gradient`, a `PullBack` or another such `Action`, with each operand in the core normal form |
@@ -3864,7 +3880,7 @@ In particular, the core normal form may still contain:
   compiler, which a pass after the core locates (see [A family of points in a mesh](#a-family-of-points-in-a-mesh)).
 - A pull-back by a `SideMap` that no pull-back by a cell encloses, such as a
   restriction that is not integrated.
-- A `Gradient` of the coordinates of a decomposed domain of lower dimension
+- A `Gradient` of the coordinates of a mesh of lower dimension
   than its ambient coordinate domain, the projection $\Pi$, and a
   `Gradient`, a `PushForward` or a node of the identity of Piola on a mesh,
   each under a pull-back by points or by another map that is not a cell,
@@ -4128,7 +4144,7 @@ composition:
 | `Gradient`                                       | Nothing composes to differentiate                                                                             |
 | `DirectionalDerivative`                          | Nothing composes to differentiate with respect to an expression                                               |
 | `GateauxDerivative`                              | The value depends on the forms in the expression, which a construction free function cannot read                           |
-| `Integral`                                       | Nothing composes to integrate over a coordinate domain, and over a decomposed domain a pass must meet the integral as written |
+| `Integral`                                       | Nothing composes to integrate over a coordinate domain, and over a mesh a pass must meet the integral as written |
 | `PullBack`                                       | Nothing composes to move an expression between domains                                                        |
 | `Form`, `Action`                                 | Binding arguments and giving an expression to an argument are not compositions                                |
 
@@ -4331,7 +4347,7 @@ classDiagram
     Base <|-- CellMap
 ```
 
-### Decomposed domains
+### Meshes
 
 ```mermaid
 ---
@@ -4345,8 +4361,8 @@ config:
 ---
 classDiagram
     direction LR
-    accTitle: Decomposed domains class hierarchy
-    AbstractDomain <|-- DecomposedDomain
+    accTitle: Meshes class hierarchy
+    AbstractDomain <|-- Mesh
     Base <|-- TransformationLaw
     AbstractExpression <|-- PushForward
     Base <|-- SideMap
@@ -4438,14 +4454,13 @@ classDiagram
 | Topology                    | [`cell_index(T, j)`](#abstracttopology)                                  |                               | `T: AbstractTopology`, `j: int`                                                                                        | `Index`                                                                                                                                                                         |
 | Reference cells             | [`cell_map(T, j, e)`](#cellmap)                                          |                               | `T: AbstractTopology`, `j: int`, `e: Index \| GatheredIndex`                                                           | `CellMap(T, j, e)`                                                                                                                                                              |
 |                             | [`cell_map(T, j)`](#cellmap)                                             |                               | `T: AbstractTopology`, `j: int`                                                                                        | `CellMap(T, j, cell_index(T, j))`                                                                                                                                               |
-| Decomposed domains          | [`decomposed_domain(pieces)`](#decomposeddomain)                         |                               | `pieces: tuple[DomainMap, ...]`                                                                                        | `DecomposedDomain`                                                                                                                                                              |
-|                             | [`image(x, Q)`](#meshes)                                                 |                               | `x: AbstractExpression`, `Q: AbstractDomain`                                                                           | `DecomposedDomain` with the pieces `domain_map(K_j, pull_back(x, cell_map(T, j)), Q)`                                                                                           |
-|                             | [`cell_domain(D, j)`](#cell-domains)                                     |                               | `D: DecomposedDomain`, `j: int`                                                                                        | `DomainMap` of the cells of type `j`                                                                                                                                            |
-|                             | [`cell_domain(D, j, e)`](#cell-domains)                                  |                               | `D: DecomposedDomain`, `j: int`, `e: Index \| GatheredIndex`                                                           | `DomainMap` of the cells of type `j` selected by `e`                                                                                                                            |
+| Meshes                      | [`image(x, Q)`](#mesh)                                                   |                               | `x: AbstractExpression`, `Q: AbstractDomain`                                                                           | `Mesh`                                                                                                                                                                          |
+|                             | [`cell_domain(D, j)`](#cell-domains)                                     |                               | `D: Mesh`, `j: int`                                                                                                    | `cell_domain(D, j, cell_index(D.topology, j))`                                                                                                                                  |
+|                             | [`cell_domain(D, j, e)`](#cell-domains)                                  |                               | `D: Mesh`, `j: int`, `e: Index \| GatheredIndex`                                                                       | `DomainMap` of the cells of group `j` selected by `e`                                                                                                                           |
 |                             | [`transformation_law(variances, weight)`](#transformationlaw)            |                               | `variances: tuple[str, ...]`, `weight: int`                                                                            | `TransformationLaw`                                                                                                                                                             |
-|                             | [`push_forward(f, D, m)`](#pushforward)                                  |                               | `f: AbstractExpression`, `D: DecomposedDomain`, `m: TransformationLaw`                                                 | `PushForward(f, D, m)`                                                                                                                                                          |
-|                             | [`side_map(X, P, s)`](#sidemap)                                          |                               | `X, P: AbstractTopology \| DecomposedDomain`, `s: str`                                                                 | `SideMap(X, P, s)`                                                                                                                                                              |
-|                             | [`side_domain(D, S, s)`](#side-domains)                                  |                               | `D: DecomposedDomain`, `S: AbstractTopology`, `s: str`                                                                 | `image(pull_back(x, side_map(T, S, s)), Q)`                                                                                                                                     |
+|                             | [`push_forward(f, D, m)`](#pushforward)                                  |                               | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw`                                                             | `PushForward(f, D, m)`                                                                                                                                                          |
+|                             | [`side_map(X, P, s)`](#sidemap)                                          |                               | `X, P: AbstractTopology \| Mesh`, `s: str`                                                                             | `SideMap(X, P, s)`                                                                                                                                                              |
+|                             | [`side_domain(D, S, s)`](#side-domains)                                  |                               | `D: Mesh`, `S: AbstractTopology`, `s: str`                                                                             | `image(pull_back(x, side_map(T, S, s)), Q)`                                                                                                                                     |
 |                             | [`normal(sm)`](#normal)                                                  |                               | `sm: SideMap`                                                                                                          | `Normal`                                                                                                                                                                        |
 | Function spaces             | [`function(V, label)`](#function)                                        |                               | `V: AbstractFunctionSpace`, `label: str \| tuple`                                                                      | `Function`                                                                                                                                                                      |
 | Variational forms           | [`conjugate_space(V)`](#conjugatespace)                                  |                               | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise                                                                                         |
@@ -4522,6 +4537,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 11    |
 | Concrete classes                | 44    |
 | Expression node classes         | 33    |
-| Free functions                  | 53    |
+| Free functions                  | 52    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

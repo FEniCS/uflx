@@ -85,7 +85,7 @@ all its outward flux passes through the hypotenuse. This agrees with the
 divergence theorem: $\operatorname{div}X=2$ and the triangle has area $1/2$.
 
 Here `density(e)` is $\sqrt{\det(J^T J)}$ with a $1\times1$ Gram matrix.
-For a decomposed domain, `expand_integrals` inserts this density automatically.
+For a mesh, `expand_integrals` inserts this density automatically.
 
 ## Integrating over the boundary of a triangle
 
@@ -134,14 +134,14 @@ The density is $5$, the area is $5/2$ and the centroid is $(2,4/3)$.
 Since the map is affine, evaluating `psi` at the reference centroid
 $(1/3,1/3)$ gives the same value through a different graph.
 
-A decomposed domain permits the shorter vector-integral form:
+The vector form can also be written directly on the reference triangle:
 
 ```python
-D = decomposed_domain((K,))
-centroid_D = integral(coordinate(D), D) / integral(Integer(1), D)
+centroid_vector = integral(pull_back(Y, K) * density(K), T) / area
 ```
 
-`expand_integrals` splits the vector integrand into scalar components.
+For a topology-backed mesh `D`, the analogous expression is
+`integral(coordinate(D), D) / integral(Integer(1), D)`.
 
 ## Quadrature
 
