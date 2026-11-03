@@ -119,8 +119,8 @@ Objects must satisfy the following rules:
    object, or exactly an `int`, a finite `float`, a `str`, or a `tuple` whose
    items are of these types. A subclass of these Python types is not accepted,
    so a `bool` is not an `int` and a named tuple is not a `tuple`. Construction
-   arguments are therefore deeply immutable, have a hash that is deterministic
-   across processes on the same machine, and are compared by type and value.
+   arguments are deeply immutable. Their hashes must be deterministic across
+   processes on the same machine, and they are compared by type and value.
    `1`, `1.0` and `True` are distinct, `0.0` and `-0.0` are distinct, and every
    value is equal to itself. Construction raises `TypeError` for an argument of
    any other type, and `ValueError` for a `float` that is not finite.
