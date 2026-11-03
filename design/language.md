@@ -1,7 +1,9 @@
 # Core UFLx language definition
 
-This note describes the smallest core language behind UFLx. The note leaves
-out implementation details, compiler algorithms and broad redesign ideas.
+This note defines UFLx objects and the rules for constructing and evaluating
+them. It includes the core's rewrite passes, but leaves numerical algorithms
+and backend implementation to the compiler.
+
 The library classes of the examples and further worked examples are in
 [examples/index.md](examples/index.md). The note assumes knowledge of differential
 geometry and functional analysis, and explains some advanced concepts of
