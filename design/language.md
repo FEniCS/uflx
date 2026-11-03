@@ -1161,11 +1161,12 @@ with more rows than columns.
 | Free function | `inverse(A)`                                                                            |
 | Takes         | `A: AbstractExpression` |
 | Properties    | `operand` $A$ |
-| Requires      | $A$ with value shape `(n, k)`, $k \le n$, and $A$ real for $k < n$                      |
+| Requires      | $A$ with value shape `(n, k)`; either `n == k`, or both extents are integers with `k < n` and $A$ is real |
 | Static type   | Value shape `(k, n)`                                                                    |
 | Raises        | `ValueError` if a requirement fails                                                     |
 
 Equal extents establish the square case even when they are symbolic.
+Unequal extents must both be integers; symbolic extents cannot be ordered.
 
 `Inverse(A)` is the pseudo-inverse $A^+ = (A^T A)^{-1} A^T$ of a matrix $A$
 of matrix rank $k$, the left inverse of $A$ with $A^+ A$ the identity. For
@@ -2750,14 +2751,10 @@ A constant unknown, such as a Lagrange multiplier, needs a space because form
 arguments come from spaces. Constant data needs none: a literal or kernel-input
 array with no domain is already a constant.
 
-#### Mixed and Sobolev spaces
+#### Mixed problems
 
 A mixed problem needs no mixed space, because an argument of a [form](#form)
 may be a `tuple` of functions in several spaces.
-
-The Sobolev space of $V$ is not yet covered. The Sobolev space is expected to
-be stated through the [restrictions](#restriction) of the functions of $V$ to
-the facets of the topology, from the two sides of each facet.
 
 #### Examples
 
