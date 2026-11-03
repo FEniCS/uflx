@@ -3333,8 +3333,47 @@ except `Gradient`, `Divergence`, `Curl`, `PushForward`, `PullBack` and
 For `Action`, the `Gradient` and `PullBack` identities are evaluated toward
 actions on transformed forms, as in [`Action`](#action).
 
-The passes of the core run in this order, each on the output grammar of the
-one before, from $N_0$ (see [Grammars](#grammars)):
+### Transformations, recipes and contracts
+
+A transformation changes an expression using the rules below. A recipe
+coordinates transformations. A contract describes an accepted representation
+and can be checked without transforming it. These are separate responsibilities;
+a contract does not choose a recipe.
+
+Consumers may compose transformations and stop at a suitable boundary:
+
+| Contract | Required representation |
+| -------- | ----------------------- |
+| Derivatives expanded | No `DirectionalDerivative` in the expression traversal; actions, mesh integrals and spatial operators may remain |
+| Reference integration | Derivatives expanded, with no `Integral` over a `Mesh`; other coordinate-domain integrals and spatial operators may remain |
+| Core normal form | The node classes and patterns of [The core normal form](#the-core-normal-form) |
+
+A check reports offending nodes and reasons, or no violations. It assumes valid
+nodes and checks only the [evaluation traversal](#evaluation-traversal), not
+mathematical declarations or later compiler capabilities. Quadrature, tabulation
+and geometry processing impose their own requirements at their own boundaries.
+No target class or checking API is prescribed.
+
+An output contract does not establish that a transformation preserved particular
+input structure. A symbolic consumer that needs the original domains and spatial
+operators retained must also require that preservation from its chosen recipe.
+
+### Standard lowering recipe
+
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `lower(f)` | | `f: AbstractExpression` | An equivalent expression in core normal form |
+
+`lower(f)` runs the standard recipe and checks its output. It raises `TypeError`
+for a non-expression input or an unsupported rewrite, and `ValueError` if the
+result violates core normal form, identifying the offending nodes. It assumes
+the geometry precondition of [Evaluation traversal](#evaluation-traversal).
+Extension nodes require an extension recipe before entering this core operation.
+
+The standard recipe takes a core expression to core normal form. The table gives
+one schedule and names its intermediate grammars for the rule tables below.
+Consumers need not follow this schedule when targeting another contract, but must
+satisfy the preconditions of the transformations they use.
 
 | Pass | Evaluates | Output grammar |
 | ---- | --------- | -------------- |
@@ -3343,7 +3382,7 @@ one before, from $N_0$ (see [Grammars](#grammars)):
 | [`expand_integrals`](#expanding-integrals) | `Integral` over a mesh | $N_3$ |
 | The lowering stage | `Gradient`, `Divergence`, `Curl`, `PushForward` and `PullBack` | $N_4$, [the core normal form](#the-core-normal-form) |
 
-The first three passes keep this order. `apply_actions` evaluates actions
+In this recipe, the first three passes keep this order. `apply_actions` evaluates actions
 created by substitution, and `apply_derivatives` uses it to evaluate actions
 created by differentiation or substitution at the derivative's point.
 The lowering stage repeats [`apply_gradients`](#applying-gradients)
@@ -3355,10 +3394,17 @@ which the form states the gradient, such as `gradient(coordinate(D), D)`, the
 identity matrix for $D$ of the dimension of its ambient coordinate domain, and
 not as the product of $J$ and $K$ on the reference cell.
 
-The passes above use the [evaluation traversal](#evaluation-traversal).
-A substitution of indices also enters domains, domain maps and spaces.
-An extension pass with a precondition runs between two lowering stages
-(see [Shape derivatives](#shape-derivatives)).
+The recipe checks its output against core normal form. Constructs allowed there
+remain for later processing; a construct outside that contract is reported,
+not silently accepted as a completed lowering. Other recipes may have weaker
+output contracts. A transformation's own postcondition is the one in its rule
+table, not necessarily the contract of the complete recipe.
+
+The passes use the [evaluation traversal](#evaluation-traversal). A substitution
+of indices also enters domains, domain maps and spaces. Extensions coordinate
+their transformations with core transformations through their own recipes. For
+example, [shape differentiation](#shape-derivatives) needs geometry exposed by
+spatial lowering before differentiating, and spatial lowering again afterwards.
 
 A rewrite of index notation that keeps the value, such as the reduction of an
 `Indexed` of a `ComponentTensor`, is a pass of the compiler, not of the core.
@@ -3510,10 +3556,10 @@ DirectionalDerivative(f, u, u0, h)
 
 ### Grammars
 
-A grammar is a set of expressions. A grammar is checked by a pass that asks
-whether an expression belongs to the grammar (see [New
-questions](#new-questions)), built from rule tables as any other pass (see
-[Rule tables](#rule-tables)).
+A grammar is a set of expressions and specifies a structural contract. A check
+asks whether an expression belongs to that set (see [New questions](#new-questions)).
+The numbered grammars below describe the standard recipe; they are not a sequence
+that every consumer must traverse.
 
 - For the lowering grammars, an expression node of an expression $e$ is a
   node visited by the [evaluation traversal](#evaluation-traversal), including
@@ -3536,7 +3582,7 @@ questions](#new-questions)), built from rule tables as any other pass (see
   the set of the expressions of $N$ with no expression node that matches a
   pattern of $P$. An intermediate grammar is written as a delta of an earlier
   grammar.
-- The core normal form is the last grammar of the passes of the core, written
+- The core normal form is the output contract of the standard recipe, written
   as a list of the node classes and the grammar patterns that it allows. A
   form compiler receives the integrand layer of an expression in the core
   normal form and continues with passes of its own, and the code that
@@ -3546,10 +3592,10 @@ A grammar may restrict two layers of an expression separately. The form layer
 consists of every `Action` and every node with argument spaces other than
 `()`. The integrand layer consists of the other nodes.
 
-The section of each pass states the input grammar and the output grammar of
-the pass, such as $N_1$ of
-[`apply_actions`](#applying-actions), and [The core
-normal form](#the-core-normal-form) lists what the last of them allows.
+Each pass states its input and output grammars. These are conditional guarantees:
+for example, `expand_integrals` removes mesh integrals, but reaches the reference
+integration contract only when no directional derivatives remain. A consumer
+checks the contract it needs rather than inferring success from a pass's name.
 
 For example, a `Function` is in $N_4$ even if its domain's parameterisation
 contains a reducible `Gradient`: traversal stops at the function. The
@@ -3815,8 +3861,8 @@ $A_i$ are the maps of [Restriction](#restriction).
 
 ### The core normal form
 
-The core normal form is $N_4 = N_3 \setminus (G \cup R)$, the output grammar of
-the lowering stage. Its expression nodes, as visited by the evaluation
+The core normal form is $N_4 = N_3 \setminus (G \cup R)$, the output contract of
+the standard lowering recipe. Its expression nodes, as visited by the evaluation
 traversal, are instances of concrete core classes or downstream terminals.
 The following table lists all allowed node classes and their conditions:
 
@@ -4097,9 +4143,13 @@ the [substitution and binding](#substitution-and-binding) rules.
 `ShapeDerivative(f, x, h)` is the derivative of $f$ when the coordinate function
 $x$ of a mesh `image(x, Q)` moves in the direction $h$ (see [A shape
 derivative](examples/surfaces.md#a-shape-derivative)). The pass of the extension runs
-between two lowering stages, where $x$ occurs explicitly in the
+between two spatial-lowering stages, where $x$ occurs explicitly in the
 parameterisations of the cells, and lowers the node to `DirectionalDerivative(f,
-x, x, h)`, which holds the domains fixed. A function on the topology keeps its
+x, x, h)`, which holds the domains fixed. The extension recipe first exposes
+geometry while retaining its own nodes, applies shape differentiation, then
+re-enters `lower` to finish derivatives, resulting actions and spatial operations
+and check core normal form. The first stage is not a completed call to core
+`lower`, since extension nodes remain. A function on the topology keeps its
 values on the reference cell, so the function moves with the mesh.
 
 The direction is any direction that the core derivatives allow, an expression
@@ -4454,6 +4504,7 @@ classDiagram
 |                             | [`form(expression, arguments)`](#form)                                   |                               | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`  | `Form`                                                                                                                                                                          |
 |                             | [`action(f, position, g)`](#action)                                      |                               | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                                                                                                        |
 |                             | [`gateaux_derivative(F, x, a, w)`](#gateaux-derivative)                  |                               | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | The `Form` constructed below                                                                                                                                                    |
+| Evaluation                  | [`lower(f)`](#standard-lowering-recipe)                                  |                               | `f: AbstractExpression`                                                                                                | An equivalent expression in core normal form                                                                                                                                    |
 <!-- end generated: free-functions -->
 
 ## Appendix: Static type table
@@ -4521,6 +4572,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 11    |
 | Concrete classes                | 43    |
 | Expression node classes         | 32    |
-| Free functions                  | 52    |
+| Free functions                  | 53    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->
