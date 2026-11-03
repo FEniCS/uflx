@@ -257,7 +257,7 @@ directions:
 
 ```python
 H = function(R, "H")
-zero = Zero((2, 2), (), ())
+zero = Zero((2, 2), (), (), real)
 N = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / two, (i, j))
 dpsi = directional_derivative(strain_energy(C + H), H, zero, N)
 S = two * component_tensor(dpsi, (k, l))

@@ -214,7 +214,7 @@ def simplex_vertices(n: int) -> AbstractExpression:
     if n < 0:
         raise ValueError("Dimension must be non-negative.")
     if n == 0:
-        return Zero((1, 0), (), ())
+        return Zero((1, 0), (), (), real)
     return tensor(
         tuple(
             tensor(tuple(Integer(1 if k == v - 1 else 0) for k in range(n))) for v in range(n + 1)

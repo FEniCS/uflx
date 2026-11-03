@@ -530,29 +530,25 @@ core has no rational literal.
 
 ### `Complex`
 
-`Complex` is a complex constant built from two real literals or
-[`Zero`](#zero) expressions. It is a terminal, and its value is
+`Complex` is a scalar complex constant built from two real literals. It is a
+terminal, and its value is
 `real` $+\,i\,$ `imag`.
 
 | `Complex(real, imag)` | |
 | --------------------- | - |
 | Extends               | `AbstractExpression` |
-| Takes                 | `real, imag: Integer \| Float \| Zero` |
+| Takes                 | `real, imag: Integer \| Float` |
 | Properties            | `real` and `imag`, the real and imaginary parts |
-| Requires              | The parts have equal value shapes and argument spaces, and equal extents for shared free indices |
-| Static type           | The common value shape and argument spaces, the free indices of `real` followed by those of `imag`, each index taken once, complex, and no support |
-| Raises                | `TypeError` for a part of another class, and `ValueError` if a requirement fails |
+| Static type           | Value shape `()`, complex, no free indices, no support and argument spaces `()` |
+| Raises                | `TypeError` for a part of another class |
 
 ```python
 Complex(Integer(0), Integer(1))  # The imaginary unit.
 Complex(Integer(-1), Integer(0))  # Minus one with complex scalar type.
-z = Zero((3,), ((i, m),), (V,))
-Complex(z, z)  # Complex zero: shape (3,), free index i, argument space V.
 ```
 
 `Complex` retains its parts and stays complex even when the imaginary part
-is zero. Both parts must be `Zero` for a non-scalar shape or nonempty argument
-spaces. As a terminal, it has no evaluation operands (see
+is zero. As a terminal, it has no evaluation operands (see
 [Evaluation traversal](#evaluation-traversal)).
 
 General real expressions `a` and `b` form a complex expression through
@@ -562,19 +558,19 @@ its value shape, free indices, support and argument spaces.
 
 ### `Zero`
 
-`Zero` represents real zero with a specified value shape, free indices and
-argument spaces.
+`Zero` represents zero with a specified value shape, free indices, argument
+spaces and scalar type (real or complex).
 
-| `Zero(value_shape, free_indices, argument_spaces)` |                                                                                                                                |
+| `Zero(value_shape, free_indices, argument_spaces, scalar_type)` |                                                                                                                                |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Extends                                            | `AbstractExpression` |
-| Properties                                         | `value_shape`, `free_indices` and `argument_spaces`, as in [Extents](#extents), [Free indices](#free-indices) and [Argument spaces](#argument-spaces) |
-| Static type                                        | The stored properties, real, with no support                                                                                         |
+| Properties                                         | `value_shape`, `free_indices`, `argument_spaces` and `scalar_type`, as in [Extents](#extents), [Free indices](#free-indices) [Argument spaces](#argument-spaces) and [Scalar type](#scalar-type) |
+| Static type                                        | The stored properties, with no support                                                                                         |
 | Raises                                             | `TypeError` for an argument of another type, and `ValueError` for a negative extent or an index that occurs twice |
 
-For example, `Zero((3,), (), ())` is a real zero vector and
-`Zero((), (), (V,))` is the real zero form on `V`. For either `z`,
-`Complex(z, z)` is the corresponding complex zero.
+For example, `Zero((3,), (), (), real)` is a real zero vector and
+`Zero((), (), (V,), complex)` is a complex zero form on `V`. Here `real` and
+`complex` denote the scalar types, not Python numeric constructors.
 
 ### Arithmetic
 
@@ -1425,7 +1421,7 @@ constants of value shape `(3, 3)`, the identity matrix `I` of value shape
 
 ```python
 E = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / Integer(2), (i, j))
-zero = Zero((3, 3), (), ())
+zero = Zero((3, 3), (), (), real)
 psi_perturbed = strain_energy(C + H)
 dpsi = directional_derivative(psi_perturbed, H, zero, E)
 S = Integer(2) * component_tensor(dpsi, (k, l))
@@ -3429,7 +3425,7 @@ Before returning a table's result `r` or rebuilding its parent, complete its
 type against the replaced expression `e`. Let
 
 ```python
-z = Zero(e.value_shape, e.free_indices, e.argument_spaces)
+z = Zero(e.value_shape, e.free_indices, e.argument_spaces, e.scalar_type)
 ```
 
 Apply these steps in order, using tensor arithmetic:
@@ -3440,9 +3436,8 @@ Apply these steps in order, using tensor arithmetic:
 
 The raw result must already have the required shape and argument spaces,
 matching extents for retained indices and no extra free indices. A real `e`
-requires a real result. A row giving zero uses `z` for a real `e` or
-`Complex(z, z)` for a complex `e`; this is what the tables mean by zero with
-the type of an expression.
+requires a real result. A row giving zero uses `z`; this is what the tables
+mean by zero with the type of an expression.
 
 Evaluation of `Action` and `DirectionalDerivative` also promotes real values
 before substituting them for complex functions, member by member for tuples.
@@ -3621,7 +3616,7 @@ created by substituting a symbolic form for a dual function.
 | `Product(a, b)`, with $n$ the arity of $a$ | `Product(Action(a, p, g), b)` for $p < n$, otherwise `Product(a, Action(b, p - n, g))` |
 | `Gradient`, `PullBack` | Remains; the operation transforms the form's output |
 | A commuting node class (see [Evaluation](#evaluation)) | The node with the action moved into the listed operands |
-| `Zero`, `Complex` | Zero with the type of the action |
+| `Zero` | Zero with the type of the action |
 | `Function` | Remains, for the supplying library |
 | `Action` | Remains, as a further application of a remaining action |
 | Any other class of the core | Cannot occur, because the argument spaces are `()` |
@@ -3710,7 +3705,7 @@ For real scalar functions `u` and `a` in a space of constants,
 
 For a real scalar function `u` in a space of constants and a constant array
 `a` of shape `(m,)`, `directional_derivative(u, u, a[i], Integer(1))` lowers
-to `Integer(1) + Zero((), ((i, m),), ())`: its value is one for every `i`.
+to `Integer(1) + Zero((), ((i, m),), (), real)`: its value is one for every `i`.
 Type completion retains indices even from unused members of tuple points
 and directions.
 
@@ -4167,8 +4162,8 @@ composition:
 | Node class                                       | Why a node class                                                                                              |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
 | `Integer`, `Float`                                | A number written down is a terminal |
-| `Complex`                                        | A complex constant, including a complex zero with shape, free indices or argument spaces, needs no arithmetic construction |
-| `Zero`                                           | No composition gives a zero with free indices without edges to other expressions                              |
+| `Complex`                                        | A scalar complex constant retains its two real literals without arithmetic construction |
+| `Zero`                                           | A zero carries its shape, free indices, argument spaces and scalar type without edges to other expressions                              |
 | `Sum`, `Product`, `Power`, `Absolute`             | Operations of the scalar field, which nothing else composes                                                 |
 | `Conjugate`                                      | An operation of the scalar field, and `Form` meets `conjugate(v)` of a function of any value shape as written |
 | `RealPart`                                       | `(f + conjugate(f)) / Integer(2)` has the value of the real part but is complex, and the real part is real    |
