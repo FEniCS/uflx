@@ -1444,7 +1444,7 @@ The substitution does not enter domains, so the derivative holds the geometry
 fixed. A shape derivative, with respect to the coordinates of a mesh, is a
 language extension (see [Shape derivatives](#shape-derivatives)).
 
-The derivative is real-linear in $h$. The gradient of a direction with no
+A real-linear differential is assumed. The gradient of a direction with no
 domain is zero, so the derivative with respect to a function `u` in a constant
 direction holds `gradient(u, P)` fixed. A direction that is a function in the
 space of `u` gives the Gateaux derivative (see [Gateaux
@@ -3006,7 +3006,8 @@ The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in
 | Static type                   | That of the expression, with the argument spaces of the expression followed by the space $V$ of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
 | Raises                        | `TypeError` for an entry that is not a `Function`, a `Conjugate` of a `Function` or a `tuple` of these, and `ValueError` for a repeated or non-bindable function or a `tuple` of fewer than two members |
 
-An argument's position is its index in `arguments`. An entry `v` declares
+An entry's binder index is its index in `arguments`; its argument position
+is the arity of `expression` plus that index. An entry `v` declares
 linearity in `v`; `conjugate(v)` declares linearity in $\bar v$, hence
 antilinearity in `v`. They give the same argument space for a real space.
 A `tuple` entry declares joint linearity in its members, so a term may depend
