@@ -54,17 +54,11 @@ through singularities.
 
 UFLx is a typed symbolic language for writing variational forms.
 
-The UFLx core language, henceforth the core, should not use finite element or
-numerical analysis terminology. Differential geometry and functional analysis
-should be all that the core requires. This draft requires vector calculus on
+The UFLx core language, henceforth the core, is independent of any particular
+discretisation, solver or finite-element library. This draft requires vector calculus on
 domains in $R^n$ and on manifolds embedded in $R^n$, in the coordinates of
 $R^n$. One gradient serves every dimension, so the statement of each concept
 does not depend on the dimension.
-
-Where finite element or numerical analysis concepts are needed, a layer above
-the core or an external library provides them. Basix is the in-house example.
-Neither Basix nor DOLFINx, nor their assumptions, should be visible in the
-core.
 
 UFLx is *not* a symbolic language for reasoning about problems in functional
 analysis or differential geometry. The core should therefore contain only the
@@ -4026,8 +4020,9 @@ operands.
 
 An extension supplies its own rules or its lowering table for each supported
 pass, whether from the core or another library, such as `units`. Earlier
-extension tables may override core rules. Every rule preserves value and
-must agree, up to mathematical equality, with lowering followed by the pass.
+extension tables may override core rules. Rewrite rules preserve value.
+Every rule must agree, up to mathematical equality, with lowering followed
+by the pass.
 An identity of a composition, such as the identity of Piola, needs node
 classes for that composition, as with `Divergence` and `Curl` in the core
 (see [`PushForward`](#pushforward)).
