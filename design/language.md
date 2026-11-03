@@ -474,7 +474,7 @@ choice for the compiler.
 
 A construction free function is part of the core only if a definition or a
 rule of the core uses it, such as `density` in [`Integral` over a
-mesh](#integral-over-a-mesh) and `cell_domain` in
+mesh](#integral-over-a-mesh) and `cell_map` in
 [Restriction](#restriction), or if a Python operator calls the free function
 as an overload, such as `matrix_product` for `@` (see [Operator
 overloads](#operator-overloads)). `transpose` is in the core because the rule
@@ -1231,10 +1231,10 @@ $X : P \to R^n$, $X(p) = p$, and the gradient of $X$ is the identity matrix
 (see [`Gradient`](#gradient)).
 
 For a mesh $D$, `coordinate(D)` is the physical coordinate field on $D$.
-Its pull-back by a cell domain is that cell's parameterisation (see
+Its pull-back by a cell map is that cell's parameterisation (see
 [`Mesh`](#mesh)). This differs from `D.coordinate_function`, which is
 the stored coordinate expression on the topology.
-For a mesh `image(x, Q)`, the pull-back by `cell_domain(D, j, e)` is
+For a mesh `image(x, Q)`, the pull-back by `cell_map(D, j, e)` is
 `pull_back(x, cell_map(T, j, e))`.
 
 For example, `coordinate(RD(3))` has value shape `(3,)` and support `RD(3)`.
@@ -1501,7 +1501,7 @@ With `T = UnitSimplex(2)` and `X = coordinate(T)`:
 
 ### `DomainMap`
 
-`DomainMap` is a map $\psi$ from a parameter domain $P$ into an ambient domain
+`DomainMap` is a map $\psi$ from a parameter domain $P$ into an ambient coordinate domain
 $Q$, with geometric image $\psi(P)$. The sections below write $D$ for the map
 or its parameterised image, retaining multiplicity. A `DomainMap` is not an
 `AbstractDomain` and is not the support of an expression.
@@ -1510,23 +1510,24 @@ or its parameterised image, retaining multiplicity. A `DomainMap` is not an
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                          | `Base` |
 | Free function                    | `domain_map(P, psi, Q)`                                                                                                                                                                           |
-| Takes                            | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractDomain` |
-| Properties                       | `parameter_domain` $P$, an [`AbstractCoordinateDomain`](#abstractcoordinatedomain) or an [`AbstractTopology`](#abstracttopology) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractDomain`                                                   |
+| Takes                            | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain` |
+| Properties                       | `parameter_domain` $P$, an [`AbstractCoordinateDomain`](#abstractcoordinatedomain) or an [`AbstractTopology`](#abstracttopology) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractCoordinateDomain`                                                   |
 | Requires                         | $\psi$ with the support $P$ or no support, $\psi$ real with value shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$ and the argument spaces `()`, and $k \le n$ |
 | Derived                          | `free_indices`, the free indices of $\psi$ |
 | Raises                           | `TypeError` for $P$ or $Q$, and `ValueError` if another requirement fails                                                                                                                                   |
 
-The coordinates of the ambient coordinate domain of $Q$ locate the image of
+The coordinates of $Q$ locate the image of
 $D$. The 'topological dimension' of $D$ is $k$,
 `D.parameter_domain.dimension`, and the 'geometric dimension' is $n$, the
 dimension of the ambient coordinate domain of $Q$.
 
 Maps need not be injective.
 
-$P$ is a coordinate domain, such as a reference cell, or a topology. With a
-topology $T$ as $P$, `pull_back(g, domain_map(T, x, D))` pulls a field $g$
-on $D$ back to an expression on $T$, which a pull-back by a cell map of $T$
-composes into a cell of $D$ (see [Expanding pull-backs](#expanding-pull-backs)).
+$P$ is a coordinate domain, such as a reference cell, or a topology. The
+target $Q$ is a coordinate domain, never a topology or a mesh. Coordinates
+alone do not select a cell or a reference preimage in a mesh; evaluation of
+mesh fields uses explicit cell or side maps (see [A family of points in a
+mesh](#a-family-of-points-in-a-mesh)).
 
 A $\psi$ with free indices makes $D$ a family of domains, with one domain for
 each value of the free indices. For example, with an array `x` of value shape
@@ -1534,7 +1535,7 @@ each value of the free indices. For example, with an array `x` of value shape
 points in `RD(n)`, retaining distinct members even at identical coordinates.
 
 $Q$ is usually `RD(n)`. $Q$ may be smaller, such as the unit triangle for an
-edge of the unit triangle, or a mesh for a cell of the mesh (see [`PullBack`](#pullback)).
+edge of the unit triangle.
 
 Examples:
 
@@ -1548,7 +1549,7 @@ A curved example is the paraboloid, with $k = 2$ and $n = 3$:
 ```python
 P = RD(2)
 X = coordinate(P)
-h = X[0]**Integer(2) + X[1]**Integer(2)
+h = X[0] ** Integer(2) + X[1] ** Integer(2)
 psi = tensor((X[0], X[1], h))
 paraboloid = domain_map(P, psi, RD(3))
 ```
@@ -1556,7 +1557,8 @@ paraboloid = domain_map(P, psi, RD(3))
 ### `PullBack`
 
 `PullBack` is the pull-back $\psi^* f$ of an expression $f$ on $Q$ by a map $D$
-with parameterisation $\psi$, parameter domain $P$ and ambient domain $Q$.
+with parameter domain $P$ and ambient domain $Q$. A `DomainMap` additionally
+specifies its coordinate parameterisation $\psi$.
 
 | `PullBack(f, D)` |                                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -1568,12 +1570,13 @@ with parameterisation $\psi$, parameter domain $P$ and ambient domain $Q$.
 | Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
 | Raises           | `TypeError` for $D$, and `ValueError` if another requirement fails                                         |
 
-The second operand is a domain, not an expression, because a domain states
-$Q$.
+The second operand is a map that identifies its source $P$ and target $Q$.
 
-The pull-back is the composition $f \circ \psi$, the expression on $P$ with
-the value $f(\psi(p))$ at each point $p$ of $P$. The axes of the value shape
-are not transformed. An axis of an expression on $Q$ is an array in the
+For a `DomainMap`, the pull-back is the composition $f \circ \psi$, the
+expression on $P$ with the value $f(\psi(p))$ at each point $p$ of $P$.
+For a `CellMap` or `SideMap`, the map selects cells and reference positions;
+its physical coordinates alone do not define the evaluation. The axes of the
+value shape are not transformed. An axis of an expression on $Q$ is an array in the
 coordinate frame of $Q$, so the pull-back keeps the frame of $Q$.
 
 [`PushForward`](#pushforward) gives the corresponding forward value
@@ -1582,16 +1585,17 @@ the pull-back cellwise; other laws also transform the values. It does not
 denote a dual or adjoint operator.
 
 A `PullBack` of a downstream terminal or of a [`Function`](#function) remains,
-and the library of the terminal evaluates the terminal at $\psi(p)$. For a
-function, the library evaluates the pull-back by a cell map of a topology or a
-cell domain of a mesh (see [`AbstractFunctionSpace`](#abstractfunctionspace)),
-and the pull-back by another domain map into a mesh is rewritten through those
-(see [A family of points in a mesh](#a-family-of-points-in-a-mesh)).
+and the library of the terminal evaluates it at the points identified by
+the map. For a function, the library evaluates the pull-back by a cell map
+of a topology or mesh (see [`AbstractFunctionSpace`](#abstractfunctionspace)),
+and evaluation at a reference position is a further pull-back within the
+selected cell (see [A family of points in a mesh](#a-family-of-points-in-a-mesh)).
 
-A domain $E$ in the parameter domain of $D$ has the image $\psi(E)$, a subset
-of $D$. The image is given by the domain map with the parameterisation
+For coordinate maps $D$ and $E$, with $E$ mapping into the parameter domain
+of $D$, their composition is the domain map with the parameterisation
 `pull_back(D.parameterisation, E)` on the parameter domain of $E$, in the
-ambient domain of $D$, such as `E` in the example below.
+ambient domain of $D$, such as `E` in the example below. Composition through
+a cell map instead keeps nested pull-backs, preserving the cell selection.
 
 This example maps an edge of the unit triangle `T` into a triangle `K` in
 `RD(2)`:
@@ -1632,16 +1636,18 @@ pull_back(f, edge_in_plane)  # Raises ValueError.
 
 The free functions `jacobian(D)`, `inverse_jacobian(D)` and `density(D)` are
 the Jacobian matrix, the left inverse of the Jacobian matrix and the density
-of a domain $D$ = `DomainMap(P, psi, Q)` with a coordinate domain $P$ of
-dimension $k$. $n$ is the dimension of the ambient coordinate domain of $Q$.
+of a `DomainMap` or a `CellMap` of a mesh, with coordinate parameter domain
+$P$ of dimension $k$ and parameterisation $\psi$. $n$ is the physical
+coordinate dimension of the target. A `CellMap` of a topology has no
+parameterisation and is rejected with `TypeError`.
 
 Each helper checks these input requirements before building its composition.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `jacobian(D)` | | `D: DomainMap` | `gradient(D.parameterisation, D.parameter_domain)` |
-| `inverse_jacobian(D)` | | `D: DomainMap` | `inverse(jacobian(D))` |
-| `density(D)` | | `D: DomainMap` | The density $\rho$ below |
+| `jacobian(D)` | | `D: DomainMap \| CellMap` | `gradient(D.parameterisation, D.parameter_domain)` |
+| `inverse_jacobian(D)` | | `D: DomainMap \| CellMap` | `inverse(jacobian(D))` |
+| `density(D)` | | `D: DomainMap \| CellMap` | The density $\rho$ below |
 
 The Jacobian matrix $J$ has value shape `(n, k)`, and $K$ =
 `inverse_jacobian(D)`, of value shape `(k, n)`, is the inverse of $J$ for
@@ -2027,28 +2033,40 @@ cell](examples/library.md#the-unit-simplex-as-a-reference-cell)).
 
 ### `CellMap`
 
-`CellMap` is the characteristic map of the cells of group $j$ of a topology $T$
-selected by an entry $e$. A `CellMap` has no parameterisation.
+`CellMap(X, j, e)` selects cells of group $j$ of a topology or mesh $X$.
+Let $T$ be $X$ when $X$ is a topology, and `X.topology` when $X$ is a mesh.
+The selected cells retain their identities even when their physical
+coordinates coincide.
 
-| `CellMap(T, j, e)` |                                                                                                     |
-| ------------------ | --------------------------------------------------------------------------------------------------- |
-| Extends            | `Base` |
-| Takes              | `T: AbstractTopology`, `j: int`, `e: Index \| GatheredIndex` |
-| Properties         | `topology` $T$, `cell_type` $j$ and `entry` $e$                                                     |
-| Requires           | $j$ a valid cell-group number of $T$, cell type $j$ a reference cell $K_j$, and the extent `T.num_cells[j]` for $e$ or for the table of $e$ |
-| Derived            | `parameter_domain` $K_j$, `ambient_domain` $T$, and `free_indices`, $e$ with the extent `T.num_cells[j]` or the free indices of the `GatheredIndex` $e$ |
-| Raises             | `TypeError` for $T$, and `ValueError` if another requirement fails                                  |
+| `CellMap(X, j, e)` | |
+| ------------------ | - |
+| Extends | `Base` |
+| Takes | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` |
+| Properties | `ambient_domain` $X$, `cell_group` $j$, and `entry` $e$ |
+| Requires | $j$ a valid cell-group number of $T$, cell type $j$ a reference cell $K_j$; an integer $e$ satisfies `0 <= e < T.num_cells[j]`, and a `GatheredIndex` has extent `T.num_cells[j]` |
+| Derived | `topology` $T$, `parameter_domain` $K_j$, `free_indices` and, for a mesh, `parameterisation`, as below |
+| Raises | `TypeError` for an invalid argument type, and `ValueError` if another requirement fails |
+
+For an ordinary `Index` $e$, `free_indices` contains $e$ with extent
+`T.num_cells[j]`; the index itself stores no extent. For a `GatheredIndex`,
+it is the free indices of $e$. For an integer entry it is `()`.
+
+A cell map of a topology has no parameterisation. For a mesh $D$ with
+coordinate expression $x$, `CellMap(D, j, e).parameterisation` is
+`pull_back(x, cell_map(T, j, e))`. This expression is derived, not a
+construction argument. Substitution reconstructs the map from $D$, $j$ and
+$e$, preserving the selected cell independently of its coordinates.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `cell_map(T, j, e)` | | `T: AbstractTopology`, `j: int`, `e: Index \| GatheredIndex` | `CellMap(T, j, e)` |
-| `cell_map(T, j)` | | `T: AbstractTopology`, `j: int` | `CellMap(T, j, cell_index(T, j))` |
+| `cell_map(X, j, e)` | | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` | `CellMap(X, j, e)` |
+| `cell_map(X, j)` | | `X: AbstractTopology \| Mesh`, `j: int` | `CellMap(X, j, cell_index(T, j))`, with $T$ the topology of $X$ |
 
-`pull_back(f, cell_map(T, j, e))` is the value of an expression $f$ on $T$ on
-the reference cell $K_j$ of each selected cell. For a function $f$, the
-library of the space of $f$ gives the value (see [Functions in a
-space](#functions-in-a-space)). Any other expression on $T$ is built from
-functions and constants, and the pull-back moves to them.
+`pull_back(f, cell_map(X, j, e))` is the value of an expression $f$ on $X$
+on the reference cell $K_j$ of each selected cell. For a function on a
+topology, the library of its space gives the value (see [Functions in a
+space](#functions-in-a-space)). For a mesh field, lowering uses the selected
+cell and its parameterisation (see [Expanding pull-backs](#expanding-pull-backs)).
 
 Worked examples for this chapter: [the unit simplex as a reference cell](examples/library.md#the-unit-simplex-as-a-reference-cell).
 
@@ -2065,7 +2083,7 @@ coordinate values; those remain with the topology and coordinate-function librar
 | ------------ | - |
 | Extends | `AbstractDomain` |
 | Free function | `image(x, Q)` |
-| Takes | `x: AbstractExpression`, `Q: AbstractDomain` |
+| Takes | `x: AbstractExpression`, `Q: AbstractCoordinateDomain` |
 | Properties | `coordinate_function` $x$, and `ambient_domain` $Q$ |
 | Requires | $x$ supported on a topology $T$ whose cell types are reference cells; $x$ real, with value shape `(n,)` for the ambient coordinate dimension of $Q$, free indices `()` and argument spaces `()`; `T.dimension <= n` |
 | Derived | `topology` $T$ = `x.support`, `dimension` = `T.dimension`, and `pieces`, below |
@@ -2097,24 +2115,19 @@ For group $j$ of $T$, let $K_j$ be its reference cell. `pieces` is the derived
 These maps are views of the mesh, not construction arguments. They carry the
 cell index `cell_index(T, j)` and do not introduce extra geometry parameters.
 
-The ambient domain $Q$ may itself be a mesh, as for a curve or point mesh
-embedded in another mesh. Its coordinate domain determines the physical
-coordinate dimension.
+The ambient domain $Q$ is a coordinate domain. A mesh embedded in another
+mesh has its own physical coordinates; cell or side maps specify its
+relation to the other mesh's cells.
 
-#### Cell domains
+#### Mesh cell maps
 
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `cell_domain(D, j)` | | `D: Mesh`, `j: int` | `cell_domain(D, j, cell_index(D.topology, j))` |
-| `cell_domain(D, j, e)` | | `D: Mesh`, `j: int`, `e: Index \| GatheredIndex` | `DomainMap` of the cells of group `j` selected by `e` |
+`cell_map(D, j, e)` returns `CellMap(D, j, e)`, whose target is the mesh $D$.
+Its parameterisation is `pull_back(x, cell_map(T, j, e))`. Piece $j$ instead
+has target $Q$ and records only physical coordinates. These maps have the
+same parameterisation but different meanings: only the cell map selects a
+cell of $D$ for evaluating a mesh field.
 
-Both forms require `0 <= j < len(D.topology.cell_types)`. For $D$ =
-`image(x, Q)`, with topology $T$, the selected cell domain is
-`domain_map(K_j, pull_back(x, cell_map(T, j, e)), D)`.
-Its ambient domain is $D$, whereas piece $j$ has ambient domain $Q$.
-A cell of a topology is a `CellMap`; a cell of a mesh is this `DomainMap`.
-
-For a field $f$ on $D$, `pull_back(f, cell_domain(D, j))` is its local
+For a field $f$ on $D$, `pull_back(f, cell_map(D, j))` is its local
 expression on $K_j$, indexed by the cells of group $j$. Pulling back
 `coordinate(D)` gives `pull_back(x, cell_map(T, j))`.
 
@@ -2136,9 +2149,9 @@ Its image is the square:
 D = image(x, RD(2))
 ```
 
-- `D.topology` is `square`. `cell_domain(D, 0)` is the family of the two
+- `D.topology` is `square`. `cell_map(D, 0)` is the family of the two
   triangles, with the free index `cell_index(square, 0)`.
-- `pull_back(coordinate(D), cell_domain(D, 0))` is
+- `pull_back(coordinate(D), cell_map(D, 0))` is
   `pull_back(x, cell_map(square, 0))`, which the library of the space of `x`
   evaluates on triangle 1 to $(1 - X_1, X_0 + X_1)$.
 
@@ -2219,7 +2232,7 @@ $T$.
 | ------------- | -------- | ----- | ------- |
 | `push_forward(f, D, m)` | | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw` | `PushForward(f, D, m)` |
 
-The pull-back of `PushForward(f, D, m)` by `cell_domain(D, j, e)` is
+The pull-back of `PushForward(f, D, m)` by `cell_map(D, j, e)` is
 $m_\psi(\hat f)$, with $\psi$ the cell and $\hat f$ =
 `pull_back(f, cell_map(T, j, e))`. The push-forward of the coordinate function
 $x$ of $D$ by `transformation_law((), 0)` is `coordinate(D)`.
@@ -2268,7 +2281,7 @@ Two families of maps with the free index `e` make the inclusion of the cells
 of group $i$:
 
 - $B_i$, the cell on the side, is `cell_map(T, j, g)` on $T$, and
-  `cell_domain(D, j, g)` on a mesh $D$ with the topology $T$.
+  `cell_map(D, j, g)` on a mesh $D$ with the topology $T$.
 - $A_i$, the inclusion into the cell on the side, is `inclusion` of the side
   tables, a domain map from $F_i$ into $K_j$. $F_i$ must be a reference cell.
 
@@ -2307,7 +2320,7 @@ side domain $E$ into a mesh $D$, through the side $s$.
 A side map of a mesh takes a side domain, so that a coupling of two meshes
 shares one side domain. `pull_back(f, side_map(X, P, s))` is an expression
 with the support $P$, the restriction of $f$ to all the groups at once. The
-pull-back of that expression by `cell_map(S, i)`, or by `cell_domain(P, i)`
+pull-back of that expression by `cell_map(S, i)`, or by `cell_map(P, i)`
 for a side domain, is `pull_back(pull_back(f, B_i), A_i)`.
 
 #### Side domains
@@ -2341,9 +2354,7 @@ The example uses `D` and `square` of the
 function `u` on `square`, and the diagonal of `square`:
 
 ```python
-diagonal = StaticTopology(
-    (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
-)
+diagonal = StaticTopology((I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),))
 plus = side_map(square, diagonal, "+")
 minus = side_map(square, diagonal, "-")
 jump = pull_back(u, plus) - pull_back(u, minus)
@@ -2384,71 +2395,77 @@ The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on th
 
 ### A family of points in a mesh
 
-Notation:
+The solver or mesh library locates physical points and supplies a selected
+cell and a reference position for each evaluation. At an interface or in
+an overlap, the selection is part of defining the value. UFLx does not
+represent a request to locate a point, and a coordinate-only `DomainMap`
+into a mesh is invalid.
 
-- $D$ is a mesh with a topology $T$ (see [`Mesh`](#mesh)).
-- $M$ = `domain_map(RD(0), q, D)` is a family of points in $D$, with the free
-  index $i$ of the family, of the extent $m$.
-- $j$ is the cell type of $T$ of the cells that contain the points, $K_j$ is
-  the reference cell of cell type $j$, and $k_j$ is the dimension of $K_j$.
-
-$M$ needs the cell of $D$ that contains each point, and the position of each
-point in that cell. These are the side tables of the topology of the points (see [Sides of a topology](#sides-of-a-topology)). The
-topology of the points has one cell of a reference cell type of dimension 0
-for each point, and the side `("inside", T, j)`. A family of points in a mesh is
-therefore a topology with a side.
-
-The mesh library locates the cells and inverts the map of each cell outside
-the language, for example by Newton's method, when the mesh library builds the
-topology $S$ of the points, as the mesh library computes every side table.
-`cells` has the shape `(m,)` and the extent `T.num_cells[j]`. The inclusion
-of each point is the constant map onto the position of the point in $K_j$,
-and the points have no reference normal.
-
-An expression $f$ on $D$ is evaluated at the points through the
-[restriction](#restriction) to the points, with $P$ = `side_domain(D, S, "inside")` the
-mesh of the points:
-
-```python
-inside = side_map(D, P, "inside")
-values = pull_back(pull_back(f, inside), cell_domain(P, 0))
-total = integral(pull_back(f, inside), P)
-```
-
-`values` is the family of the values at the points, with the cell index of
-$S$, and `total` is their sum. [`expand_pull_backs`](#expanding-pull-backs)
-lowers the restriction as on any other topology with a side, to the value on
-the cell on the side at the position of the point, so point evaluation needs
-no pass outside the core.
-
-The core does not rewrite `pull_back(f, M)` for a field `f` on $D$ such as
-`push_forward(u, D, m)`, because the library of the space of `u` defines `u` on
-the cells only (see [`AbstractFunctionSpace`](#abstractfunctionspace)), and
-such a pull-back remains in the core normal form. A family of points known in advance is
-therefore written as the topology of the points, not as $M$. Points known only
-after a pass of the compiler, such as points that depend on the quadrature
-points, are located by a pass after the core, of the compiler with the mesh
-library, which rewrites the pull-back as the restriction to the topology of
-the points, with the index $i$ of the family in place of the cell index:
+For a mesh $D$ with topology $T$, suppose a family indexed by $i$ has selected
+cells in group $j$, with reference cell $K_j$. The solver supplies a table
+`cells` with extent `T.num_cells[j]` and an expression `positions[i]` for the
+reference positions. Evaluation is the nested pull-back:
 
 ```python
 g = gathered_index(cells, (i,))
 R = domain_map(RD(0), positions[i], K_j)
-pull_back(pull_back(f, cell_domain(D, j, g)), R)
+values = pull_back(pull_back(f, cell_map(D, j, g)), R)
 ```
 
-with `positions[i]` the position in $K_j$ of the point $i$, which the mesh
-library computes.
+Families spanning several cell groups are split by group. The inner
+pull-back selects the cell; the outer pull-back evaluates within it. The
+cell selection is retained when maps are substituted or expressions lowered.
 
-The pull-back of `u` by `cell_map(T, j, g)` is in the contract of the
-space. The maps below `f` may be a chain, such as a family of maps from a
-mesh, pulled back by a cell of that domain and then by the
-quadrature points of the reference cell. The pass reads the chain as one
-family with all of its free indices (see [A 1D network in a 3D
-mesh](examples/coupling.md#a-1d-network-in-a-3d-mesh)).
+#### Adjacent and coincident cells
 
-A family whose points lie in cells of several types is not yet covered,
-because the family would need one piece for each cell type.
+Let group 0 contain two interval cells with reference cell $K = [0, 1]$.
+On a mesh $D$ with cells $[0, 1]$ and $[1, 2]$, let $f$ equal 2 on cell 0
+and 7 on cell 1. These snippets describe symbolic values, not numerical
+execution by the core:
+
+```python
+f0 = pull_back(f, cell_map(D, 0, 0))
+f1 = pull_back(f, cell_map(D, 0, 1))
+midpoint = domain_map(RD(0), tensor((Float(0.5),)), K)
+left_endpoint = domain_map(RD(0), tensor((Integer(0),)), K)
+right_endpoint = domain_map(RD(0), tensor((Integer(1),)), K)
+
+pull_back(f0, midpoint)  # Physical coordinate 0.5; value 2.
+pull_back(f0, right_endpoint)  # Physical coordinate 1; value 2.
+pull_back(f1, left_endpoint)  # Physical coordinate 1; value 7.
+```
+
+The last two expressions are the two traces at the interface. Physical
+coordinate 1 alone does not choose between them.
+
+For a mesh `D_overlap` whose two cells both occupy $[0, 1]$, let $g$ again
+have values 2 and 7 on the respective cells:
+
+```python
+g0 = pull_back(g, cell_map(D_overlap, 0, 0))
+g1 = pull_back(g, cell_map(D_overlap, 0, 1))
+pull_back(g0, midpoint)  # Physical coordinate 0.5; value 2.
+pull_back(g1, midpoint)  # Physical coordinate 0.5; value 7.
+```
+
+The physical and reference coordinates coincide, but the selected cells differ.
+
+#### Points forming a domain
+
+A reusable domain of points may instead have a topology $S$ with one
+zero-dimensional cell per point and a side `("inside", T, j)`. Its side
+tables store the selected cells and reference positions supplied by the
+solver. Set `P = side_domain(D, S, "inside")`:
+
+```python
+inside = side_map(D, P, "inside")
+values = pull_back(pull_back(f, inside), cell_map(P, 0))
+total = integral(pull_back(f, inside), P)
+```
+
+This representation supports fields, restrictions and integration on the
+points. A single evaluation or indexed family needs only the nested
+pull-backs above, without constructing a point topology.
 
 ### `Integral` over a mesh
 
@@ -2463,7 +2480,7 @@ does not make that index a cell selector.
 For group $j$ of `D.topology`, let $K_j$ be its reference cell and $e_j$ an
 internal cell index fresh for $f$. The deterministic choice of $e_j$ is stated
 in [Expanding integrals](#expanding-integrals). Set
-`D_j = cell_domain(D, j, e_j)`. For a scalar field on $D$, the contribution is:
+`D_j = cell_map(D, j, e_j)`. For a scalar field on $D$, the contribution is:
 
 ```python
 index_sum(integral(pull_back(f, D_j) * density(D_j), K_j), (e_j,))
@@ -2539,7 +2556,7 @@ Notation, for `sm` = `SideMap(D, E, s)` and the piece $i$ of $E$:
 
 #### The pull-back of `Normal`
 
-The pull-back of `Normal(SideMap(D, E, s))` by `cell_domain(E, i)` is
+The pull-back of `Normal(SideMap(D, E, s))` by `cell_map(E, i)` is
 $\nu = w / \lvert w \rvert$, with $w = m_{B_i}(\hat m)$, where:
 
 - $m$ is `transformation_law(("covariant",), 0)`, applied with the Jacobian
@@ -2634,7 +2651,7 @@ the concrete subclass defines the function on the cells:
 - A space whose values on the reference cell depend on the geometry is on a
   mesh $D$, such as Hermite, Argyris, Morley and the other elements that are
   not Piola equivalent. The concrete subclass defines
-  `pull_back(u, cell_domain(D, j, e))`, and reads $x$ from the cell domain.
+  `pull_back(u, cell_map(D, j, e))`, and reads $x$ from the cell map.
 - For a coordinate domain, such as a reference cell, a function is a terminal
   that the concrete subclass evaluates.
 
@@ -3722,11 +3739,11 @@ The pass rewrites mesh integrals, inner integrals first. For group $j$ of
 `cell_index(D.topology, j)`.
 
 Choose the internal index without capturing $f$: form the template
-`index_sum(pull_back(Integer(1), cell_domain(D, j)), (c_j,))`, make its binder
+`index_sum(pull_back(Integer(1), cell_map(D, j)), (c_j,))`, make its binder
 fresh for $f$ using [Substitution and binding](#substitution-and-binding), and
 let $e_j$ be its resulting bound index. This retains $c_j$ when no renaming is
 needed, preserving shared geometry for ordinary integrands. Set
-`D_j = cell_domain(D, j, e_j)` and
+`D_j = cell_map(D, j, e_j)` and
 `piece_j = domain_map(K_j, D_j.parameterisation, D.ambient_domain)`.
 
 | Integral | Rewrite |
@@ -3752,7 +3769,7 @@ They must preserve the same value and free indices.
 | Input grammar        | $N_3$, in the lowering stage |
 | Output grammar       | $N_3 \setminus G$, with $G$ the grammar patterns of the rows below that rewrite |
 
-A cell is a `CellMap` or a `cell_domain(D, j, e)`. The identity of Piola
+A cell is a `CellMap` of a topology or mesh. The identity of Piola
 matches `Divergence(PushForward(f, D, m), D)` with $m$ =
 `transformation_law(("contravariant",), 1)`, and `Curl(PushForward(f, D, m), D)`
 with $m$ = `transformation_law(("covariant",), 0)` and $k = n$ (see
@@ -3801,10 +3818,10 @@ coordinate domain of $P$. $\partial_j$ applies the first row that matches:
 The pass rewrites every `PullBack(f, ψ)`, inner pull-backs first, with the
 first row that matches, and applies the rows again to each `PullBack` that a
 rewrite creates. $P$ and $Q$ are the parameter domain and the ambient domain
-of $\psi$. For $\psi$ a cell $D_j$ = `cell_domain(D, j, e)` of a mesh $D$ with
+of $\psi$. For $\psi$ a cell $D_j$ = `cell_map(D, j, e)` of a mesh $D$ with
 the topology $T$, $\hat f$ is `pull_back(f, cell_map(T, j, e))` and $m_\psi$
 is the law $m$ on $\psi$ (see [`TransformationLaw`](#transformationlaw)). For
-$\psi$ = `cell_map(S, i)` or `cell_domain(E, i)` and a side $s$, $B_i$ and
+$\psi$ = `cell_map(S, i)` or `cell_map(E, i)` and a side $s$, $B_i$ and
 $A_i$ are the maps of [Restriction](#restriction).
 
 | `PullBack(f, ψ)` | Rewrite |
@@ -3813,16 +3830,16 @@ $A_i$ are the maps of [Restriction](#restriction).
 | $\psi$ a `SideMap`, $f$ with a support | Remains until a pull-back by a cell of $P$ |
 | $f$ with no support | $f$, with [type completion](#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
 | `Coordinate(Q)` | The parameterisation of $\psi$ |
-| `PullBack(g, SideMap(X, P, s))`, $\psi$ = `cell_map(S, i)` or `cell_domain(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
+| `PullBack(g, SideMap(X, P, s))`, $\psi$ = `cell_map(S, i)` or `cell_map(E, i)` | `PullBack(PullBack(g, B_i), A_i)` |
 | `PullBack(g, φ)`, φ a `SideMap` or a cell | Remains, so a pull-back nests only inside a read on a cell |
-| `PullBack(g, φ)` | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](#pullback)) |
+| `PullBack(g, φ)`, φ a `DomainMap` | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](#pullback)) |
 | `PushForward(f, D, m)`, $\psi$ a cell of $D$ | $m_\psi(\hat f)$ |
 | `Divergence(PushForward(f, D, m), D)` of the identity of Piola, $\psi$ a cell of $D$ | $m'_\psi$ of `divergence(f̂, K_j)`, with $m'$ = `transformation_law((), 1)` |
 | `Curl(PushForward(f, D, m), D)` of the identity of Piola, $\psi$ a cell of $D$ | $m'_\psi$ of `curl(f̂, K_j)`, with $m'$ = `transformation_law(("contravariant",), 1)` for $n = 3$ and `transformation_law((), 1)` for $n = 2$ |
 | `PushForward`, `Divergence` or `Curl` | Remains, read at the points of $P$ |
 | `Gradient(g, Q)`, $\psi$ a cell of $Q$ | $m_\psi(\nabla_P(\psi^* g))$, with $m$ = `transformation_law(("covariant",), 0)` |
 | `Gradient(g, Q)` | Remains, the gradient on $Q$ read at the points of $P$ |
-| `Normal(SideMap(D, E, s))`, $\psi$ = `cell_domain(E, i)` | $w / \lvert w \rvert$ of [`Normal`](#normal) |
+| `Normal(SideMap(D, E, s))`, $\psi$ = `cell_map(E, i)` | $w / \lvert w \rvert$ of [`Normal`](#normal) |
 | A terminal | Remains, for the library of the terminal |
 | Any other node class | The node of the pull-backs of the operands that are expressions |
 
@@ -3835,9 +3852,8 @@ $A_i$ are the maps of [Restriction](#restriction).
   expression on $P$ that is not integrated, remains.
 - The composition of maps lowers the parameterisation of the map that the
   composition builds as a separate expression root (see
-  [Evaluation traversal](#evaluation-traversal)). With a `CellMap` as $\psi$ and φ =
-  `domain_map(T, x, D)`, the composition is `cell_domain(D, j, e)` for the
-  coordinate function $x$ of $D$.
+  [Evaluation traversal](#evaluation-traversal)). Composition through a
+  `CellMap` remains nested, preserving its explicit cell selection.
 - The rows of the identity of Piola read no derivative of $J$. A
   `PushForward` and a node of the identity of Piola under a map that is not a
   cell remain, as a function on a mesh does.
@@ -3848,11 +3864,10 @@ $A_i$ are the maps of [Restriction](#restriction).
 - Every pull-back that remains reads a value of a library on a cell, possibly
   at the points of a cell of $S$ through $A_i$, such as the reference
   gradient of a function on the cell at the points of a facet. A pull-back of
-  a field on a mesh by a map other than a cell, such as by a point of a mesh
-  given by its coordinates, remains, because the library defines the function
-  on the cells. A point of a mesh known in advance is evaluated through a
-  restriction instead, and other points are located by a pass after the core
-  (see [A family of points in a mesh](#a-family-of-points-in-a-mesh)).
+  a field on a mesh at a supplied reference position remains nested within
+  the selected cell read. Point location and the choice of a cell belong to
+  the solver before constructing the evaluation (see [A family of points
+  in a mesh](#a-family-of-points-in-a-mesh)).
 
 ### The core normal form
 
@@ -3905,15 +3920,14 @@ integral that contains the expression.
 
 In particular, the core normal form may still contain:
 
-- A pull-back of a function by points known only after a pass of the
-  compiler, which a pass after the core locates (see [A family of points in a mesh](#a-family-of-points-in-a-mesh)).
+- A read on an explicitly selected cell at supplied reference positions
+  (see [A family of points in a mesh](#a-family-of-points-in-a-mesh)).
 - A pull-back by a `SideMap` that no pull-back by a cell encloses, such as a
   restriction that is not integrated.
 - A `Gradient` of the coordinates of a mesh of lower dimension
   than its ambient coordinate domain, the projection $\Pi$, and a
-  `Gradient`, a `PushForward` or a node of the identity of Piola on a mesh,
-  each under a pull-back by points or by another map that is not a cell,
-  such as the coordinates of another mesh.
+  `Gradient`, a `PushForward` or a node of the identity of Piola on a mesh
+  not yet read through a cell map, including under an unexpanded side restriction.
 
 ## Extending the core
 
@@ -4047,11 +4061,13 @@ the operands, such as a value shape, to choose the composition (see
 `cross(a, b)` checks that both operands have value shape `(3,)` and returns:
 
 ```python
-tensor((
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-))
+tensor(
+    (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+)
 ```
 
 `trace(A)` reads no extent,
@@ -4477,17 +4493,15 @@ classDiagram
 |                             | [`curl(u, P)`](#divergence-and-curl)                                     |                               | `u: AbstractExpression`, `P: AbstractDomain`                                                                           | `Curl`                                                                                                                                                                          |
 |                             | [`directional_derivative(f, x, a, h)`](#directionalderivative)           |                               | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple`                                   | `DirectionalDerivative(f, x, a, h)`                                                                                                                                             |
 |                             | [`integral(f, P)`](#integral)                                            |                               | `f: AbstractExpression`, `P: AbstractDomain`                                                                           | `Integral`                                                                                                                                                                      |
-| Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractDomain`                      | `DomainMap`                                                                                                                                                                     |
+| Maps between domains        | [`domain_map(P, psi, Q)`](#domainmap)                                    |                               | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain`            | `DomainMap`                                                                                                                                                                     |
 |                             | [`pull_back(f, D)`](#pullback)                                           |                               | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap`                                                          | `PullBack`                                                                                                                                                                      |
-|                             | [`jacobian(D)`](#jacobian-and-density)                                   |                               | `D: DomainMap`                                                                                                         | `gradient(D.parameterisation, D.parameter_domain)`                                                                                                                              |
-|                             | [`inverse_jacobian(D)`](#jacobian-and-density)                           |                               | `D: DomainMap`                                                                                                         | `inverse(jacobian(D))`                                                                                                                                                          |
-|                             | [`density(D)`](#jacobian-and-density)                                    |                               | `D: DomainMap`                                                                                                         | The density $\rho$ below                                                                                                                                                        |
+|                             | [`jacobian(D)`](#jacobian-and-density)                                   |                               | `D: DomainMap \| CellMap`                                                                                              | `gradient(D.parameterisation, D.parameter_domain)`                                                                                                                              |
+|                             | [`inverse_jacobian(D)`](#jacobian-and-density)                           |                               | `D: DomainMap \| CellMap`                                                                                              | `inverse(jacobian(D))`                                                                                                                                                          |
+|                             | [`density(D)`](#jacobian-and-density)                                    |                               | `D: DomainMap \| CellMap`                                                                                              | The density $\rho$ below                                                                                                                                                        |
 | Topology                    | [`cell_index(T, j)`](#abstracttopology)                                  |                               | `T: AbstractTopology`, `j: int`                                                                                        | `Index`                                                                                                                                                                         |
-| Reference cells             | [`cell_map(T, j, e)`](#cellmap)                                          |                               | `T: AbstractTopology`, `j: int`, `e: Index \| GatheredIndex`                                                           | `CellMap(T, j, e)`                                                                                                                                                              |
-|                             | [`cell_map(T, j)`](#cellmap)                                             |                               | `T: AbstractTopology`, `j: int`                                                                                        | `CellMap(T, j, cell_index(T, j))`                                                                                                                                               |
-| Meshes                      | [`image(x, Q)`](#mesh)                                                   |                               | `x: AbstractExpression`, `Q: AbstractDomain`                                                                           | `Mesh`                                                                                                                                                                          |
-|                             | [`cell_domain(D, j)`](#cell-domains)                                     |                               | `D: Mesh`, `j: int`                                                                                                    | `cell_domain(D, j, cell_index(D.topology, j))`                                                                                                                                  |
-|                             | [`cell_domain(D, j, e)`](#cell-domains)                                  |                               | `D: Mesh`, `j: int`, `e: Index \| GatheredIndex`                                                                       | `DomainMap` of the cells of group `j` selected by `e`                                                                                                                           |
+| Reference cells             | [`cell_map(X, j, e)`](#cellmap)                                          |                               | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex`                                            | `CellMap(X, j, e)`                                                                                                                                                              |
+|                             | [`cell_map(X, j)`](#cellmap)                                             |                               | `X: AbstractTopology \| Mesh`, `j: int`                                                                                | `CellMap(X, j, cell_index(T, j))`, with $T$ the topology of $X$                                                                                                                 |
+| Meshes                      | [`image(x, Q)`](#mesh)                                                   |                               | `x: AbstractExpression`, `Q: AbstractCoordinateDomain`                                                                 | `Mesh`                                                                                                                                                                          |
 |                             | [`transformation_law(variances, weight)`](#transformationlaw)            |                               | `variances: tuple[str, ...]`, `weight: int`                                                                            | `TransformationLaw`                                                                                                                                                             |
 |                             | [`push_forward(f, D, m)`](#pushforward)                                  |                               | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw`                                                             | `PushForward(f, D, m)`                                                                                                                                                          |
 |                             | [`side_map(X, P, s)`](#sidemap)                                          |                               | `X, P: AbstractTopology \| Mesh`, `s: str`                                                                             | `SideMap(X, P, s)`                                                                                                                                                              |
@@ -4567,6 +4581,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 11    |
 | Concrete classes                | 43    |
 | Expression node classes         | 32    |
-| Free functions                  | 53    |
+| Free functions                  | 51    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->
