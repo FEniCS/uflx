@@ -978,10 +978,12 @@ nor a free index; its table indices determine its free indices.
 | Takes                           | `table: AbstractIndexValue`, `indices: tuple` |
 | Properties                      | `table`, an `AbstractIndexValue`, and `indices`, an `int`, an `Index` or a `GatheredIndex` for each axis of the shape of the table |
 | Derived                         | `extent` and `free_indices`, below |
-| Raises                          | The errors of the entries of an [`Indexed`](#indexed)                                                                              |
+| Raises                          | `TypeError` for an invalid table or entry type, `IndexError` for an incorrect number of entries or invalid bounds or gather extent, and `ValueError` for inconsistent extents of a repeated index |
 
-The entries follow the rules and errors of [`Indexed`](#indexed), except that
-`EllipsisIndex` is not accepted. Gathers may nest. The result has the table's
+`indices` contains one `int`, `Index` or `GatheredIndex` per table axis, with
+the same bounds and extent checks as [`Indexed`](#indexed). A scalar table
+therefore takes `()`. Both constructor and factory follow this rule.
+Gathers may nest. The result has the table's
 extent, and its free indices are the `Index` entries with their axis extents,
 followed by the free indices of the `GatheredIndex` entries, taking each index
 once.
