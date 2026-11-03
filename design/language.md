@@ -189,37 +189,31 @@ Concrete core classes are final; libraries subclass only abstract classes.
 A parent class never constructs a subclass, though its properties may return
 existing subclass instances. A subclass may narrow a property's return type.
 
-### Properties and free functions
+### Construction policy
 
-A property reads and a construction free function builds. Properties expose
-stored or derived data, such as `value_shape` or `parameter_domain`, and never construct
-objects. Operations that construct objects are pure free functions, such as
-`coordinate(P)` or `density(D)`. A class method immediately calls a free
-function.
+| Kind | Role and permitted inspection | Validation and exceptions |
+| ---- | ----------------------------- | ------------------------- |
+| Property | Returns stored or derived data; creates no objects | Derived objects may be built and stored during construction |
+| Constructor | Creates a node and computes derived data; does not simplify expressions | Validates construction arguments |
+| Construction free function | Builds a fixed composition from expression static types and documented interfaces of explicit non-expression arguments; does not inspect expression structure to choose a composition | Validates inputs itself or through constructors; may inspect structure for validation only. Space factories apply canonical forms; `indexed`, `component`, `component_tensor` and `index_sum` apply their empty-index identities |
+| Pass | After construction, inspects graph structure and returns information or a rewritten graph | Enforces its own preconditions; constructors validate nodes it builds. Space substitution preserves canonical forms |
 
-Constructor arguments are positional only; a named argument raises `TypeError`.
-Free functions may take named arguments, such as `domain_map(P=T, psi=psi, Q=RD(2))`.
+Free functions and passes are pure. A class method immediately calls a free
+function. Constructor arguments are positional only; named arguments raise
+`TypeError`. Free functions may take named arguments, such as
+`domain_map(P=T, psi=psi, Q=RD(2))`.
 
 A stored property returns a construction argument; a derived property depends
 on the class and those arguments. Concrete classes inherit the derived
-properties of their abstract classes. Derived objects may be built and stored
-during construction for properties to return.
+properties of their abstract classes.
 
 ### No simplification during construction
 
-Simplification and rewriting should be avoided entirely while the user
-constructs the graph, so the graph keeps the intent of the user. Only later
-passes, chosen by the user, should rewrite. For example, in `(a + b) + c` in
-floating point arithmetic, where `a`, `b` and `c` are terminals supplied
-later, the user may need `(a + b)` evaluated before `c` is added.
-
-Space descriptions use the canonical forms specified by their classes.
-Their factories and substitution apply these identities without simplifying
-expression structure.
-
-The empty-index identities of `indexed`, `component`, `component_tensor` and
-`index_sum` are also explicit factory exceptions: they return the operand
-without creating a node or inspecting its expression structure.
+The construction policy preserves the user's written operations. For example,
+in `(a + b) + c`, the user may need `(a + b)` evaluated before `c` is added
+in floating-point arithmetic. Building a fixed composition defines an
+operation; it does not simplify its operands. Later passes, chosen by the
+user, may rewrite it.
 
 ### Passes
 
@@ -244,20 +238,8 @@ core pass `replace(e, mapping)` performs this substitution.
 A pass does one thing, such as differentiating or lowering. Passes compose,
 and the user of the core chooses which passes run and in what order.
 
-### Kinds of code that produce objects
-
-Three kinds of code produce objects:
-
-| Kind                                               | When the code runs              | Inspects arguments to choose what to build                                | Validates construction arguments |
-| -------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------- | ----------------------------- |
-| Constructor                                        | Whenever an object is made      | To validate and compute derived data; never to simplify the expression | Yes                           |
-| Construction free function, such as `transpose`  | While the user builds the graph | Expression static type and explicit non-expression arguments; canonical forms for spaces | May validate documented inputs |
-| Pass, such as differentiation, lowering or `units` | After construction              | Yes, and a pass may rewrite the graph                                     | No                            |
-
-A construction free function rejects invalid inputs itself or through the
-constructors it calls. A pass fails with `TypeError` for a node class that
-the pass has no rule for, or with an error of the pass, such as inconsistent
-units.
+A pass fails with `TypeError` for a node class it has no rule for, or with an
+error of the pass, such as inconsistent units.
 
 ## Domains
 
@@ -459,26 +441,12 @@ forms](#variational-forms)).
 
 ### Node class or free function
 
-An expression operation must be a construction free function, not a node class, if it can
-build the concept as one fixed composition of existing node classes for each
-expression static type and choice of explicit non-expression arguments.
-The static type of an expression is the value
-shape, the free indices, the scalar type, the domain and the argument
-spaces. The static type of a domain is the stored and the derived
-properties of the domain, such as the dimension of a coordinate domain or the pieces of a
-mesh. A construction free function chooses the composition from
-expression static types and the documented interfaces of explicit non-expression
-arguments. Choosing a composition from expression structure, such as the class,
-the edges or the values, requires a node class; inspecting it to validate
-inputs does not. A concept that is evaluated
-by a numerical algorithm that the user supplies also
-gets its own node class, even if a fixed composition exists, because the
-composition would fix the algorithm. A concept that a pass must
-meet as the user wrote the concept also gets its own node class, even if a
-fixed composition exists, and the section of the node class states the
-composition.
-`Integral` over a mesh is such a concept (see
-[`Integral`](#integral)).
+An operation uses a construction free function when it has a fixed
+composition under the [construction policy](#construction-policy). A node
+class is needed when choosing the result requires expression structure, when
+the compiler must choose a numerical algorithm, or when a pass must retain
+the operation as written. In the last case, the node's section states its
+composition; `Integral` over a mesh is an example.
 
 For example, the transpose is always `component_tensor(A[k, l], (l, k))`,
 so it is a free function. `Inverse` and `Determinant` keep the algorithm
@@ -493,11 +461,6 @@ overloads](#operator-overloads)). `transpose` is in the core because the rule
 for `Inverse` of [Applying derivatives](#applying-derivatives) uses it. Every
 other construction free function belongs to a library, such as the operations
 of [Tensor algebra](examples/tensors.md#tensor-algebra).
-
-A construction free function that builds a fixed composition is a definition,
-not a simplification. Validation does not rewrite the operands. The empty-index
-factory identities below return an operand directly, without inspecting its
-expression structure; their node constructors still require nonempty tuples.
 
 A node class is part of the core only if a definition or a rule of the core
 needs the node class, or if the node class is an operation of the scalar
