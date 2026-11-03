@@ -238,6 +238,41 @@ and the user of the core chooses which passes run and in what order.
 A pass fails with `TypeError` for a node class it has no rule for, or with an
 error of the pass, such as inconsistent units.
 
+### Operator overloads
+
+Only `AbstractExpression` defines arithmetic and indexing overloads, listed in
+the [table of free functions](#appendix-free-functions).
+
+An overload passes operands unchanged to its free function, except for the
+indexing syntax below. There are no reflected overloads, such as `__radd__`.
+
+An overload applies one free function to the operands, so the graph follows
+the grouping and the precedence of Python, and construction never regroups
+(see [No simplification during
+construction](#no-simplification-during-construction)). For example,
+`a + b + c` is `Sum(Sum(a, b), c)` and `a + (b + c)` is `Sum(a, Sum(b, c))`,
+and the two are not equal. `a ** b ** c` is `power(a, power(b, c))`, and
+`-a ** b` is `negate(power(a, b))`.
+
+Python passes `f[i]` to `__getitem__` as `i`, but `f[i, j]` as `(i, j)`.
+`__getitem__` wraps a single entry in a `tuple` and calls `component` (see
+[Partial indexing](#partial-indexing)).
+
+`AbstractExpression` defines `__iter__` to raise `TypeError`, because
+expressions are not iterable and Python otherwise iterates through
+`__getitem__`.
+
+### Numbers in expressions
+
+Every number in an expression is written with literals, such as `Integer(2)`,
+`Float(0.5)`, `Integer(1) / Integer(3)` or `Complex(Integer(0), Integer(1))`. A Python `int`, `float`,
+`complex`, `Fraction` or NumPy scalar is never converted and is rejected with
+`TypeError`.
+
+With `X = coordinate(RD(2))`, `X[0]**Integer(2)` is accepted, but `X[0]**2`
+raises `TypeError`. The same rule applies inside containers:
+`tensor((Integer(1), Integer(2)))` is accepted, but `tensor((1, 2))` is not.
+
 ## Domains
 
 Function spaces and operators use a domain's dimension, boundary and cell
@@ -468,7 +503,7 @@ the core.
 The [node-class rationale](#appendix-node-class-rationale) explains the
 individual choices.
 
-## Algebra
+## Numbers and scalar operations
 
 ### Literals
 
@@ -691,6 +726,8 @@ part in $(-\pi, \pi]$, and `SquareRoot` is the principal square root.
 because IEEE 754 requires a correctly rounded square root and not a correctly
 rounded power, so the result of `power` depends on the math library.
 ~~~
+
+## Tensors and indexing
 
 ### `Tensor`
 
@@ -967,6 +1004,8 @@ A free function or a pass derives one `Index` per axis.
 `component_tensor(e, K)[J]` is $e$ with each index of `K` replaced by the
 corresponding entry of `J`.
 
+## Tensor operations
+
 ### Tensor arithmetic
 
 Tensor arithmetic uses fixed compositions of scalar nodes and index notation.
@@ -1122,41 +1161,6 @@ Domain, free indices and scalar type follow the operand.
 The node remains in the core normal form. The compiler chooses its evaluation,
 such as an explicit formula for a small matrix or a factorisation. The
 [derivative rule](#derivatives-of-the-node-classes) uses `Inverse`.
-
-### Operator overloads
-
-Only `AbstractExpression` defines arithmetic and indexing overloads, listed in
-the [table of free functions](#appendix-free-functions).
-
-An overload passes operands unchanged to its free function, except for the
-indexing syntax below. There are no reflected overloads, such as `__radd__`.
-
-An overload applies one free function to the operands, so the graph follows
-the grouping and the precedence of Python, and construction never regroups
-(see [No simplification during
-construction](#no-simplification-during-construction)). For example,
-`a + b + c` is `Sum(Sum(a, b), c)` and `a + (b + c)` is `Sum(a, Sum(b, c))`,
-and the two are not equal. `a ** b ** c` is `power(a, power(b, c))`, and
-`-a ** b` is `negate(power(a, b))`.
-
-Python passes `f[i]` to `__getitem__` as `i`, but `f[i, j]` as `(i, j)`.
-`__getitem__` wraps a single entry in a `tuple` and calls `component` (see
-[Partial indexing](#partial-indexing)).
-
-`AbstractExpression` defines `__iter__` to raise `TypeError`, because
-expressions are not iterable and Python otherwise iterates through
-`__getitem__`.
-
-### Numbers in expressions
-
-Every number in an expression is written with literals, such as `Integer(2)`,
-`Float(0.5)`, `Integer(1) / Integer(3)` or `Complex(Integer(0), Integer(1))`. A Python `int`, `float`,
-`complex`, `Fraction` or NumPy scalar is never converted and is rejected with
-`TypeError`.
-
-With `X = coordinate(RD(2))`, `X[0]**Integer(2)` is accepted, but `X[0]**2`
-raises `TypeError`. The same rule applies inside containers:
-`tensor((Integer(1), Integer(2)))` is accepted, but `tensor((1, 2))` is not.
 
 Worked examples for this chapter: [transpose](examples/tensors.md#transpose), [tensor algebra](examples/tensors.md#tensor-algebra).
 
@@ -3838,10 +3842,10 @@ The following table lists all allowed node classes and their conditions:
 
 | Chapter | Node class | Allowed in the core normal form |
 | ------- | ---------- | ------------------------------- |
-| [Algebra](#algebra) | `Integer`, `Float`, `Complex`, `Zero` | Always |
-| [Algebra](#algebra) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
-| [Algebra](#algebra) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of a `ComponentTensor`, which the compiler rewrites (see [Evaluation](#evaluation)) |
-| [Algebra](#algebra) | `Inverse`, `Determinant` | Always, for the compiler to evaluate |
+| [Numbers and scalar operations](#numbers-and-scalar-operations) | `Integer`, `Float`, `Complex`, `Zero` | Always |
+| [Numbers and scalar operations](#numbers-and-scalar-operations) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
+| [Tensors and indexing](#tensors-and-indexing) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of a `ComponentTensor`, which the compiler rewrites (see [Evaluation](#evaluation)) |
+| [Tensor operations](#tensor-operations) | `Inverse`, `Determinant` | Always, for the compiler to evaluate |
 | [Calculus on a domain](#calculus-on-a-domain) | `Coordinate` | Always |
 | [Calculus on a domain](#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
 | [Calculus on a domain](#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
@@ -4191,15 +4195,27 @@ Extend `Base`:
 
 [`Index`](#index).
 
-### Algebra
+### Numbers and scalar operations
 
 Extend `AbstractExpression`:
 
-[`Integer`](#literals), [`Float`](#literals), [`Complex`](#complex), [`Zero`](#zero), [`Sum`](#sum), [`Product`](#product), [`Power`](#power), [`Division`](#division), [`Absolute`](#absolute), [`Conjugate`](#conjugate), [`RealPart`](#realpart-and-imaginarypart), [`ImaginaryPart`](#realpart-and-imaginarypart), [`SquareRoot`](#elementary-functions), [`Logarithm`](#elementary-functions), [`Tensor`](#tensor), [`Indexed`](#indexed), [`ComponentTensor`](#componenttensor-and-indexsum), [`IndexSum`](#componenttensor-and-indexsum), [`Inverse`](#inverse), [`Determinant`](#determinant).
+[`Integer`](#literals), [`Float`](#literals), [`Complex`](#complex), [`Zero`](#zero), [`Sum`](#sum), [`Product`](#product), [`Power`](#power), [`Division`](#division), [`Absolute`](#absolute), [`Conjugate`](#conjugate), [`RealPart`](#realpart-and-imaginarypart), [`ImaginaryPart`](#realpart-and-imaginarypart), [`SquareRoot`](#elementary-functions), [`Logarithm`](#elementary-functions).
+
+### Tensors and indexing
+
+Extend `AbstractExpression`:
+
+[`Tensor`](#tensor), [`Indexed`](#indexed), [`ComponentTensor`](#componenttensor-and-indexsum), [`IndexSum`](#componenttensor-and-indexsum).
 
 Extend `Base`:
 
 [`GatheredIndex`](#gatheredindex).
+
+### Tensor operations
+
+Extend `AbstractExpression`:
+
+[`Inverse`](#inverse), [`Determinant`](#determinant).
 
 ### Calculus on a domain
 
@@ -4263,32 +4279,42 @@ Extend `AbstractExpression`:
 | ------------------------ | -------- | --------------------- | ------- |
 | [`index(label)`](#index) |          | `label: str \| tuple` | `Index` |
 
-### Algebra
+### Numbers and scalar operations
 
-| Function                                                                 | Overload | Takes                                                          | Returns                                                                                                                                                                                |
-| ------------------------------------------------------------------------ | -------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`power(first, second)`](#power)                                         | `**`     | `first, second: AbstractExpression`                            | `Power`                                                                                                                                                                                |
-| [`negate(f)`](#negation-and-subtraction)                                 | `-f`     | `f: AbstractExpression`                                        | `multiply(Integer(-1), f)`                                                                                                                                                             |
-| [`subtract(f, g)`](#negation-and-subtraction)                            | `f - g`  | `f, g: AbstractExpression`                                     | `add(f, negate(g))`                                                                                                                                                                    |
-| [`absolute(f)`](#absolute)                                               | `abs(f)` | `f: AbstractExpression`                                        | `Absolute`                                                                                                                                                                             |
-| [`conjugate(f)`](#conjugate)                                             |          | `f: AbstractExpression`                                        | `Conjugate`                                                                                                                                                                            |
-| [`square_root(f)`](#elementary-functions)                                |          | `f: AbstractExpression`                                        | `SquareRoot`                                                                                                                                                                           |
-| [`logarithm(f)`](#elementary-functions)                                  |          | `f: AbstractExpression`                                        | `Logarithm`                                                                                                                                                                            |
-| [`tensor(entries)`](#tensor)                                             |          | `entries: tuple[AbstractExpression, ...]`                      | `Tensor`                                                                                                                                                                               |
-| [`indexed(expression, indices)`](#indexed)                               |          | `expression: AbstractExpression`, `indices: tuple`             | `Indexed`                                                                                                                                                                              |
-| [`component(f, entries)`](#partial-indexing)                             | `[]`     | `f: AbstractExpression`, `entries: tuple`                      | `f` if `entries == ()`; otherwise `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$, otherwise `indexed(f, entries)`                        |
-| [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]` | `ComponentTensor`                                                                                                                                                                      |
-| [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]` | `IndexSum`                                                                                                                                                                             |
-| [`gathered_index(table, indices)`](#gatheredindex)                       |          | `table: AbstractIndexTable`, `indices: tuple`                  | `GatheredIndex`                                                                                                                                                                        |
-| [`add(first, second)`](#tensor-arithmetic)                               | `+`      | `first, second: AbstractExpression`                            | `component_tensor(Sum(first[K], second[K]), K)`                                                                                                                                        |
-| [`multiply(first, second)`](#tensor-arithmetic)                          | `*`      | `first, second: AbstractExpression`                            | `component_tensor(Product(first, second[K]), K)` if `first` is scalar, `component_tensor(Product(first[K], second), K)` if only `second` is scalar, otherwise `Product(first, second)` |
-| [`divide(first, second)`](#tensor-arithmetic)                            | `/`      | `first, second: AbstractExpression`                            | `component_tensor(Division(first[K], second), K)`                                                                                                                                      |
-| [`real_part(f)`](#tensor-arithmetic)                                     |          | `f: AbstractExpression`                                        | `component_tensor(RealPart(f[K]), K)`                                                                                                                                                  |
-| [`imaginary_part(f)`](#tensor-arithmetic)                                |          | `f: AbstractExpression`                                        | `component_tensor(ImaginaryPart(f[K]), K)`                                                                                                                                             |
-| [`matrix_product(first, second)`](#tensor-arithmetic)                    | `@`      | `first, second: AbstractExpression`                            | The contraction of the last axis of `first` with the first axis of `second`, below                                                                                                     |
-| [`transpose(A)`](#tensor-arithmetic)                                     |          | `A: AbstractExpression`                                        | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2                                                                                                            |
-| [`inverse(A)`](#inverse)                                                 |          | `A: AbstractExpression`                                        | `Inverse`                                                                                                                                                                              |
-| [`determinant(A)`](#determinant)                                         |          | `A: AbstractExpression`                                        | `Determinant`                                                                                                                                                                          |
+| Function                                      | Overload | Takes                               | Returns                    |
+| --------------------------------------------- | -------- | ----------------------------------- | -------------------------- |
+| [`power(first, second)`](#power)              | `**`     | `first, second: AbstractExpression` | `Power`                    |
+| [`negate(f)`](#negation-and-subtraction)      | `-f`     | `f: AbstractExpression`             | `multiply(Integer(-1), f)` |
+| [`subtract(f, g)`](#negation-and-subtraction) | `f - g`  | `f, g: AbstractExpression`          | `add(f, negate(g))`        |
+| [`absolute(f)`](#absolute)                    | `abs(f)` | `f: AbstractExpression`             | `Absolute`                 |
+| [`conjugate(f)`](#conjugate)                  |          | `f: AbstractExpression`             | `Conjugate`                |
+| [`square_root(f)`](#elementary-functions)     |          | `f: AbstractExpression`             | `SquareRoot`               |
+| [`logarithm(f)`](#elementary-functions)       |          | `f: AbstractExpression`             | `Logarithm`                |
+
+### Tensors and indexing
+
+| Function                                                                 | Overload | Takes                                                          | Returns                                                                                                                                                         |
+| ------------------------------------------------------------------------ | -------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`tensor(entries)`](#tensor)                                             |          | `entries: tuple[AbstractExpression, ...]`                      | `Tensor`                                                                                                                                                        |
+| [`indexed(expression, indices)`](#indexed)                               |          | `expression: AbstractExpression`, `indices: tuple`             | `Indexed`                                                                                                                                                       |
+| [`component(f, entries)`](#partial-indexing)                             | `[]`     | `f: AbstractExpression`, `entries: tuple`                      | `f` if `entries == ()`; otherwise `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$, otherwise `indexed(f, entries)` |
+| [`component_tensor(expression, indices)`](#componenttensor-and-indexsum) |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]` | `ComponentTensor`                                                                                                                                               |
+| [`index_sum(expression, indices)`](#componenttensor-and-indexsum)        |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]` | `IndexSum`                                                                                                                                                      |
+| [`gathered_index(table, indices)`](#gatheredindex)                       |          | `table: AbstractIndexTable`, `indices: tuple`                  | `GatheredIndex`                                                                                                                                                 |
+
+### Tensor operations
+
+| Function                                              | Overload | Takes                               | Returns                                                                                                                                                                                |
+| ----------------------------------------------------- | -------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`add(first, second)`](#tensor-arithmetic)            | `+`      | `first, second: AbstractExpression` | `component_tensor(Sum(first[K], second[K]), K)`                                                                                                                                        |
+| [`multiply(first, second)`](#tensor-arithmetic)       | `*`      | `first, second: AbstractExpression` | `component_tensor(Product(first, second[K]), K)` if `first` is scalar, `component_tensor(Product(first[K], second), K)` if only `second` is scalar, otherwise `Product(first, second)` |
+| [`divide(first, second)`](#tensor-arithmetic)         | `/`      | `first, second: AbstractExpression` | `component_tensor(Division(first[K], second), K)`                                                                                                                                      |
+| [`real_part(f)`](#tensor-arithmetic)                  |          | `f: AbstractExpression`             | `component_tensor(RealPart(f[K]), K)`                                                                                                                                                  |
+| [`imaginary_part(f)`](#tensor-arithmetic)             |          | `f: AbstractExpression`             | `component_tensor(ImaginaryPart(f[K]), K)`                                                                                                                                             |
+| [`matrix_product(first, second)`](#tensor-arithmetic) | `@`      | `first, second: AbstractExpression` | The contraction of the last axis of `first` with the first axis of `second`, below                                                                                                     |
+| [`transpose(A)`](#tensor-arithmetic)                  |          | `A: AbstractExpression`             | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2                                                                                                            |
+| [`inverse(A)`](#inverse)                              |          | `A: AbstractExpression`             | `Inverse`                                                                                                                                                                              |
+| [`determinant(A)`](#determinant)                      |          | `A: AbstractExpression`             | `Determinant`                                                                                                                                                                          |
 
 ### Calculus on a domain
 
