@@ -20,23 +20,44 @@ Using user indices instead gives a mathematically equal expression with a
 different graph. `Indexed` rejects an operand of array rank other than 2,
 including a scalar, with `IndexError`.
 
-## Tensor algebra with `EllipsisIndex`
+## Tensor algebra
 
-An ellipsis index lets a library define a tensor operation once for every
-array rank. With derived ellipsis indices `r` and `s` and an ordinary derived
-index `k`, the definitions are:
+A library builds one ordinary index per value axis. For `outer(u, v)`, use
+distinct tuples `I` and `J`:
 
-| Operation | Fixed composition |
-| --------- | ----------------- |
-| `outer(u, v)` | `component_tensor(u[r] * v[s], (r, s))` |
-| `dot(u, v)` | `component_tensor(index_sum(u[r, k] * v[k, s], (k,)), (r, s))` |
-| `inner(A, B)` | `index_sum(A[r] * conjugate(B[r]), (r,))` |
+```python
+I = tuple(Index(("library.outer", u, v, 0, m)) for m in range(len(u.value_shape)))
+J = tuple(Index(("library.outer", u, v, 1, m)) for m in range(len(v.value_shape)))
+outer = component_tensor(indexed(u, I) * indexed(v, J), I + J)
+```
 
-These are library operations. Core tensor arithmetic instead builds one index
-per axis. For vectors and matrices, `dot(u, v)` and `u @ v` contract the same
-axes but are not structurally equal. Nor does an ellipsis composition reduce
-when it meets a binder with separate indices, as in `inner(transpose(A), B)`;
-that requires a later rewrite.
+For `inner(A, B)`, use one tuple `K` for both operands, which must have equal
+value shapes:
+
+```python
+K = tuple(Index(("library.inner", A, B, m)) for m in range(len(A.value_shape)))
+inner = index_sum(indexed(A, K) * conjugate(indexed(B, K)), K)
+```
+
+Both constructions include scalars: empty index tuples return the operands,
+so the outer product becomes multiplication and the inner product becomes
+multiplication by the conjugate.
+
+For `dot(u, v)`, both operands have rank at least one. Derive distinct tuples
+`I` for all but the last axis of `u` and `J` for all but the first axis of
+`v`, and a further index `k`, using labels based on `"library.dot"`, `u` and
+`v`. The contraction is:
+
+```python
+dot = component_tensor(
+    index_sum(indexed(u, I + (k,)) * indexed(v, (k,) + J), (k,)),
+    I + J,
+)
+```
+
+For vectors, `I` and `J` are empty and the result is scalar. For ranks 1 and
+2, this contracts the same axes as `@`; higher ranks use the same formula.
+All three operations are library compositions, not additional core nodes.
 
 ## Symmetric tensors
 
