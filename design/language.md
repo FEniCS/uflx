@@ -515,22 +515,17 @@ individual choices.
 ### Literals
 
 A literal is a number written in an expression, such as `Integer(2) * u`.
-`Integer` and `Float` are real terminals with the abstract base
-`AbstractRealLiteral`:
-
-| `AbstractRealLiteral` | |
-| --------------------- | - |
-| Extends               | `AbstractExpression` |
-| Static type           | Value shape `()`, real, no free indices, no domain and the argument spaces `()` |
+`Integer` and `Float` are real terminals with value shape `()`, no free
+indices, no domain and argument spaces `()`.
 
 | `Integer(v)` |                       |
 | ------------ | --------------------- |
-| Extends      | `AbstractRealLiteral` |
+| Extends      | `AbstractExpression` |
 | Properties   | `value` $v$, an `int` |
 
 | `Float(v)` |                               |
 | ---------- | ----------------------------- |
-| Extends    | `AbstractRealLiteral`         |
+| Extends    | `AbstractExpression`         |
 | Properties | `value` $v$, a finite `float` |
 
 `Integer` and `Float` accept only exact Python types, as in rule 1 of
@@ -4343,14 +4338,14 @@ config:
 classDiagram
     direction LR
     accTitle: Algebra class hierarchy (1 of 3)
-    AbstractExpression <|-- AbstractRealLiteral
-    AbstractRealLiteral <|-- Integer
-    AbstractRealLiteral <|-- Float
+    AbstractExpression <|-- Integer
+    AbstractExpression <|-- Float
     AbstractExpression <|-- Complex
     AbstractExpression <|-- Zero
     AbstractExpression <|-- Sum
     AbstractExpression <|-- Product
     AbstractExpression <|-- Power
+    AbstractExpression <|-- Division
 ```
 
 ```mermaid
@@ -4366,7 +4361,6 @@ config:
 classDiagram
     direction LR
     accTitle: Algebra class hierarchy (2 of 3)
-    AbstractExpression <|-- Division
     AbstractExpression <|-- Absolute
     AbstractExpression <|-- Conjugate
     AbstractExpression <|-- RealPart
@@ -4374,6 +4368,7 @@ classDiagram
     AbstractExpression <|-- SquareRoot
     AbstractExpression <|-- Logarithm
     AbstractExpression <|-- Tensor
+    AbstractExpression <|-- Indexed
 ```
 
 ```mermaid
@@ -4389,7 +4384,6 @@ config:
 classDiagram
     direction LR
     accTitle: Algebra class hierarchy (3 of 3)
-    AbstractExpression <|-- Indexed
     AbstractExpression <|-- ComponentTensor
     AbstractExpression <|-- IndexSum
     Base <|-- AbstractIndexValue
@@ -4660,8 +4654,8 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 53    |
-| Abstract classes                | 11    |
+| Classes                         | 52    |
+| Abstract classes                | 10    |
 | Concrete classes                | 42    |
 | Expression node classes         | 32    |
 | Free functions                  | 50    |
