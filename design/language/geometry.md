@@ -62,7 +62,7 @@ Examples:
 | ---------- | --------------------------------------------------------------- |
 | Extends    | `AbstractCoordinateDomain` |
 | Properties | `dimension`, an `int` $n \ge 0$                                 |
-| Raises     | `TypeError` if $n$ is not an `int`, and `ValueError` if $n < 0$ |
+| Raises     | `ValueError` if $n < 0$ |
 
 Worked examples for this chapter: [the unit simplex](../examples/library.md#the-unit-simplex).
 
@@ -80,7 +80,6 @@ coordinate domain. It is a terminal.
 | Takes           | `P: AbstractDomain` |
 | Properties      | `domain`, an `AbstractDomain` $P$                  |
 | Static type     | Value shape `(n,)`, real, the domain $P$          |
-| Raises          | `TypeError` if $P$ is not an `AbstractDomain`      |
 
 $n$ is the dimension of the ambient coordinate domain of $P$. For a
 coordinate domain $P$, the coordinate function is the identity,
@@ -100,7 +99,8 @@ For example, `coordinate(RD(3))` has value shape `(3,)` and domain `RD(3)`.
 
 An expression and a domain $(f, P)$ are a valid pair if $P$ is an
 [`AbstractDomain`](#abstractdomain) and $f$ has the domain $P$ or no domain.
-Otherwise construction raises `TypeError` for $P$ or `ValueError` for $f$. An
+The type of $P$ is checked statically; construction raises `ValueError` if
+the domains do not match. An
 $f$ with no domain is a constant on $P$.
 
 ### `Gradient`
@@ -117,7 +117,7 @@ dimension $n$.
 | Properties       | `expression` $f$ and `domain` $P$, with $n$ the dimension of the ambient coordinate domain of $P$ |
 | Requires         | A [valid pair](#valid-pair) $(f, P)$                                                              |
 | Static type      | Value shape `f.value_shape + (n,)`                                                                |
-| Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                               |
+| Raises           | `ValueError` for $f$ if a requirement fails                               |
 
 The gradient acts on each component of an array-valued $f$. Entry `j` of the
 last axis of `Gradient(f, P)` is the partial derivative $\partial_j f$ in the
@@ -190,7 +190,7 @@ domain $P$, with $n$ the dimension of its ambient coordinate domain.
 | Properties         | `expression` $u$ and `domain` $P$                                   |
 | Requires           | A [valid pair](#valid-pair) $(u, P)$, and $u$ of rank at least 1 with the last extent $n$ |
 | Static type        | Value shape `u.value_shape[:-1]`                                    |
-| Raises             | `TypeError` for $P$ and `ValueError` for $u$ if a requirement fails |
+| Raises             | `ValueError` for $u$ if a requirement fails |
 
 | `Curl(u, P)`  |                                                                     |
 | ------------- | ------------------------------------------------------------------- |
@@ -200,7 +200,7 @@ domain $P$, with $n$ the dimension of its ambient coordinate domain.
 | Properties    | `expression` $u$ and `domain` $P$                                   |
 | Requires      | A [valid pair](#valid-pair) $(u, P)$, $n$ 2 or 3, and $u$ of value shape `(n,)` |
 | Static type   | Value shape `(3,)` for $n = 3$ and `()` for $n = 2$                 |
-| Raises        | `TypeError` for $P$ and `ValueError` for $u$ if a requirement fails |
+| Raises        | `ValueError` for $u$ if a requirement fails |
 
 The value of `Divergence(u, P)` is the trace of `gradient(u, P)` over the last
 axis of $u$ and the axis of the gradient. With `G = gradient(u, P)`, so
@@ -239,7 +239,7 @@ binding](evaluation.md#substitution-and-binding)).
 | Properties                       | `expression` $f$, `variable` $x$, `point` $a$ and `direction` $h$ |
 | Requires                         | $x$ a [bindable function](forms.md#bindable-functions), or a `tuple` of at least two distinct bindable functions; member by member, $a$ and $h$ admissible values for the space of $x$ as in [`Action`](forms.md#action) |
 | Static type                      | The value shape of $f$, the free indices of $f$ followed by those of the members of $a$ and $h$, each `Index` taken once, and the argument spaces and the scalar type of $f$ |
-| Raises                           | `TypeError` for an $x$ that is not a `Function` or a `tuple` of functions, and `ValueError` if another requirement fails |
+| Raises                           | `ValueError` if another requirement fails |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -295,7 +295,7 @@ needs no topological notion of the domain.
 | Properties       | `expression` $f$ and `integration_domain` $P$                                                           |
 | Requires         | A [valid pair](#valid-pair) $(f, P)$, or $P$ a mesh and $f$ with the domain `P.ambient_domain` |
 | Static type      | The value shape and free indices of $f$, with no domain |
-| Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                         |
+| Raises           | `ValueError` for $f$ if a requirement fails                         |
 
 For a coordinate domain $P$ of dimension $n$, `Integral(f, P)` is the
 Lebesgue integral in the coordinates $X$ of $P$,
@@ -340,7 +340,7 @@ or its parameterised image, retaining multiplicity. A `DomainMap` is not an
 | Properties                       | `parameter_domain` $P$, an [`AbstractCoordinateDomain`](#abstractcoordinatedomain) or an [`AbstractTopology`](#abstracttopology) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractCoordinateDomain`                                                   |
 | Requires                         | $\psi$ with the domain $P$ or no domain, $\psi$ real with value shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$ and the argument spaces `()`, and $k \le n$ |
 | Derived                          | `free_indices`, the free indices of $\psi$ |
-| Raises                           | `TypeError` for $P$ or $Q$, and `ValueError` if another requirement fails                                                                                                                                   |
+| Raises                           | `ValueError` if another requirement fails                                                                                                                                   |
 
 The topological dimension is `P.dimension`; the geometric dimension is
 that of the ambient coordinate domain of $Q$. Maps need not be injective.
@@ -370,7 +370,7 @@ specifies its coordinate parameterisation $\psi$.
 | Properties       | `expression` $f$, and `map` $D$, a `DomainMap`, a [`SideMap`](#sidemap) or a [`CellMap`](#cellmap) |
 | Requires         | $f$ with the domain $Q$ or no domain, and an equal extent for an `Index` free in both $f$ and $D$          |
 | Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
-| Raises           | `TypeError` for $D$, and `ValueError` if another requirement fails                                         |
+| Raises           | `ValueError` if another requirement fails                                         |
 
 For a `DomainMap`, the pull-back is the composition $f \circ \psi$, the
 expression on $P$ with the value $f(\psi(p))$ at each point $p$ of $P$.
@@ -775,7 +775,7 @@ coordinates coincide.
 | Properties | `ambient_domain` $X$, `cell_group` $j$, and `entry` $e$ |
 | Requires | $j$ a valid cell-group number of $T$, `T.cell_types[j]` a reference cell $K_j$; an integer $e$ satisfies `0 <= e < T.num_cells[j]`, and a `GatheredIndex` has extent `T.num_cells[j]` |
 | Derived | `topology` $T$, `parameter_domain` $K_j$, `free_indices` and, for a mesh, `parameterisation`, as below |
-| Raises | `TypeError` for an invalid argument type, and `ValueError` if another requirement fails |
+| Raises | `ValueError` if another requirement fails |
 
 For an ordinary `Index` $e$, `free_indices` contains $e$ with extent
 `T.num_cells[j]`; the index itself stores no extent. For a `GatheredIndex`,
@@ -817,7 +817,7 @@ coordinate values; those remain with the topology and coordinate-function librar
 | Properties | `coordinate_function` $x$, and `ambient_domain` $Q$ |
 | Requires | $x$ with domain $T$, a topology whose cell types are reference cells; $x$ real, with value shape `(n,)` for the ambient coordinate dimension of $Q$, free indices `()` and argument spaces `()`; `T.dimension <= n` |
 | Derived | `topology` $T$ = `x.domain`, `dimension` = `T.dimension`, and `pieces`, below |
-| Raises | `TypeError` for an invalid coordinate domain or ambient-domain type, and `ValueError` if another requirement fails |
+| Raises | `TypeError` if the coordinate expression has no topology domain, and `ValueError` if another requirement fails |
 
 `image(x, Q)` returns `Mesh(x, Q)`. The topology is determined by $x$ and is
 not a separate construction argument. Mesh identity depends on $x$ and $Q$;
@@ -908,12 +908,11 @@ to a cell of a mesh.
 | -------------------------------------- | --------------------------------------------------------------------- |
 | Extends                                | `Base` |
 | Free function                          | `transformation_law(variances, weight)`                               |
-| Takes                                  | `variances: tuple[str, ...]`, `weight: int` |
+| Takes                                  | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` |
 | Properties                             | `variances`, a `tuple` of `"covariant"` and `"contravariant"`, and `weight` $w$ |
-| Raises                                 | `TypeError` for an argument of another type, and `ValueError` for another string |
 
 There is one variance for each of the last axes of the value shape, and the
-leading axes are unchanged. A library may type the variances as a `Literal`.
+leading axes are unchanged. The permitted variance names are checked statically.
 
 For a cell $\psi$ of a mesh, with $J$, $K$ and $\rho$ of [Jacobian and
 density](#jacobian-and-density), $k$ the dimension of the topology and $n$ the
@@ -956,7 +955,7 @@ $T$.
 | Properties             | `expression` $f$, `mesh` $D$ and `law` $m$                        |
 | Requires               | $D$ a mesh with the topology $T$, $f$ with the domain $T$ or no domain, and the last axes of $f$, one for each variance of $m$, of the extent $k$ |
 | Static type            | The value shape of $f$ with the extent $n$ for each transformed axis, the domain $D$ |
-| Raises                 | `TypeError` for $D$ or $m$, and `ValueError` if another requirement fails |
+| Raises                 | `ValueError` if another requirement fails |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -1267,7 +1266,7 @@ It points outward on boundary pieces.
 | Properties   | `side_map`, a [`SideMap`](#sidemap) `SideMap(D, E, s)`                                               |
 | Requires     | $D$ a mesh, and $E$ of the dimension $k - 1$ for the dimension $k$ of $D$                             |
 | Static type  | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the domain $E$, real      |
-| Raises       | `TypeError` for an `sm` that is not a `SideMap`, and `ValueError` if the requirement fails           |
+| Raises       | `ValueError` if the requirement fails           |
 
 The normal of `sm` belongs to the same side as the restriction
 `pull_back(f, sm)`, so a form writes both from one side map.

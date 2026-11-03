@@ -108,7 +108,6 @@ with those argument spaces.
 | Takes                | `V: AbstractFunctionSpace`, `label: str \| tuple` |
 | Properties           | `space` $V$, an `AbstractFunctionSpace`, and `label`, a `str` or a `tuple` with the rules of the label of an [`Index`](expressions.md#index) |
 | Static type          | The value shape, scalar type and argument spaces of $V$, the domain of $V$, and no free indices |
-| Raises               | `TypeError` if a requirement fails                                                                                           |
 
 The label identifies the function, so two functions are the same only if the
 spaces and the labels are equal. `Function(DualSpace(S), label)` is an
@@ -194,7 +193,7 @@ arguments remain an open question.
 | Returns             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise |
 | Properties          | `space` $V$, an `AbstractFunctionSpace` with the complex scalar type, not a `ConjugateSpace`       |
 | Derived             | `domain`, `value_shape` and `scalar_type`, those of $V$; `argument_spaces`, those of $V$ with each space conjugated, member by member for a `tuple` |
-| Raises              | `TypeError` for a $V$ that is not a space, and `ValueError` for a real $V$ or a `ConjugateSpace`  |
+| Raises              | `ValueError` for a real $V$ or a `ConjugateSpace`  |
 
 $\bar V$ has the functions of $V$ with the conjugate scalar multiplication, so
 a function in $\bar V$ is the conjugate of a function in $V$, and a linear
@@ -226,7 +225,7 @@ product and belongs to the supplying library.
 | Takes | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` |
 | Properties | `space` $S$, a space other than a `DualSpace`, or a `tuple` of at least two spaces with the same scalar type |
 | Derived | `domain`, `value_shape`, `scalar_type` and `argument_spaces`, below |
-| Raises | `TypeError` for an $S$ of another type, and `ValueError` for a `DualSpace` or an invalid tuple |
+| Raises | `ValueError` for a `DualSpace` or an invalid tuple |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -335,7 +334,7 @@ The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in
 | Properties                    | `expression`, an expression, and `arguments`, a `tuple` of entries, each a [function](#function) `v`, the [conjugate](expressions.md#conjugate) `conjugate(v)` of a function, or a `tuple` of at least two of these |
 | Requires                      | Every function in `arguments` distinct and [bindable](#bindable-functions) |
 | Static type                   | That of the expression, with the argument spaces of the expression followed by the space $V$ of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
-| Raises                        | `TypeError` for an entry that is not a `Function`, a `Conjugate` of a `Function` or a `tuple` of these, and `ValueError` for a repeated or non-bindable function or a `tuple` of fewer than two members |
+| Raises                        | `ValueError` for a conjugated expression that is not a function, a repeated or non-bindable function, or a `tuple` of fewer than two members |
 
 An entry's binder index is its index in `arguments`; its argument position
 is the arity of `expression` plus that index. An entry `v` declares
@@ -537,9 +536,9 @@ $w$ belongs to that space. The functions of $w$ are distinct, none is free
 in $F$ or $a$, and tuple members of $w$ are either all plain functions or all
 conjugates. Shared free indices of $F$ and the points have matching extents.
 
-Construction raises `TypeError` if $F$ is not an expression or $x$ is not a
-function or tuple of functions, and `ValueError` if another requirement fails.
-It checks these structural requirements, not existence of the differential
+The types of $F$, $x$, $a$ and $w$ are checked statically. Construction raises
+`ValueError` if a remaining structural requirement fails.
+It checks these requirements, not existence of the differential
 or holomorphicity. The resulting form has the value shape of $F$, the free
 indices of $F$ and $a$, and the argument spaces of $F$ followed by the space
 of entry $w$. Its scalar type is that of $F$ for real $x$, and complex for

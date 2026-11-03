@@ -226,14 +226,14 @@ Extend `AbstractExpression`:
 
 ### Meshes
 
-| Function                                                                 | Overload | Takes                                                      | Returns                                     |
-| ------------------------------------------------------------------------ | -------- | ---------------------------------------------------------- | ------------------------------------------- |
-| [`image(x, Q)`](geometry.md#mesh)                                        |          | `x: AbstractExpression`, `Q: AbstractCoordinateDomain`     | `Mesh`                                      |
-| [`transformation_law(variances, weight)`](geometry.md#transformationlaw) |          | `variances: tuple[str, ...]`, `weight: int`                | `TransformationLaw`                         |
-| [`push_forward(f, D, m)`](geometry.md#pushforward)                       |          | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw` | `PushForward(f, D, m)`                      |
-| [`side_map(X, P, s)`](geometry.md#sidemap)                               |          | `X, P: AbstractTopology \| Mesh`, `s: str`                 | `SideMap(X, P, s)`                          |
-| [`side_domain(D, S, s)`](geometry.md#side-domains)                       |          | `D: Mesh`, `S: AbstractTopology`, `s: str`                 | `image(pull_back(x, side_map(T, S, s)), Q)` |
-| [`normal(sm)`](geometry.md#normal)                                       |          | `sm: SideMap`                                              | `Normal`                                    |
+| Function                                                                 | Overload | Takes                                                                         | Returns                                     |
+| ------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------- | ------------------------------------------- |
+| [`image(x, Q)`](geometry.md#mesh)                                        |          | `x: AbstractExpression`, `Q: AbstractCoordinateDomain`                        | `Mesh`                                      |
+| [`transformation_law(variances, weight)`](geometry.md#transformationlaw) |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                         |
+| [`push_forward(f, D, m)`](geometry.md#pushforward)                       |          | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw`                    | `PushForward(f, D, m)`                      |
+| [`side_map(X, P, s)`](geometry.md#sidemap)                               |          | `X, P: AbstractTopology \| Mesh`, `s: str`                                    | `SideMap(X, P, s)`                          |
+| [`side_domain(D, S, s)`](geometry.md#side-domains)                       |          | `D: Mesh`, `S: AbstractTopology`, `s: str`                                    | `image(pull_back(x, side_map(T, S, s)), Q)` |
+| [`normal(sm)`](geometry.md#normal)                                       |          | `sm: SideMap`                                                                 | `Normal`                                    |
 
 ### Function spaces
 

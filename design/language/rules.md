@@ -16,7 +16,8 @@
 
 ### Mathematical admissibility
 
-Construction checks structural validity. Values and rewrites assume the required
+Static type checking establishes the documented Python argument types. Construction
+checks the remaining structural and value constraints. Values and rewrites assume the required
 mathematical hypotheses; the core neither verifies them nor extends formulas
 through singularities.
 
@@ -106,8 +107,9 @@ Objects must satisfy the following rules:
    arguments are deeply immutable. Their hashes must be deterministic across
    processes on the same machine, and they are compared by type and value.
    `1`, `1.0` and `True` are distinct, `0.0` and `-0.0` are distinct, and every
-   value is equal to itself. Construction raises `TypeError` for an argument of
-   any other type, and `ValueError` for a `float` that is not finite.
+   value is equal to itself. The permitted argument types are checked statically
+   under rule 8. Construction raises `TypeError` for a subclass where an exact
+   built-in type is required, and `ValueError` for a `float` that is not finite.
 2. Construction and all results depend only on the class and construction
    arguments, never on global state.
 3. Objects are immutable after construction.
@@ -130,12 +132,17 @@ Objects must satisfy the following rules:
    Structural equality does not decide mathematical equality: $a + b$ and
    $b + a$ are not structurally equal. Mathematical equalities are applied
    in later graph algorithms.
-8. Constructors validate their nodes. Construction free functions may validate
-   their documented inputs, but never convert them. Structural requirements
-   must be checked by the free function or the constructors it calls. Unless
-   stated otherwise, an unacceptable type or class raises `TypeError`, and an
-   unacceptable value of an accepted type or class raises `ValueError`.
-   Class tables list only additional details or exceptions to these defaults.
+8. Requirements expressible to a static type checker must be checked statically
+   and must not be duplicated by runtime validation. This includes argument
+   classes, container member types, fixed tuple structure and permitted literal
+   alternatives. Callers must satisfy the documented types; runtime behaviour
+   for a statically invalid call is not specified. Constructors and construction
+   free functions check the remaining structural and value requirements, such
+   as compatible shapes, matching extents and distinct binders. They never
+   convert inputs. Unless stated otherwise, failure of a runtime value
+   requirement raises `ValueError`. Class tables list additional details or
+   exceptions. Exact built-in types, including the exclusion of `bool` and
+   named tuples in rule 1, and finite floats still require runtime checks.
 9. A constructor has no default values, so every construction argument is
    written at construction.
 10. A concrete class states an `identifier`, a `str` with the public name of
@@ -173,13 +180,13 @@ existing subclass instances. A subclass may narrow a property's return type.
 | Kind | Role and permitted inspection | Validation and exceptions |
 | ---- | ----------------------------- | ------------------------- |
 | Property | Returns stored or derived data; creates no objects | Derived objects may be built and stored during construction |
-| Constructor | Creates a node and computes derived data; does not simplify expressions | Validates construction arguments |
-| Construction free function | Builds a fixed composition from expression static types and documented interfaces of explicit non-expression arguments; does not inspect expression structure to choose a composition | Validates inputs itself or through constructors; may inspect structure for validation only. Space factories apply canonical forms; `indexed`, `component`, `component_tensor` and `index_sum` apply their empty-index identities |
+| Constructor | Creates a node and computes derived data; does not simplify expressions | Checks constraints not established statically, as in rule 8 |
+| Construction free function | Builds a fixed composition from expression static types and documented interfaces of explicit non-expression arguments; does not inspect expression structure to choose a composition | Checks constraints not established statically, itself or through constructors; may inspect structure for validation only. Space factories apply canonical forms; `indexed`, `component`, `component_tensor` and `index_sum` apply their empty-index identities |
 | Pass | After construction, inspects graph structure and returns information or a rewritten graph | Enforces its own preconditions; constructors validate nodes it builds. Space substitution preserves canonical forms |
 
 Free functions and passes are pure. A class method immediately calls a free
-function. Constructor arguments are positional only; named arguments raise
-`TypeError`. Free functions may take named arguments, such as
+function. Constructor arguments are positional only; the type checker rejects
+named arguments. Free functions may take named arguments, such as
 `domain_map(P=T, psi=psi, Q=RD(2))`.
 
 A stored property returns a construction argument; a derived property depends
@@ -235,9 +242,9 @@ expressions are not iterable and Python otherwise iterates through
 
 Every number in an expression is written with literals, such as `Integer(2)`,
 `Float(0.5)`, `Integer(1) / Integer(3)` or `Complex(Integer(0), Integer(1))`. A Python `int`, `float`,
-`complex`, `Fraction` or NumPy scalar is never converted and is rejected with
-`TypeError`.
+`complex`, `Fraction` or NumPy scalar is never converted and is rejected by
+static type checking.
 
 With `X = coordinate(RD(2))`, `X[0]**Integer(2)` is accepted, but `X[0]**2`
-raises `TypeError`. The same rule applies inside containers:
+is a static type error. The same rule applies inside containers:
 `tensor((Integer(1), Integer(2)))` is accepted, but `tensor((1, 2))` is not.

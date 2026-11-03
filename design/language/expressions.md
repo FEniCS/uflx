@@ -61,7 +61,6 @@ tensor, as `i` and `j` in `A[i, j]` (see [Index notation](#index-notation)).
 | Free function  | `index(label)`                                                                                  |
 | Takes          | `label: str \| tuple` |
 | Properties     | `label`, a `str` for a user index, or a `tuple` that contains graph objects for a derived index |
-| Raises         | `TypeError` if the label is neither a `str` nor a `tuple`                                       |
 
 An `Index` takes its extent from the indexed axis; it has no extent of its own.
 
@@ -188,7 +187,6 @@ terminal, and its value is
 | Takes                 | `real, imag: Integer \| Float` |
 | Properties            | `real` and `imag`, the real and imaginary parts |
 | Static type           | Value shape `()`, complex, no free indices, no domain and argument spaces `()` |
-| Raises                | `TypeError` for a part of another class |
 
 ```python
 Complex(Integer(0), Integer(1))  # The imaginary unit.
@@ -214,7 +212,7 @@ spaces and scalar type (real or complex).
 | Extends                                            | `AbstractExpression` |
 | Properties                                         | `value_shape`, `free_indices`, `argument_spaces` and `scalar_type`, as in [Extents](#extents), [Free indices](#free-indices) [Argument spaces](forms.md#argument-spaces) and [Scalar type](#scalar-type) |
 | Static type                                        | The stored properties, with no domain                                                                                         |
-| Raises                                             | `TypeError` for an argument of another type, and `ValueError` for a negative extent or an index that occurs twice |
+| Raises                                             | `ValueError` for a negative extent or an index that occurs twice |
 
 For example, `Zero((3,), (), (), real)` is a real zero vector and
 `Zero((), (), (V,), complex)` is a complex zero form on `V`. Here `real` and
@@ -437,7 +435,7 @@ indices](#derived-indices)).
 | Takes                          | `expression: AbstractExpression`, `indices: tuple` |
 | Properties                     | `expression`, and `indices`, a non-empty `tuple` of entries of the kinds below    |
 | Static type                    | Value shape `()`, and the free indices below                                      |
-| Raises                         | `TypeError`, `ValueError` and `IndexError`, below                                 |
+| Raises                         | `ValueError` and `IndexError`, below                                 |
 
 The factory `indexed(f, ())` returns `f` if `f` is scalar, and raises
 `IndexError` otherwise: full indexing must cover every axis. `Indexed(f, ())`
@@ -464,7 +462,7 @@ expression. All the occurrences are the same index and must have the same
 extent, so the indexed axes take the same value. `A[i, i]` is the diagonal
 entry of a matrix `A`.
 
-Construction also raises `TypeError` for an entry of another kind,
+Static checking rejects entries of another kind. Construction raises
 `ValueError` for no entries or for an index with two extents, in two entries
 or in an entry and the expression, and `IndexError` if the entries do not
 cover exactly the rank. An expression with value shape `()` has rank 0.
@@ -576,7 +574,7 @@ nor a free index; its table indices determine its free indices.
 | Takes                           | `table: AbstractIndexTable`, `indices: tuple` |
 | Properties                      | `table`, an `AbstractIndexTable`, and `indices`, an `int`, an `Index` or a `GatheredIndex` for each axis of the shape of the table |
 | Derived                         | `extent` and `free_indices`, below |
-| Raises                          | `TypeError` for an invalid table or entry type, `IndexError` for an incorrect number of entries or invalid bounds or gather extent, and `ValueError` for inconsistent extents of a repeated index |
+| Raises                          | `IndexError` for an incorrect number of entries or invalid bounds or gather extent, and `ValueError` for inconsistent extents of a repeated index |
 
 `indices` contains one `int`, `Index` or `GatheredIndex` per table axis, with
 the same bounds and extent checks as [`Indexed`](#indexed). A scalar table
@@ -790,7 +788,7 @@ J = tensor((tensor((one,)), tensor((one,))))
 | Properties | `operand` $A$ |
 | Requires | Value shape `(n, n)` and argument spaces `()` |
 | Static type | Value shape `()` |
-| Raises | `TypeError` for an $A$ that is not an expression, and `ValueError` if a requirement fails |
+| Raises | `ValueError` if a requirement fails |
 
 The extent $n$ may be an `int` or an `AbstractExtent`; the two axes must
 have equal extents. The empty determinant, of shape `(0, 0)`, has value 1.

@@ -79,7 +79,7 @@ operators retained must also require that preservation from its chosen recipe.
 | `lower(f)` | | `f: AbstractExpression` | An equivalent expression in core normal form |
 
 `lower(f)` runs the standard recipe and checks its output. It raises `TypeError`
-for a non-expression input or an unsupported rewrite, and `ValueError` if the
+for an unsupported rewrite, and `ValueError` if the
 result violates core normal form, identifying the offending nodes. It assumes
 the geometry precondition of [Evaluation traversal](#evaluation-traversal).
 Extension nodes require an extension recipe before entering this core operation.
