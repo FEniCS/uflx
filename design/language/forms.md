@@ -621,7 +621,7 @@ $J_+$. Until then, take the derivatives separately.
 The real differential in a direction $v$ is
 $\delta F[v]$ = `directional_derivative(F, x, a, v)`, with the members of a
 `tuple` variable substituted at once (see
-[`DirectionalDerivative`](expressions.md#directionalderivative)). $\delta F$ is
+[`DirectionalDerivative`](geometry.md#directionalderivative)). $\delta F$ is
 real-linear in $v$. Write $h$ for the function underlying $w$, member by
 member for a tuple; for a plain entry, $h=w$. Construction uses
 `i_unit = Complex(Integer(0), Integer(1))` and binds the entry as follows:

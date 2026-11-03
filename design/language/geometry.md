@@ -4,7 +4,7 @@
 
 Function spaces and operators use a domain's dimension, boundary and cell
 decomposition. The only metric is the ambient Euclidean metric, which defines
-the tangential [gradient](expressions.md#gradient), integration [density](#jacobian-and-density)
+the tangential [gradient](#gradient), integration [density](#jacobian-and-density)
 and unit [normal](#normal).
 
 ### `AbstractDomain`
@@ -34,8 +34,8 @@ points are named by the coordinates of the points themselves. The core cannot
 build the set from smaller objects. A library defines a new coordinate domain,
 such as a reference cell, by extending this abstract class. On a coordinate
 domain the coordinates are canonical: the coordinate function is the identity
-(see [`Coordinate`](expressions.md#coordinate)), and the integral is the Lebesgue integral in
-the coordinates (see [`Integral`](expressions.md#integral)). Every other domain gets these by
+(see [`Coordinate`](#coordinate)), and the integral is the Lebesgue integral in
+the coordinates (see [`Integral`](#integral)). Every other domain gets these by
 pull-back.
 
 | `AbstractCoordinateDomain` |                                              |
@@ -65,6 +65,263 @@ Examples:
 | Raises     | `TypeError` if $n$ is not an `int`, and `ValueError` if $n < 0$ |
 
 Worked examples for this chapter: [the unit simplex](../examples/library.md#the-unit-simplex).
+
+## Calculus on a domain
+
+### `Coordinate`
+
+`Coordinate` maps each point of a domain to its coordinates in the ambient
+coordinate domain. It is a terminal.
+
+| `Coordinate(P)` |                                                    |
+| --------------- | -------------------------------------------------- |
+| Extends         | `AbstractExpression` |
+| Free function   | `coordinate(P)`                                    |
+| Takes           | `P: AbstractDomain` |
+| Properties      | `domain`, an `AbstractDomain` $P$                  |
+| Static type     | Value shape `(n,)`, real, the domain $P$          |
+| Raises          | `TypeError` if $P$ is not an `AbstractDomain`      |
+
+$n$ is the dimension of the ambient coordinate domain of $P$. For a
+coordinate domain $P$, the coordinate function is the identity,
+$X : P \to R^n$, $X(p) = p$, and the gradient of $X$ is the identity matrix
+(see [`Gradient`](#gradient)).
+
+For a mesh $D$, `coordinate(D)` is the physical coordinate field on $D$.
+Its pull-back by a cell map is that cell's parameterisation (see
+[`Mesh`](#mesh)). This differs from `D.coordinate_function`, which is
+the stored coordinate expression on the topology.
+For a mesh `image(x, Q)`, the pull-back by `cell_map(D, j, e)` is
+`pull_back(x, cell_map(T, j, e))`.
+
+For example, `coordinate(RD(3))` has value shape `(3,)` and domain `RD(3)`.
+
+### Valid pair
+
+An expression and a domain $(f, P)$ are a valid pair if $P$ is an
+[`AbstractDomain`](#abstractdomain) and $f$ has the domain $P$ or no domain.
+Otherwise construction raises `TypeError` for $P$ or `ValueError` for $f$. An
+$f$ with no domain is a constant on $P$.
+
+### `Gradient`
+
+`Gradient` is the gradient of an expression on a domain $P$. The gradient adds a
+last axis in the coordinate frame of the ambient coordinate domain of $P$, of
+dimension $n$.
+
+| `Gradient(f, P)` |                                                                                                   |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| Extends          | `AbstractExpression` |
+| Free function    | `gradient(f, P)`                                                                                  |
+| Takes            | `f: AbstractExpression`, `P: AbstractDomain` |
+| Properties       | `expression` $f$ and `domain` $P$, with $n$ the dimension of the ambient coordinate domain of $P$ |
+| Requires         | A [valid pair](#valid-pair) $(f, P)$                                                              |
+| Static type      | Value shape `f.value_shape + (n,)`                                                                |
+| Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                               |
+
+The gradient acts on each component of an array-valued $f$. Entry `j` of the
+last axis of `Gradient(f, P)` is the partial derivative $\partial_j f$ in the
+coordinate $X_j$ of the frame.
+
+On a mesh, `Gradient`, `Divergence` and `Curl` act cellwise.
+They do not include distributional interface terms for discontinuous fields;
+traces and interface integrals are written explicitly.
+
+#### The frame
+
+For a domain $P$ of dimension $k$, the frame is the coordinate frame of the
+ambient coordinate domain of $P$, of dimension $n$. A coordinate domain has
+$k = n$.
+
+- For $k = n$, $\partial_j$ is the partial derivative in the coordinate
+  $X_j$ of $P$.
+- For $k < n$, such as a mesh that is a surface in $R^3$, the
+  coordinate directions of the ambient coordinate domain are not tangent to
+  $P$. `Gradient(f, P)` is then the tangential gradient, the gradient of an
+  extension of $f$ off $P$, projected orthogonally onto the tangent space of
+  $P$ with the Euclidean metric of the ambient coordinate domain. The
+  tangential gradient does not depend on the extension.
+
+The divergence and the curl are [`Divergence` and `Curl`](#divergence-and-curl),
+defined by `Gradient`. Other operators of vector calculus are fixed
+compositions of `Gradient`, which a library provides as free functions (see
+[New operations](extensions.md#new-operations)).
+
+#### Pull-backs of `Gradient`
+
+The gradient depends on the coordinates of $P$, so a pull-back does not
+commute with `Gradient`. `PullBack(Gradient(f, Q), D)` is the gradient of $f$
+on $Q$, evaluated at $\psi(p)$.
+
+#### Examples
+
+Start with a scalar expression on `RD(3)`:
+
+```python
+P = RD(3)
+X = coordinate(P)
+x, y, z = X[0], X[1], X[2]
+f = x * y * z
+```
+
+| Expression                              | Value shape | Meaning                                       |
+| --------------------------------------- | ----------- | --------------------------------------------- |
+| `gradient(f, P)`                        | `(3,)`      | The gradient $(yz, xz, xy)$, after evaluation |
+| `gradient(gradient(f, P), P)`           | `(3, 3)`    | The Hessian of $f$                            |
+| `gradient(X, P)`                        | `(3, 3)`    | The identity matrix, after evaluation         |
+
+- Let `M` be a mesh of dimension 2 in `RD(3)`, and `w` a field
+  on `M`. `gradient(w, M)` is the surface gradient of `w`, with value shape
+  `(3,)`. `gradient(coordinate(M), M)` is the orthogonal projection onto the
+  tangent plane of `M`, with value shape `(3, 3)`.
+- `gradient(X, RD(2))` raises `ValueError`, because `X` has the domain
+  `RD(3)`.
+
+### `Divergence` and `Curl`
+
+`Divergence` and `Curl` are the divergence and curl of an expression $u$ on a
+domain $P$, with $n$ the dimension of its ambient coordinate domain.
+
+| `Divergence(u, P)` |                                                                     |
+| ------------------ | ------------------------------------------------------------------- |
+| Extends            | `AbstractExpression` |
+| Free function      | `divergence(u, P)`                                                  |
+| Takes              | `u: AbstractExpression`, `P: AbstractDomain` |
+| Properties         | `expression` $u$ and `domain` $P$                                   |
+| Requires           | A [valid pair](#valid-pair) $(u, P)$, and $u$ of rank at least 1 with the last extent $n$ |
+| Static type        | Value shape `u.value_shape[:-1]`                                    |
+| Raises             | `TypeError` for $P$ and `ValueError` for $u$ if a requirement fails |
+
+| `Curl(u, P)`  |                                                                     |
+| ------------- | ------------------------------------------------------------------- |
+| Extends       | `AbstractExpression` |
+| Free function | `curl(u, P)`                                                        |
+| Takes         | `u: AbstractExpression`, `P: AbstractDomain` |
+| Properties    | `expression` $u$ and `domain` $P$                                   |
+| Requires      | A [valid pair](#valid-pair) $(u, P)$, $n$ 2 or 3, and $u$ of value shape `(n,)` |
+| Static type   | Value shape `(3,)` for $n = 3$ and `()` for $n = 2$                 |
+| Raises        | `TypeError` for $P$ and `ValueError` for $u$ if a requirement fails |
+
+The value of `Divergence(u, P)` is the trace of `gradient(u, P)` over the last
+axis of $u$ and the axis of the gradient. With `G = gradient(u, P)`, so
+$G_{ij}=\partial_j u_i$, `Curl(u, P)` is the antisymmetric contraction:
+
+| Ambient dimension | Value |
+| ----------------- | ----- |
+| 2 | `G[1, 0] - G[0, 1]` |
+| 3 | `tensor((G[2, 1] - G[1, 2], G[0, 2] - G[2, 0], G[1, 0] - G[0, 1]))` |
+
+`Gradient` stays the one derivative that defines the others. The two node
+classes are in the core so that the identity of Piola
+holds structurally (see [`PushForward`](#pushforward)).
+
+### `DirectionalDerivative`
+
+`DirectionalDerivative` differentiates an expression $f$ with respect to a
+variable $x$ at a point $a$ in a direction $h$,
+
+$$
+\mathrm{D}(f, x, a, h) = \frac{d}{d\varepsilon} f[x := a + \varepsilon h] \Big|_{\varepsilon = 0},
+$$
+
+with $\varepsilon$ real and $f[x := s]$ the substitution of $s$ for $x$ in $f$
+that does not enter domains, domain maps or the spaces of functions. The
+variable $x$ is a function or a `tuple` of functions. For a `tuple`, $a$ and $h$
+are `tuple`s with one member for each member of $x$, and the substitution
+replaces every member $x_k$ by $a_k + \varepsilon h_k$ at once. The functions of
+$x$ are bound in $f$ (see [Substitution and
+binding](evaluation.md#substitution-and-binding)).
+
+| `DirectionalDerivative(f, x, a, h)` |                                                                                                       |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Extends                          | `AbstractExpression` |
+| Takes                            | `f: AbstractExpression`, `x: Function \| tuple[Function, ...]`, `a, h: AbstractExpression \| tuple[AbstractExpression, ...]` |
+| Properties                       | `expression` $f$, `variable` $x$, `point` $a$ and `direction` $h$ |
+| Requires                         | $x$ a [bindable function](forms.md#bindable-functions), or a `tuple` of at least two distinct bindable functions; member by member, $a$ and $h$ admissible values for the space of $x$ as in [`Action`](forms.md#action) |
+| Static type                      | The value shape of $f$, the free indices of $f$ followed by those of the members of $a$ and $h$, each `Index` taken once, and the argument spaces and the scalar type of $f$ |
+| Raises                           | `TypeError` for an $x$ that is not a `Function` or a `tuple` of functions, and `ValueError` if another requirement fails |
+
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `directional_derivative(f, x, a, h)` | | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple` | `DirectionalDerivative(f, x, a, h)` |
+
+This is a partial derivative: substitution replaces only occurrences of $x$.
+The point $a$ need not be a function. A `tuple` variable differentiates jointly
+in its members, as for the unknowns of a mixed problem. Real points and
+directions for a complex variable use the complex embedding of
+[type compatibility](evaluation.md#type-compatibility-of-rewrites) before substitution.
+
+A dual function may be a variable. Its point and direction may be symbolic
+forms with the same functional signature; differentiation preserves the
+argument spaces of the expression being differentiated.
+
+The substitution does not enter domains, so the derivative holds the geometry
+fixed. A shape derivative, with respect to the coordinates of a mesh, is a
+language extension (see [Shape derivatives](extensions.md#shape-derivatives)).
+
+A real-linear differential is assumed. The gradient of a direction with no
+domain is zero, so the derivative with respect to a function `u` in a constant
+direction holds `gradient(u, P)` fixed. A direction that is a function in the
+space of `u` gives the Gateaux derivative (see [Gateaux
+derivative](forms.md#gateaux-derivative)).
+
+For `u`, `a` and `h` in a real scalar space of constants,
+`directional_derivative(u * u, u, a, h)` has the value $2 a h$. The variable
+is `u`, the evaluation point is `a`, and the direction is `h`.
+
+An indexed direction gives a family of derivatives. For scalar constants
+`h0` and `h1` in the same space:
+
+```python
+i = index("i")
+directions = tensor((h0, h1))
+d = directional_derivative(u * u, u, a, directions[i])
+```
+
+`d` has free index `i` and value `Integer(2) * a * directions[i]`. Tensor derivatives
+use families of unit directions; the directions specify any symmetry. See
+[Hyperelasticity and the stress](../examples/forms.md#hyperelasticity-and-the-stress).
+
+### `Integral`
+
+`Integral` integrates an expression $f$ over a domain $P$. A basic integral
+needs no topological notion of the domain.
+
+| `Integral(f, P)` |                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------- |
+| Extends          | `AbstractExpression` |
+| Free function    | `integral(f, P)`                                                                            |
+| Takes            | `f: AbstractExpression`, `P: AbstractDomain` |
+| Properties       | `expression` $f$ and `integration_domain` $P$                                                           |
+| Requires         | A [valid pair](#valid-pair) $(f, P)$, or $P$ a mesh and $f$ with the domain `P.ambient_domain` |
+| Static type      | The value shape and free indices of $f$, with no domain |
+| Raises           | `TypeError` for $P$ and `ValueError` for $f$ if a requirement fails                         |
+
+For a coordinate domain $P$ of dimension $n$, `Integral(f, P)` is the
+Lebesgue integral in the coordinates $X$ of $P$,
+
+$$
+\int_P f \,\mathrm{d}X.
+$$
+
+For $n = 0$, the integral is the value of $f$ at the single point of $R^0$.
+
+On a mesh, the integral sums the integrals over its pieces with
+their induced densities (see [the expansion](#integral-over-a-mesh)).
+
+An array-valued $f$ integrates component by component. A later pass might
+approximate an `Integral` over a coordinate domain by
+[quadrature](#quadrature), or evaluate it exactly when the rule is exact.
+
+#### Examples
+
+With `T = UnitSimplex(2)` and `X = coordinate(T)`:
+
+- `integral(X[0], T)` is $\int_T X_0 \,\mathrm{d}X$. A later pass evaluates
+  the integral to $1/6$.
+- `integral(Integer(1), T)` is the area $1/2$ of `T`.
+- `integral(X[0], T) * integral(X[1], T)` is a product of two integrals, with
+  value shape `()` and no domain.
 
 ## Maps between domains
 

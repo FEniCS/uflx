@@ -209,7 +209,7 @@ for evaluation, substitution and differentiation:
 | ------------ | -------------- | ----------- | -------- |
 | [`ComponentTensor(e, indices)`, `IndexSum(e, indices)`](expressions.md#componenttensor-and-indexsum) | `e` | The indices of `indices` | `e` and `indices` |
 | [`Form(e, arguments)`](forms.md#form) | `e` | The functions of `arguments` | `e` and `arguments` |
-| [`DirectionalDerivative(f, x, a, h)`](expressions.md#directionalderivative) | `f`, `a`, `h` | $x$ | $f$ and $x$ |
+| [`DirectionalDerivative(f, x, a, h)`](geometry.md#directionalderivative) | `f`, `a`, `h` | $x$ | $f$ and $x$ |
 
 Tuple-valued operands are visited member by member. Substitution follows
 construction dependencies subject to these scopes and the label rules;
@@ -428,7 +428,7 @@ The pass rewrites every `DirectionalDerivative(f, x, a, h)`, inner derivatives
 first, with the first row that matches $f$. $\mathrm{D} b$ is short for
 `DirectionalDerivative(b, x, a, h)`. The rules give the derivative directly
 at $a$: undifferentiated operands in the derivative formulas use the
-substitution $[x := a]$ of [`DirectionalDerivative`](expressions.md#directionalderivative),
+substitution $[x := a]$ of [`DirectionalDerivative`](geometry.md#directionalderivative),
 while $h$ is inserted unchanged. Rules match the original operands, before
 substitution. The pass applies `apply_actions` to the result, so the output
 remains in $N_1$ and contains no `DirectionalDerivative`.
@@ -547,7 +547,7 @@ identities: scalar `f[K]` is `f`, and a retained scalar gradient component is
 - The gradient of a terminal remains for the library of the terminal, so the
   Hessian of a function is a gradient of a gradient.
 - On a mesh $P$ of lower dimension than its ambient coordinate
-  domain, `Gradient` is the tangential gradient (see [`Gradient`](expressions.md#gradient)),
+  domain, `Gradient` is the tangential gradient (see [`Gradient`](geometry.md#gradient)),
   which obeys the same rows. The `Coordinate` row does not match, so
   `gradient(coordinate(P), P)`, the projection $\Pi$, remains, and a
   pull-back by a cell evaluates it.
@@ -632,10 +632,10 @@ The following table lists all allowed node classes and their conditions:
 | [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
 | [Tensors and indexing](expressions.md#tensors-and-indexing) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of a `ComponentTensor`, which the compiler rewrites (see [Evaluation](#evaluation)) |
 | [Tensor operations](expressions.md#tensor-operations) | `Inverse`, `Determinant` | Always, for the compiler to evaluate |
-| [Calculus on a domain](expressions.md#calculus-on-a-domain) | `Coordinate` | Always |
-| [Calculus on a domain](expressions.md#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
-| [Calculus on a domain](expressions.md#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
-| [Calculus on a domain](expressions.md#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `RD(0)` |
+| [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Coordinate` | Always |
+| [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
+| [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
+| [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `RD(0)` |
 | [Maps between domains](geometry.md#maps-between-domains) | `PullBack` | By a `SideMap` of an expression other than an `Action` or `Form`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
 | [Meshes](geometry.md#meshes) | `Normal` | Always |
 | [Meshes](geometry.md#meshes) | `PushForward` | Under no pull-back by a cell |

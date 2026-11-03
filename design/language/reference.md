@@ -85,17 +85,17 @@ Extend `AbstractExpression`:
 
 [`Inverse`](expressions.md#inverse), [`Determinant`](expressions.md#determinant).
 
-### Calculus on a domain
-
-Extend `AbstractExpression`:
-
-[`Coordinate`](expressions.md#coordinate), [`Gradient`](expressions.md#gradient), [`Divergence`](expressions.md#divergence-and-curl), [`Curl`](expressions.md#divergence-and-curl), [`DirectionalDerivative`](expressions.md#directionalderivative), [`Integral`](expressions.md#integral).
-
 ### Domains
 
 Extend `AbstractCoordinateDomain`:
 
 [`RD`](geometry.md#rd).
+
+### Calculus on a domain
+
+Extend `AbstractExpression`:
+
+[`Coordinate`](geometry.md#coordinate), [`Gradient`](geometry.md#gradient), [`Divergence`](geometry.md#divergence-and-curl), [`Curl`](geometry.md#divergence-and-curl), [`DirectionalDerivative`](geometry.md#directionalderivative), [`Integral`](geometry.md#integral).
 
 ### Maps between domains
 
@@ -192,14 +192,14 @@ Extend `AbstractExpression`:
 
 ### Calculus on a domain
 
-| Function                                                                     | Overload | Takes                                                                                | Returns                             |
-| ---------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------ | ----------------------------------- |
-| [`coordinate(P)`](expressions.md#coordinate)                                 |          | `P: AbstractDomain`                                                                  | `Coordinate`                        |
-| [`gradient(f, P)`](expressions.md#gradient)                                  |          | `f: AbstractExpression`, `P: AbstractDomain`                                         | `Gradient`                          |
-| [`divergence(u, P)`](expressions.md#divergence-and-curl)                     |          | `u: AbstractExpression`, `P: AbstractDomain`                                         | `Divergence`                        |
-| [`curl(u, P)`](expressions.md#divergence-and-curl)                           |          | `u: AbstractExpression`, `P: AbstractDomain`                                         | `Curl`                              |
-| [`directional_derivative(f, x, a, h)`](expressions.md#directionalderivative) |          | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple` | `DirectionalDerivative(f, x, a, h)` |
-| [`integral(f, P)`](expressions.md#integral)                                  |          | `f: AbstractExpression`, `P: AbstractDomain`                                         | `Integral`                          |
+| Function                                                                  | Overload | Takes                                                                                | Returns                             |
+| ------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------ | ----------------------------------- |
+| [`coordinate(P)`](geometry.md#coordinate)                                 |          | `P: AbstractDomain`                                                                  | `Coordinate`                        |
+| [`gradient(f, P)`](geometry.md#gradient)                                  |          | `f: AbstractExpression`, `P: AbstractDomain`                                         | `Gradient`                          |
+| [`divergence(u, P)`](geometry.md#divergence-and-curl)                     |          | `u: AbstractExpression`, `P: AbstractDomain`                                         | `Divergence`                        |
+| [`curl(u, P)`](geometry.md#divergence-and-curl)                           |          | `u: AbstractExpression`, `P: AbstractDomain`                                         | `Curl`                              |
+| [`directional_derivative(f, x, a, h)`](geometry.md#directionalderivative) |          | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple` | `DirectionalDerivative(f, x, a, h)` |
+| [`integral(f, P)`](geometry.md#integral)                                  |          | `f: AbstractExpression`, `P: AbstractDomain`                                         | `Integral`                          |
 
 ### Maps between domains
 
