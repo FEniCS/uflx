@@ -3345,6 +3345,8 @@ spatial lowering before differentiating, and spatial lowering again afterwards.
 A rewrite of index notation that keeps the value, such as the reduction of an
 `Indexed` of a `ComponentTensor`, is a pass of the compiler, not of the core.
 
+## Rewriting and substitution
+
 ### Type compatibility of rewrites
 
 A replacement $r$ is type-compatible with the expression $e$ it replaces if:
@@ -3556,6 +3558,8 @@ For example, a `Function` is in $N_4$ even if its domain's parameterisation
 contains a reducible `Gradient`: traversal stops at the function. The
 parameterisation is checked separately when exposed or evaluated.
 
+## Actions and derivatives
+
 ### Applying actions
 
 | `apply_actions(f)` |  |
@@ -3679,6 +3683,8 @@ For a real scalar function `u` in a space of constants and a constant array
 to `Integer(1) + Zero((), ((i, m),), (), real)`: its value is one for every `i`.
 Type completion retains indices even from unused members of tuple points
 and directions.
+
+## Spatial lowering
 
 ### Expanding integrals
 
@@ -3833,7 +3839,7 @@ $\psi$ = `cell_map(Y, i, q)` for a topology or mesh $Y$ and a side $s$,
 - Remaining cell reads are evaluated under the library contract in
   [Functions in a space](#functions-in-a-space).
 
-### The core normal form
+## The core normal form
 
 The core normal form is $N_4 = N_3 \setminus (G \cup R)$, the output contract of
 the standard lowering recipe. Its expression nodes, as visited by the evaluation
