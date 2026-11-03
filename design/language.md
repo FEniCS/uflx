@@ -3499,16 +3499,10 @@ restored before rebuilding an enclosing `ComponentTensor` or `IndexSum`.
 
 ### Evaluation traversal
 
-Evaluation visits the root expression and recursively visits its expression
-operands, in construction order:
-
-- A terminal has no expression operands, even if its construction arguments
-  contain expressions, as a derived `Function` label may.
-- A `Form` has only its body as a value operand. Its `arguments` are binding
-  declarations, not value operands; evaluation does not visit them.
-- Every other core expression has as operands its `AbstractExpression`
-  construction arguments, including those nested in `tuple`s. Traversal
-  stops at non-expression `Base` objects.
+Evaluation visits the root expression and recursively visits its value
+operands in construction order, as defined in [Substitution and
+binding](#substitution-and-binding). Traversal stops at non-expression `Base`
+objects and does not visit binding declarations.
 
 Thus evaluation visits both expression arguments of an `Action`, including
 a tuple argument, but does not enter domains, maps, spaces, indices or their
@@ -3530,14 +3524,24 @@ without evaluating their contents.
 
 ### Substitution and binding
 
-Substitution respects scope. A binding node binds names in some of its
-operands:
+The following rules define value operands, binding declarations and scopes
+for evaluation, substitution and differentiation:
 
-| Binding node | Bound names | Bound in |
-| ------------ | ----------- | -------- |
-| [`ComponentTensor(e, indices)`, `IndexSum(e, indices)`](#componenttensor-and-indexsum) | The indices of `indices` | `e` and `indices` |
-| [`Form(e, arguments)`](#form) | The functions of `arguments` | `e` and `arguments` |
-| [`DirectionalDerivative(f, x, a, h)`](#directionalderivative) | $x$ | $f$ and $x$ |
+- Terminals have no value operands.
+- Except for the nodes below, value operands are the `AbstractExpression`
+  construction arguments, including those nested in `tuple`s; no names are bound.
+- Labels are identity metadata, not value operands. Substitution follows the
+  reconstruction rules of [Derived indices](#derived-indices).
+
+| Binding node | Value operands | Bound names | Bound in |
+| ------------ | -------------- | ----------- | -------- |
+| [`ComponentTensor(e, indices)`, `IndexSum(e, indices)`](#componenttensor-and-indexsum) | `e` | The indices of `indices` | `e` and `indices` |
+| [`Form(e, arguments)`](#form) | `e` | The functions of `arguments` | `e` and `arguments` |
+| [`DirectionalDerivative(f, x, a, h)`](#directionalderivative) | `f`, `a`, `h` | $x$ | $f$ and $x$ |
+
+Tuple-valued operands are visited member by member. Substitution follows
+construction dependencies subject to these scopes and the label rules;
+individual passes specify which value operands they transform.
 
 A binding node is made fresh for expressions $s_1, \dots, s_n$ by renaming,
 in the operands in which the names are bound, each bound name that is free in
