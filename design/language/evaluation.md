@@ -368,7 +368,9 @@ Extensions can add derivative rules to either group.
 | --- | --- | --- |
 | D01 | `Product(b, c)` | $\delta b \, c + b \, \delta c$ |
 | D02 | `Division(b, c)` | $\delta b / c - (b \, \delta c) / (c c)$ |
-| D03 | `Power(b, c)`, independence of $c$ established by SH15 or SH16, or an analysis under SH18 | $c \, b^{c - 1} \, \delta b$ |
+| D19 | `Power(b, c)`, $c$ an `Integer`, `Float` or `Complex` literal with value zero, or a scalar `Zero` | Zero with the type of the derivative |
+| D20 | `Power(b, c)`, $c$ an `Integer`, `Float` or `Complex` literal with value one | $\delta b$, with type completion against the derivative |
+| D03 | `Power(b, c)`, independence of $c$ established by SH15 or SH16, or an analysis under SH18; exclude D19 and D20 | $c \, b^{c - 1} \, \delta b$ |
 | D04 | `Power(b, c)`, independence of $c$ not established | $b^c (\log(b) \, \delta c + c \, \delta b / b)$ |
 | D05 | `Absolute(b)` | $\operatorname{Re}(\bar b \, \delta b) / \lvert b \rvert$, with `real_part`, so the derivative is real |
 | D06 | `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
@@ -376,6 +378,12 @@ Extensions can add derivative rules to either group.
 | D08 | `Determinant(A)`, $A$ invertible | $\det(A)\sum_{i,j}(A^{-1})_{ij}\,\delta A_{ji}$, with `inverse`, `index_sum` and derived indices $i,j$ |
 | D09 | `Inverse(A)`, equal axis extents, including symbolic extents, and $A$ invertible | `-inverse(A) @ delta_A @ inverse(A)`, with `delta_A` = $\delta A$ |
 | D10 | `Inverse(A)`, $A$ real with shape `(n, k)`, $k<n$, and full column rank | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
+
+Literal values in D19 and D20 are compared exactly, including signed zero;
+`Complex` has that value when its imaginary part is zero. These cases apply
+before substituting the differentiation point. A variable exponent that happens
+to be zero or one at that point still uses D04. An undefined base remains
+undefined under mathematical admissibility.
 
 The constant-exponent power rule avoids a logarithm, permitting negative real
 bases where differentiable. Results are core expressions.
@@ -557,7 +565,7 @@ selected by another strategy.
 | Independent expression | L10 |
 | Variable and action derivatives | D11–D12 |
 | Defer an inner derivative | D13 |
-| Derivative fallback | D01–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \mathrm{D} b$ |
+| Derivative fallback | D01–D02, D19–D20, D03–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \mathrm{D} b$ |
 
 ### Expanding integrals
 
@@ -590,7 +598,7 @@ selected by another strategy.
 | Constants and coordinates | L11, D17 |
 | Keep terminal and mapped gradients | ST09 |
 | Chain rule and actions | CC01, ST10 |
-| Derivative fallback | D01–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \partial_j b$ |
+| Derivative fallback | D01–D02, D19–D20, D03–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \partial_j b$ |
 
 Gradients exposed by pull-backs are processed in the next call to `apply_gradients`.
 

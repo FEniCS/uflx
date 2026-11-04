@@ -288,9 +288,17 @@ The free functions below construct these nodes for scalar operands. `add`,
 | Properties             | `first` and `second` |
 | Requires               | The operands of [Arithmetic](#arithmetic)                                   |
 
-Complex powers use the principal value, consistent with `Logarithm`.
+| Operands | Value |
+| -------- | ----- |
+| Defined base, exponent zero | One, including `0**0`, with the scalar type of the power |
+| Defined base, exponent one | The base value, with the scalar type of the power |
+| Other defined powers | The real power for real operands, or the principal complex value consistent with `Logarithm` |
+| Either operand undefined | Undefined, including an undefined base raised to zero |
+
+These are value rules; construction retains `Power` and its static type.
 The exponent may have domain. The [derivative rules](evaluation.md#derivatives-of-the-node-classes)
-distinguish constant and variable exponents.
+distinguish a fixed zero or one exponent from an exponent that only takes that
+value at the differentiation point.
 
 ### Negation and subtraction
 
