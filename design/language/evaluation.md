@@ -4,8 +4,8 @@ Rewriting replaces expressions without changing their mathematical value.
 Lowering applies rewrites to meet the requirements of later computations.
 
 Rule IDs stay with their rules when moved. They cover rewrite rows, including
-retained cases, and shared type, traversal and substitution rules. Conditions
-and notation surrounding a table apply to its numbered rows. Contracts and
+retained cases, and shared type, traversal and substitution rules. Shared conditions and notation apply to every row. Each rewrite table gives
+the input pattern and its conditions, then the replacement or retained result. Contracts and
 recipe schedules are not numbered. New rules take new IDs; existing IDs are
 not renumbered or reused. The prefixes identify the groups below; numbers follow
 reading order within each group at this renumbering. The
@@ -15,7 +15,7 @@ reading order within each group at this renumbering. The
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
-| SH01 | Every rewrite | A rewrite preserves [binding](#substitution-and-binding) and must have a [compatible type](#type-compatibility-of-rewrites). It need not preserve floating-point results or simplify algebra. The [mathematical admissibility](rules.md#mathematical-admissibility) convention applies. Zero times an undefined value remains undefined. |
+| SH01 | Every rewrite | For a valid input expression, a rewrite preserves its mathematical value and [binding](#substitution-and-binding) and must have a [compatible type](#type-compatibility-of-rewrites). It need not preserve floating-point results or simplify algebra. The [mathematical admissibility](rules.md#mathematical-admissibility) convention applies. Zero times an undefined value remains undefined. |
 
 The lazy nodes are `Action`, `DirectionalDerivative`, mesh `Integral`,
 `PullBack`, `Gradient`, `Divergence`, `Curl` and `PushForward`. They store
@@ -139,13 +139,19 @@ including quadrature and tabulation, have their own requirements.
 | Symbol | Meaning |
 | ------ | ------- |
 | $\delta b$ | The derivative of $b$; each differentiation rule defines its target |
-| $\mathrm{D}b$ | `DirectionalDerivative(b, x, a, h)` |
+| $\mathrm{D}b$ | `DirectionalDerivative(b, x, a, h)`; $x$, $a$ and $h$ are its variable, point and direction |
 | $\partial_j b$ | Component $j$ of the gradient of $b$ on $P$, with $b$'s value shape and an additional free index $j$ of ambient extent $n$ |
 | $P$, $Q$ for `PullBack(f, ψ)` | The parameter domain and ambient domain of $\psi$ |
 | Cell | A `CellMap` of a topology or mesh |
+| $k$, $n$ in mapping rules | The topological dimension and ambient coordinate dimension of the mapped mesh |
+| $A^+$ | `inverse(A)`; rectangular operands satisfy the requirements of [Inverse](expressions.md#inverse) |
 
-The family column describes a rule's role, not a separate public pass.
-Boundary rows leave an expression unchanged for a later rule or the supplying library.
+| Table entry | Meaning |
+| ----------- | ------- |
+| Commuting operation | Apply the operation to the listed operands, then rebuild the same node with all other operands unchanged |
+| Retained result | Keep the matched expression unchanged for a later rule or the supplying library |
+| Excluded pattern | The rule does not apply, even if the rule for that pattern is not selected |
+| Derivative identity | Applies where the derivative and the quantities used by the identity are defined, under mathematical admissibility |
 
 ### Commuting rules
 
@@ -175,7 +181,7 @@ not change an `i` bound by an index sum.
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
-| SB05 | Substitution traversal | Substitution follows construction dependencies within these scopes and label rules, visiting tuples member by member. Each pass states which operands it transforms. |
+| SB05 | Substitution traversal | Substitution follows all construction dependencies, including domains, maps, spaces and derived labels, within the binding scopes and label rules. Visit tuples member by member. Each pass states which operands it transforms. |
 | SB06 | Fresh bound names | Making a binding node *fresh* for expressions $s_1, \dots, s_n$ means renaming each bound name that occurs free in any $s_k$. Rename it only within its binding scope. This prevents an inserted free name from becoming bound accidentally. |
 
 Substitution replaces $r_1, \dots, r_n$ by $s_1, \dots, s_n$
@@ -223,7 +229,7 @@ In these examples, `j` is a fresh index.
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
-| SB15 | Dependencies and compositions | Substitution follows all construction dependencies, including domains, maps, spaces and derived labels. It commutes with a fixed composition when the static-type choice is unchanged. For example, replacing `A` by `B` in `transpose(A)` gives `transpose(B)`, with the derived indices of `B`. |
+| SB15 | Compositions | Substitution commutes with a fixed composition when the static-type choice is unchanged. For example, replacing `A` by `B` in `transpose(A)` gives `transpose(B)`, with the derived indices of `B`. |
 
 ### Applying forms and preserving binding
 
@@ -232,16 +238,16 @@ forms and binding during actions, derivatives and pull-backs.
 
 | Rule | Form $f$ | Rewrite of `Action(f, p, g)` |
 | --- | --- | --- |
-| SB16 | `Form(e, arguments)`, $p$ at least the arity $n$ of $e$ | `Form(e, others)` with $g$ substituted for the argument at $p - n$, or $e$ with $g$ substituted if no entries remain |
+| SB16 | `Form(e, arguments)`, $p \ge n$ with $n =$ `len(e.argument_spaces)` | Remove entry $p-n$, leaving `others`. Substitute $g$ for that entry in $e$, obtaining `e_new`; for `conjugate(v)`, substitute `conjugate(g)` for `v`, and for tuple entries substitute member by member simultaneously. Return `Form(e_new, others)`, or `e_new` if no entries remain. Preserve binding by SB07–SB14. |
 
 | Rule | Applies to | Requirement |
 | --- | --- | --- |
 | SB17 | Binding during action substitution | Substitution preserves all enclosing and inserted binders. In particular, commuting through `DirectionalDerivative` makes its variable fresh for `g`; occurrences in `g` are not differentiated. |
-| SB18 | Derivative substitution | Write $\mathrm{D}b$ for `DirectionalDerivative(b, x, a, h)`. Match original operands before substituting `[x := a]` into undifferentiated operands; insert `h` unchanged. |
+| SB18 | Derivative substitution | For `DirectionalDerivative(b, x, a, h)`, match original operands before substituting `[x := a]` into undifferentiated operands; insert `h` unchanged. This substitution holds domains, maps and function spaces fixed, as specified by [DirectionalDerivative](geometry.md#directionalderivative). |
 
-| Rule | Family | `PullBack(f, ψ)` | Rewrite |
-| --- | --- | --- | --- |
-| SB19 | Binding | `Form(e, arguments)` | Make the form fresh for $\psi$, obtaining `Form(e_new, arguments_new)`; return `Form(PullBack(e_new, ψ), arguments_new)`, preserving argument spaces |
+| Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
+| --- | --- | --- |
+| SB19 | `Form(e, arguments)` | Make the form fresh for $\psi$, obtaining `Form(e_new, arguments_new)`; return `Form(PullBack(e_new, ψ), arguments_new)`, preserving argument spaces |
 
 ## Structural rules
 
@@ -250,7 +256,7 @@ another rule or library. Commuting uses the shared conditions above.
 
 | Rule | Node class | Operands | Operations that commute |
 | --- | --- | --- | --- |
-| ST01 | `Indexed`, `ComponentTensor`, `IndexSum`, `Form`, `DirectionalDerivative` | The expression | `Action`, `DirectionalDerivative`, spatial partial derivative |
+| ST01 | `Indexed`, `ComponentTensor`, `IndexSum`, `Form`, `DirectionalDerivative`; for `Action` on a `Form`, require $p<n$, where $n =$ `len(e.argument_spaces)`; nested derivatives follow D13 | The expression operand (`f` for `DirectionalDerivative`, `e` for `Form`) | `Action`, `DirectionalDerivative`, spatial partial derivative |
 
 | Rule | Form $f$ | Rewrite of `Action(f, p, g)` |
 | --- | --- | --- |
@@ -258,18 +264,18 @@ another rule or library. Commuting uses the shared conditions above.
 | ST03 | `Gradient`, `PullBack` | Remains; the operation transforms the form's output |
 | ST04 | `Function` or a downstream terminal | Remains, for the supplying library |
 | ST05 | `Action` | Remains, as a further application of a remaining action |
-| ST06 | Any other class of the core | Cannot occur, because the argument spaces are `()` |
+| ST06 | A core expression with `argument_spaces == ()` | No valid `Action` can select an argument position |
 
-| Rule | Family | Expression or operation | Rewrite |
-| --- | --- | --- | --- |
-| ST07 | Action transport | `Gradient(Action(B, p, g), P)` | `Action(Gradient(B, P), p, g)` |
-| ST08 | Gradient reconstruction | Other `Gradient(f, P)` | `component_tensor(∂_j f[A], A + (j,))`, using the component rules selected by [Applying gradients](#applying-gradients) |
-| ST09 | Boundary | $\partial_j b$, $b$ a terminal, `Gradient`, `PushForward`, Piola-matched node, or `PullBack` by a cell or `SideMap` | `component_tensor(gradient(b, P)[B + (j,)], B)`, with one derived index in `B` per value axis of $b$; the gradient remains |
-| ST10 | Action transport | $\partial_j$ `Action(B, p, g)` | `Action(∂_j B, p, g)`, with $g$ unchanged |
+| Rule | Expression or operation | Rewrite |
+| --- | --- | --- |
+| ST07 | `Gradient(Action(B, p, g), P)` | `Action(Gradient(B, P), p, g)` |
+| ST08 | `Gradient(f, P)`, $f$ not an `Action` | `component_tensor(∂_j f[A], A + (j,))`, using the component rules selected by [Applying gradients](#applying-gradients) |
+| ST09 | $\partial_j b$, $b$ a terminal, `Gradient`, `PushForward`, node matching CC06 or CC07, or `PullBack` by a cell or `SideMap`; exclude L11 and D17 | `component_tensor(gradient(b, P)[B + (j,)], B)`, with one derived index in `B` per value axis of $b$; the gradient remains |
+| ST10 | $\partial_j$ `Action(B, p, g)` | `Action(∂_j B, p, g)`, with $g$ unchanged |
 
-| Rule | Family | `PullBack(f, ψ)` | Rewrite |
-| --- | --- | --- | --- |
-| ST11 | Action transport | `Action(A, p, g)` | `Action(PullBack(A, ψ), p, g)`, with $g$ unchanged |
+| Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
+| --- | --- | --- |
+| ST11 | `Action(A, p, g)` | `Action(PullBack(A, ψ), p, g)`, with $g$ unchanged |
 
 Gradient reconstruction uses derived indices $A$ and $j$, with one index in
 $A$ per value axis of $f$. Empty lists use the factory identities. The supplying
@@ -287,27 +293,21 @@ for its components. Conjugation uses a real differentiation parameter.
 | --- | --- | --- | --- |
 | L01 | `Sum`, `Tensor` | Every operand | `Action`, `DirectionalDerivative`, spatial partial derivative |
 | L02 | `Division` | The numerator | `Action`, `DirectionalDerivative`, spatial partial derivative |
-| L03 | `Gradient`, `Divergence`, `Curl`, `PushForward`, `PullBack`, `Integral` | The expression | `Action`, `DirectionalDerivative` |
+| L03 | `Gradient`, `Divergence`, `Curl`, `PushForward`, `PullBack`, `Integral` | The expression | `DirectionalDerivative`; also `Action` except on `Gradient` or `PullBack` (ST03) |
 | L04 | `Conjugate`, `RealPart`, `ImaginaryPart` | The expression | `DirectionalDerivative`, spatial partial derivative |
 
 | Rule | Form $f$ | Rewrite of `Action(f, p, g)` |
 | --- | --- | --- |
 | L05 | `Conjugate(e)` | `conjugate(action(e, p, conjugate(g)))`, with conjugation member by member for a `tuple` $g$ |
-| L06 | A commuting node class (see [Commuting rules](#commuting-rules)) | The node with the action moved into the listed operands |
 | L07 | `Zero` | Zero with the type of the action |
-
-| Rule | Expression | Derivative |
-| --- | --- | --- |
-| L08 | `Conjugate(b)`, `RealPart(b)`, `ImaginaryPart(b)` | The same node applied to $\delta b$ |
-| L09 | A commuting node class (see [Commuting rules](#commuting-rules)) | The node with the derivative moved into the listed operands |
 
 | Rule | Expression $f$ | Rewrite of the derivative at $a$ |
 | --- | --- | --- |
-| L10 | No function of $x$ free in $f$ | Zero with the type of the derivative |
+| L10 | No member of $x$ free in $f$ under D15 | Zero with the type of the derivative |
 
-| Rule | Family | Expression or operation | Rewrite |
-| --- | --- | --- | --- |
-| L11 | Gradient rules | $\partial_j b$, $b$ with no domain | Zero with $b$'s shape and argument spaces, and its free indices followed by $j$ |
+| Rule | Expression or operation | Rewrite |
+| --- | --- | --- |
+| L11 | $\partial_j b$, $b$ with no domain | Zero with $b$'s shape and argument spaces, and its free indices followed by $j$ |
 
 ## Differentiation
 
@@ -321,14 +321,14 @@ Extensions can add derivative rules to either group.
 | --- | --- | --- |
 | D01 | `Product(b, c)` | $\delta b \, c + b \, \delta c$ |
 | D02 | `Division(b, c)` | $\delta b / c - (b \, \delta c) / (c c)$ |
-| D03 | `Power(b, c)`, $c$ constant | $c \, b^{c - 1} \, \delta b$ |
-| D04 | `Power(b, c)` | $b^c (\log(b) \, \delta c + c \, \delta b / b)$ |
+| D03 | `Power(b, c)`, $c$ independent of the differentiation target | $c \, b^{c - 1} \, \delta b$ |
+| D04 | `Power(b, c)`, $c$ not independent of the differentiation target | $b^c (\log(b) \, \delta c + c \, \delta b / b)$ |
 | D05 | `Absolute(b)` | $\operatorname{Re}(\bar b \, \delta b) / \lvert b \rvert$, with `real_part`, so the derivative is real |
 | D06 | `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
 | D07 | `Logarithm(b)` | $\delta b / b$ |
 | D08 | `Determinant(A)`, $A$ invertible | $\det(A)\sum_{i,j}(A^{-1})_{ij}\,\delta A_{ji}$, with `inverse`, `index_sum` and derived indices $i,j$ |
-| D09 | `Inverse(A)`, equal axis extents, including symbolic extents | `-inverse(A) @ delta_A @ inverse(A)`, with `delta_A` = $\delta A$ |
-| D10 | `Inverse(A)`, rectangular shape | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
+| D09 | `Inverse(A)`, equal axis extents, including symbolic extents, and $A$ invertible | `-inverse(A) @ delta_A @ inverse(A)`, with `delta_A` = $\delta A$ |
+| D10 | `Inverse(A)`, $A$ real with shape `(n, k)`, $k<n$, and full column rank | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
 
 The constant-exponent power rule avoids a logarithm, permitting negative real
 bases where differentiable. Results are core expressions.
@@ -337,10 +337,9 @@ bases where differentiable. Results are core expressions.
 
 | Rule | Expression $f$ | Rewrite of the derivative at $a$ |
 | --- | --- | --- |
-| D11 | $f$ equal to the member $x_k$ of $x$ | $h_k$, or $h$ for a function $x$ |
+| D11 | $f=x$ for a single function, or $f=x_k$ for a tuple variable | $h$ for a single function, or $h_k$ for the matching tuple member |
 | D12 | `Action(b, p, g)` | `Action(Db, p, g) + Action(b, p, Dg)`, with undifferentiated operands evaluated at $a$ |
 | D13 | `DirectionalDerivative` | Defer until the inner derivative is expanded |
-| D14 | Any other expression | D01–D10, L08–L09 in order, with $\delta b = \mathrm{D} b$ |
 
 | Rule | Applies to | Requirement |
 | --- | --- | --- |
@@ -357,11 +356,10 @@ and directions.
 
 ### Spatial derivatives
 
-| Rule | Family | Expression or operation | Rewrite |
-| --- | --- | --- | --- |
-| D16 | Differential expansion | Other `Divergence` or `Curl` | Its composition of gradients from [Divergence and Curl](geometry.md#divergence-and-curl) |
-| D17 | Gradient rules | $\partial_j$ `Coordinate(P)`, $P$ of its ambient dimension | `component_tensor(I[i, j], (i,))`, with $I$ the identity of shape `(n, n)` and a derived $i$ |
-| D18 | Gradient rules | $\partial_j b$, any other $b$ | D01–D10, L08–L09 in order, with $\delta b = \partial_j b$ |
+| Rule | Expression or operation | Rewrite |
+| --- | --- | --- |
+| D16 | `Divergence` or `Curl` not matching CC06 or CC07 | Its composition of gradients from [Divergence and Curl](geometry.md#divergence-and-curl) |
+| D17 | $\partial_j$ `Coordinate(P)`, $P$ of its ambient dimension | `component_tensor(I[i, j], (i,))`, with $I$ the identity of shape `(n, n)` and a derived $i$ |
 
 On embedded meshes these rules apply to the tangential gradient. The coordinate
 gradient remains a projection until the pull-back to a cell.
@@ -372,14 +370,14 @@ Pull-backs express values in a map's parameter coordinates. These rules handle
 pointwise operations, coordinates and map composition. Binding is handled by
 the substitution rules; restrictions and transformation laws have their own groups.
 
-| Rule | Family | `PullBack(f, ψ)` | Rewrite |
-| --- | --- | --- | --- |
-| PB01 | Pointwise | $f$ with no domain | $f$, with [type completion](#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
-| PB02 | Geometry | `Coordinate(Q)` | The parameterisation of $\psi$ |
-| PB03 | Boundary | `PullBack(g, φ)`, φ a `SideMap` or a cell | Remains, so a pull-back nests only inside a read on a cell |
-| PB04 | Map composition | `PullBack(g, φ)`, φ a `DomainMap` | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](geometry.md#pullback)) |
-| PB05 | Boundary | A terminal | Remains, for the library of the terminal |
-| PB06 | Pointwise | Any other node class | Make its binders fresh for $\psi$; rebuild from the pull-backs of its expression operands |
+| Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
+| --- | --- | --- |
+| PB01 | $f$ with no domain, neither an `Action` nor a `Form` | $f$, with [type completion](#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
+| PB02 | `Coordinate(Q)`; exclude R01 | The parameterisation of $\psi$ |
+| PB03 | `PullBack(g, φ)`, φ a `SideMap` or a cell; exclude R01 and R02 | Remains, so a pull-back nests only inside a read on a cell |
+| PB04 | `PullBack(g, φ)`, φ a `DomainMap`; exclude R01 | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](geometry.md#pullback)) |
+| PB05 | A terminal not matching PB01, PB02, R01 or R03 | Remains, for the library of the terminal |
+| PB06 | An operand matching none of ST11, SB19, R01–R03, PB01–PB05, CC02–CC05 or CC08–CC09 | Make its binders fresh for $\psi$; rebuild from the pull-backs of its expression operands |
 
 Map composition processes its new parameterisation as a separate root under
 the [geometry preparation contract](#evaluation-traversal).
@@ -393,16 +391,16 @@ $K_j$ be its reference cell, $\hat f$ = `pull_back(f, cell_map(T, j, e))`,
 and $m_\psi$ be the law $m$ on $\psi$ (see
 [`TransformationLaw`](geometry.md#transformationlaw)).
 
-| Rule | Family | Expression or operation | Rewrite |
-| --- | --- | --- | --- |
-| CC01 | Gradient rules | $\partial_j$ `PullBack(g, φ)`, φ a `DomainMap` | `component_tensor(index_sum(H[A + (l,)] * J[l, j], (l,)), A)`, with `H = pull_back(gradient(g, Q), φ)`, `J = jacobian(φ)`, and $Q$ the ambient domain of φ |
+| Rule | Expression or operation | Rewrite |
+| --- | --- | --- |
+| CC01 | $\partial_j$ `PullBack(g, φ)`, φ a `DomainMap` with parameter domain $P$ | `component_tensor(index_sum(H[A + (l,)] * J[l, j], (l,)), A)`, with `H = pull_back(gradient(g, Q), φ)`, `J = jacobian(φ)`, and $Q$ the ambient domain of φ |
 
-| Rule | Family | `PullBack(f, ψ)` | Rewrite |
-| --- | --- | --- | --- |
-| CC02 | Mapped values | `PushForward(f, D, m)`, $\psi$ a cell of $D$ | $m_\psi(\hat f)$ |
-| CC03 | Boundary | `PushForward`, `Divergence` or `Curl` | Remains, read at the points of $P$ |
-| CC04 | Gradient transport | `Gradient(g, Q)`, $\psi$ a cell of $Q$ | $m_\psi(\nabla_P(\psi^* g))$, with $m$ = `transformation_law(("covariant",), 0)` |
-| CC05 | Boundary | `Gradient(g, Q)` | Remains, the gradient on $Q$ read at the points of $P$ |
+| Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
+| --- | --- | --- |
+| CC02 | `PushForward(f, D, m)`, $\psi$ a cell of $D$ | $m_\psi(\hat f)$ |
+| CC03 | `PushForward`, `Divergence` or `Curl` not matching CC02, CC08 or CC09; exclude R01 | Remains, read at the points of $P$ |
+| CC04 | `Gradient(g, Q)`, $\psi$ a cell of $Q$ | $m_\psi(\nabla_P(\psi^* g))$, with $m$ = `transformation_law(("covariant",), 0)` |
+| CC05 | `Gradient(g, Q)` not matching CC04; exclude R01 | Remains, the gradient on $Q$ read at the points of $P$ |
 
 In the gradient chain rule, `A` indexes the value axes of `g` and `l` is a
 distinct contraction index; scalar `g` uses `A == ()`. Only cell transport
@@ -414,15 +412,15 @@ cell reads under [Functions in a space](forms.md#functions-in-a-space).
 The retained divergence and curl patterns take precedence over generic
 expansion. The cell pull-back rules use no derivative of $J$.
 
-| Rule | Family | Expression or operation | Rewrite |
-| --- | --- | --- | --- |
-| CC06 | Boundary | `Divergence(PushForward(f, D, m), D)`, `m = transformation_law(("contravariant",), 1)` | Remains for the Piola rule of a cell pull-back |
-| CC07 | Boundary | `Curl(PushForward(f, D, m), D)`, `m = transformation_law(("covariant",), 0)`, $k=n$ | Remains for the Piola rule of a cell pull-back |
+| Rule | Expression or operation | Rewrite |
+| --- | --- | --- |
+| CC06 | `Divergence(PushForward(f, D, m), D)`, `m = transformation_law(("contravariant",), 1)` | Remains for the Piola rule of a cell pull-back |
+| CC07 | `Curl(PushForward(f, D, m), D)`, `m = transformation_law(("covariant",), 0)`, $k=n$ | Remains for the Piola rule of a cell pull-back |
 
-| Rule | Family | `PullBack(f, ψ)` | Rewrite |
-| --- | --- | --- | --- |
-| CC08 | Piola | `Divergence(PushForward(f, D, m), D)` of the identity of Piola, $\psi$ a cell of $D$ | $m'_\psi$ of `divergence(f̂, K_j)`, with $m'$ = `transformation_law((), 1)` |
-| CC09 | Piola | `Curl(PushForward(f, D, m), D)` of the identity of Piola, $\psi$ a cell of $D$ | $m'_\psi$ of `curl(f̂, K_j)`, with $m'$ = `transformation_law(("contravariant",), 1)` for $n = 3$ and `transformation_law((), 1)` for $n = 2$ |
+| Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
+| --- | --- | --- |
+| CC08 | `Divergence(PushForward(f, D, m), D)`, `m = transformation_law(("contravariant",), 1)`, $\psi$ a cell of $D$ | $m'_\psi$ of `divergence(f̂, K_j)`, with $m'$ = `transformation_law((), 1)` |
+| CC09 | `Curl(PushForward(f, D, m), D)`, `m = transformation_law(("covariant",), 0)`, $k=n$, $\psi$ a cell of $D$ | $m'_\psi$ of `curl(f̂, K_j)`, with $m'$ = `transformation_law(("contravariant",), 1)` for $n = 3$ and `transformation_law((), 1)` for $n = 2$ |
 
 ## Restriction
 
@@ -431,11 +429,11 @@ For $\psi =$ `cell_map(Y, i, q)` of a topology or mesh $Y$ and a side $s$,
 [Restriction](geometry.md#restriction), selected by `q`.
 Cell maps retain explicit selection; unselected side restrictions remain.
 
-| Rule | Family | `PullBack(f, ψ)` | Rewrite |
-| --- | --- | --- | --- |
-| R01 | Boundary | $\psi$ a `SideMap`, $f$ with a domain | Remains until a pull-back by a cell of $P$ |
-| R02 | Restriction | `PullBack(g, SideMap(X, Y, s))`, $\psi$ = `cell_map(Y, i, q)` | `PullBack(PullBack(g, B_selected), A_selected)` |
-| R03 | Geometry | `Normal(SideMap(D, E, s))`, $\psi$ = `cell_map(E, i, q)` | $w / \lvert w \rvert$ of [`Normal`](geometry.md#normal) |
+| Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
+| --- | --- | --- |
+| R01 | $\psi$ a `SideMap`, $f$ with a domain and neither an `Action` nor a `Form` | Remains until a pull-back by a cell of $P$ |
+| R02 | `PullBack(g, SideMap(X, Y, s))`, $\psi$ = `cell_map(Y, i, q)` | `PullBack(PullBack(g, B_selected), A_selected)` |
+| R03 | `Normal(SideMap(D, E, s))`, $\psi$ = `cell_map(E, i, q)`; the cell Jacobian has full column rank and $w \ne 0$ | $w / \lvert w \rvert$, with $w$ defined in [The pull-back of Normal](geometry.md#the-pull-back-of-normal) |
 
 ## Integration
 
@@ -458,7 +456,7 @@ for a scalar, and set `f_K = indexed(f, K)`.
 
 | Rule | Integral | Rewrite |
 | ---- | -------- | ------- |
-| I01 | `Integral(f, D)` | `component_tensor(sum_j, K)`, where `sum_j` is the sum over groups $j$ of `index_sum(integral(g_j * density(D_j), K_j), (e_j,))` |
+| I01 | `Integral(f, D)`, $D$ a `Mesh` | `component_tensor(sum_j, K)`, where `sum_j` is the sum over groups $j$ of `index_sum(integral(g_j * density(D_j), K_j), (e_j,))` |
 
 $g_j$ is `pull_back(f_K, piece_j)` when $f$ has domain `D.ambient_domain`,
 and `pull_back(f_K, D_j)` otherwise, including domain-free $f$.
@@ -473,10 +471,11 @@ The value and free indices must stay the same.
 
 ## Pass recipes
 
-All recipes use the shared requirements. Each ordered selection lists the
-rules in precedence order, including retained cases and fallbacks. A fallback
-uses the rules it references. Rules keep these conditions when selected by
-another strategy.
+All recipes use the shared requirements. Selection rows are tried from top to bottom, and rule IDs within a row from
+left to right, including retained cases. Binding and dependence rows state
+requirements used throughout the recipe. Fallback selections apply
+only when the preceding rules do not match. Rules keep their conditions when
+selected by another strategy.
 
 ### Applying actions
 
@@ -489,9 +488,12 @@ another strategy.
 
 | Selection | Rules |
 | --------- | ----- |
-| Ordered action rules | SB16, L05, ST02–ST03, L06–L07, ST04–ST06 |
+| Apply explicit forms | SB16 |
+| Conjugation and products | L05, ST02 |
+| Keep spatially transformed forms | ST03 |
+| Commute into operands | L01, ST01, L02–L03 |
+| Zero and remaining applications | L07, ST04–ST06 |
 | Binding | SB01–SB15, SB17 |
-| Commuting fallback L06 | L01, ST01, L02–L03; ST03 keeps actions outside gradients and pull-backs |
 
 ### Applying derivatives
 
@@ -505,8 +507,10 @@ another strategy.
 | Selection | Rules |
 | --------- | ----- |
 | Substitution and dependence | SB18, D15 |
-| Ordered directional rules | L10, D11–D14 |
-| Derivative fallback D14 | D01–D10, L08–L09, in order; L09 uses L01, ST01, L02–L04 |
+| Independent expression | L10 |
+| Variable and action derivatives | D11–D12 |
+| Defer an inner derivative | D13 |
+| Derivative fallback | D01–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \mathrm{D} b$ |
 
 ### Expanding integrals
 
@@ -532,8 +536,14 @@ another strategy.
 
 | Selection | Rules |
 | --------- | ----- |
-| Ordered spatial rules | ST07, CC06–CC07, D16, ST08, L11, D17, ST09, CC01, ST10, D18 |
-| Derivative fallback D18 | D01–D10, L08–L09, in order; L09 uses L01, ST01, L02–L04 |
+| Move an action outside the gradient | ST07 |
+| Keep Piola patterns | CC06–CC07 |
+| Expand divergence and curl | D16 |
+| Reconstruct the gradient from components | ST08 |
+| Constants and coordinates | L11, D17 |
+| Keep terminal and mapped gradients | ST09 |
+| Chain rule and actions | CC01, ST10 |
+| Derivative fallback | D01–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \partial_j b$ |
 
 Gradients exposed by pull-backs are processed in the next call to `apply_gradients`.
 
@@ -548,7 +558,16 @@ Gradients exposed by pull-backs are processed in the next call to `apply_gradien
 
 | Selection | Rules |
 | --------- | ----- |
-| Ordered pull-back rules | ST11, SB19, R01, PB01–PB02, R02, PB03–PB04, CC02, CC08–CC09, CC03–CC05, R03, PB05–PB06 |
+| Actions and binding | ST11, SB19 |
+| Keep a side restriction | R01 |
+| Constants and coordinates | PB01–PB02 |
+| Select the cell on a side | R02 |
+| Nested maps | PB03–PB04 |
+| Mapped values | CC02 |
+| Piola identities | CC08–CC09 |
+| Remaining mapped derivatives | CC03–CC05 |
+| Side normal | R03 |
+| Terminals and pointwise operations | PB05–PB06 |
 
 ## The core normal form
 
