@@ -66,12 +66,18 @@ For the replaced expression `e`, let
 z = Zero(e.value_shape, e.free_indices, e.argument_spaces, e.scalar_type)
 ```
 
-Apply both steps in order, using tensor arithmetic.
+Apply both steps in order. SH05 uses tensor arithmetic; SH06 repeats once
+for each missing index, in the order of `e.free_indices`.
 
 | Rule | Condition | Completion |
 | ---- | --------- | ---------- |
 | SH05 | `e` complex, `r` real | `Complex(Integer(1), Integer(0)) * r` |
-| SH06 | `r` lacks a free index of `e` | `r + z` |
+| SH06 | `r` lacks index `i` of extent `n` from `e.free_indices` | `component_tensor(indexed(broadcast_to(r, (n,) + r.value_shape), (i,) + K), K)`, with `K` one derived index per value axis of `r`, fresh for `e`, `r` and `i` |
+
+For scalar `r`, `K == ()` and the result is `indexed(broadcast_to(r, (n,)), (i,))`.
+For tensors, binding `K` restores the value shape. These selections retain the
+missing indices without adding arithmetic. `z` is still used for actual zero
+results.
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
@@ -303,7 +309,7 @@ another rule or library. Commuting uses the shared conditions above.
 
 | Rule | Node class | Operands | Operations that commute |
 | --- | --- | --- | --- |
-| ST01 | `Indexed`, `ComponentTensor`, `IndexSum`, `Form`, `DirectionalDerivative`; for `Action` on a `Form`, require $p<n$, where $n =$ `len(e.argument_spaces)`; nested derivatives follow D13 | The expression operand (`f` for `DirectionalDerivative`, `e` for `Form`) | `Action`, `DirectionalDerivative`, spatial partial derivative |
+| ST01 | `Indexed`, `ComponentTensor`, `IndexSum`, `BroadcastTo`, `Form`, `DirectionalDerivative`; for `Action` on a `Form`, require $p<n$, where $n =$ `len(e.argument_spaces)`; nested derivatives follow D13 | The expression operand (`value` for `BroadcastTo`, `f` for `DirectionalDerivative`, `e` for `Form`) | `Action`, `DirectionalDerivative`, spatial partial derivative |
 
 | Rule | Form $f$ | Rewrite of `Action(f, p, g)` |
 | --- | --- | --- |
@@ -405,7 +411,7 @@ For real scalar functions `u` and `a` in a space of constants,
 
 For a real scalar function `u` in a space of constants and a constant array
 `a` of shape `(m,)`, `directional_derivative(u, u, a[i], Integer(1))` lowers
-to `Integer(1) + Zero((), ((i, m),), (), real)`. Its value is one for every `i`.
+to `indexed(broadcast_to(Integer(1), (m,)), (i,))`. Its value is one for every `i`.
 Type completion retains indices even from unused members of tuple points
 and directions.
 
@@ -635,7 +641,7 @@ the nodes allowed after `lower`.
 | ------- | ---------- | ------------------------------- |
 | [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Integer`, `Float`, `Complex`, `Zero` | Always |
 | [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
-| [Tensors and indexing](expressions.md#tensors-and-indexing) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always; index simplification is left to the compiler |
+| [Tensors and indexing](expressions.md#tensors-and-indexing) | `Tensor`, `BroadcastTo`, `Indexed`, `ComponentTensor`, `IndexSum` | Always; index simplification is left to the compiler |
 | [Tensor operations](expressions.md#tensor-operations) | `Inverse`, `Determinant` | Always, for the compiler to evaluate |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Coordinate` | Always |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |

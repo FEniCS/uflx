@@ -18,6 +18,7 @@ are in the class sections.
 | `SquareRoot`                                     | IEEE 754 rounds the square root correctly and the power not, so `power(f, Integer(1) / Integer(2))` differs   |
 | `Logarithm`                                      | An elementary function, which nothing else composes                                                           |
 | `Inverse`, `Determinant`                         | The compiler chooses the numerical algorithm; construction retains the operation |
+| `BroadcastTo` | Repeats values over explicit axes, including symbolic and empty shapes, without artificial arithmetic |
 | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | The primitives of index notation                                                                            |
 | `Coordinate`, `Function`, `Normal`               | Terminals: the coordinate function of a domain, a member of a space, the unit side conormal |
 | `Gradient`                                       | Nothing composes to differentiate                                                                             |
@@ -73,7 +74,7 @@ Extend `AbstractExpression`:
 
 Extend `AbstractExpression`:
 
-[`Tensor`](expressions.md#tensor), [`Indexed`](expressions.md#indexed), [`ComponentTensor`](expressions.md#componenttensor-and-indexsum), [`IndexSum`](expressions.md#componenttensor-and-indexsum).
+[`Tensor`](expressions.md#tensor), [`BroadcastTo`](expressions.md#broadcastto), [`Indexed`](expressions.md#indexed), [`ComponentTensor`](expressions.md#componenttensor-and-indexsum), [`IndexSum`](expressions.md#componenttensor-and-indexsum).
 
 Extend `Base`:
 
@@ -167,14 +168,15 @@ Extend `AbstractExpression`:
 
 ### Tensors and indexing
 
-| Function                                                                               | Overload | Takes                                                          | Returns                                                                                                                                                         |
-| -------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`tensor(entries)`](expressions.md#tensor)                                             |          | `entries: tuple[AbstractExpression, ...]`                      | `Tensor`                                                                                                                                                        |
-| [`indexed(expression, indices)`](expressions.md#indexed)                               |          | `expression: AbstractExpression`, `indices: tuple`             | `Indexed`                                                                                                                                                       |
-| [`component(f, entries)`](expressions.md#partial-indexing)                             | `[]`     | `f: AbstractExpression`, `entries: tuple`                      | `f` if `entries == ()`; otherwise `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$, otherwise `indexed(f, entries)` |
-| [`component_tensor(expression, indices)`](expressions.md#componenttensor-and-indexsum) |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]` | `ComponentTensor`                                                                                                                                               |
-| [`index_sum(expression, indices)`](expressions.md#componenttensor-and-indexsum)        |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]` | `IndexSum`                                                                                                                                                      |
-| [`gathered_index(table, indices)`](expressions.md#gatheredindex)                       |          | `table: AbstractIndexTable`, `indices: tuple`                  | `GatheredIndex`                                                                                                                                                 |
+| Function                                                                               | Overload | Takes                                                                         | Returns                                                                                                                                                         |
+| -------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`tensor(entries)`](expressions.md#tensor)                                             |          | `entries: tuple[AbstractExpression, ...]`                                     | `Tensor`                                                                                                                                                        |
+| [`broadcast_to(value, value_shape)`](expressions.md#broadcastto)                       |          | `value: AbstractExpression`, `value_shape: tuple[int \| AbstractExtent, ...]` | `BroadcastTo`                                                                                                                                                   |
+| [`indexed(expression, indices)`](expressions.md#indexed)                               |          | `expression: AbstractExpression`, `indices: tuple`                            | `Indexed`                                                                                                                                                       |
+| [`component(f, entries)`](expressions.md#partial-indexing)                             | `[]`     | `f: AbstractExpression`, `entries: tuple`                                     | `f` if `entries == ()`; otherwise `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$, otherwise `indexed(f, entries)` |
+| [`component_tensor(expression, indices)`](expressions.md#componenttensor-and-indexsum) |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                | `ComponentTensor`                                                                                                                                               |
+| [`index_sum(expression, indices)`](expressions.md#componenttensor-and-indexsum)        |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                | `IndexSum`                                                                                                                                                      |
+| [`gathered_index(table, indices)`](expressions.md#gatheredindex)                       |          | `table: AbstractIndexTable`, `indices: tuple`                                 | `GatheredIndex`                                                                                                                                                 |
 
 ### Tensor operations
 
@@ -279,6 +281,7 @@ and are not added to the enclosing expression's argument spaces.
 | `Conjugate`                              | Those of the operand, each conjugated                          |
 | `SquareRoot`, `Logarithm`, `Inverse`, `Determinant` | `()`                                                           |
 | `Tensor`                                 | Those of the entries, which must be equal                      |
+| `BroadcastTo` | Those of the value |
 | `Indexed`, `ComponentTensor`, `IndexSum` | Those of the expression                                        |
 | `Coordinate`                             | `()`                                                           |
 | `Normal`                                 | `()`                                                           |
@@ -319,10 +322,10 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 52    |
+| Classes                         | 53    |
 | Abstract classes                | 10    |
-| Concrete classes                | 42    |
-| Expression node classes         | 32    |
-| Free functions                  | 50    |
+| Concrete classes                | 43    |
+| Expression node classes         | 33    |
+| Free functions                  | 51    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

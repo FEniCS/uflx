@@ -420,8 +420,8 @@ rounded power, so the result of `power` depends on the math library.
 A matrix is a `Tensor` of `Tensor`s.
 
 Value shapes may contain extent 0, as in `coordinate(RD(0))`. An empty
-`Tensor` cannot provide the entry shape `s`; use `Zero` for an array with an
-extent 0, which has no entries.
+`Tensor` cannot provide the entry shape `s`. Use `Zero` for a typed zero or
+[`broadcast_to`](#broadcastto) with an operand supplying the member type.
 
 Examples, with `one, two = Integer(1), Integer(2)`:
 
@@ -429,11 +429,45 @@ Examples, with `one, two = Integer(1), Integer(2)`:
 - `tensor((one, tensor((one, two))))` raises `ValueError`, because the entries
   have different value shapes.
 
+### `BroadcastTo`
+
+`BroadcastTo` repeats an expression over a complete target shape. Source axes
+align with the trailing target axes. It binds no indices.
+
+| `BroadcastTo(value, value_shape)` | |
+| -------------------------------- | - |
+| Extends | `AbstractExpression` |
+| Free function | `broadcast_to(value, value_shape)` |
+| Takes | `value: AbstractExpression`, `value_shape: tuple[int \| AbstractExtent, ...]` |
+| Properties | `value` and the complete target `value_shape` |
+| Requires | Target entries are [extents](#extents); target rank is at least the source rank; every aligned source extent equals the target extent or is the integer 1 |
+| Static type | Target value shape; free indices, domain, scalar type and argument spaces of `value` |
+| Raises | `ValueError` for an invalid extent, lower target rank or incompatible aligned extents |
+
+| Case | Meaning |
+| ---- | ------- |
+| Leading target axis | Repeat the source along that axis |
+| Aligned source extent 1 | Use source entry 0 for every target entry |
+| Equal aligned extents | Use the same entry on both axes; symbolic extents must be structurally equal |
+| Zero target extent | No member value is evaluated. The operand still supplies the static type and remains a graph dependency; construction validates both operand and target shape. |
+| Target `()` | Valid only for a scalar source |
+| Target extent `-1` | Invalid; extents are never inferred |
+
+```python
+broadcast_to(Integer(1), (n,))[i]  # One for each i; i remains free.
+broadcast_to(v, (n,) + v.value_shape)  # n copies of v.
+broadcast_to(v, (0,) + v.value_shape)  # An empty array with v's member type.
+```
+
+Selecting a broadcast uses the ordinary indexing rules, including free-index
+extent checks. A free selector remains free even when every selected value is
+the same. Arithmetic does not broadcast implicitly.
+
 ### Index notation
 
-Index notation writes tensor algebra with four node classes. `Tensor` builds a
-tensor from scalars, `Indexed` selects one component, and `ComponentTensor`
-and `IndexSum` bind the free indices of a scalar, as axes or as a sum. Tensor
+Index notation uses `Tensor` to build a tensor from scalars, `BroadcastTo` to
+repeat values, and `Indexed` to select one component. `ComponentTensor` and
+`IndexSum` bind the free indices of a scalar, as axes or as a sum. Tensor
 rearrangements and contractions are compositions of these, so `transpose`,
 `dot` and `inner` are free functions, not node classes (see [Node class or
 free function](#node-class-or-free-function)).
@@ -712,7 +746,7 @@ The empty-index factory identities give scalar operations when `K == ()`.
 Scalar constructors inside the compositions avoid recursive factory calls.
 Operand free indices remain free.
 
-There is no broadcasting:
+There is no implicit broadcasting. Use [`broadcast_to`](#broadcastto) explicitly.
 
 | Invalid operands | Exception |
 | ---------------- | --------- |
