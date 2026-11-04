@@ -24,6 +24,7 @@ project:
         - file: examples/forms.md
         - file: examples/surfaces.md
         - file: examples/estimation.md
+        - file: examples/patches.md
         - file: examples/library.md
   error_rules:
     - rule: reference-target-explicit

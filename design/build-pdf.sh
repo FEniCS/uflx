@@ -29,6 +29,7 @@ else
     examples/forms.md
     examples/surfaces.md
     examples/estimation.md
+    examples/patches.md
     examples/library.md
   )
 fi
