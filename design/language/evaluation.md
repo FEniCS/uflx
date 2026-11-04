@@ -11,11 +11,9 @@ not renumbered or reused.
 
 ## Rewriting
 
-**R001.** A rewrite preserves [binding](#substitution-and-binding) and must have a
-[compatible type](#type-compatibility-of-rewrites).
-It need not preserve floating-point results or simplify algebra. The
-[mathematical admissibility](rules.md#mathematical-admissibility) convention
-applies. Zero times an undefined value remains undefined.
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| R001 | Every rewrite | A rewrite preserves [binding](#substitution-and-binding) and must have a [compatible type](#type-compatibility-of-rewrites). It need not preserve floating-point results or simplify algebra. The [mathematical admissibility](rules.md#mathematical-admissibility) convention applies. Zero times an undefined value remains undefined. |
 
 The lazy nodes are `Action`, `DirectionalDerivative`, mesh `Integral`,
 `PullBack`, `Gradient`, `Divergence`, `Curl` and `PushForward`. They store
@@ -75,15 +73,10 @@ Apply both steps in order, using tensor arithmetic.
 | R005 | `e` complex, `r` real | `Complex(Integer(1), Integer(0)) * r` |
 | R006 | `r` lacks a free index of `e` | `r + z` |
 
-**R007.** The raw result must already have the required shape and argument spaces,
-matching extents for retained indices and no extra free indices. A real `e`
-requires a real result. A row giving zero uses `z`; this is what the tables
-mean by zero with the type of an expression.
-
-**R008.** `Action` and `DirectionalDerivative` also promote real values before
-substitution for complex functions, member by member for tuples; `replace`
-does not. Promotion must precede evaluation of, for example, a square root at
-a negative real point. Index completion must precede rebuilding a binder.
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| R007 | Result before type completion | The raw result must already have the required shape and argument spaces, matching extents for retained indices and no extra free indices. A real `e` requires a real result. A row giving zero uses `z`; this is what the tables mean by zero with the type of an expression. |
+| R008 | Promotion and completion order | `Action` and `DirectionalDerivative` also promote real values before substitution for complex functions, member by member for tuples; `replace` does not. Promotion must precede evaluation of, for example, a square root at a negative real point. Index completion must precede rebuilding a binder. |
 
 ### Evaluation traversal
 
@@ -94,10 +87,9 @@ a negative real point. Index completion must precede rebuilding a binder.
 | R011 | Domains, maps, spaces, indices and labels | May inspect, but do not traverse or modify stored expressions |
 | R012 | Expressions exposed by a rule | Visit as separate roots; includes newly built map parameterisations |
 
-**R013.** Geometry is *prepared* when it satisfies core expressions, actions expanded,
-derivatives expanded and mesh integrals expanded. Reference recipes require
-the supplier to prepare geometry before exposing it. Constructors do not
-require this; another strategy may process unprepared geometry with suitable rules.
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| R013 | Prepared geometry | Geometry is *prepared* when it satisfies core expressions, actions expanded, derivatives expanded and mesh integrals expanded. Reference recipes require the supplier to prepare geometry before exposing it. Constructors do not require this; another strategy may process unprepared geometry with suitable rules. |
 
 Normal-form checks visit these same nodes. Stored dependencies are checked
 separately when needed; labels need no lowering. Substitution follows more
@@ -108,9 +100,9 @@ dependencies, as described below.
 Substitution must respect local names. For example, replacing a free `i` must
 not change an `i` bound by an index sum.
 
-**R014.** Value operands are `AbstractExpression` construction arguments, including
-those in tuples. Terminals have none. Labels identify objects and follow
-[Derived indices](expressions.md#derived-indices). Only these nodes bind names.
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| R014 | Value operands and labels | Value operands are `AbstractExpression` construction arguments, including those in tuples. Terminals have none. Labels identify objects and follow [Derived indices](expressions.md#derived-indices). Only these nodes bind names. |
 
 | Rule | Binding node | Value operands | Bound names | Bound in |
 | ---- | ------------ | -------------- | ----------- | -------- |
@@ -118,21 +110,20 @@ those in tuples. Terminals have none. Labels identify objects and follow
 | R016 | [`Form(e, arguments)`](forms.md#form) | `e` | The functions of `arguments` | `e` and `arguments` |
 | R017 | [`DirectionalDerivative(f, x, a, h)`](geometry.md#directionalderivative) | `f`, `a`, `h` | $x$ | $f$ and $x$ |
 
-**R018.** Substitution follows construction dependencies within these scopes and label
-rules, visiting tuples member by member. Each pass states which operands it transforms.
-
-**R019.** Making a binding node *fresh* for expressions $s_1, \dots, s_n$ means renaming
-each bound name that occurs free in any $s_k$. Rename it only within its binding
-scope. This prevents an inserted free name from becoming bound accidentally.
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| R018 | Substitution traversal | Substitution follows construction dependencies within these scopes and label rules, visiting tuples member by member. Each pass states which operands it transforms. |
+| R019 | Fresh bound names | Making a binding node *fresh* for expressions $s_1, \dots, s_n$ means renaming each bound name that occurs free in any $s_k$. Rename it only within its binding scope. This prevents an inserted free name from becoming bound accidentally. |
 
 Substitution replaces $r_1, \dots, r_n$ by $s_1, \dots, s_n$
 simultaneously. Within a binding scope, follow these steps.
 
-1. **R020.** Drop each pair whose key $r_k$ has a bound name free in it.
-2. **R021.** Make the binding node fresh for the remaining replacement values $s_k$.
-3. **R022.** Substitute the remaining pairs into the operands in that scope.
-
-**R023.** Operands outside the binding scope use the original pairs.
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| R020 | Within a binding scope, step 1 | Drop each pair whose key $r_k$ has a bound name free in it. |
+| R021 | Within a binding scope, step 2 | Make the binding node fresh for the remaining replacement values $s_k$. |
+| R022 | Within a binding scope, step 3 | Substitute the remaining pairs into the operands in that scope. |
+| R023 | Outside the binding scope | Operands outside the binding scope use the original pairs. |
 
 To make names fresh for $s_1, \ldots, s_n$, let `body` be the tuple of operands
 in the binder's scope. Use these names.
@@ -148,13 +139,10 @@ and absent from `body` and the inserted expressions.
 `replace(e, mapping)` substitutes each key of the dictionary `mapping` with
 its value, simultaneously.
 
-**R026.** Match whole original nodes before their dependencies, respecting binding scopes
-and label rules. The outermost eligible match wins, even when keys overlap.
-Do not search inserted values or rebuilt nodes.
-
-**R027.** Order replacement pairs by the structural key order of
-[`Base`](rules.md#the-base-object-base), preserving that order through scope filtering
-and in fresh-name labels. Dictionary insertion order has no effect.
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| R026 | Matching | Match whole original nodes before their dependencies, respecting binding scopes and label rules. The outermost eligible match wins, even when keys overlap. Do not search inserted values or rebuilt nodes. |
+| R027 | Replacement order | Order replacement pairs by the structural key order of [`Base`](rules.md#the-base-object-base), preserving that order through scope filtering and in fresh-name labels. Dictionary insertion order has no effect. |
 
 ```python
 replace(a + b, {a + b: c, a: d})  # c
@@ -170,10 +158,9 @@ In these examples, `j` is a fresh index.
 | `replace(form(a, (v,)), {v: w})` | The original form; `v` is bound |
 | `replace(DirectionalDerivative(f, u, u, h), {u: u0})` | `DirectionalDerivative(f, u, u0, h)`; the point is outside the binding scope |
 
-**R028.** Substitution follows all construction dependencies, including domains, maps,
-spaces and derived labels. It commutes with a fixed composition when the
-static-type choice is unchanged. For example, replacing `A` by `B` in `transpose(A)`
-gives `transpose(B)`, with the derived indices of `B`.
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| R028 | Dependencies and compositions | Substitution follows all construction dependencies, including domains, maps, spaces and derived labels. It commutes with a fixed composition when the static-type choice is unchanged. For example, replacing `A` by `B` in `transpose(A)` gives `transpose(B)`, with the derived indices of `B`. |
 
 ### Grammars
 
@@ -264,9 +251,9 @@ vectors or matrices; their libraries evaluate the retained actions.
 | R041 | `Action` | Remains, as a further application of a remaining action |
 | R042 | Any other class of the core | Cannot occur, because the argument spaces are `()` |
 
-**R043.** Substitution preserves all enclosing and inserted binders. In particular,
-commuting through `DirectionalDerivative` makes its variable fresh for `g`;
-occurrences in `g` are not differentiated.
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| R043 | Binding during action substitution | Substitution preserves all enclosing and inserted binders. In particular, commuting through `DirectionalDerivative` makes its variable fresh for `g`; occurrences in `g` are not differentiated. |
 
 ### Derivatives of the node classes
 
@@ -301,9 +288,9 @@ bases where differentiable. Results are core expressions.
 | Output contract        | Actions and derivatives expanded |
 | Strategy | Inner derivatives first; first matching row; alternate with `apply_actions` until both output contracts hold |
 
-**R056.** Write $\mathrm{D}b$ for `DirectionalDerivative(b, x, a, h)`. Match original
-operands before substituting `[x := a]` into undifferentiated operands; insert
-`h` unchanged.
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| R056 | Derivative substitution | Write $\mathrm{D}b$ for `DirectionalDerivative(b, x, a, h)`. Match original operands before substituting `[x := a]` into undifferentiated operands; insert `h` unchanged. |
 
 | Rule | Expression $f$ | Rewrite of the derivative at $a$ |
 | ---- | -------------- | -------------------------------- |
@@ -313,12 +300,9 @@ operands before substituting `[x := a]` into undifferentiated operands; insert
 | R060 | `DirectionalDerivative` | Defer until the inner derivative is expanded |
 | R061 | Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \mathrm{D} b$ |
 
-**R062.** To test whether an expression depends on `x`, follow value operands and binding
-scopes, holding domains and maps fixed. A `Function` contributes itself, not
-names in its label or space. A form binding `x` has no free `x`.
-Tuple arguments vary member by member,
-including conjugated entries. Dual directions and substitution points may be
-symbolic forms whose actions the recipe evaluates.
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| R062 | Dependence on the derivative variable | To test whether an expression depends on `x`, follow value operands and binding scopes, holding domains and maps fixed. A `Function` contributes itself, not names in its label or space. A form binding `x` has no free `x`. Tuple arguments vary member by member, including conjugated entries. Dual directions and substitution points may be symbolic forms whose actions the recipe evaluates. |
 
 For real scalar functions `u` and `a` in a space of constants,
 `directional_derivative(u * u, u, a, u)` rewrites to `u * a + a * u`.
