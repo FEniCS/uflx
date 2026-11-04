@@ -30,6 +30,9 @@ through singularities.
 | [Construction free function](expressions.md#node-class-or-free-function) | A pure free function that may validate inputs and builds fixed expression compositions or canonical space descriptions. |
 | [Pass](#passes) | A pure free function that walks a graph after construction to compute a result or rewrite the graph. |
 | [Evaluation traversal](evaluation.md#evaluation-traversal) | A walk through expression operands, excluding dependencies stored in geometry, spaces and labels. |
+| [Free occurrence](evaluation.md#free-occurrences) | An occurrence of a name outside its binding scope, on the walk chosen by the operation. |
+| [Independence](evaluation.md#independence) | An operand's value is unchanged when the operation's target varies with other inputs fixed. |
+| [Domain-free expression](expressions.md#domain-free-expressions) | An expression with no spatial argument, interpreted as a constant field where a domain is required. |
 | [Grammar pattern](evaluation.md#grammars) | A structural condition on a node and objects within a bounded number of edges, independent of pass results. |
 | [Rule pattern](extensions.md#rule-tables) | A condition selecting a local rewrite from node structure, static types or explicit analyses. |
 | [Strategy](evaluation.md#transformations-recipes-and-contracts) | Selection and scheduling of rewrite rules, including traversal and stopping conditions. |

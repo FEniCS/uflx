@@ -109,8 +109,8 @@ value is not a real number, such as `square_root(Integer(-1))`, is undefined.
 
 An expression's `domain` is where it is defined: an
 [`AbstractDomain`](geometry.md#abstractdomain), or an [`AbstractTopology`](geometry.md#abstracttopology)
-whose cell types are reference cells. It is `None` for an expression independent
-of a domain, such as a literal.
+whose cell types are reference cells. It is `None` when the result has no
+spatial argument, as for a literal or an integral.
 
 Unless the [static type table](reference.md#appendix-static-type-table) states otherwise,
 a node inherits the domain of its expression operands with a domain. All such
@@ -123,12 +123,32 @@ its `map` and has that map's `parameter_domain`. A `PushForward` stores its
 `mesh`, which is also its domain. For `Coordinate`, `Gradient`, `Divergence`
 and `Curl`, the stored domain is also the result's domain.
 
+### Domain-free expressions
+
+An expression with `domain is None` has no spatial argument. For fixed values
+of its free indices and form arguments, it denotes one array. Where an operation
+accepts it on a domain $P$, use that same array at every point of $P$.
+
+| Property or operation | Meaning |
+| --------------------- | ------- |
+| Domain-free value on $P$ | A spatially constant field; the expression itself keeps domain `None` |
+| Free indices and form arguments | May vary the value; the constant-field interpretation applies separately to each assignment |
+| Functions and stored geometry | May affect the value. Having no spatial domain does not imply independence from these inputs. |
+| Spatial derivative | Zero, with the required type and derivative index |
+| Pull-back | The same value at every parameter point, with type completion for any added free indices |
+| Integration | Integrate that constant field with the domain's measure |
+
+For example, `integral(u, P)` has no spatial argument but may depend on `u`
+and the geometry of $P$. A function in a constant space is spatially constant
+but still varies when differentiated with respect to that function.
+
 ### Expressions as functions
 
 An expression denotes an array-valued function on the domain of the
 expression. An expression on a topology denotes a function on the reference
 cell of each cell of the topology (see [`CellMap`](geometry.md#cellmap)). An expression
-with no domain denotes a single array. An expression with argument spaces other than `()` denotes a multilinear map from
+with no domain has the [constant-field interpretation](#domain-free-expressions).
+An expression with argument spaces other than `()` denotes a multilinear map from
 the argument spaces to such functions (see [Variational
 forms](forms.md#variational-forms)).
 
@@ -650,10 +670,9 @@ the binding node, preventing termination.
 The edges of an index to the objects in the label of the index identify the
 index and are not operands (see [Evaluation traversal](evaluation.md#evaluation-traversal)).
 
-Label contents do not introduce free occurrences of functions or indices.
-This also applies to function labels: a function whose label mentions `u`
-is not thereby a function of `u`. Labels still determine identity and are
-rebuilt according to the substitution rules above.
+Label contents add no [free occurrences](evaluation.md#free-occurrences),
+including in function labels. They still determine identity and are rebuilt
+according to the substitution rules above.
 
 A free function or a pass derives one `Index` per axis.
 `component_tensor(e, K)[J]` is $e$ with each index of `K` replaced by the

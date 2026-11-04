@@ -100,8 +100,8 @@ For example, `coordinate(RD(3))` has value shape `(3,)` and domain `RD(3)`.
 An expression and a domain $(f, P)$ are a valid pair if $P$ is an
 [`AbstractDomain`](#abstractdomain) and $f$ has the domain $P$ or no domain.
 The type of $P$ is checked statically; construction raises `ValueError` if
-the domains do not match. An
-$f$ with no domain is a constant on $P$.
+the domains do not match. For $f$ with no domain, use the
+[constant-field interpretation](expressions.md#domain-free-expressions) on $P$.
 
 ### `Gradient`
 
@@ -224,8 +224,8 @@ $$
 \mathrm{D}(f, x, a, h) = \frac{d}{d\varepsilon} f[x := a + \varepsilon h] \Big|_{\varepsilon = 0},
 $$
 
-with $\varepsilon$ real and $f[x := s]$ the substitution of $s$ for $x$ in $f$
-that does not enter domains, domain maps or the spaces of functions. The
+with $\varepsilon$ real and $f[x := s]$ the substitution of $s$ for free
+occurrences of $x$ in $f$ under the [value walk](evaluation.md#free-occurrences). The
 variable $x$ is a function or a `tuple` of functions. For a `tuple`, $a$ and $h$
 are `tuple`s with one member for each member of $x$, and the substitution
 replaces every member $x_k$ by $a_k + \varepsilon h_k$ at once. The functions of

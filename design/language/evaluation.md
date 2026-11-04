@@ -53,7 +53,7 @@ satisfy these conditions.
 | ---- | --------- | ------------- |
 | SH02 | Value shape, scalar type, ordered argument spaces | Equal |
 | SH03 | Free indices | Same names and extents, up to order and consistent bound-name renaming |
-| SH04 | Domain | Equal, or $r$ has no domain and represents a constant field on $e$'s domain for each free-index and argument assignment |
+| SH04 | Domain | Equal, or $r$ has no domain and its [constant-field interpretation](expressions.md#domain-free-expressions) equals $e$ on the original domain |
 
 For example, a constant pull-back or the gradient of coordinates may lose its
 domain. Code that needs the original domain must keep it separately.
@@ -153,12 +153,31 @@ including quadrature and tabulation, have their own requirements.
 | Excluded pattern | The rule does not apply, even if the rule for that pattern is not selected |
 | Derivative identity | Applies where the derivative and the quantities used by the identity are defined, under mathematical admissibility |
 
+### Independence
+
+Independence concerns the operation being applied, not an expression in isolation.
+The reference recipes use the checks below.
+
+| Rule | Operation or question | Meaning or check |
+| ---- | --------------------- | ---------------- |
+| SH14 | Mathematical independence | Varying the operation's target leaves the operand's value unchanged, with other inputs fixed, wherever the expressions are defined |
+| SH15 | Directional differentiation with variable $x$ | No member of $x$ occurs free in the operand under the value walk SB22; a single function counts as one member |
+| SH16 | Spatial differentiation on $P$ | The operand has domain `None`; interpret it on $P$ by [Domain-free expressions](expressions.md#domain-free-expressions) |
+| SH17 | `Action(f, p, g)` | Each unchanged expression operand contributes none of the selected argument slot, according to the node's argument-space definition. Slots are identified by position, not by equality of spaces. Binding declarations and fixed non-expression data do not contribute slots. |
+| SH18 | Stronger independence checks | A strategy may use an explicit analysis proving SH14. Reference recipes use SH15–SH17 only. Failure of a check means independence is unknown, not that dependence is proved. Any constant replacement must preserve mathematical admissibility and type. |
+
+| Example | Consequence |
+| ------- | ----------- |
+| `u - u` | Still contains a free `u`; cancellation requires a separate proof or rewrite |
+| `integral(u, P)` | Has no spatial domain, but a free `u` remains for directional differentiation |
+| Two argument slots with the same space | Remain distinct slots for an action |
+
 ### Commuting rules
 
 Differentiating a sum gives a sum of derivatives. This and the other commuting
-rules apply when all other operands are independent of the operation's target.
-Specific rules take precedence. Rename bound names where needed to avoid
-capturing names in inserted operands (see [Substitution and binding](#substitution-and-binding)).
+rules use SH15–SH17 for unchanged expression operands. Binding declarations
+and fixed non-expression data are not differentiated. Specific rules take
+precedence. Rename bound names where needed to avoid capturing names in inserted operands (see [Substitution and binding](#substitution-and-binding)).
 
 The commuting rows are grouped under [Structural rules](#structural-rules)
 and [Linearity](#linearity). Directional differentiation uses a real parameter
@@ -168,6 +187,34 @@ and holds domains fixed. `RealPart` and `ImaginaryPart` have no argument spaces.
 
 Substitution must respect local names. For example, replacing a free `i` must
 not change an `i` bound by an index sum.
+
+### Free occurrences
+
+A name is an `Index` or a `Function`. Free occurrence uses the same binding
+rules for two walks, chosen by the operation.
+
+| Rule | Walk or condition | Definition |
+| ---- | ----------------- | ---------- |
+| SB20 | Free occurrence of a name | Encounter a structurally equal name on the chosen walk with no enclosing binder binding it in that operand. Binding declarations do not themselves count as free occurrences. Names mentioned only in labels do not count. |
+| SB21 | Construction walk, used by substitution | Follow construction dependencies, including those stored in domains, maps and spaces, respecting the scopes SB02–SB04. Label reconstruction follows [Derived indices](expressions.md#derived-indices), but label contents add no free occurrences. |
+| SB22 | Value walk, used by directional differentiation | Follow expression value operands SB01, respecting SB02–SB04. A `Function` contributes itself; do not enter its space or label. Do not enter domains, maps or other stored non-expression dependencies. |
+
+Tuples are walked member by member. A name may be bound in one operand and
+free in another. Unless stated otherwise, substitution and capture avoidance
+use the construction walk; directional differentiation uses the value walk.
+
+| Example | Free occurrences |
+| ------- | ---------------- |
+| `form(e, (u,))` | Occurrences of `u` in `e` are bound |
+| `DirectionalDerivative(f, u, u, h)` | `u` is bound in `f` but free in the point operand |
+| `Function(V, ("label", u))` | The label introduces no free `u` in either walk |
+| `pull_back(f, φ)`, with `u` absent from `f` but free in `φ.parameterisation` | `u` occurs in the construction walk but not the value walk |
+
+The static `free_indices` attribute retains its definition in
+[Free indices](expressions.md#free-indices). The value walk is a dependency
+check, not a replacement for that attribute.
+
+### Scopes and substitution
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
@@ -181,15 +228,15 @@ not change an `i` bound by an index sum.
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
-| SB05 | Substitution traversal | Substitution follows all construction dependencies, including domains, maps, spaces and derived labels, within the binding scopes and label rules. Visit tuples member by member. Each pass states which operands it transforms. |
-| SB06 | Fresh bound names | Making a binding node *fresh* for expressions $s_1, \dots, s_n$ means renaming each bound name that occurs free in any $s_k$. Rename it only within its binding scope. This prevents an inserted free name from becoming bound accidentally. |
+| SB05 | Substitution traversal | Use the construction walk SB21 and the binding scopes SB02–SB04. Rebuild derived labels under [Derived indices](expressions.md#derived-indices). Each pass states which operands it transforms. |
+| SB06 | Fresh bound names | Making a binding node *fresh* for expressions $s_1, \dots, s_n$ means renaming each bound name that occurs free in any $s_k$ under SB20–SB21. Rename it only within its binding scope. This prevents an inserted free name from becoming bound accidentally. |
 
 Substitution replaces $r_1, \dots, r_n$ by $s_1, \dots, s_n$
 simultaneously. Within a binding scope, follow these steps.
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
-| SB07 | Within a binding scope, step 1 | Drop each pair whose key $r_k$ has a bound name free in it. |
+| SB07 | Within a binding scope, step 1 | Drop each pair whose key $r_k$ has a bound name free in it under SB20–SB21. |
 | SB08 | Within a binding scope, step 2 | Make the binding node fresh for the remaining replacement values $s_k$. |
 | SB09 | Within a binding scope, step 3 | Substitute the remaining pairs into the operands in that scope. |
 | SB10 | Outside the binding scope | Operands outside the binding scope use the original pairs. |
@@ -303,11 +350,11 @@ for its components. Conjugation uses a real differentiation parameter.
 
 | Rule | Expression $f$ | Rewrite of the derivative at $a$ |
 | --- | --- | --- |
-| L10 | No member of $x$ free in $f$ under D15 | Zero with the type of the derivative |
+| L10 | $f$ passes the directional independence check SH15 for $x$ | Zero with the type of the derivative |
 
 | Rule | Expression or operation | Rewrite |
 | --- | --- | --- |
-| L11 | $\partial_j b$, $b$ with no domain | Zero with $b$'s shape and argument spaces, and its free indices followed by $j$ |
+| L11 | $\partial_j b$, $b$ passes the spatial independence check SH16 | Zero with $b$'s shape and argument spaces, and its free indices followed by $j$ |
 
 ## Differentiation
 
@@ -321,8 +368,8 @@ Extensions can add derivative rules to either group.
 | --- | --- | --- |
 | D01 | `Product(b, c)` | $\delta b \, c + b \, \delta c$ |
 | D02 | `Division(b, c)` | $\delta b / c - (b \, \delta c) / (c c)$ |
-| D03 | `Power(b, c)`, $c$ independent of the differentiation target | $c \, b^{c - 1} \, \delta b$ |
-| D04 | `Power(b, c)`, $c$ not independent of the differentiation target | $b^c (\log(b) \, \delta c + c \, \delta b / b)$ |
+| D03 | `Power(b, c)`, independence of $c$ established by SH15 or SH16, or an analysis under SH18 | $c \, b^{c - 1} \, \delta b$ |
+| D04 | `Power(b, c)`, independence of $c$ not established | $b^c (\log(b) \, \delta c + c \, \delta b / b)$ |
 | D05 | `Absolute(b)` | $\operatorname{Re}(\bar b \, \delta b) / \lvert b \rvert$, with `real_part`, so the derivative is real |
 | D06 | `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
 | D07 | `Logarithm(b)` | $\delta b / b$ |
@@ -343,7 +390,7 @@ bases where differentiable. Results are core expressions.
 
 | Rule | Applies to | Requirement |
 | --- | --- | --- |
-| D15 | Dependence on the derivative variable | To test whether an expression depends on `x`, follow value operands and binding scopes, holding domains and maps fixed. A `Function` contributes itself, not names in its label or space. A form binding `x` has no free `x`. Tuple arguments vary member by member, including conjugated entries. Dual directions and substitution points may be symbolic forms whose actions the recipe evaluates. |
+| D15 | Dependence on the derivative variable | Use the directional independence check SH15 and value walk SB22. Tuple variables vary member by member, including occurrences under conjugation. Dual directions and substitution points may be symbolic forms whose actions the recipe evaluates. |
 
 For real scalar functions `u` and `a` in a space of constants,
 `directional_derivative(u * u, u, a, u)` rewrites to `u * a + a * u`.
@@ -372,7 +419,7 @@ the substitution rules; restrictions and transformation laws have their own grou
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
-| PB01 | $f$ with no domain, neither an `Action` nor a `Form` | $f$, with [type completion](#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
+| PB01 | $f$ with no domain, neither an `Action` nor a `Form` | The same spatially constant value $f$ under [Domain-free expressions](expressions.md#domain-free-expressions), with [type completion](#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
 | PB02 | `Coordinate(Q)`; exclude R01 | The parameterisation of $\psi$ |
 | PB03 | `PullBack(g, φ)`, φ a `SideMap` or a cell; exclude R01 and R02 | Remains, so a pull-back nests only inside a read on a cell |
 | PB04 | `PullBack(g, φ)`, φ a `DomainMap`; exclude R01 | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](geometry.md#pullback)) |
@@ -493,7 +540,7 @@ selected by another strategy.
 | Keep spatially transformed forms | ST03 |
 | Commute into operands | L01, ST01, L02–L03 |
 | Zero and remaining applications | L07, ST04–ST06 |
-| Binding | SB01–SB15, SB17 |
+| Binding | SB01–SB15, SB17, SB20–SB21 |
 
 ### Applying derivatives
 
@@ -506,7 +553,7 @@ selected by another strategy.
 
 | Selection | Rules |
 | --------- | ----- |
-| Substitution and dependence | SB18, D15 |
+| Substitution and dependence | SB18, D15, SH15, SB20, SB22 |
 | Independent expression | L10 |
 | Variable and action derivatives | D11–D12 |
 | Defer an inner derivative | D13 |
