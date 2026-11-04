@@ -444,7 +444,7 @@ and directions.
 | --------------------- | - |
 | Evaluates             | `Integral` over a mesh |
 | Input grammar         | $N_2$ |
-| Output grammar        | $N_3 = N_2 \setminus \{$an `Integral` whose domain is a `Mesh`$\}$ |
+| Output grammar        | $N_3 = N_2 \setminus \{$an `Integral` whose `integration_domain` is a `Mesh`$\}$ |
 
 The pass rewrites mesh integrals, inner integrals first. For group $j$ of
 `D.topology`, let $K_j$ be the reference cell and $c_j$ =

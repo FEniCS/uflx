@@ -773,9 +773,14 @@ coordinates coincide.
 | Extends | `Base` |
 | Takes | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` |
 | Properties | `ambient_domain` $X$, `cell_group` $j$, and `entry` $e$ |
-| Requires | $j$ a valid cell-group number of $T$, `T.cell_types[j]` a reference cell $K_j$; an integer $e$ satisfies `0 <= e < T.num_cells[j]`, and a `GatheredIndex` has extent `T.num_cells[j]` |
+| Requires | $j$ a valid cell-group number of $T$, `T.cell_types[j]` a reference cell $K_j$; an integer $e$ satisfies the bounds below, and a `GatheredIndex` has extent `T.num_cells[j]` |
 | Derived | `topology` $T$, `parameter_domain` $K_j$, `free_indices` and, for a mesh, `parameterisation`, as below |
 | Raises | `ValueError` if another requirement fails |
+
+For a symbolic cell count, construction cannot check the upper bound. An
+integer entry $e$ must be nonnegative. If `T.num_cells[j]` is an `int`,
+construction also checks `e < T.num_cells[j]`; otherwise the caller must ensure
+that $e$ is smaller than the supplied cell count.
 
 For an ordinary `Index` $e$, `free_indices` contains $e$ with extent
 `T.num_cells[j]`; the index itself stores no extent. For a `GatheredIndex`,

@@ -220,8 +220,10 @@ pass-specific error, such as inconsistent units.
 Only `AbstractExpression` defines arithmetic and indexing overloads, listed in
 the [table of free functions](reference.md#appendix-free-functions).
 
-An overload passes operands unchanged to its free function, except for the
-indexing syntax below. There are no reflected overloads, such as `__radd__`.
+To allow external libraries to handle operations such as `expr * measure`,
+binary arithmetic overloads return `NotImplemented` for non-expression operands.
+Otherwise, overloads call the corresponding factory with operands unchanged,
+except for indexing below. The core defines no reflected overloads.
 
 An overload applies one free function to the operands, so the graph follows
 the grouping and the precedence of Python, and construction never regroups

@@ -98,6 +98,9 @@ The scalar type is real or complex. Unless the [static type
 table](reference.md#appendix-static-type-table) states otherwise, an expression is complex
 if and only if at least one edge is a complex expression.
 
+The Python representation of the scalar types is implementation-defined. When
+stored as a construction argument, it must satisfy rule 1.
+
 The scalar type is the arithmetic in which the expression is evaluated, not a
 statement about the value. A real `SquareRoot`, `Logarithm` or `Power` whose
 value is not a real number, such as `square_root(Integer(-1))`, is undefined.
@@ -448,9 +451,13 @@ the following kinds:
 
 | Entry                                | Covers                                | Rule                                                                                               | Raises       |
 | ------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------ |
-| An `int` $k$                         | One axis, of extent $n_j$             | $n_j$ is an `int`, and $0 \le k < n_j$                                                             | `IndexError` |
+| An `int` $k$                         | One axis, of extent $n_j$             | $k \ge 0$; if $n_j$ is an `int`, $k < n_j$; otherwise the caller ensures the upper bound, as below | `IndexError` |
 | An [`Index`](#index)                 | One axis, of extent $n_j$             | The `Index` takes the extent $n_j$                                                                 |              |
 | A [`GatheredIndex`](#gatheredindex)  | One axis, of extent $n_j$             | The extent of the `GatheredIndex` equals $n_j$                                                     | `IndexError` |
+
+For a symbolic extent, construction cannot check the upper bound. The caller
+must ensure that an integer entry is smaller than the supplied extent.
+Construction checks nonnegativity and any known upper bound.
 
 The free indices of the `Indexed` are the free indices of the expression,
 followed by each `Index` entry with the extent that the

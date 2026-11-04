@@ -298,7 +298,7 @@ from the default rules of [Domain](expressions.md#domain) and [Scalar type](expr
 | Class                    | Domain of the node                | Scalar type of the node           |
 | ------------------------ | ---------------------------------- | --------------------------------- |
 | `Complex`          | None                               | Complex                           |
-| `Zero`                   | None                               | Real                              |
+| `Zero`                   | None                               | The stored scalar type            |
 | `Absolute`               | The domain of the operand         | Real                              |
 | `RealPart`, `ImaginaryPart` | The domain of the operand      | Real                              |
 | `Coordinate`             | The domain $P$                     | Real                              |
