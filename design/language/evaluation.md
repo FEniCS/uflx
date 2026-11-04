@@ -322,8 +322,9 @@ another rule or library. Commuting uses the shared conditions above.
 | Rule | Expression or operation | Rewrite |
 | --- | --- | --- |
 | ST07 | `Gradient(Action(B, p, g), P)` | `Action(Gradient(B, P), p, g)` |
-| ST08 | `Gradient(f, P)`, $f$ not an `Action` | `component_tensor(∂_j f[A], A + (j,))`, using the component rules selected by [Applying gradients](#applying-gradients) |
-| ST09 | $\partial_j b$, $b$ a terminal, `Gradient`, `PushForward`, node matching CC06 or CC07, or `PullBack` by a cell or `SideMap`; exclude L11 and D17 | `component_tensor(gradient(b, P)[B + (j,)], B)`, with one derived index in `B` per value axis of $b$; the gradient remains |
+| ST12 | `Gradient(b, P)`, $b$ with a domain and either a terminal, `Gradient`, `PushForward`, node matching CC06 or CC07, or `PullBack` by a cell or `SideMap`; exclude `Coordinate(P)` when $P$ has its ambient dimension | Retain the whole gradient unchanged |
+| ST08 | `Gradient(f, P)`, $f$ not an `Action` and the gradient does not match ST12 | `component_tensor(∂_j f[A], A + (j,))`, using the component rules selected by [Applying gradients](#applying-gradients) |
+| ST09 | $\partial_j b$, with `Gradient(b, P)` matching ST12 | `component_tensor(gradient(b, P)[B + (j,)], B)`, with one derived index in `B` per value axis of $b$; ST12 retains the introduced gradient |
 | ST10 | $\partial_j$ `Action(B, p, g)` | `Action(∂_j B, p, g)`, with $g$ unchanged |
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
@@ -438,7 +439,18 @@ the substitution rules; restrictions and transformation laws have their own grou
 | PB03 | `PullBack(g, φ)`, φ a `SideMap` or a cell; exclude R01 and R02 | Remains, so a pull-back nests only inside a read on a cell |
 | PB04 | `PullBack(g, φ)`, φ a `DomainMap`; exclude R01 | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](geometry.md#pullback)) |
 | PB05 | A terminal not matching PB01, PB02, R01 or R03 | Remains, for the library of the terminal |
-| PB06 | An operand matching none of ST11, SB19, R01–R03, PB01–PB05, CC02–CC05 or CC08–CC09 | Make its binders fresh for $\psi$; rebuild from the pull-backs of its expression operands |
+| PB06 | $f$ has a domain, $\psi$ is not a `SideMap`, and $f$ belongs to a class in the table below | Make its binders fresh for $\psi$; rebuild from the pull-backs of the listed operands, preserving the other construction arguments |
+
+| PB06 operand class | Operands to pull back |
+| ------------------ | --------------------- |
+| `Sum`, `Product`, `Division`, `Power` | Both expression operands |
+| `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm`, `Inverse`, `Determinant` | The expression operand |
+| `Tensor` | Each entry |
+| `BroadcastTo` | `value`; keep the target shape |
+| `Indexed` | `expression`; keep the index entries |
+| `ComponentTensor`, `IndexSum` | `expression`, after making the bound indices fresh for $\psi$ |
+
+Other classes need their own rules; adding a node class does not extend PB06.
 
 Map composition processes its new parameterisation as a separate root under
 the [geometry preparation contract](#evaluation-traversal).
@@ -538,6 +550,25 @@ requirements used throughout the recipe. Fallback selections apply
 only when the preceding rules do not match. Rules keep their conditions when
 selected by another strategy.
 
+### Visiting and revisiting
+
+These rules apply to the reference recipes. Retention is a rule result, not a
+permanent annotation on a node.
+
+| Rule | Event | Required action |
+| ---- | ----- | --------------- |
+| SH19 | Visit a node | Process its value operands in construction order under SH09–SH11, then rebuild if they changed and select a rule for the resulting node |
+| SH20 | A rule replaces a node | Apply type completion, then process the replacement, including its root and any new or changed subexpressions that this recipe handles. Reuse already processed, structurally unchanged subexpressions. Substitution itself still follows SB13. |
+| SH21 | A rule retains a node | Finish this visit without reconstructing it through a fallback or scheduling it again unchanged. Its operands have already been processed. Reconsider it if an operand changes or another recipe visits it. |
+| SH22 | A rule exposes work for another recipe | Leave that work for the stated recipe. After it changes an operand, rebuild and reconsider affected ancestors. Exposed geometry follows SH12–SH13. |
+| SH23 | A recipe stops | No work belonging to that recipe remains. Check its output contract. An unchanged replacement is not progress; an unmatched required operation, repeated state or resource limit is not successful completion. |
+| SH24 | A replacement contains $\partial_j b$ | Resolve this component-derivative request with the component rows of `apply_gradients`. It is notation, not a core node. ST08 creates these requests; ST09 ends a request at a retained gradient. No unresolved request may appear in the returned expression. |
+
+A retained node does not hide its operands. For example, a `PullBack` retained
+around a gradient must be reconsidered if a later gradient pass changes that
+operand into arithmetic. A recipe may revisit an unchanged retained node in a
+later round, but its retention rule returns it unchanged without new indices.
+
 ### Applying actions
 
 | `apply_actions(f)` |  |
@@ -545,7 +576,7 @@ selected by another strategy.
 | Evaluates          | `Action` |
 | Input contract     | Core expressions |
 | Output contract    | Actions expanded |
-| Strategy | Inner actions first; first matching rule in the ordered selection; revisit created actions, including those exposed by substitution |
+| Strategy | SH19–SH23; inner actions first; first matching rule; process new actions, including those exposed by substitution |
 
 | Selection | Rules |
 | --------- | ----- |
@@ -563,7 +594,7 @@ selected by another strategy.
 | Evaluates              | `DirectionalDerivative` and actions created by its evaluation |
 | Input contract         | Core expressions; actions expanded |
 | Output contract        | Actions and derivatives expanded |
-| Strategy | Inner derivatives first; first matching rule in the ordered selection; alternate with `apply_actions` until both output contracts hold |
+| Strategy | SH19–SH23; inner derivatives first; first matching rule; process new derivatives and run `apply_actions` on exposed actions, then reconsider changed ancestors |
 
 | Selection | Rules |
 | --------- | ----- |
@@ -580,7 +611,7 @@ selected by another strategy.
 | Evaluates             | `Integral` over a mesh |
 | Input contract        | Core expressions |
 | Output contract       | Mesh integrals expanded |
-| Strategy | Inner mesh integrals first |
+| Strategy | SH19–SH23; inner mesh integrals first; process mesh integrals exposed by expansion |
 
 | Selection | Rules |
 | --------- | ----- |
@@ -593,12 +624,12 @@ selected by another strategy.
 | Evaluates            | `Gradient`, `Divergence` and `Curl` |
 | Input contract       | Core expressions; actions and derivatives expanded |
 | Output contract      | Actions, derivatives and gradients expanded |
-| Strategy | Inner expressions first; first matching rule in the ordered selection; evaluate exposed actions with `apply_actions` and revisit affected expressions |
+| Strategy | SH19–SH24; inner expressions first; first matching rule; resolve component derivatives and run `apply_actions` on exposed actions, then reconsider changed ancestors |
 
 | Selection | Rules |
 | --------- | ----- |
 | Move an action outside the gradient | ST07 |
-| Keep Piola patterns | CC06–CC07 |
+| Keep Piola patterns and terminal or mapped gradients | CC06–CC07, ST12 |
 | Expand divergence and curl | D16 |
 | Reconstruct the gradient from components | ST08 |
 | Constants and coordinates | L11, D17 |
@@ -615,7 +646,7 @@ Gradients exposed by pull-backs are processed in the next call to `apply_gradien
 | Evaluates              | `PullBack` |
 | Input contract         | Core expressions; actions and derivatives expanded; prepared geometry when exposed |
 | Output contract        | Actions, derivatives and pull-backs expanded |
-| Strategy | Inner pull-backs first; first matching rule in the ordered selection; revisit created pull-backs and evaluate exposed actions with `apply_actions` |
+| Strategy | SH19–SH23; inner pull-backs first; first matching rule; process new pull-backs and run `apply_actions` on exposed actions. Leave new gradients to the next spatial round. |
 
 | Selection | Rules |
 | --------- | ----- |
@@ -644,7 +675,7 @@ the nodes allowed after `lower`.
 | [Tensors and indexing](expressions.md#tensors-and-indexing) | `Tensor`, `BroadcastTo`, `Indexed`, `ComponentTensor`, `IndexSum` | Always; index simplification is left to the compiler |
 | [Tensor operations](expressions.md#tensor-operations) | `Inverse`, `Determinant` | Always, for the compiler to evaluate |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Coordinate` | Always |
-| [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
+| [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Gradient` | Matches ST12 |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `RD(0)` |
 | [Maps between domains](geometry.md#maps-between-domains) | `PullBack` | By a `SideMap` of an expression other than an `Action` or `Form`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
@@ -684,7 +715,8 @@ them in every integral that needs them.
 | ----------------- | --------------------- |
 | Input | Core expressions and [prepared geometry](#evaluation-traversal); extension nodes need an extension recipe first |
 | Unsupported rewrite | `TypeError` |
-| Output violates core normal form | `ValueError`, identifying offending nodes |
+| Stable output violates core normal form | `ValueError`, identifying offending nodes |
+| A complete spatial round returns to an earlier state | `ValueError`; a cycle is not completion |
 
 It runs these passes in order.
 
@@ -693,7 +725,132 @@ It runs these passes in order.
 | [`apply_actions`](#applying-actions) | Actions expanded |
 | [`apply_derivatives`](#applying-derivatives), including action cleanup | Actions and derivatives expanded |
 | [`expand_integrals`](#expanding-integrals) | Also mesh integrals expanded |
-| Repeat [`apply_gradients`](#applying-gradients), then [`expand_pull_backs`](#expanding-pull-backs), with action cleanup, until neither changes the expression | Core normal form |
+| Repeat [`apply_gradients`](#applying-gradients), then [`expand_pull_backs`](#expanding-pull-backs), with action cleanup and reconsideration under SH19–SH24 | Stop under the conditions below |
+
+Compare states after complete spatial rounds using structural equality,
+including bound names and labels. Fresh naming alone is not progress.
+
+| Round result | Next step |
+| ------------ | --------- |
+| Neither spatial pass nor action cleanup changed the expression; core normal form holds | Return the expression |
+| Neither changed it; core normal form fails | Raise `ValueError` with the remaining offending nodes |
+| Some step changed it, but the final state equals an earlier round boundary | Report a cycle; do not treat it as an unchanged round |
+| Otherwise | Run the next round |
+
+### Progress of the reference recipe
+
+Expression size may grow, so node count is not a progress measure. The rules
+remove an operation, move it to operands, or stop at an explicit retained case.
+
+| Rule family | Progress |
+| ----------- | -------- |
+| Actions and directional derivatives | Apply or differentiate the current node, then process operations on its operands. An inner derivative is processed before an outer one. Retained actions are not expanded again. |
+| Mesh integration | Replace a mesh integral by reference-cell integrals. Repeating the pass cannot expand those as mesh integrals. |
+| Gradient reconstruction | Apply ST08 only to a gradient outside ST12. Component rules descend through operands. ST09 introduces a gradient that matches ST12, so reconstruction cannot wrap it again. |
+| Action transport | ST07, ST10 and ST11 move actions outside spatial operations. ST03 prevents action expansion from reversing this move. |
+| Pull-back algebra | Move a pull-back into operands, compose an existing map, or retain a read. Composition exposes the existing map's parameterisation for processing; it does not recreate the original map composition. |
+| Cell transport and Piola identities | Replace the matched cell pull-back by its transformation formula. New gradients are handled in the next spatial round and stop at ST12 where appropriate. |
+| Retained cases | Do not create fresh indices or schedule another rewrite of the unchanged node |
+
+The finite, acyclic input and stored geometry supply the operands and map
+parameterisations in these steps. New recipes or extension rules must justify
+their own progress; the stopping checks above do not prove termination for an
+arbitrary rule selection.
+
+### Stability examples
+
+Here `u` is a scalar function on `P` and `v` a vector function on `P`.
+
+| Input | Required behaviour |
+| ----- | ------------------ |
+| `gradient(u, P)` | ST12 returns it unchanged, without a `ComponentTensor` wrapper |
+| `gradient(gradient(u, P), P)` | Visit the inner gradient, then retain both under ST12 |
+| `gradient(v, P)` | Retain the whole tensor gradient; do not expand and rebind its components |
+| `gradient(u * u, P)` | Expand the product derivative; retain each resulting `gradient(u, P)` |
+| Gradient of a domain-free value | ST12 does not apply; L11 gives the typed zero |
+| `gradient(coordinate(P), P)` on a full-dimensional domain | ST12 does not apply; D17 gives the identity |
+| A retained pull-back whose gradient operand later becomes arithmetic | Reconsider the rebuilt pull-back and apply its arithmetic rules |
+| A completed `lower(f)` passed to `lower` again | Return a structurally equal expression |
+
+### Worked rule combinations
+
+These checks compare values, shapes and free indices. They do not require
+arithmetic simplification. Zero terms are omitted from displayed results,
+and fresh bound names are shown schematically.
+
+#### Nested derivatives
+
+Let `u`, `a`, `b`, `h` and `k` be real scalar functions in a constant space,
+with `a`, `b`, `h` and `k` independent of `u`.
+
+| Input | Rule trace and result |
+| ----- | --------------------- |
+| `directional_derivative(directional_derivative(u * u, u, u, h), u, a, k)` | The inner derivative gives `h * u + u * h` by D01, D11 and SB18. Its point `u` is free under SB04. The outer derivative gives `h * k + k * h`. |
+| `directional_derivative(directional_derivative(u * u, u, b, h), u, a, k)` | The inner derivative gives `h * b + b * h`. SH15 then finds no free `u`, so L10 gives the typed zero. |
+
+#### Capture avoidance
+
+Let `u` and `u0` be real scalar functions in a constant space, and `a` and `b`
+be constant arrays. The index `i` has the same extent in both arrays.
+
+| Input | Rule trace and result |
+| ----- | --------------------- |
+| `directional_derivative(index_sum(u * a[i], (i,)), u, u0, b[i])` | SB06–SB09 rename the sum's bound index to fresh `j` before ST01 moves differentiation inside. D01 and D11 give `index_sum(b[i] * a[j], (j,))`. The direction's `i` stays free. |
+
+For `a = (2, 3)` and `b = (7, 11)`, the result has values `(35, 55)` over
+free `i`. Capturing `i` would instead give the scalar `47`.
+
+#### Several missing indices
+
+Let `u` be a real scalar function in a constant space, `a` and `b` constant
+arrays of extents `m` and `n`, and `i` and `j` distinct indices.
+
+| Step | Result |
+| ---- | ------ |
+| Differentiate `directional_derivative(u, u, a[i] + b[j], Integer(1))` | D11 gives the raw value `Integer(1)`, missing both indices |
+| SH06 for `i` | `r = indexed(broadcast_to(Integer(1), (m,)), (i,))` |
+| SH06 for `j` | `indexed(broadcast_to(r, (n,)), (j,))` |
+| Bind and sum both indices | The value is `m * n`, including zero when either extent is zero |
+
+For a vector result of shape `(d,)`, SH06 instead uses a fresh component
+index `k` and returns
+`component_tensor(indexed(broadcast_to(r, (m, d)), (i, k)), (k,))`.
+The result keeps shape `(d,)` and adds free `i`; a second missing index is
+handled in the same way without capturing `k`.
+
+#### Empty broadcasts
+
+| Input | Required result |
+| ----- | --------------- |
+| `index_sum(indexed(broadcast_to(square_root(Integer(-1)), (0,)), (i,)), (i,))` | Value zero with shape `()` and no free indices. Neither the empty broadcast nor the empty sum evaluates the real square root. The prototype remains subject to static construction checks. |
+
+This does not make `square_root(Integer(-1))` a defined real value. Symbolic
+traversal under SH19 is distinct from evaluating an array member.
+
+#### Piola identity exposed by an action
+
+Let `v` and `u` be vector functions on the topology of mesh `D`, with geometry
+independent of them. Set `m = transformation_law(("contravariant",), 1)`,
+`F = form(push_forward(v, D, m), (v,))`, and let `ψ` be a cell map of `D`.
+
+| Step | Result |
+| ---- | ------ |
+| Start with `pull_back(divergence(action(F, 0, u), D), ψ)` | The Piola pattern is hidden by the action |
+| Apply SB16 | `pull_back(divergence(push_forward(u, D, m), D), ψ)` |
+| Apply CC06 | Retain the divergence until the cell pull-back is processed |
+| Apply CC08 | The reference-cell divergence of `û`, carried by `transformation_law((), 1)` |
+
+For reference field $\hat u=(\xi,\eta)$, the reference divergence is 2.
+
+| Cell map | Physical divergence |
+| -------- | ------------------- |
+| $\psi(\xi,\eta)=(2\xi,3\eta)$ | $2/6=1/3$ |
+| $\psi(\xi,\eta)=(\xi,(1+\xi)\eta)$, $\xi>-1$ | $2/(1+\xi)$ |
+
+For the second map the physical field is
+$u(x,y)=(x/(1+x),\;y(1+2x)/(1+x)^2)$. Direct differentiation gives
+$1/(1+x)^2+(1+2x)/(1+x)^2=2/(1+x)$, agreeing with CC08 without derivatives
+of the Jacobian in the lowered expression.
 
 This order evaluates gradients on their stated domains before changing coordinates.
 Full-dimensional `gradient(coordinate(D), D)` becomes the identity before
