@@ -243,13 +243,16 @@ For example, `Zero((3,), (), (), real)` is a real zero vector and
 
 ### Arithmetic
 
-`Sum`, `Product`, `Division` and `Power` denote the sum, product, quotient and
-power of two scalar expressions. Both operands must have value shape `()`, or
-construction raises `ValueError`; the result has value shape `()`. Free indices
-follow the [default rule](#free-indices).
+Arithmetic nodes retain scalar and tensor operations as written. Their free
+functions construct the corresponding nodes directly. Invalid operand shapes
+raise `ValueError`. Free indices follow the [default rule](#free-indices).
 
-The free functions below construct these nodes for scalar operands. `add`,
-`multiply` and `divide` also support [tensor arithmetic](#tensor-arithmetic).
+| Node | Operand shapes | Value shape | Meaning |
+| ---- | -------------- | ----------- | ------- |
+| `Sum(a, b)` | Equal | Shape of `a` | Entrywise sum |
+| `Product(a, b)` | At least one scalar | Shape of the other operand, or `()` if both scalar | Scalar multiplication, preserving operand order |
+| `Division(a, b)` | Scalar `b` | Shape of `a` | Entrywise division by `b` |
+| `Power(a, b)` | Both scalar | `()` | Scalar power |
 
 | Class      | Free function | Overload |
 | ---------- | ------------- | -------- |
@@ -348,7 +351,7 @@ by entry.
 | Properties     | `operand` $f$ |
 | Static type    | The value shape and the free indices of $f$, and the argument spaces of $f$ with each space conjugated (see [`ConjugateSpace`](forms.md#conjugatespace)) |
 
-`Conjugate` is the only scalar-field node that accepts any value shape, because
+`Conjugate` accepts any value shape because
 [`Form`](forms.md#form) binds `conjugate(v)` even for a vector argument. Its entrywise
 meaning is `conjugate(f)[e]` = `conjugate(f[e])` in value.
 
@@ -724,14 +727,15 @@ corresponding entry of `J`.
 
 ### Tensor arithmetic
 
-Tensor arithmetic uses fixed compositions of scalar nodes and index notation.
-The free functions read operand ranks to choose the compositions below.
+Addition, scalar multiplication and division retain their arithmetic nodes.
+[Component expansion](evaluation.md#expanding-tensor-arithmetic) introduces index
+notation during lowering. The other operations below use fixed compositions.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `add(first, second)` | `+` | `first, second: AbstractExpression` | `component_tensor(Sum(first[K], second[K]), K)` |
-| `multiply(first, second)` | `*` | `first, second: AbstractExpression` | `component_tensor(Product(first, second[K]), K)` if `first` is scalar, `component_tensor(Product(first[K], second), K)` if only `second` is scalar, otherwise `Product(first, second)` |
-| `divide(first, second)` | `/` | `first, second: AbstractExpression` | `component_tensor(Division(first[K], second), K)` |
+| `add(first, second)` | `+` | `first, second: AbstractExpression` | `Sum(first, second)` |
+| `multiply(first, second)` | `*` | `first, second: AbstractExpression` | `Product(first, second)` |
+| `divide(first, second)` | `/` | `first, second: AbstractExpression` | `Division(first, second)` |
 | `real_part(f)` | | `f: AbstractExpression` | `component_tensor(RealPart(f[K]), K)` |
 | `imaginary_part(f)` | | `f: AbstractExpression` | `component_tensor(ImaginaryPart(f[K]), K)` |
 | `matrix_product(first, second)` | `@` | `first, second: AbstractExpression` | The contraction of the last axis of `first` with the first axis of `second`, below |
@@ -741,7 +745,6 @@ In each composition, `K` contains one [derived index](#derived-indices)
 per axis of the indexed operand: `Index((name, first, second, m))` for binary
 operations, or `Index((name, f, m))` for unary operations. `name` is the
 qualified function identifier and `m` runs from zero to rank minus one.
-For addition and division, use the rank of `first`.
 The empty-index factory identities give scalar operations when `K == ()`.
 Scalar constructors inside the compositions avoid recursive factory calls.
 Operand free indices remain free.
@@ -750,8 +753,7 @@ There is no implicit broadcasting. Use [`broadcast_to`](#broadcastto) explicitly
 
 | Invalid operands | Exception |
 | ---------------- | --------- |
-| Addition: unequal ranks | `IndexError` from `Indexed` |
-| Addition: unequal extents | `ValueError` from `Sum` |
+| Addition: unequal shapes | `ValueError` from `Sum` |
 | Multiplication: two tensors | `ValueError` from `Product` |
 | Division: tensor denominator | `ValueError` from `Division` |
 

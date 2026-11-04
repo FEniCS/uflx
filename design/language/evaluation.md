@@ -133,6 +133,7 @@ separately when exposed.
 | Mesh integrals expanded | No `Integral` over a `Mesh` |
 | Gradients expanded | Every remaining `Gradient`, `Divergence` and `Curl` is allowed by [The core normal form](#the-core-normal-form) |
 | Pull-backs expanded | Every remaining `PullBack` is allowed by [The core normal form](#the-core-normal-form) |
+| Tensor arithmetic expanded | Every `Sum`, `Product` and `Division` has scalar value shape |
 | Reference integration | Derivatives expanded and mesh integrals expanded |
 | Core normal form | The allowed patterns in [The core normal form](#the-core-normal-form) |
 
@@ -336,6 +337,20 @@ $A$ per value axis of $f$. Empty lists use the factory identities. The supplying
 library evaluates remaining terminal gradients. Downstream terminals may declare
 argument spaces, for example for assembled vectors or matrices; their libraries
 evaluate the remaining actions.
+
+### Tensor arithmetic components
+
+These rules expand tensor arithmetic into scalar operations. Each applies only
+to a non-scalar result. `K` has one derived index per result axis, using
+`Index(("uflx.expand_arithmetic", f, m))` for node `f` and axis `m`.
+Choose fresh names under SB07–SB14; operand free indices remain free.
+
+| Rule | Node | Rewrite |
+| ---- | ---- | ------- |
+| ST13 | `Sum(a, b)` | `component_tensor(Sum(a[K], b[K]), K)` |
+| ST14 | `Product(a, b)`, scalar `a` | `component_tensor(Product(a, b[K]), K)` |
+| ST15 | `Product(a, b)`, scalar `b` | `component_tensor(Product(a[K], b), K)` |
+| ST16 | `Division(a, b)` | `component_tensor(Division(a[K], b), K)` |
 
 ## Linearity
 
@@ -661,17 +676,31 @@ Gradients exposed by pull-backs are processed in the next call to `apply_gradien
 | Side normal | R03 |
 | Terminals and pointwise operations | PB05–PB06 |
 
+### Expanding tensor arithmetic
+
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `expand_arithmetic(f)` | | `f: AbstractExpression` | An equivalent expression with tensor arithmetic expanded |
+
+| `expand_arithmetic(f)` | |
+| ---------------------- | - |
+| Evaluates | Tensor-valued `Sum`, `Product` and `Division` |
+| Input contract | Core expressions |
+| Output contract | Tensor arithmetic expanded |
+| Strategy | SH19–SH23; operands first; apply ST13–ST16; retain scalar arithmetic |
+
 ## The core normal form
 
 The core normal form combines
 the core expressions, actions expanded, derivatives expanded, mesh integrals
-expanded, gradients expanded and pull-backs expanded contracts. The table lists
-the nodes allowed after `lower`.
+expanded, gradients expanded, pull-backs expanded and tensor arithmetic expanded
+contracts. The table lists the nodes allowed after `lower`.
 
 | Chapter | Node class | Allowed in the core normal form |
 | ------- | ---------- | ------------------------------- |
 | [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Integer`, `Float`, `Complex`, `Zero` | Always |
-| [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
+| [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Sum`, `Product`, `Division` | Scalar value shape |
+| [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
 | [Tensors and indexing](expressions.md#tensors-and-indexing) | `Tensor`, `BroadcastTo`, `Indexed`, `ComponentTensor`, `IndexSum` | Always; index simplification is left to the compiler |
 | [Tensor operations](expressions.md#tensor-operations) | `Inverse`, `Determinant` | Always, for the compiler to evaluate |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Coordinate` | Always |
@@ -726,14 +755,15 @@ It runs these passes in order.
 | [`apply_derivatives`](#applying-derivatives), including action cleanup | Actions and derivatives expanded |
 | [`expand_integrals`](#expanding-integrals) | Also mesh integrals expanded |
 | Repeat [`apply_gradients`](#applying-gradients), then [`expand_pull_backs`](#expanding-pull-backs), with action cleanup and reconsideration under SH19–SH24 | Stop under the conditions below |
+| [`expand_arithmetic`](#expanding-tensor-arithmetic) | Core normal form |
 
 Compare states after complete spatial rounds using structural equality,
 including bound names and labels. Fresh naming alone is not progress.
 
 | Round result | Next step |
 | ------------ | --------- |
-| Neither spatial pass nor action cleanup changed the expression; core normal form holds | Return the expression |
-| Neither changed it; core normal form fails | Raise `ValueError` with the remaining offending nodes |
+| Neither spatial pass nor action cleanup changed the expression; all contracts except tensor arithmetic expanded hold | Proceed to `expand_arithmetic` |
+| Neither changed it; another core normal-form contract fails | Raise `ValueError` with the remaining offending nodes |
 | Some step changed it, but the final state equals an earlier round boundary | Report a cycle; do not treat it as an unchanged round |
 | Otherwise | Run the next round |
 
@@ -750,6 +780,7 @@ remove an operation, move it to operands, or stop at an explicit retained case.
 | Action transport | ST07, ST10 and ST11 move actions outside spatial operations. ST03 prevents action expansion from reversing this move. |
 | Pull-back algebra | Move a pull-back into operands, compose an existing map, or retain a read. Composition exposes the existing map's parameterisation for processing; it does not recreate the original map composition. |
 | Cell transport and Piola identities | Replace the matched cell pull-back by its transformation formula. New gradients are handled in the next spatial round and stop at ST12 where appropriate. |
+| Tensor arithmetic | ST13–ST16 replace a tensor arithmetic node by scalar arithmetic and index notation. They introduce no tensor arithmetic nodes. |
 | Retained cases | Do not create fresh indices or schedule another rewrite of the unchanged node |
 
 The finite, acyclic input and stored geometry supply the operands and map

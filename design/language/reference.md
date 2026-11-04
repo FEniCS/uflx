@@ -10,7 +10,8 @@ are in the class sections.
 | `Integer`, `Float`                                | A number written down is a terminal |
 | `Complex`                                        | A scalar complex constant retains its two real literals without arithmetic construction |
 | `Zero`                                           | A zero carries its shape, free indices, argument spaces and scalar type without edges to other expressions                              |
-| `Sum`, `Product`, `Power`, `Absolute`             | Primitive scalar operations |
+| `Sum`, `Product` | Retain addition and scalar multiplication at their original value shape |
+| `Power`, `Absolute` | Primitive scalar operations |
 | `Conjugate`                                      | An operation of the scalar field, and `Form` meets `conjugate(v)` of a function of any value shape as written |
 | `RealPart`                                       | `(f + conjugate(f)) / Integer(2)` has the value of the real part but is complex, and the real part is real    |
 | `ImaginaryPart`                                  | `real_part(Complex(Integer(0), Integer(1)) * conjugate(f))` multiplies the real part by zero, which is NaN for an infinite real part |
@@ -180,17 +181,17 @@ Extend `AbstractExpression`:
 
 ### Tensor operations
 
-| Function                                                            | Overload | Takes                               | Returns                                                                                                                                                                                |
-| ------------------------------------------------------------------- | -------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`add(first, second)`](expressions.md#tensor-arithmetic)            | `+`      | `first, second: AbstractExpression` | `component_tensor(Sum(first[K], second[K]), K)`                                                                                                                                        |
-| [`multiply(first, second)`](expressions.md#tensor-arithmetic)       | `*`      | `first, second: AbstractExpression` | `component_tensor(Product(first, second[K]), K)` if `first` is scalar, `component_tensor(Product(first[K], second), K)` if only `second` is scalar, otherwise `Product(first, second)` |
-| [`divide(first, second)`](expressions.md#tensor-arithmetic)         | `/`      | `first, second: AbstractExpression` | `component_tensor(Division(first[K], second), K)`                                                                                                                                      |
-| [`real_part(f)`](expressions.md#tensor-arithmetic)                  |          | `f: AbstractExpression`             | `component_tensor(RealPart(f[K]), K)`                                                                                                                                                  |
-| [`imaginary_part(f)`](expressions.md#tensor-arithmetic)             |          | `f: AbstractExpression`             | `component_tensor(ImaginaryPart(f[K]), K)`                                                                                                                                             |
-| [`matrix_product(first, second)`](expressions.md#tensor-arithmetic) | `@`      | `first, second: AbstractExpression` | The contraction of the last axis of `first` with the first axis of `second`, below                                                                                                     |
-| [`transpose(A)`](expressions.md#tensor-arithmetic)                  |          | `A: AbstractExpression`             | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2                                                                                                            |
-| [`inverse(A)`](expressions.md#inverse)                              |          | `A: AbstractExpression`             | `Inverse`                                                                                                                                                                              |
-| [`determinant(A)`](expressions.md#determinant)                      |          | `A: AbstractExpression`             | `Determinant`                                                                                                                                                                          |
+| Function                                                            | Overload | Takes                               | Returns                                                                            |
+| ------------------------------------------------------------------- | -------- | ----------------------------------- | ---------------------------------------------------------------------------------- |
+| [`add(first, second)`](expressions.md#tensor-arithmetic)            | `+`      | `first, second: AbstractExpression` | `Sum(first, second)`                                                               |
+| [`multiply(first, second)`](expressions.md#tensor-arithmetic)       | `*`      | `first, second: AbstractExpression` | `Product(first, second)`                                                           |
+| [`divide(first, second)`](expressions.md#tensor-arithmetic)         | `/`      | `first, second: AbstractExpression` | `Division(first, second)`                                                          |
+| [`real_part(f)`](expressions.md#tensor-arithmetic)                  |          | `f: AbstractExpression`             | `component_tensor(RealPart(f[K]), K)`                                              |
+| [`imaginary_part(f)`](expressions.md#tensor-arithmetic)             |          | `f: AbstractExpression`             | `component_tensor(ImaginaryPart(f[K]), K)`                                         |
+| [`matrix_product(first, second)`](expressions.md#tensor-arithmetic) | `@`      | `first, second: AbstractExpression` | The contraction of the last axis of `first` with the first axis of `second`, below |
+| [`transpose(A)`](expressions.md#tensor-arithmetic)                  |          | `A: AbstractExpression`             | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2        |
+| [`inverse(A)`](expressions.md#inverse)                              |          | `A: AbstractExpression`             | `Inverse`                                                                          |
+| [`determinant(A)`](expressions.md#determinant)                      |          | `A: AbstractExpression`             | `Determinant`                                                                      |
 
 ### Calculus on a domain
 
@@ -252,6 +253,12 @@ Extend `AbstractExpression`:
 | [`form(expression, arguments)`](forms.md#form)                  |          | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`  | `Form`                                                                                  |
 | [`action(f, position, g)`](forms.md#action)                     |          | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                |
 | [`gateaux_derivative(F, x, a, w)`](forms.md#gateaux-derivative) |          | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | The `Form` constructed below                                                            |
+
+### Pass recipes
+
+| Function                                                            | Overload | Takes                   | Returns                                                  |
+| ------------------------------------------------------------------- | -------- | ----------------------- | -------------------------------------------------------- |
+| [`expand_arithmetic(f)`](evaluation.md#expanding-tensor-arithmetic) |          | `f: AbstractExpression` | An equivalent expression with tensor arithmetic expanded |
 
 ### Standard lowering recipe
 
@@ -326,6 +333,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 43    |
 | Expression node classes         | 33    |
-| Free functions                  | 51    |
+| Free functions                  | 52    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->
