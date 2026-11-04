@@ -18,7 +18,7 @@ languages for variational forms, such as UFL and ngsolve.
 - [Expressions](language/expressions.md)
 - [Geometry](language/geometry.md)
 - [Functions and forms](language/forms.md)
-- [Evaluation and lowering](language/evaluation.md)
+- [Rewriting and lowering](language/evaluation.md)
 - [Extensions](language/extensions.md)
 - [Reference](language/reference.md)
 

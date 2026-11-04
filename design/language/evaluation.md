@@ -1,107 +1,49 @@
-# Evaluation and lowering
+# Rewriting and lowering
 
-## Evaluation
+Rewriting replaces expressions without changing their mathematical value.
+Lowering applies rewrites to meet the requirements of later computations.
 
-A rewrite replaces an expression by one with the same mathematical value,
-[binding](#substitution-and-binding) and [compatible type](#type-compatibility-of-rewrites).
+## Rewriting
+
+A rewrite preserves [binding](#substitution-and-binding) and must have a
+[compatible type](#type-compatibility-of-rewrites).
 It need not preserve floating-point results or simplify algebra. The
 [mathematical admissibility](rules.md#mathematical-admissibility) convention
-applies: zero times an undefined value remains undefined.
+applies. Zero times an undefined value remains undefined.
 
-The lazy classes are `Action`, `DirectionalDerivative`, mesh `Integral`,
-`PullBack`, `Gradient`, `Divergence`, `Curl` and `PushForward`.
-
-The following operations commute through the listed operands when all other
-operands are independent of the operation's target. Specific rules take
-precedence. Make binders fresh for inserted operands before commuting.
-
-| Node class | Operands | Operations that commute |
-| ---------- | -------- | ----------------------- |
-| `Sum`, `Tensor` | Every operand | `Action`, `DirectionalDerivative`, spatial partial derivative |
-| `Indexed`, `ComponentTensor`, `IndexSum`, `Form`, `DirectionalDerivative` | The expression | `Action`, `DirectionalDerivative`, spatial partial derivative |
-| `Division` | The numerator | `Action`, `DirectionalDerivative`, spatial partial derivative |
-| `Gradient`, `Divergence`, `Curl`, `PushForward`, `PullBack`, `Integral` | The expression | `Action`, `DirectionalDerivative` |
-| `Conjugate`, `RealPart`, `ImaginaryPart` | The expression | `DirectionalDerivative`, spatial partial derivative |
-
-Directional differentiation uses a real parameter and holds domains fixed.
-`Action` has its own [conjugation rule](#applying-actions); `RealPart` and
-`ImaginaryPart` have no argument spaces. Actions on gradients and pull-backs
-stay outside them, as specified in their rule tables.
+The lazy nodes are `Action`, `DirectionalDerivative`, mesh `Integral`,
+`PullBack`, `Gradient`, `Divergence`, `Curl` and `PushForward`. They store
+operations to evaluate later.
 
 ### Transformations, recipes and contracts
 
 | Component | Responsibility |
 | --------- | -------------- |
-| Rule | Local match, conditions and directed replacement; shared binding, type completion and reconstruction |
-| Strategy | Rule selection and precedence, traversal, revisiting and stopping |
-| Recipe | Composition of strategies with input, output and preservation contracts; the named passes below are reference recipes |
+| Rule | Match part of an expression, check conditions and replace it; use the shared rules for binding, type completion and rebuilding nodes |
+| Strategy | Choose rules and their order, which nodes to visit, when to revisit them and when to stop |
+| Recipe | Combine strategies with input, output and preservation requirements |
 
-Rules do not schedule traversal or invoke a whole pass for cleanup. No
-rule-object API or global registry is prescribed.
+The named passes below are reference recipes. Rules cannot call a whole pass
+to simplify their results. The spec requires no rule objects or global registry.
+
+A contract states a requirement, such as “no directional derivatives remain”.
+Contracts can be combined and apply to the nodes visited by the
+[evaluation traversal](#evaluation-traversal).
 
 | Strategy condition | Requirement |
 | ------------------ | ----------- |
-| Specific identity or retained boundary | Takes precedence over generic expansion; omitting its rule does not enable an excluded fallback |
+| Specific identity or a pattern that must remain | Takes precedence over generic expansion, even when its rule is not selected |
 | Unmatched node | May remain during partial rewriting; required lowering must satisfy its output contract |
 | Optional simplification | Need not eliminate any node class |
-| Repetition | Requires progress; no cycles between opposite rewrites; a resource limit does not establish success |
-| Structural stability | Does not imply mathematical canonicalisation or equal outputs from different recipes |
-
-Contracts are independent predicates over the evaluation traversal:
-
-| Contract | Required representation |
-| -------- | ----------------------- |
-| Core expressions | Structurally valid concrete core nodes and downstream terminals |
-| Actions expanded | Every `Action` applies a `Function`, downstream terminal, `Gradient`, `PullBack` or another retained `Action` |
-| Derivatives expanded | No `DirectionalDerivative` |
-| Mesh integrals expanded | No `Integral` over a `Mesh` |
-| Gradients expanded | Every `Gradient`, `Divergence` and `Curl` satisfies its retained-pattern condition in [The core normal form](#the-core-normal-form) |
-| Pull-backs expanded | Every `PullBack` satisfies its retained-pattern condition in [The core normal form](#the-core-normal-form) |
-| Reference integration | Derivatives expanded and mesh integrals expanded |
-| Core normal form | The allowed patterns in [The core normal form](#the-core-normal-form) |
-
-Contracts compose independently of schedules. Checks report offending nodes
-and reasons without rewriting; they establish neither preservation of input
-structure nor backend compatibility. Recipes separately state what domains or
-operators they preserve. Quadrature and tabulation impose their own contracts.
-
-### Standard lowering recipe
-
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `lower(f)` | | `f: AbstractExpression` | An equivalent expression in core normal form |
-
-| `lower` condition | Requirement or result |
-| ----------------- | --------------------- |
-| Input | Core expressions and [prepared geometry](#evaluation-traversal); extension nodes need an extension recipe first |
-| Unsupported rewrite | `TypeError` |
-| Output violates core normal form | `ValueError`, identifying offending nodes |
-
-The reference schedule is:
-
-| Recipe step | Required result |
-| ----------- | --------------- |
-| [`apply_actions`](#applying-actions) | Actions expanded |
-| [`apply_derivatives`](#applying-derivatives), including action cleanup | Actions and derivatives expanded |
-| [`expand_integrals`](#expanding-integrals) | Also mesh integrals expanded |
-| Repeat [`apply_gradients`](#applying-gradients), then [`expand_pull_backs`](#expanding-pull-backs), with action cleanup, until neither changes the expression | Core normal form |
-
-This order evaluates gradients on their stated domains before transport:
-full-dimensional `gradient(coordinate(D), D)` becomes the identity before
-introducing Jacobians. Piola patterns survive until a matching cell pull-back.
-
-Other recipes may select individual rules or families, subject to their local
-conditions and geometry preparation contract. For example,
-[shape differentiation](extensions.md#shape-derivatives) lowers spatially before
-and after differentiation. Index-notation simplification, such as reducing an
-`Indexed` of a `ComponentTensor`, remains a compiler operation.
+| Repetition | Must make progress without cycling; reaching a time or step limit does not count as success |
+| Expression no longer changes | Does not mean all equivalent expressions have the same structure, or that different recipes give the same output |
 
 ## Rewriting and substitution
 
 ### Type compatibility of rewrites
 
 A replacement $r$ must preserve the value of $e$ on its original domain and
-satisfy these conditions:
+satisfy these conditions.
 
 | Attribute | Compatibility |
 | --------- | ------------- |
@@ -110,16 +52,17 @@ satisfy these conditions:
 | Domain | Equal, or $r$ has no domain and represents a constant field on $e$'s domain for each free-index and argument assignment |
 
 For example, a constant pull-back or the gradient of coordinates may lose its
-domain. A consumer needing that domain must retain it.
+domain. Code that needs the original domain must keep it separately.
 
-Before returning a table's result `r` or rebuilding its parent, complete its
-type against the replaced expression `e`. Let
+*Type completion* restores scalar type and free indices lost in a rewrite.
+Apply it before returning a table's result `r` or rebuilding its parent.
+For the replaced expression `e`, let
 
 ```python
 z = Zero(e.value_shape, e.free_indices, e.argument_spaces, e.scalar_type)
 ```
 
-Apply both steps in order, using tensor arithmetic:
+Apply both steps in order, using tensor arithmetic.
 
 | Condition | Completion |
 | --------- | ---------- |
@@ -145,20 +88,23 @@ a negative real point. Index completion must precede rebuilding a binder.
 | Domains, maps, spaces, indices and labels | May inspect, but do not traverse or modify stored expressions |
 | Expressions exposed by a rule | Visit as separate roots; includes newly built map parameterisations |
 
-Reference recipes require exposed geometry to satisfy core expressions,
-actions expanded, derivatives expanded and mesh integrals expanded. The supplier
-prepares it if necessary. This is a recipe precondition, not a constructor
-restriction; another strategy may process unprepared geometry with suitable rules.
+Geometry is *prepared* when it satisfies core expressions, actions expanded,
+derivatives expanded and mesh integrals expanded. Reference recipes require
+the supplier to prepare geometry before exposing it. Constructors do not
+require this; another strategy may process unprepared geometry with suitable rules.
 
-Normal-form claims cover only this traversal. Stored dependencies are checked
-separately when needed; labels have no lowering requirement. Substitution uses
-its broader dependency and binding rules below.
+Normal-form checks visit these same nodes. Stored dependencies are checked
+separately when needed; labels need no lowering. Substitution follows more
+dependencies, as described below.
 
 ### Substitution and binding
 
+Substitution must respect local names. For example, replacing a free `i` must
+not change an `i` bound by an index sum.
+
 Value operands are `AbstractExpression` construction arguments, including
-those in tuples. Terminals have none. Labels are identity metadata, handled by
-[Derived indices](expressions.md#derived-indices). Only these nodes bind names:
+those in tuples. Terminals have none. Labels identify objects and follow
+[Derived indices](expressions.md#derived-indices). Only these nodes bind names.
 
 | Binding node | Value operands | Bound names | Bound in |
 | ------------ | -------------- | ----------- | -------- |
@@ -166,26 +112,24 @@ those in tuples. Terminals have none. Labels are identity metadata, handled by
 | [`Form(e, arguments)`](forms.md#form) | `e` | The functions of `arguments` | `e` and `arguments` |
 | [`DirectionalDerivative(f, x, a, h)`](geometry.md#directionalderivative) | `f`, `a`, `h` | $x$ | $f$ and $x$ |
 
-Tuple-valued operands are visited member by member. Substitution follows
-construction dependencies subject to these scopes and the label rules;
-individual passes specify which value operands they transform.
+Substitution follows construction dependencies within these scopes and label
+rules, visiting tuples member by member. Each pass states which operands it transforms.
 
-A binding node is made fresh for expressions $s_1, \dots, s_n$ by renaming,
-in the operands in which the names are bound, each bound name that is free in
-some $s_k$, so that the binding node does not capture the name.
+Making a binding node *fresh* for expressions $s_1, \dots, s_n$ means renaming
+each bound name that occurs free in any $s_k$. Rename it only within its binding
+scope. This prevents an inserted free name from becoming bound accidentally.
 
 Substitution replaces $r_1, \dots, r_n$ by $s_1, \dots, s_n$
-simultaneously. Within a binding scope:
+simultaneously. Within a binding scope, follow these steps.
 
 1. Drop each pair whose key $r_k$ has a bound name free in it.
 2. Make the binding node fresh for the remaining replacement values $s_k$.
 3. Substitute the remaining pairs into the operands in that scope.
 
-Operands outside the binding scope use the original pairs. Inserted values
-are never searched for further matches.
+Operands outside the binding scope use the original pairs.
 
-For freshening against $s_1, \ldots, s_n$, let `body` be the tuple of operands
-in the binder's scope. Use these names:
+To make names fresh for $s_1, \ldots, s_n$, let `body` be the tuple of operands
+in the binder's scope. Use these names.
 
 | Bound name | Fresh name |
 | ---------- | ---------- |
@@ -195,13 +139,12 @@ in the binder's scope. Use these names:
 The [derived labels](expressions.md#derived-indices) keep these names distinct
 and absent from `body` and the inserted expressions.
 
-The core pass `replace(e, mapping)` performs this simultaneous substitution,
-replacing each key of the `dict` `mapping` with its value.
+`replace(e, mapping)` substitutes each key of the dictionary `mapping` with
+its value, simultaneously.
 
-Match whole original nodes first, subject to binding scope. A match stops
-descent; inserted values and rebuilt nodes are not searched. Otherwise,
-recurse according to the binding and label rules. Overlapping keys are
-allowed: the outermost eligible match wins.
+Match whole original nodes before their dependencies, respecting binding scopes
+and label rules. The outermost eligible match wins, even when keys overlap.
+Do not search inserted values or rebuilt nodes.
 
 Order replacement pairs by the structural key order of
 [`Base`](rules.md#the-base-object-base), preserving that order through scope filtering
@@ -213,7 +156,7 @@ replace(a + b, {a: d, d + b: c})  # d + b; no match after rebuilding
 replace(a, {a: b, b: c})  # b; inserted values are not searched
 ```
 
-Examples, with `j` a fresh index:
+In these examples, `j` is a fresh index.
 
 | Substitution | Result |
 | ------------ | ------ |
@@ -223,36 +166,75 @@ Examples, with `j` a fresh index:
 
 Substitution follows all construction dependencies, including domains, maps,
 spaces and derived labels. It commutes with a fixed composition when the
-static-type choice is unchanged: replacing `A` by `B` in `transpose(A)`
+static-type choice is unchanged. For example, replacing `A` by `B` in `transpose(A)`
 gives `transpose(B)`, with the derived indices of `B`.
 
 ### Grammars
 
-A grammar is a set of expressions describing a structural contract. A check
-asks whether an expression belongs to that set (see
-[New questions](extensions.md#new-questions)). Contracts refer only to nodes
-visited by the [evaluation traversal](#evaluation-traversal).
+A grammar is a set of allowed expressions. A contract check tests membership
+of that set (see [New questions](extensions.md#new-questions)).
 
-A grammar pattern inspects a node and objects within a bounded number of edges,
-not the result of a pass. It may classify a domain or map without adding that
+A grammar pattern inspects a node and objects within a bounded number of links,
+without running a pass. It may classify a domain or map without adding that
 dependency to the traversal. For a grammar $N$ and patterns $P$, $N \setminus P$
-contains the expressions of $N$ with no visited node matching $P$. Contracts
-compose by intersection; there is no mandatory sequence of numbered grammars.
+contains the expressions of $N$ with no visited node matching $P$. Combining
+contracts means taking the intersection of their grammars.
 
-A recipe maps an input grammar to an output grammar under its stated
-preconditions. A single rule only guarantees its replacement and preservation
-obligations. Extension nodes require extension grammars and rules before a
-consumer can require core expressions.
+A recipe accepts expressions in its input grammar and, under its stated
+conditions, produces expressions in its output grammar. A rule guarantees only
+its own replacement and what it preserves. Extensions must define grammars
+and rules for their nodes before those nodes can be lowered to core expressions.
 
-The form layer consists of every `Action` and every node with nonempty argument
-spaces; the integrand layer consists of the other nodes. A contract may restrict
+The form layer contains every `Action` and every node with nonempty argument
+spaces. The integrand layer contains all other nodes. A contract may restrict
 these separately. A `Function` can satisfy core normal form even if its stored
-parameterisation contains a reducible gradient: that parameterisation is checked
+parameterisation contains a reducible gradient. That parameterisation is checked
 separately when exposed.
+
+### Representation contracts
+
+| Contract | Required representation |
+| -------- | ----------------------- |
+| Core expressions | Structurally valid concrete core nodes and downstream terminals |
+| Actions expanded | Every `Action` applies a `Function`, downstream terminal, `Gradient`, `PullBack` or another retained `Action` |
+| Derivatives expanded | No `DirectionalDerivative` |
+| Mesh integrals expanded | No `Integral` over a `Mesh` |
+| Gradients expanded | Every remaining `Gradient`, `Divergence` and `Curl` is allowed by [The core normal form](#the-core-normal-form) |
+| Pull-backs expanded | Every remaining `PullBack` is allowed by [The core normal form](#the-core-normal-form) |
+| Reference integration | Derivatives expanded and mesh integrals expanded |
+| Core normal form | The allowed patterns in [The core normal form](#the-core-normal-form) |
+
+A check reports which nodes fail a contract and why, without changing the
+expression. Preservation requirements cover domains and operators. Later steps,
+including quadrature and tabulation, have their own requirements.
 
 ## Actions and derivatives
 
+### Commuting rules
+
+Differentiating a sum gives a sum of derivatives. The table lists this and
+other commuting rules. They apply when all other operands are independent of
+the operation's target. Specific rules take precedence. Rename bound names
+where needed to avoid capturing names in inserted
+operands (see [Substitution and binding](#substitution-and-binding)).
+
+| Node class | Operands | Operations that commute |
+| ---------- | -------- | ----------------------- |
+| `Sum`, `Tensor` | Every operand | `Action`, `DirectionalDerivative`, spatial partial derivative |
+| `Indexed`, `ComponentTensor`, `IndexSum`, `Form`, `DirectionalDerivative` | The expression | `Action`, `DirectionalDerivative`, spatial partial derivative |
+| `Division` | The numerator | `Action`, `DirectionalDerivative`, spatial partial derivative |
+| `Gradient`, `Divergence`, `Curl`, `PushForward`, `PullBack`, `Integral` | The expression | `Action`, `DirectionalDerivative` |
+| `Conjugate`, `RealPart`, `ImaginaryPart` | The expression | `DirectionalDerivative`, spatial partial derivative |
+
+Directional differentiation uses a real parameter and holds domains fixed.
+`Action` has its own [conjugation rule](#applying-actions); `RealPart` and
+`ImaginaryPart` have no argument spaces. Actions on gradients and pull-backs
+stay outside them, as specified in their rule tables.
+
 ### Applying actions
+
+An action supplies a value for a form's argument. This pass moves actions
+into operands and substitutes values into explicit forms.
 
 | `apply_actions(f)` |  |
 | ------------------ | - |
@@ -266,11 +248,11 @@ vectors or matrices; their libraries evaluate the retained actions.
 
 | Form $f$ | Rewrite of `Action(f, p, g)` |
 | -------- | ---------------------------- |
-| `Form(e, arguments)`, $p$ at least the arity $n$ of $e$ | The value of `Action`: `Form(e, others)` with $g$ substituted for the argument at $p - n$, or $e$ with $g$ substituted if no entries remain |
+| `Form(e, arguments)`, $p$ at least the arity $n$ of $e$ | `Form(e, others)` with $g$ substituted for the argument at $p - n$, or $e$ with $g$ substituted if no entries remain |
 | `Conjugate(e)` | `conjugate(action(e, p, conjugate(g)))`, with conjugation member by member for a `tuple` $g$ |
 | `Product(a, b)`, with $n$ the arity of $a$ | `Product(Action(a, p, g), b)` for $p < n$, otherwise `Product(a, Action(b, p - n, g))` |
 | `Gradient`, `PullBack` | Remains; the operation transforms the form's output |
-| A commuting node class (see [Evaluation](#evaluation)) | The node with the action moved into the listed operands |
+| A commuting node class (see [Commuting rules](#commuting-rules)) | The node with the action moved into the listed operands |
 | `Zero` | Zero with the type of the action |
 | `Function` or a downstream terminal | Remains, for the supplying library |
 | `Action` | Remains, as a further application of a remaining action |
@@ -282,9 +264,9 @@ occurrences in `g` are not differentiated.
 
 ### Derivatives of the node classes
 
-Both differentiation contexts use this table after their specific rules.
-$\delta b$ is the operand's derivative; each context defines independence from
-its differentiation target. Extensions add derivative rules here for reuse.
+Directional and spatial derivatives use this table after their specific rules.
+Here $\delta b$ is the derivative of $b$. Each pass defines independence from
+its differentiation target. Extensions can add rules here.
 
 | Expression | Derivative |
 | ---------- | ---------- |
@@ -299,11 +281,10 @@ its differentiation target. Extensions add derivative rules here for reuse.
 | `Inverse(A)`, equal axis extents, including symbolic extents | `-inverse(A) @ delta_A @ inverse(A)`, with `delta_A` = $\delta A$ |
 | `Inverse(A)`, rectangular shape | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
 | `Conjugate(b)`, `RealPart(b)`, `ImaginaryPart(b)` | The same node applied to $\delta b$ |
-| A commuting node class (see [Evaluation](#evaluation)) | The node with the derivative moved into the listed operands |
+| A commuting node class (see [Commuting rules](#commuting-rules)) | The node with the derivative moved into the listed operands |
 
 The constant-exponent power rule avoids a logarithm, permitting negative real
-bases where differentiable. Results are core expressions; recipes evaluate
-resulting actions using [Applying actions](#applying-actions).
+bases where differentiable. Results are core expressions.
 
 ### Applying derivatives
 
@@ -316,7 +297,7 @@ resulting actions using [Applying actions](#applying-actions).
 
 Write $\mathrm{D}b$ for `DirectionalDerivative(b, x, a, h)`. Match original
 operands before substituting `[x := a]` into undifferentiated operands; insert
-`h` unchanged. Rules may produce actions; cleanup belongs to the recipe.
+`h` unchanged.
 
 | Expression $f$ | Rewrite of the derivative at $a$ |
 | -------------- | -------------------------------- |
@@ -326,9 +307,10 @@ operands before substituting `[x := a]` into undifferentiated operands; insert
 | `DirectionalDerivative` | Defer until the inner derivative is expanded |
 | Any other expression | The row of [Derivatives of the node classes](#derivatives-of-the-node-classes), with $\delta b = \mathrm{D} b$ |
 
-The dependency test follows value operands and binding scopes, holding domains
-and maps fixed. A `Function` contributes itself, not names in its label or
-space; a form binding `x` has no free `x`. Tuple arguments vary member by member,
+To test whether an expression depends on `x`, follow value operands and binding
+scopes, holding domains and maps fixed. A `Function` contributes itself, not
+names in its label or space. A form binding `x` has no free `x`.
+Tuple arguments vary member by member,
 including conjugated entries. Dual directions and substitution points may be
 symbolic forms whose actions the recipe evaluates.
 
@@ -337,13 +319,16 @@ For real scalar functions `u` and `a` in a space of constants,
 
 For a real scalar function `u` in a space of constants and a constant array
 `a` of shape `(m,)`, `directional_derivative(u, u, a[i], Integer(1))` lowers
-to `Integer(1) + Zero((), ((i, m),), (), real)`: its value is one for every `i`.
+to `Integer(1) + Zero((), ((i, m),), (), real)`. Its value is one for every `i`.
 Type completion retains indices even from unused members of tuple points
 and directions.
 
 ## Spatial lowering
 
 ### Expanding integrals
+
+Mesh integration becomes a sum over cells, with each cell integral expressed
+on its reference cell. The density accounts for the change of coordinates.
 
 | `expand_integrals(f)` |  |
 | --------------------- | - |
@@ -355,7 +340,7 @@ and directions.
 For group $j$ of `D.topology`, let $K_j$ be the reference cell and $c_j$ =
 `cell_index(D.topology, j)`.
 
-Choose the internal index without capturing $f$: form the template
+To choose the internal index without capturing $f$, form the template
 `index_sum(pull_back(Integer(1), cell_map(D, j)), (c_j,))`, make its binder
 fresh for $f$ using [Substitution and binding](#substitution-and-binding), and
 let $e_j$ be its resulting bound index. This retains $c_j$ when no renaming is
@@ -372,17 +357,19 @@ for a scalar, and set `f_K = indexed(f, K)`.
 
 $g_j$ is `pull_back(f_K, piece_j)` when $f$ has domain `D.ambient_domain`,
 and `pull_back(f_K, D_j)` otherwise, including domain-free $f$.
-The pull-back introduces the internal cell index; `IndexSum` consumes it and
+The pull-back introduces the internal cell index; `IndexSum` sums over it and
 retains every free index of $f$ and the component indices `K`. The outer
 `component_tensor` restores the value shape, and is the identity for scalar
 $f$. The remaining integrals have coordinate domains.
 
-Repeated expansion of the same input constructs the same graph. Paths involving
-capture-avoiding renaming may choose different bound names; the rule does not
-assert structural equality between every ordering of substitution and expansion.
-They must preserve the same value and free indices.
+Expanding the same input again gives the same graph. Changing the order of
+substitution and expansion may change bound names when renaming is needed.
+The value and free indices must stay the same.
 
 ### Applying gradients
+
+This pass applies spatial calculus rules while keeping derivatives that need
+the supplying library or a later change of coordinates.
 
 | `apply_gradients(f)` |  |
 | -------------------- | - |
@@ -391,8 +378,10 @@ They must preserve the same value and free indices.
 | Output contract      | Actions, derivatives and gradients expanded |
 | Strategy | Inner expressions first; first matching row; evaluate exposed actions with `apply_actions` and revisit affected expressions |
 
-A cell is a `CellMap` of a topology or mesh. The divergence and curl boundary
-rows identify the Piola patterns. Families select rules, not public passes.
+A cell is a `CellMap` of a topology or mesh. Rows marked “Boundary” keep an
+expression for later; the divergence and curl rows preserve the Piola identities.
+The family column groups rules for selection by a strategy. Families are not
+separate public passes.
 
 $\partial_j b$ denotes component $j$ of the gradient of $b$ on $P$, with
 $b$'s value shape and the additional free index $j$ of ambient extent $n$.
@@ -415,11 +404,15 @@ index in $A$ per value axis of $f$. Empty lists use the factory identities.
 
 In the chain rule, `A` indexes the value axes of `g` and `l` is a distinct
 contraction index; scalar `g` uses `A == ()`. On embedded meshes the same rules
-apply to the tangential gradient: the coordinate gradient remains a projection
-until cell transport. Retained terminal gradients belong to the supplying
-library; gradients exposed by pull-backs are processed in the next spatial round.
+apply to the tangential gradient. The coordinate gradient remains a projection
+until the pull-back to a cell. The supplying library evaluates remaining terminal
+gradients. The next call to `apply_gradients` handles gradients exposed by pull-backs.
 
 ### Expanding pull-backs
+
+Pull-backs express values in a map's parameter coordinates. This pass moves
+them through arithmetic and applies the geometry and mapping rules below.
+Boundary rows keep reads that the supplying library must evaluate.
 
 | `expand_pull_backs(f)` |  |
 | ---------------------- | - |
@@ -465,17 +458,16 @@ reads under [Functions in a space](forms.md#functions-in-a-space).
 
 ## The core normal form
 
-Core normal form is the target of the reference lowering recipe. It combines
-core expressions, actions expanded, derivatives expanded, mesh integrals
-expanded, gradients expanded and pull-backs expanded. Its expression nodes
-are visited by the evaluation traversal.
-The following table lists all allowed node classes and their conditions:
+The core normal form combines
+the core expressions, actions expanded, derivatives expanded, mesh integrals
+expanded, gradients expanded and pull-backs expanded contracts. The table lists
+the nodes allowed after `lower`.
 
 | Chapter | Node class | Allowed in the core normal form |
 | ------- | ---------- | ------------------------------- |
 | [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Integer`, `Float`, `Complex`, `Zero` | Always |
 | [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Sum`, `Product`, `Division`, `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |
-| [Tensors and indexing](expressions.md#tensors-and-indexing) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always, including index notation that a rewrite could reduce, such as an `Indexed` of a `ComponentTensor`, which the compiler rewrites (see [Evaluation](#evaluation)) |
+| [Tensors and indexing](expressions.md#tensors-and-indexing) | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | Always; index simplification is left to the compiler |
 | [Tensor operations](expressions.md#tensor-operations) | `Inverse`, `Determinant` | Always, for the compiler to evaluate |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Coordinate` | Always |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Gradient` | Of a terminal, a `Gradient`, a `PushForward`, a node of the identity of Piola, or a `PullBack` by a cell or a `SideMap`, other than `Coordinate(P)` on its own domain $P$ of the dimension of its ambient coordinate domain |
@@ -489,23 +481,53 @@ The following table lists all allowed node classes and their conditions:
 | [Variational forms](forms.md#variational-forms) | `Action` | Its form is a `Function`, a downstream terminal, a `Gradient`, a `PullBack` or another such `Action`, with each operand in the core normal form |
 | | A terminal of a downstream library | Always |
 
-Dependencies outside the [evaluation traversal](#evaluation-traversal), such
-as geometry and labels, are outside this normal-form claim.
+The normal-form check follows the [evaluation traversal](#evaluation-traversal);
+it does not check stored geometry or labels.
 
-The code that assembles receives the form layer (see [Grammars](#grammars)):
-sums and products of forms, real and complex zeros, forms whose expression
-may be a form, with the order of the arguments from the static type (see [`Form`](forms.md#form)),
-and actions on supplied or spatially transformed forms.
+Assembly code receives the form layer (see [Grammars](#grammars)), including
+sums and products of forms, real and complex zeros, nested forms, and actions
+on supplied or spatially transformed forms. The static type gives the argument
+order (see [`Form`](forms.md#form)).
 
-A form compiler receives the integrand layer: integrals over reference cells
+A form compiler receives the integrand layer, consisting of integrals over reference cells
 and points, with arithmetic and index notation over constants, reference
 coordinates and the library reads of [Functions in a space](forms.md#functions-in-a-space).
 
 ```{dropdown} Reusing geometry calculations
-Every expression that a pass builds from domain maps, such as the Jacobian,
-the inverse Jacobian, the density and the normal of a side, depends only on
-those domain maps and remains a subexpression of the result. A form compiler
-can therefore evaluate such an expression once for the values that the domain
-maps read, such as the coordinates of a mesh, and use the value in every
-integral that contains the expression.
+Jacobians, inverse Jacobians, densities and side normals built by these passes
+depend only on domain maps and remain subexpressions of the result. A compiler
+can compute them once for given map data, such as mesh coordinates, and reuse
+them in every integral that needs them.
 ```
+
+## Standard lowering recipe
+
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `lower(f)` | | `f: AbstractExpression` | An equivalent expression in core normal form |
+
+| `lower` condition | Requirement or result |
+| ----------------- | --------------------- |
+| Input | Core expressions and [prepared geometry](#evaluation-traversal); extension nodes need an extension recipe first |
+| Unsupported rewrite | `TypeError` |
+| Output violates core normal form | `ValueError`, identifying offending nodes |
+
+It runs these passes in order.
+
+| Recipe step | Required result |
+| ----------- | --------------- |
+| [`apply_actions`](#applying-actions) | Actions expanded |
+| [`apply_derivatives`](#applying-derivatives), including action cleanup | Actions and derivatives expanded |
+| [`expand_integrals`](#expanding-integrals) | Also mesh integrals expanded |
+| Repeat [`apply_gradients`](#applying-gradients), then [`expand_pull_backs`](#expanding-pull-backs), with action cleanup, until neither changes the expression | Core normal form |
+
+This order evaluates gradients on their stated domains before changing coordinates.
+Full-dimensional `gradient(coordinate(D), D)` becomes the identity before
+introducing Jacobians. Expressions matching Piola identities remain until a
+matching cell pull-back.
+
+Other recipes may choose individual rules or rule families, provided their
+conditions hold and geometry is prepared as required. For example,
+[shape differentiation](extensions.md#shape-derivatives) lowers spatially before
+and after differentiation. Index-notation simplification, such as reducing an
+`Indexed` of a `ComponentTensor`, remains a compiler operation.

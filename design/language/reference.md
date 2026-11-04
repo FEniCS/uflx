@@ -251,7 +251,7 @@ Extend `AbstractExpression`:
 | [`action(f, position, g)`](forms.md#action)                     |          | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                |
 | [`gateaux_derivative(F, x, a, w)`](forms.md#gateaux-derivative) |          | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | The `Form` constructed below                                                            |
 
-### Evaluation
+### Standard lowering recipe
 
 | Function                                             | Overload | Takes                   | Returns                                      |
 | ---------------------------------------------------- | -------- | ----------------------- | -------------------------------------------- |
