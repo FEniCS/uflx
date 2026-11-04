@@ -1051,16 +1051,17 @@ side domain $E$ into a mesh $D$, through the side $s$.
 | Takes              | `X, P: AbstractTopology \| Mesh`, `s: str` |
 | Properties         | `ambient_domain` $X$, `parameter_domain` $P$, and `side` $s$ |
 | Derived            | `free_indices`, always `()` |
-| Requires           | Conditions 1 to 3 below                                                                                 |
+| Requires           | The domain conditions below |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `side_map(X, P, s)` | | `X, P: AbstractTopology \| Mesh`, `s: str` | `SideMap(X, P, s)` |
 
-1. $X$ is a topology $T$ and $P$ a topology $S$, or $X$ is a mesh with the
-   topology $T$ and $P$ a side domain with the topology $S$.
-2. Every cell type of $S$ is an `AbstractReferenceCell`.
-3. Every group of $S$ has a side named $s$ with the topology $T$.
+| Domain condition | Requirement |
+| ---------------- | ----------- |
+| $X$, $P$ | Topologies $T$, $S$, or a mesh on $T$ and a side domain on $S$ |
+| Cell types of $S$ | All are `AbstractReferenceCell` |
+| Groups of $S$ | Each has a side named $s$ with topology $T$ |
 
 A side map of a mesh takes a side domain, so that a coupling of two meshes
 shares one side domain. `pull_back(f, side_map(X, P, s))` is an expression

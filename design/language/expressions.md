@@ -685,12 +685,14 @@ The empty-index factory identities give scalar operations when `K == ()`.
 Scalar constructors inside the compositions avoid recursive factory calls.
 Operand free indices remain free.
 
-There is no broadcasting. Constructors enforce compatibility:
+There is no broadcasting:
 
-- Addition with unequal ranks raises `IndexError` from `Indexed`; unequal
-  extents raise `ValueError` from `Sum`.
-- Multiplication of two tensors raises `ValueError` from `Product`.
-- Division by a tensor raises `ValueError` from `Division`.
+| Invalid operands | Exception |
+| ---------------- | --------- |
+| Addition: unequal ranks | `IndexError` from `Indexed` |
+| Addition: unequal extents | `ValueError` from `Sum` |
+| Multiplication: two tensors | `ValueError` from `Product` |
+| Division: tensor denominator | `ValueError` from `Division` |
 
 A scalar operation's free function accepts tensors only when the operation has
 no competing tensor meaning. Thus `conjugate`, `real_part` and `imaginary_part`

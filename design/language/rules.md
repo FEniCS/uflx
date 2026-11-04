@@ -31,7 +31,9 @@ through singularities.
 | [Pass](#passes) | A pure free function that walks a graph after construction to compute a result or rewrite the graph. |
 | [Evaluation traversal](evaluation.md#evaluation-traversal) | A walk through expression operands, excluding dependencies stored in geometry, spaces and labels. |
 | [Grammar pattern](evaluation.md#grammars) | A structural condition on a node and objects within a bounded number of edges, independent of pass results. |
-| [Rule pattern](extensions.md#rule-tables) | A condition selecting a rewrite rule; it may inspect a pass result on an operand. |
+| [Rule pattern](extensions.md#rule-tables) | A condition selecting a local rewrite from node structure, static types or explicit analyses. |
+| [Strategy](evaluation.md#transformations-recipes-and-contracts) | Selection and scheduling of rewrite rules, including traversal and stopping conditions. |
+| [Recipe](evaluation.md#transformations-recipes-and-contracts) | A composition of strategies with stated input, output and preservation contracts. |
 | [Array rank](expressions.md#abstractexpression), or **rank** | The number of axes in an expression's value shape. |
 | [Arity](forms.md#argument-spaces) | The number of argument spaces of a form, counting a product-space argument once. |
 | [Structurally equal](#the-base-object-base) | Objects with the same class and equal construction arguments, as tested by `==`. |
@@ -212,8 +214,9 @@ Each pass states its traversal and purpose. Passes compose; the caller chooses
 which run and in what order. The core substitution pass is
 [`replace(e, mapping)`](evaluation.md#substitution-and-binding).
 
-A pass raises `TypeError` for a node class it has no rule for, or a
-pass-specific error, such as inconsistent units.
+Unmatched nodes and failures follow the [strategy and contract rules](evaluation.md#transformations-recipes-and-contracts)
+and the [extension policy](extensions.md#rule-tables). Analyses may report
+operation-specific errors, such as inconsistent units.
 
 ### Operator overloads
 

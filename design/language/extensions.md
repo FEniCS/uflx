@@ -2,11 +2,9 @@
 
 ## Extending the core
 
-The core has a small, fixed set of node classes and an open set of passes. A
-downstream library extends UFLx mainly by adding passes, not by adding
-properties to the node classes of the core. A new pass needs one rule for each
-node class of the core and does not change the core. Only a language extension
-adds node classes.
+The core fixes its node classes; libraries add passes and subclass abstract
+leaves. Only language extensions add non-leaf classes. Passes follow the
+[rule-selection and contract policy](evaluation.md#transformations-recipes-and-contracts).
 
 The core supports five kinds of extension:
 
@@ -30,47 +28,32 @@ In legacy UFL, properties are stored on the node classes, and the set of propert
 
 ### Language extensions
 
-A language extension is a package outside the core that adds non-leaf node
-classes. Each extends `AbstractExpression`, never a concrete core class
-(see [Leaves and subclassing](rules.md#leaves-and-subclassing)), and provides:
+A language extension adds non-leaf subclasses of `AbstractExpression`, never
+of concrete core classes (see [Leaves and subclassing](rules.md#leaves-and-subclassing)).
 
-- the value of the node, as the section of a lazy node class of the core
-  states the value (see [Evaluation](evaluation.md#evaluation)), and
-- its expression operands for the [evaluation traversal](evaluation.md#evaluation-traversal),
-  distinguishing them from metadata, and
-- a lowering to a mathematically equal expression of core node classes, if
-  such an expression exists.
-
-An extension node may state argument spaces, making it an operator with
-arguments. The extension's action-evaluation table defines the action on
-each argument; dual arguments alone do not require an extension node.
+| Extension node supplies | Requirement |
+| ----------------------- | ----------- |
+| Semantics | Its mathematical value |
+| Traversal | Expression operands distinguished from metadata |
+| Lowering, where one exists | A mathematically equal expression of core nodes |
+| Argument spaces, if nonempty | Action rules for each argument; dual arguments alone need no new node class |
 
 #### Rule tables
 
-A pass is built from an ordered `tuple` of rule tables, each a list of rules
-pairing a rule pattern with a rewrite. A rule pattern may match the node
-class, operand classes, a condition on the static type, or the pass result
-on an operand. The first matching rule wins, in table order and then rule
-order. Each rule receives the whole pass, including every table, to apply to
-operands.
+Extension rules use the core's [rules, strategies and contracts](evaluation.md#transformations-recipes-and-contracts).
 
-- A table of a language extension may match only some nodes. The table of
-  the core comes last, and has a rule for every node class of the core.
-- A pass applied to a node that no rule matches raises `TypeError`.
-- The lowering table of a node class with a lowering matches the nodes of the
-  class, lowers the node and applies the pass to the lowering.
-- The caller chooses the tables and their order, including extension tables;
-  there is no global registry. The result depends on this order, not on the
-  order in which extensions are loaded.
+| Concern | Requirement |
+| ------- | ----------- |
+| Matching | Inspect structure and static types; do not run the enclosing strategy to decide a match |
+| Precedence | Caller-selected; extension rules may specialise core rules; no registry or load-order dependence |
+| Replacement | Preserve semantics, binding and type; leave traversal and cleanup to the strategy |
+| Compatibility | Agree with lowering followed by the operation, where a lowering exists |
+| Partial rewriting | Unmatched nodes may remain |
+| Required core output | Eliminate extension nodes or report failure |
+| Required analysis or evaluation | Raise `TypeError` if no applicable rule exists |
 
-An extension supplies its own rules or its lowering table for each supported
-pass, whether from the core or another library, such as `units`. Earlier
-extension tables may override core rules. Rewrite rules preserve value.
-Every rule must agree, up to mathematical equality, with lowering followed
-by the pass.
-An identity of a composition, such as the identity of Piola, needs node
-classes for that composition, as with `Divergence` and `Curl` in the core
-(see [`PushForward`](geometry.md#pushforward)).
+Identities that depend on a composition need nodes retaining that composition,
+as `Divergence` and `Curl` do for [Piola identities](geometry.md#pushforward).
 
 #### Examples
 
@@ -79,8 +62,8 @@ classes for that composition, as with `Divergence` and `Curl` in the core
   network. The node class has no lowering. The table of the extension for a
   derivative gives the derivative of the operation, and the table for a
   pull-back gives the node of the pulled-back operands, because the operation
-  is pointwise. A pass with no table of the extension raises `TypeError` for
-  the node.
+  is pointwise. A recipe requiring its derivative or pull-back raises `TypeError`
+  if the corresponding extension rule is absent.
 - An interpolation node may retain the target space or delay expansion into
   sampling and basis reconstruction. Its lowering is the library operation
   of [Cell-local interpolation](#cell-local-interpolation). Forward
@@ -189,29 +172,20 @@ expansion is open.
 
 ### New subclasses
 
-An abstract class states the contract that downstream subclasses fulfil
-without changing the core. Passes handle them through that contract, which
-belongs to the class, never a global registry. For example, a downstream
-`AbstractCoordinateDomain`, such as
-[`UnitSimplex`](../examples/library.md#the-unit-simplex), provides the dimension; passes
-handle its coordinate function through `Coordinate`.
+Downstream subclasses fulfil their abstract class's contract; passes use that
+contract without a registry. For example, `UnitSimplex` supplies the dimension
+of an `AbstractCoordinateDomain`, and passes handle its coordinate via `Coordinate`.
 
-Information that a downstream library attaches to the graph goes in one of two
-places:
-
-- Information that defines the variational problem goes in the construction
-  arguments of a leaf. For example, the space that a function belongs to
-  changes the meaning of an expression, so the space is part of the leaf.
-- Information that only checks or analyses the variational problem may stay in
-  a table of the library, keyed by leaves. For example, units check an
-  expression but do not change the meaning of the expression.
+| Library information | Location |
+| ------------------- | -------- |
+| Defines the variational problem, such as a function's space | Leaf construction arguments |
+| Checks or analyses the problem, such as units | May remain in library tables keyed by leaves |
 
 ### New transformations
 
-A new transformation is a pass with one rule for each node class of the core
-and one rule for each terminal class that the transformation rewrites. For
-example, a compiler may reduce an `Indexed` of a `ComponentTensor`, following
-the [substitution and binding](evaluation.md#substitution-and-binding) rules.
+A library selects rewrite rules and a strategy, with coverage determined by its
+output contract. For example, a compiler may reduce an `Indexed` of a
+`ComponentTensor` using [substitution and binding](evaluation.md#substitution-and-binding).
 
 ### Shape derivatives
 

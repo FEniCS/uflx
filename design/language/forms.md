@@ -431,16 +431,13 @@ In legacy UFL, the arguments of a form are the test functions and the trial func
 | Requires                 | `0 <= position < len(f.argument_spaces)` and the conditions below |
 | Static type              | That of $f$, with the free indices of $f$ followed by those of $g$, each `Index` taken once, and the argument spaces of $f$ without the entry at `position` |
 
-Let the argument space at `position` be $V$ or `ConjugateSpace(V)`.
+| Argument space at `position` | Admissible $g$ |
+| ---------------------------- | -------------- |
+| $V$ | Same value shape and argument spaces as a function in $V$; its scalar type or real; its domain or no domain |
+| `ConjugateSpace(V)` | The conjugate type of an admissible value for $V$, including argument spaces; supplies the value of `conjugate(v)` |
+| Tuple of spaces | A tuple with one admissible member per space |
 
-- For a space $V$, $g$ has the value shape and the argument spaces of a
-  function in $V$, the scalar type of that function or the real scalar type,
-  and the domain of that function or no domain.
-- For `ConjugateSpace(V)`, $g$ has the type of the conjugate of an admissible
-  value for $V$, including conjugating its argument spaces. It supplies the
-  value of an entry `conjugate(v)`.
-- For a `tuple` of spaces, $g$ is a `tuple` with one such member per space.
-- An `Index` free in both $f$ and $g$ has the same extent in both.
+An index free in both $f$ and $g$ must have the same extent in both.
 
 Free indices in $g$ give a family of actions, one per index value. For a
 `tuple` $g$, its free indices are those of its members.
@@ -452,10 +449,10 @@ before substitution (see [Type compatibility of rewrites](evaluation.md#type-com
 Let $p$ be `position` and $n$ the arity of $e$. The value of
 `Action(Form(e, arguments), p, g)` is determined by the argument's position:
 
-- For $p < n$, it is `Form(Action(e, p, g), arguments)`.
-- Otherwise, remove entry $p - n$ of `arguments` and substitute $g$ for that
-  argument in $e$. Bind the remaining entries in a `Form`, or return the
-  substituted $e$ if none remain.
+| Position | Value |
+| -------- | ----- |
+| $p < n$ | `Form(Action(e, p, g), arguments)` |
+| $p \ge n$ | Remove argument entry $p-n$ and substitute $g$ for it in $e$; bind the remaining entries in `Form`, or return $e$ if none remain |
 
 Substitution renames a remaining bound function if it is free in $g$ (see
 [Substitution and binding](evaluation.md#substitution-and-binding)). For `conjugate(v)`,
