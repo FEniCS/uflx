@@ -3,13 +3,16 @@
 A topological mesh acquires physical geometry through a coordinate expression:
 
 ```python
-D = mesh(x, Q)
+# T is a triangle topology supplied by the mesh library.
+Q = RD(2)                       # Ambient space: the plane.
+X = Lagrange(T, 1, (2,))         # Library-supplied space of coordinate functions.
+x = function(X, "x")            # Physical positions, with values supplied by the solver.
+D = mesh(x, Q)                  # Physical mesh; its topology comes from x.
 ```
 
-Here `x` is a coordinate expression on a topology `T`, and `Q` is the ambient
-coordinate domain. The resulting `Mesh` has topology `T`. Changing `x` can
-change the physical geometry while retaining `T` and the functions defined
-on it. Fields on `T` are carried to `D` by [push-forward](#pushforward).
+Changing the coordinate expression can change the physical geometry while
+retaining the topology and the functions defined on it. Fields on the topology
+are carried to the physical mesh by [push-forward](#pushforward).
 
 The only metric is the ambient Euclidean metric, which defines the tangential
 [gradient](#gradient), integration [density](#jacobian-and-density) and unit
