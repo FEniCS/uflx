@@ -82,7 +82,7 @@ Nothing. Integrals over cells and facets use the induced density in
 - H(curl) and H(div) spaces, as spaces on a topology with a covariant or a
   contravariant `TransformationLaw`, with the normal trace through `normal`.
 - Shape derivatives and ALE meshes, through the coordinate function of
-  `image(x, Q)` and the shape derivative extension.
+  `mesh(x, Q)` and the shape derivative extension.
 - Real spaces and Lagrange multipliers, as a space with the domain `None` and a
   `Function`.
 - Subdomain and marked boundary terms, through topologies with sides of

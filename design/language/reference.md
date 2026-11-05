@@ -50,10 +50,10 @@ classDiagram
     Base <|-- AbstractExpression
     Base <|-- AbstractExtent
     Base <|-- AbstractIndexTable
-    Base <|-- AbstractDomain
-    AbstractDomain <|-- AbstractCoordinateDomain
     Base <|-- AbstractCellType
     Base <|-- AbstractTopology
+    Base <|-- AbstractDomain
+    AbstractDomain <|-- AbstractCoordinateDomain
     AbstractCoordinateDomain <|-- AbstractReferenceCell
     AbstractCellType <|-- AbstractReferenceCell
     Base <|-- AbstractFunctionSpace
@@ -91,7 +91,25 @@ Extend `AbstractExpression`:
 
 Extend `AbstractCoordinateDomain`:
 
-[`RD`](geometry.md#rd).
+[`RD`](topology.md#rd).
+
+### Reference cells
+
+Extend `Base`:
+
+[`CellMap`](topology.md#cellmap).
+
+### Restriction
+
+Extend `Base`:
+
+[`SideMap`](topology.md#sidemap).
+
+### Meshes
+
+Extend `AbstractDomain`:
+
+[`Mesh`](geometry.md#mesh).
 
 ### Calculus on a domain
 
@@ -109,21 +127,11 @@ Extend `AbstractExpression`:
 
 [`PullBack`](geometry.md#pullback).
 
-### Reference cells
+### Fields and integration on a mesh
 
 Extend `Base`:
 
-[`CellMap`](geometry.md#cellmap).
-
-### Meshes
-
-Extend `AbstractDomain`:
-
-[`Mesh`](geometry.md#mesh).
-
-Extend `Base`:
-
-[`TransformationLaw`](geometry.md#transformationlaw), [`SideMap`](geometry.md#sidemap).
+[`TransformationLaw`](geometry.md#transformationlaw).
 
 Extend `AbstractExpression`:
 
@@ -193,6 +201,31 @@ Extend `AbstractExpression`:
 | [`inverse(A)`](expressions.md#inverse)                              |          | `A: AbstractExpression`             | `Inverse`                                                                          |
 | [`determinant(A)`](expressions.md#determinant)                      |          | `A: AbstractExpression`             | `Determinant`                                                                      |
 
+### Topology
+
+| Function                                           | Overload | Takes                           | Returns |
+| -------------------------------------------------- | -------- | ------------------------------- | ------- |
+| [`cell_index(T, j)`](topology.md#abstracttopology) |          | `T: AbstractTopology`, `j: int` | `Index` |
+
+### Reference cells
+
+| Function                                   | Overload | Takes                                                                       | Returns                                                         |
+| ------------------------------------------ | -------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [`cell_map(X, j, e)`](topology.md#cellmap) |          | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` | `CellMap(X, j, e)`                                              |
+| [`cell_map(X, j)`](topology.md#cellmap)    |          | `X: AbstractTopology \| Mesh`, `j: int`                                     | `CellMap(X, j, cell_index(T, j))`, with $T$ the topology of $X$ |
+
+### Restriction
+
+| Function                                   | Overload | Takes                                      | Returns            |
+| ------------------------------------------ | -------- | ------------------------------------------ | ------------------ |
+| [`side_map(X, P, s)`](topology.md#sidemap) |          | `X, P: AbstractTopology \| Mesh`, `s: str` | `SideMap(X, P, s)` |
+
+### Meshes
+
+| Function                         | Overload | Takes                                                  | Returns |
+| -------------------------------- | -------- | ------------------------------------------------------ | ------- |
+| [`mesh(x, Q)`](geometry.md#mesh) |          | `x: AbstractExpression`, `Q: AbstractCoordinateDomain` | `Mesh`  |
+
 ### Calculus on a domain
 
 | Function                                                                  | Overload | Takes                                                                                | Returns                             |
@@ -214,29 +247,14 @@ Extend `AbstractExpression`:
 | [`inverse_jacobian(D)`](geometry.md#jacobian-and-density) |          | `D: DomainMap \| CellMap`                                                                                   | `inverse(jacobian(D))`                             |
 | [`density(D)`](geometry.md#jacobian-and-density)          |          | `D: DomainMap \| CellMap`                                                                                   | The density $\rho$ below                           |
 
-### Topology
+### Fields and integration on a mesh
 
-| Function                                           | Overload | Takes                           | Returns |
-| -------------------------------------------------- | -------- | ------------------------------- | ------- |
-| [`cell_index(T, j)`](geometry.md#abstracttopology) |          | `T: AbstractTopology`, `j: int` | `Index` |
-
-### Reference cells
-
-| Function                                   | Overload | Takes                                                                       | Returns                                                         |
-| ------------------------------------------ | -------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [`cell_map(X, j, e)`](geometry.md#cellmap) |          | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` | `CellMap(X, j, e)`                                              |
-| [`cell_map(X, j)`](geometry.md#cellmap)    |          | `X: AbstractTopology \| Mesh`, `j: int`                                     | `CellMap(X, j, cell_index(T, j))`, with $T$ the topology of $X$ |
-
-### Meshes
-
-| Function                                                                 | Overload | Takes                                                                         | Returns                                     |
-| ------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------- | ------------------------------------------- |
-| [`image(x, Q)`](geometry.md#mesh)                                        |          | `x: AbstractExpression`, `Q: AbstractCoordinateDomain`                        | `Mesh`                                      |
-| [`transformation_law(variances, weight)`](geometry.md#transformationlaw) |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                         |
-| [`push_forward(f, D, m)`](geometry.md#pushforward)                       |          | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw`                    | `PushForward(f, D, m)`                      |
-| [`side_map(X, P, s)`](geometry.md#sidemap)                               |          | `X, P: AbstractTopology \| Mesh`, `s: str`                                    | `SideMap(X, P, s)`                          |
-| [`side_domain(D, S, s)`](geometry.md#side-domains)                       |          | `D: Mesh`, `S: AbstractTopology`, `s: str`                                    | `image(pull_back(x, side_map(T, S, s)), Q)` |
-| [`normal(sm)`](geometry.md#normal)                                       |          | `sm: SideMap`                                                                 | `Normal`                                    |
+| Function                                                                 | Overload | Takes                                                                         | Returns                                    |
+| ------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------- | ------------------------------------------ |
+| [`transformation_law(variances, weight)`](geometry.md#transformationlaw) |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                        |
+| [`push_forward(f, D, m)`](geometry.md#pushforward)                       |          | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw`                    | `PushForward(f, D, m)`                     |
+| [`side_domain(D, S, s)`](geometry.md#side-domains)                       |          | `D: Mesh`, `S: AbstractTopology`, `s: str`                                    | `mesh(pull_back(x, side_map(T, S, s)), Q)` |
+| [`normal(sm)`](geometry.md#normal)                                       |          | `sm: SideMap`                                                                 | `Normal`                                   |
 
 ### Function spaces
 

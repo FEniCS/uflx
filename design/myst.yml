@@ -11,6 +11,7 @@ project:
       children:
         - file: language/rules.md
         - file: language/expressions.md
+        - file: language/topology.md
         - file: language/geometry.md
         - file: language/forms.md
         - file: language/evaluation.md

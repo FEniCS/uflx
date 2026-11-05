@@ -133,7 +133,7 @@ to two cells; their remaining facets belong to one. The four topologies have
 
 ### Side tables of a static topology
 
-The library builds [side tables](../language/geometry.md#side-tables) from reference
+The library builds [side tables](../language/topology.md#side-tables) from reference
 vertices, which the core does not read. For a $k$-dimensional reference cell
 $F$ with vertices $V_v$, `affine_map(F, points)` maps the first $k+1$ vertices
 to rows $p_v$ of `points`:

@@ -31,7 +31,7 @@ The solver gives the coordinate function `x` the vertex values
 
 ```python
 x = function(X_space, "x")
-D = image(x, RD(2))
+D = mesh(x, RD(2))
 E = side_domain(D, diagonal, "+")
 e = cell_index(diagonal, 0)
 
@@ -205,7 +205,7 @@ function `x` on `square`, with vertex values `((0,0), (1,0), (0,1), (1,1))`:
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
 square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
-D = image(x, RD(2))
+D = mesh(x, RD(2))
 ```
 
 A marked region is a topology with a side into its parent. Its side domain
@@ -322,7 +322,7 @@ tell the assembler which cells to pack.
 - A material coefficient varying by cell needs no submesh when all fields
   live on `square`: supply a table `nu_cells` and use `nu_cells[c]`, with
   `c = cell_index(square, 0)`, under an integral over `D`.
-- For a moving fluid mesh, use `image(F.coordinate_function + m, RD(2))`,
+- For a moving fluid mesh, use `mesh(F.coordinate_function + m, RD(2))`,
   where the mesh displacement `m` on `fluid_cells` extends the solid motion.
   Functions on that topology push forward to the moved mesh unchanged.
 
@@ -347,7 +347,7 @@ The library supplies `runtime_array` for solver data with no domain and
 `runtime_extent` for sizes known at run time.
 
 ```python
-D3 = image(x3, RD(3))
+D3 = mesh(x3, RD(3))
 D1 = side_domain(D3, T1, "tissue")
 identity = transformation_law((), 0)
 

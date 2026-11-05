@@ -13,6 +13,7 @@ PAGES = tuple(
     for name in (
         "rules",
         "expressions",
+        "topology",
         "geometry",
         "forms",
         "evaluation",

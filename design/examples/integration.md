@@ -244,7 +244,7 @@ material values at the corresponding physical points:
 
 ```python
 K = ReferenceSimplex(2)
-D = image(x, RD(2))
+D = mesh(x, RD(2))
 cells = cell_domain(D, 0)
 e, q = cell_index(T, 0), index("q")
 points = runtime_array("points", (3, 2))

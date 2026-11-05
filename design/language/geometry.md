@@ -1,70 +1,121 @@
-# Geometry
+# Geometry and calculus
 
-## Domains
+A topological mesh acquires physical geometry through a coordinate expression:
 
-Function spaces and operators use a domain's dimension, boundary and cell
-decomposition. The only metric is the ambient Euclidean metric, which defines
-the tangential [gradient](#gradient), integration [density](#jacobian-and-density)
-and unit [normal](#normal).
+```python
+D = mesh(x, Q)
+```
 
-### `AbstractDomain`
+Here `x` is a coordinate expression on a topology `T`, and `Q` is the ambient
+coordinate domain. The resulting `Mesh` has topology `T`. Changing `x` can
+change the physical geometry while retaining `T` and the functions defined
+on it. Fields on `T` are carried to `D` by [push-forward](#pushforward).
 
-`AbstractDomain` represents a domain, the set on which an expression is defined.
-A domain is a coordinate domain supplied by a library (see
-[`AbstractCoordinateDomain`](#abstractcoordinatedomain)), or a mesh with a
-topology and coordinate expression (see [`Mesh`](#mesh)). Every node class
-taking a domain accepts either kind; its section defines its value on a mesh
-through its cells.
+The only metric is the ambient Euclidean metric, which defines the tangential
+[gradient](#gradient), integration [density](#jacobian-and-density) and unit
+[normal](#normal).
 
-| `AbstractDomain` |                                                                             |
-| ---------------- | --------------------------------------------------------------------------- |
-| Extends          | `Base` |
-| Provides         | `dimension`, an `int` $k \ge 0$, and `ambient_domain`, an `AbstractDomain` |
-| Defined by       | `AbstractCoordinateDomain` and `Mesh`                           |
+## Meshes
 
-The ambient domain of $D$ supplies the coordinates naming its points. The
-first coordinate domain reached by following `ambient_domain` repeatedly is
-the *ambient coordinate domain*, of dimension $n \ge k$. A coordinate domain
-is its own ambient domain.
+### `Mesh`
 
-### `AbstractCoordinateDomain`
+`Mesh(x, Q)` is one physical field domain, with coordinate expression $x$ on
+an `AbstractTopology` $T$ and ambient domain $Q$. Cells keep their identities
+when their physical coordinates coincide. The mesh stores no connectivity or
+coordinate values; those remain with the topology and coordinate-function library.
 
-A coordinate domain is a subset of $R^n$ with non-empty interior in $R^n$ whose
-points are named by the coordinates of the points themselves. The core cannot
-build the set from smaller objects. A library defines a new coordinate domain,
-such as a reference cell, by extending this abstract class. On a coordinate
-domain the coordinates are canonical: the coordinate function is the identity
-(see [`Coordinate`](#coordinate)), and the integral is the Lebesgue integral in
-the coordinates (see [`Integral`](#integral)). Every other domain gets these by
-pull-back.
+| `Mesh(x, Q)` | |
+| ------------ | - |
+| Extends | `AbstractDomain` |
+| Free function | `mesh(x, Q)` |
+| Takes | `x: AbstractExpression`, `Q: AbstractCoordinateDomain` |
+| Properties | `coordinate_function` $x$, and `ambient_domain` $Q$ |
+| Requires | $x$ with domain $T$, a topology whose cell types are reference cells; $x$ real, with value shape `(n,)` for the ambient coordinate dimension of $Q$, free indices `()` and argument spaces `()`; `T.dimension <= n` |
+| Derived | `topology` $T$ = `x.domain`, `dimension` = `T.dimension`, and `pieces`, below |
+| Raises | `TypeError` if the coordinate expression has no topology domain, and `ValueError` if another requirement fails |
 
-| `AbstractCoordinateDomain` |                                              |
-| -------------------------- | -------------------------------------------- |
-| Extends                    | `AbstractDomain` |
-| Provides                   | `dimension`, an `int` $n \ge 0$              |
-| Derived                    | `ambient_domain`, the coordinate domain itself |
-| Defined by                 | A subclass, such as `RD` or a reference cell |
+`mesh(x, Q)` returns `Mesh(x, Q)`. The topology is determined by $x$ and is
+not a separate construction argument. Mesh identity depends on $x$ and $Q$;
+replacing the coordinates reconstructs the mesh from the new coordinates.
 
-Examples:
+A mesh describes one geometry, not an indexed family of geometries. Coordinates
+may depend on symbolic coefficients, deformation fields or scalar parameters,
+but have no free indices. Construction and reconstruction enforce this rule.
+A solver may evaluate a form for different coordinate values or manage several
+meshes outside the language. Shape differentiation does not require an indexed
+mesh (see [Shape derivatives](extensions.md#shape-derivatives)).
 
-- The unit simplex in $R^n$ is a coordinate domain. A codimension-1 face is
-  not: it has empty interior in $R^n$ and is instead the image of a domain map
-  from the unit simplex in $R^{n-1}$.
-- A mesh of triangles is *not* a coordinate domain, because the core builds the
-  mesh from a topology and a coordinate expression; its cells are parameterised
-  by reference triangles.
+Deformed surfaces, isogeometric patches and analytic maps are meshes of
+coordinate functions. Continuity across cells is a property of the space of
+$x$. Independent patches or points that support fields use a topology with
+independent cells; no sides are required. An indexed family used only for
+integration or sampling needs a `DomainMap`, not a mesh (see
+[Mapped integration families](#mapped-integration-families)).
 
-### `RD`
+#### Cell maps and pieces
 
-`RD(n)` is the whole of $R^n$.
+For group $j$ of $T$, let $K_j$ be its reference cell. `pieces` is the derived
+`tuple` of maps
+`domain_map(K_j, pull_back(x, cell_map(T, j)), Q)`.
+These maps are views of the mesh, not construction arguments. They carry the
+cell index `cell_index(T, j)` and do not introduce extra geometry parameters.
 
-| `RD(n)`    |                                                                 |
-| ---------- | --------------------------------------------------------------- |
-| Extends    | `AbstractCoordinateDomain` |
-| Properties | `dimension`, an `int` $n \ge 0$                                 |
-| Raises     | `ValueError` if $n < 0$ |
+The ambient domain $Q$ is a coordinate domain. A mesh embedded in another
+mesh has its own physical coordinates; cell or side maps specify its
+relation to the other mesh's cells.
 
-Worked examples for this chapter: [the unit simplex](../examples/library.md#the-unit-simplex).
+#### Mesh cell maps
+
+`cell_map(D, j, e)` returns `CellMap(D, j, e)`, whose target is the mesh $D$.
+Its parameterisation is `pull_back(x, cell_map(T, j, e))`. This expression
+is derived, not a construction argument. Substitution reconstructs the map
+from $D$, $j$ and $e$, preserving the selected cell independently of its
+coordinates. Piece $j$ instead
+has target $Q$ and records only physical coordinates. These maps have the
+same parameterisation but different meanings: only the cell map selects a
+cell of $D$ for evaluating a mesh field.
+
+For a field $f$ on $D$, `pull_back(f, cell_map(D, j))` is its local
+expression on $K_j$, indexed by the cells of group $j$. Pulling back
+`coordinate(D)` gives `pull_back(x, cell_map(T, j))`.
+
+#### Examples
+
+Use the two-triangle topology of the [static topology
+example](../examples/library.md#a-static-topology), on reference cells:
+
+```python
+K = ReferenceSimplex(2)
+square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+```
+
+Let `x` be a vector Lagrange function of degree 1 on `square`, of value shape
+`(2,)`, with vertex values $(0, 0)$, $(1, 0)$, $(0, 1)$ and $(1, 1)$.
+The resulting physical mesh is the square:
+
+```python
+D = mesh(x, RD(2))
+```
+
+- `D.topology` is `square`. `cell_map(D, 0)` is the family of the two
+  triangles, with the free index `cell_index(square, 0)`.
+- `pull_back(coordinate(D), cell_map(D, 0))` is
+  `pull_back(x, cell_map(square, 0))`, which the library of the space of `x`
+  evaluates on triangle 1 to $(1 - X_1, X_0 + X_1)$.
+
+For a topology `M` of triangles and quadrilaterals, with the cell types
+`(Kt, Kq)`, `mesh(x, RD(2))` has one piece for each cell group. A function `u`
+on `M` is one expression, pulled back through each cell group:
+
+```python
+# On Kt with the free index cell_index(M, 0), and on Kq with cell_index(M, 1).
+u_tri = pull_back(u, cell_map(M, 0))
+u_quad = pull_back(u, cell_map(M, 1))
+```
+
+```{dropdown} Legacy UFL
+In legacy UFL, a `Mesh` is `mesh(x, Q)` for the coordinate element of `x`, and `SpatialCoordinate(mesh)` is `coordinate(D)`.
+```
 
 ## Calculus on a domain
 
@@ -90,7 +141,7 @@ For a mesh $D$, `coordinate(D)` is the physical coordinate field on $D$.
 Its pull-back by a cell map is that cell's parameterisation (see
 [`Mesh`](#mesh)). This differs from `D.coordinate_function`, which is
 the stored coordinate expression on the topology.
-For a mesh `image(x, Q)`, the pull-back by `cell_map(D, j, e)` is
+For a mesh `mesh(x, Q)`, the pull-back by `cell_map(D, j, e)` is
 `pull_back(x, cell_map(T, j, e))`.
 
 For example, `coordinate(RD(3))` has value shape `(3,)` and domain `RD(3)`.
@@ -98,7 +149,7 @@ For example, `coordinate(RD(3))` has value shape `(3,)` and domain `RD(3)`.
 ### Valid pair
 
 An expression and a domain $(f, P)$ are a valid pair if $P$ is an
-[`AbstractDomain`](#abstractdomain) and $f$ has the domain $P$ or no domain.
+[`AbstractDomain`](topology.md#abstractdomain) and $f$ has the domain $P$ or no domain.
 The type of $P$ is checked statically; construction raises `ValueError` if
 the domains do not match. For $f$ with no domain, use the
 [constant-field interpretation](expressions.md#domain-free-expressions) on $P$.
@@ -337,7 +388,7 @@ or its parameterised image, retaining multiplicity. A `DomainMap` is not an
 | Extends                          | `Base` |
 | Free function                    | `domain_map(P, psi, Q)`                                                                                                                                                                           |
 | Takes                            | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain` |
-| Properties                       | `parameter_domain` $P$, an [`AbstractCoordinateDomain`](#abstractcoordinatedomain) or an [`AbstractTopology`](#abstracttopology) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractCoordinateDomain`                                                   |
+| Properties                       | `parameter_domain` $P$, an [`AbstractCoordinateDomain`](topology.md#abstractcoordinatedomain) or an [`AbstractTopology`](topology.md#abstracttopology) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractCoordinateDomain`                                                   |
 | Requires                         | $\psi$ with the domain $P$ or no domain, $\psi$ real with value shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$ and the argument spaces `()`, and $k \le n$ |
 | Derived                          | `free_indices`, the free indices of $\psi$ |
 | Raises                           | `ValueError` if another requirement fails                                                                                                                                   |
@@ -367,7 +418,7 @@ specifies its coordinate parameterisation $\psi$.
 | Extends          | `AbstractExpression` |
 | Free function    | `pull_back(f, D)`                                                                                          |
 | Takes            | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap` |
-| Properties       | `expression` $f$, and `map` $D$, a `DomainMap`, a [`SideMap`](#sidemap) or a [`CellMap`](#cellmap) |
+| Properties       | `expression` $f$, and `map` $D$, a `DomainMap`, a [`SideMap`](topology.md#sidemap) or a [`CellMap`](topology.md#cellmap) |
 | Requires         | $f$ with the domain $Q$ or no domain, and an equal extent for an `Index` free in both $f$ and $D$          |
 | Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
 | Raises           | `ValueError` if another requirement fails                                         |
@@ -568,341 +619,7 @@ fc = integral(pull_back(f, c), RD(0))
 
 Worked examples for this chapter: [an affinely mapped triangle](../examples/integration.md#an-affinely-mapped-triangle), [circulation along an edge](../examples/integration.md#circulation-along-an-edge), [integrating over an edge](../examples/integration.md#integrating-over-an-edge), [integrating over the boundary of a triangle](../examples/integration.md#integrating-over-the-boundary-of-a-triangle), [quadrature](../examples/integration.md#quadrature), [integrating over a cut cell](../examples/integration.md#integrating-over-a-cut-cell), [the centroid of a triangle](../examples/integration.md#the-centroid-of-a-triangle).
 
-## Topology
-
-### `AbstractCellType`
-
-`AbstractCellType` describes a cell type with numbered vertices.
-
-| `AbstractCellType` |                                                                         |
-| ------------------ | ----------------------------------------------------------------------- |
-| Extends            | `Base` |
-| Provides           | `dimension`, an `int` $n \ge 0$, and `num_vertices`, an `int` $m \ge 1$ |
-| Defined by         | A subclass outside the core, such as `Simplex`                          |
-
-The core does not number the facets or the other sub-entities of a cell type.
-A sub-entity of a cell is named by the vertex numbers of the cell that the
-sub-entity contains, such as the vertex numbers of a facet, and the mesh or a
-library such as Basix decides which sets of vertices are sub-entities (see
-[Sides of a topology](#sides-of-a-topology)).
-
-A topology of polygons, as for the virtual element method, has a cell type for
-each number of vertices. A number of vertices known only at run time is not yet
-covered.
-
-### `AbstractTopology`
-
-`AbstractTopology` describes a set of cells of given cell types, without
-coordinates.
-
-| `AbstractTopology` |                                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------- |
-| Extends            | `Base` |
-| Provides           | `cell_types`, `num_cells`, `sides`, and `side_tables(i, side)` for a topology with sides |
-| Derived            | `dimension`, the dimension of the cell types                                                |
-| Defined by         | A subclass outside the core, such as the topology of the mesh of a solver                   |
-
-- `cell_types` is a nonempty `tuple` of `AbstractCellType`s $C_0, C_1, \dots$ of the
-  same dimension, one for each group of cells. A cell of group $j$ has type
-  $C_j$ and its vertices are numbered as in $C_j$.
-  The cell types are distinct, except that two groups with different sides may
-  have the same cell type (see [Sides of a topology](#sides-of-a-topology)).
-- `num_cells` is a `tuple` of the same length as `cell_types`, with the number
-  of cells in each group: a nonnegative `int`, such as for a macro element,
-  or an `AbstractExtent`, such as for the mesh of a solver.
-- `sides` is `()`, or the sides of [Sides of a topology](#sides-of-a-topology).
-
-Zero-cell groups are valid, including when every group is empty. An empty
-topology retains its cell types, which determine its dimension. An empty
-boundary selection likewise retains its facet types and side declarations;
-its side tables have zero entries along the cell axis. The supplying library
-must satisfy these contracts, including for counts supplied at evaluation.
-
-A cell-group number `j` for a topology `T` is an `int` satisfying
-`0 <= j < len(T.cell_types)`. This applies to cell maps, side triples and
-`side_tables`; negative numbers do not select groups from the end.
-
-A topology whose cell types are reference cells may be the domain of an
-expression and the domain of a space, as the cell complex of its cells (see
-[`CellMap`](#cellmap)). A topology is not an `AbstractDomain`, so
-`Coordinate`, `Gradient` and `Integral` reject a topology.
-
-Topology identity is structural: a concrete `AbstractTopology` stores its
-identifying arguments, such as a label.
-
-The free function `cell_index(T, j)` returns the derived index
-`Index(("uflx.cell_index", T, j, 0))` for the cells of group $j$, numbered from
-0. The index differs between groups and between topologies, even if the numbers of cells are equal.
-
-`cell_index` checks that $T$ is a topology and $j$ is an `int` with
-`0 <= j < len(T.cell_types)`.
-
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `cell_index(T, j)` | | `T: AbstractTopology`, `j: int` | `Index` |
-
-An expression with the free index `cell_index(T, j)` has one value per cell of
-group $j$.
-
-Examples:
-
-- The Alfeld split of a triangle, a macro element, has the numbers of cells
-  `(3,)`.
-- A mesh of a solver with triangles and quadrilaterals has two cell types, and
-  two `AbstractExtent`s as the numbers of cells.
-
-```{dropdown} Legacy UFL
-In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and the measure `dx` hides the sum over the cells. In UFLx, the topology, the parameterisations of the pieces of a mesh and the `IndexSum` over `cell_index(T, j)` are separate.
-```
-
-### Sides of a topology
-
-A topology $S$ whose cells are sub-entities of cells of other topologies has
-sides. A cell of $S$ is seen from one cell of another topology on each side,
-and [Restriction](#restriction) picks the value of an expression on a cell of
-$S$ by the side name.
-
-#### `sides`
-
-`S.sides` describes the sides of $S$:
-
-- `S.sides` has one entry for each cell group of $S$.
-- Entry $i$ is a `tuple` of one or more sides with distinct names.
-- Each side is a triple `(name, T, j)` of a side name, a `str`, a topology
-  $T$ and a cell-group number $j$ of $T$.
-- Entries for groups with the same cell type must differ. A group of cells of $S$ is
-  therefore fixed by the cell type and the sides together.
-- A topology whose cells are not seen from other cells has the sides `()`.
-
-Notation, for the group $i$ of $S$ with a side `(name, T, j)`:
-
-- $K_j$ is the reference cell of group $j$ of $T$, and $k_j$ is the
-  dimension of $K_j$.
-- $m$ is the number of vertices of the cell type of group $i$ of $S$.
-
-#### The image of a cell on a side
-
-Each side inclusion maps the cell type $F_i$ into the parent reference cell
-$K_j$. Its image may be the whole cell, a sub-entity, or a piece such as half
-a facet or a cut through the cell. A whole-cell inclusion preserves vertex
-order. The mesh library supplies the map; an affine inclusion can be built
-from the vertex positions in $K_j$ (see [A static topology](../examples/library.md#a-static-topology)).
-For periodic sides, those positions refer to the corresponding periodic image.
-
-#### Side tables
-
-A concrete topology with sides also provides `side_tables(i, side)`, the
-triple `(cells, inclusion, reference_normal)` for the side named `side` of
-group $i$, with the side `(side, T, j)`, the cell type $F_i$ of group $i$ and
-`e = cell_index(S, i)`:
-
-- `cells` is an [`AbstractIndexTable`](expressions.md#abstractindextable) of the shape
-  `(S.num_cells[i],)` and the extent `T.num_cells[j]`. Entry $e$ selects a cell of
-  group $j$ of $T$ on the side of the cell $e$ of $S$.
-- `inclusion` is a [`DomainMap`](#domainmap) from $F_i$ into $K_j$ with the
-  free index `e`. Member $e$ is the inclusion of the cell $e$ into the cell on
-  the side.
-- `reference_normal` is an expression with the domain $F_i$ or no domain,
-  the value shape `(k_j,)` and the free index `e`, for a group of cells of
-  dimension $k_j - 1$, and `None` for any other group. A normal that varies
-  along the cell, such as on a curved piece, has the domain $F_i$. Member $e$ is a normal in $K_j$ of
-  the image of the cell $e$. The normal points out of $K_j$ for an image on the
-  boundary of $K_j$. For an image inside $K_j$, the supplying library chooses
-  its orientation.
-
-Side inclusions pair points across sides. Physical coincidence is a
-library-supplied assumption for ordinary interfaces, not a core requirement;
-periodic and mortar couplings may pair distinct physical points.
-[Restriction](#restriction) and [`Normal`](#normal) read the tables.
-
-#### What the concrete mesh decides
-
-The mesh library chooses the cells or pieces of $S$, the side names, and
-one parent cell on each side. For a lower-dimensional entity shared by several
-cells, this choice affects the restriction of a discontinuous field.
-Sides may refer to different topologies, and a side topology may itself have
-sides, allowing facets of facets.
-
-#### Cells that are pieces
-
-Pieces cover hanging facets, mortar intersections and segments of a network
-inside mesh cells. The mesh library computes these intersections and their
-inclusions; a curved inclusion may be approximate. See the
-[network example](../examples/coupling.md#a-1d-network-in-a-3d-mesh).
-
-#### Examples
-
-For a triangle topology `T` and facet cell type `I`, a boundary topology has
-cell types `(I,)` and sides `((("inside", T, 0),),)`. Interior facets instead
-have sides `((("+", T, 0), ("-", T, 0)),)`.
-
-See [Side topology examples](../examples/coupling.md#side-topology-examples)
-for corners, submeshes, periodic boundaries and mixed cell types.
-
-```{dropdown} Legacy UFL
-The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
-```
-
-Worked examples for this chapter: [the simplex as a cell type](../examples/library.md#the-simplex-as-a-cell-type), [a static topology](../examples/library.md#a-static-topology).
-
-## Reference cells
-
-### Reference cell
-
-An abstract subclass of `AbstractCoordinateDomain` and of `AbstractCellType`
-for a reference cell `AbstractReferenceCell`, a cell type that is also a
-coordinate domain. The core reads no vertices of a reference cell. A library
-that builds inclusions, such as from vertex positions, keeps the vertices of
-its reference cells (see [The unit simplex as a reference
-cell](../examples/library.md#the-unit-simplex-as-a-reference-cell)).
-
-| `AbstractReferenceCell` |                                                                                                                                                            |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extends                 | `AbstractCoordinateDomain`, `AbstractCellType` |
-| Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](../examples/library.md#the-unit-simplex-as-a-reference-cell)                                                   |
-
-### `CellMap`
-
-`CellMap(X, j, e)` selects cells of group $j$ of a topology or mesh $X$.
-Let $T$ be $X$ when $X$ is a topology, and `X.topology` when $X$ is a mesh.
-The selected cells retain their identities even when their physical
-coordinates coincide.
-
-| `CellMap(X, j, e)` | |
-| ------------------ | - |
-| Extends | `Base` |
-| Takes | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` |
-| Properties | `ambient_domain` $X$, `cell_group` $j$, and `entry` $e$ |
-| Requires | $j$ a valid cell-group number of $T$, `T.cell_types[j]` a reference cell $K_j$; an integer $e$ satisfies the bounds below, and a `GatheredIndex` has extent `T.num_cells[j]` |
-| Derived | `topology` $T$, `parameter_domain` $K_j$, `free_indices` and, for a mesh, `parameterisation`, as below |
-| Raises | `ValueError` if another requirement fails |
-
-For a symbolic cell count, construction cannot check the upper bound. An
-integer entry $e$ must be nonnegative. If `T.num_cells[j]` is an `int`,
-construction also checks `e < T.num_cells[j]`; otherwise the caller must ensure
-that $e$ is smaller than the supplied cell count.
-
-For an ordinary `Index` $e$, `free_indices` contains $e$ with extent
-`T.num_cells[j]`; the index itself stores no extent. For a `GatheredIndex`,
-it is the free indices of $e$. For an integer entry it is `()`.
-
-A cell map of a topology has no parameterisation. For a mesh $D$ with
-coordinate expression $x$, `CellMap(D, j, e).parameterisation` is
-`pull_back(x, cell_map(T, j, e))`. This expression is derived, not a
-construction argument. Substitution reconstructs the map from $D$, $j$ and
-$e$, preserving the selected cell independently of its coordinates.
-
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `cell_map(X, j, e)` | | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` | `CellMap(X, j, e)` |
-| `cell_map(X, j)` | | `X: AbstractTopology \| Mesh`, `j: int` | `CellMap(X, j, cell_index(T, j))`, with $T$ the topology of $X$ |
-
-`pull_back(f, cell_map(X, j, e))` is the value of an expression $f$ on $X$
-on the reference cell $K_j$ of each selected cell. For a function on a
-topology, the library of its space gives the value (see [Functions in a
-space](forms.md#functions-in-a-space)). For a mesh field, lowering uses the selected
-cell and its parameterisation (see [Expanding pull-backs](evaluation.md#expanding-pull-backs)).
-
-Worked examples for this chapter: [the unit simplex as a reference cell](../examples/library.md#the-unit-simplex-as-a-reference-cell).
-
-## Meshes
-
-### `Mesh`
-
-`Mesh(x, Q)` is one physical field domain, with coordinate expression $x$ on
-an `AbstractTopology` $T$ and ambient domain $Q$. Cells keep their identities
-when their physical coordinates coincide. The mesh stores no connectivity or
-coordinate values; those remain with the topology and coordinate-function library.
-
-| `Mesh(x, Q)` | |
-| ------------ | - |
-| Extends | `AbstractDomain` |
-| Free function | `image(x, Q)` |
-| Takes | `x: AbstractExpression`, `Q: AbstractCoordinateDomain` |
-| Properties | `coordinate_function` $x$, and `ambient_domain` $Q$ |
-| Requires | $x$ with domain $T$, a topology whose cell types are reference cells; $x$ real, with value shape `(n,)` for the ambient coordinate dimension of $Q$, free indices `()` and argument spaces `()`; `T.dimension <= n` |
-| Derived | `topology` $T$ = `x.domain`, `dimension` = `T.dimension`, and `pieces`, below |
-| Raises | `TypeError` if the coordinate expression has no topology domain, and `ValueError` if another requirement fails |
-
-`image(x, Q)` returns `Mesh(x, Q)`. The topology is determined by $x$ and is
-not a separate construction argument. Mesh identity depends on $x$ and $Q$;
-replacing the coordinates reconstructs the mesh from the new coordinates.
-
-A mesh describes one geometry, not an indexed family of geometries. Coordinates
-may depend on symbolic coefficients, deformation fields or scalar parameters,
-but have no free indices. Construction and reconstruction enforce this rule.
-A solver may evaluate a form for different coordinate values or manage several
-meshes outside the language. Shape differentiation does not require an indexed
-mesh (see [Shape derivatives](extensions.md#shape-derivatives)).
-
-Deformed surfaces, isogeometric patches and analytic maps are meshes of
-coordinate functions. Continuity across cells is a property of the space of
-$x$. Independent patches or points that support fields use a topology with
-independent cells; no sides are required. An indexed family used only for
-integration or sampling needs a `DomainMap`, not a mesh (see
-[Mapped integration families](#mapped-integration-families)).
-
-#### Cell maps and pieces
-
-For group $j$ of $T$, let $K_j$ be its reference cell. `pieces` is the derived
-`tuple` of maps
-`domain_map(K_j, pull_back(x, cell_map(T, j)), Q)`.
-These maps are views of the mesh, not construction arguments. They carry the
-cell index `cell_index(T, j)` and do not introduce extra geometry parameters.
-
-The ambient domain $Q$ is a coordinate domain. A mesh embedded in another
-mesh has its own physical coordinates; cell or side maps specify its
-relation to the other mesh's cells.
-
-#### Mesh cell maps
-
-`cell_map(D, j, e)` returns `CellMap(D, j, e)`, whose target is the mesh $D$.
-Its parameterisation is `pull_back(x, cell_map(T, j, e))`. Piece $j$ instead
-has target $Q$ and records only physical coordinates. These maps have the
-same parameterisation but different meanings: only the cell map selects a
-cell of $D$ for evaluating a mesh field.
-
-For a field $f$ on $D$, `pull_back(f, cell_map(D, j))` is its local
-expression on $K_j$, indexed by the cells of group $j$. Pulling back
-`coordinate(D)` gives `pull_back(x, cell_map(T, j))`.
-
-#### Examples
-
-Use the two-triangle topology of the [static topology
-example](../examples/library.md#a-static-topology), on reference cells:
-
-```python
-K = ReferenceSimplex(2)
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
-```
-
-Let `x` be a vector Lagrange function of degree 1 on `square`, of value shape
-`(2,)`, with vertex values $(0, 0)$, $(1, 0)$, $(0, 1)$ and $(1, 1)$.
-Its image is the square:
-
-```python
-D = image(x, RD(2))
-```
-
-- `D.topology` is `square`. `cell_map(D, 0)` is the family of the two
-  triangles, with the free index `cell_index(square, 0)`.
-- `pull_back(coordinate(D), cell_map(D, 0))` is
-  `pull_back(x, cell_map(square, 0))`, which the library of the space of `x`
-  evaluates on triangle 1 to $(1 - X_1, X_0 + X_1)$.
-
-For a topology `M` of triangles and quadrilaterals, with the cell types
-`(Kt, Kq)`, `image(x, RD(2))` has one piece for each cell group. A function `u`
-on `M` is one expression, pulled back through each cell group:
-
-```python
-# On Kt with the free index cell_index(M, 0), and on Kq with cell_index(M, 1).
-u_tri = pull_back(u, cell_map(M, 0))
-u_quad = pull_back(u, cell_map(M, 1))
-```
-
-```{dropdown} Legacy UFL
-In legacy UFL, a `Mesh` is `image(x, Q)` for the coordinate element of `x`, and `SpatialCoordinate(mesh)` is `coordinate(D)`.
-```
+## Fields and integration on a mesh
 
 ### `TransformationLaw`
 
@@ -990,94 +707,19 @@ The identity of Piola holds on each cell of $D$, with no derivative of $J$:
 [`expand_pull_backs`](evaluation.md#expanding-pull-backs) applies the identity, and every
 other `Divergence` and `Curl` lowers to its composition of `Gradient`.
 
-### Restriction
+### Traces on a mesh
 
-The restriction of an expression $f$ on a topology $T$ or a mesh $D$ to the
-cells of a topology $S$ with sides, from the side $s$, is the pull-back of $f$
-along the inclusion of each cell of $S$ into the cell on the side $s$. The
-side tables of $S$ give the cell on the side, through a
-[`GatheredIndex`](expressions.md#gatheredindex) entry, and the inclusion of each cell of $S$
-into that cell. The restriction is `pull_back(f, side_map(T, S, s))` for $f$
-on $T$, and `pull_back(f, side_map(D, E, s))` for $f$ on $D$ and a side
-domain $E$ (see [`SideMap`](#sidemap)).
-
-Notation, for the group $i$ of $S$ with the side `(s, T, j)`:
-
-- `(cells, inclusion, reference_normal)` are the side tables of the side $s$
-  of group $i$.
-- $F_i$ is the cell type of group $i$, and $K_j$ the reference cell of
-  group $j$ of $T$.
-- `e = cell_index(S, i)` and `g = gathered_index(cells, (e,))`.
-
-#### The inclusion
-
-Two families of maps with the free index `e` make the inclusion of the cells
-of group $i$:
-
-- $B_i$, the cell on the side, is `cell_map(T, j, g)` on $T$, and
-  `cell_map(D, j, g)` on a mesh $D$ with the topology $T$.
-- $A_i$, the inclusion into the cell on the side, is `inclusion` of the side
-  tables, a domain map from $F_i$ into $K_j$. $F_i$ must be a reference cell.
-
-The restriction of $f$ to group $i$ from the side $s$ is
-`pull_back(pull_back(f, B_i), A_i)`, an expression on $F_i$ with the free index
-`e`.
-
-For an explicit cell selection `q` (an `int`, `Index` or `GatheredIndex`),
-use the same side data with their cell index replaced:
-
-```python
-B_selected = replace(B_i, {e: q})
-A_selected = replace(A_i, {e: q})
-```
-
-The selected restriction is `pull_back(pull_back(f, B_selected), A_selected)`.
-Substitute only into the side data, not into `f`; its free indices remain
-independent. The default selection `q = e` leaves the maps unchanged.
-
-Restrictions are compared at paired points; their difference is an ordinary
-interface jump when those points physically coincide (see [Side tables](#side-tables)).
-A cell with more than two sides has no jump; a form uses each side's
-restriction separately.
-
-#### `SideMap`
-
-`SideMap` is the lazy map of the cells of $S$ into $T$, or of the cells of a
-side domain $E$ into a mesh $D$, through the side $s$.
-
-| `SideMap(X, P, s)` |                                                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------- |
-| Extends            | `Base` |
-| Takes              | `X, P: AbstractTopology \| Mesh`, `s: str` |
-| Properties         | `ambient_domain` $X$, `parameter_domain` $P$, and `side` $s$ |
-| Derived            | `free_indices`, always `()` |
-| Requires           | The domain conditions below |
-
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `side_map(X, P, s)` | | `X, P: AbstractTopology \| Mesh`, `s: str` | `SideMap(X, P, s)` |
-
-| Domain condition | Requirement |
-| ---------------- | ----------- |
-| $X$, $P$ | Topologies $T$, $S$, or a mesh on $T$ and a side domain on $S$ |
-| Cell types of $S$ | All are `AbstractReferenceCell` |
-| Groups of $S$ | Each has a side named $s$ with topology $T$ |
-
-A side map of a mesh takes a side domain, so that a coupling of two meshes
-shares one side domain. `pull_back(f, side_map(X, P, s))` is an expression
-with the domain $P$, the restriction of $f$ to all the groups at once. The
-pull-back of that expression by `cell_map(P, i, q)` uses
-`pull_back(pull_back(f, B_selected), A_selected)`, with the selected maps
-defined above. This covers both topology and mesh targets.
+[Restriction](topology.md#restriction) and [`SideMap`](topology.md#sidemap) select a side on the
+topology. On a physical mesh, a side domain also supplies the geometry.
 
 #### Side domains
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `side_domain(D, S, s)` | | `D: Mesh`, `S: AbstractTopology`, `s: str` | `image(pull_back(x, side_map(T, S, s)), Q)` |
+| `side_domain(D, S, s)` | | `D: Mesh`, `S: AbstractTopology`, `s: str` | `mesh(pull_back(x, side_map(T, S, s)), Q)` |
 
-For a mesh $D$ = `image(x, Q)` with the topology $T$, the side domain of $S$
-is the image of the trace of $x$ from side $s$, so the side domain moves with
+For a mesh $D$ = `mesh(x, Q)` with the topology $T$, the side domain of $S$
+is the mesh defined by the trace of $x$ from side $s$, so the side domain moves with
 $x$. The result has topology $S$ and geometry supplied by that side.
 
 The chosen side supplies the integration measure. Any measure conversion
@@ -1269,7 +911,7 @@ It points outward on boundary pieces.
 | Extends      | `AbstractExpression` |
 | Free function | `normal(sm)`                                                                                         |
 | Takes        | `sm: SideMap` |
-| Properties   | `side_map`, a [`SideMap`](#sidemap) `SideMap(D, E, s)`                                               |
+| Properties   | `side_map`, a [`SideMap`](topology.md#sidemap) `SideMap(D, E, s)`                                               |
 | Requires     | $D$ a mesh, and $E$ of the dimension $k - 1$ for the dimension $k$ of $D$                             |
 | Static type  | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the domain $E$, real      |
 | Raises       | `ValueError` if the requirement fails           |
@@ -1279,7 +921,7 @@ The normal of `sm` belongs to the same side as the restriction
 
 Notation, for `sm` = `SideMap(D, E, s)` and the piece $i$ of $E$:
 
-- $B_i$ and $A_i$ are the maps of [Restriction](#restriction) for the side $s$.
+- $B_i$ and $A_i$ are the maps of [Restriction](topology.md#restriction) for the side $s$.
 - $K_j$ is the reference cell of the cell on the side.
 - $k$ is the dimension of $D$, and $n$ is the dimension of the ambient
   coordinate domain.
@@ -1288,14 +930,14 @@ Notation, for `sm` = `SideMap(D, E, s)` and the piece $i$ of $E$:
 
 The pull-back of `Normal(SideMap(D, E, s))` by `cell_map(E, i, q)` is
 $\nu = w / \lvert w \rvert$, with $w = m_{B_{\mathrm{selected}}}(\hat m)$,
-using the selected maps of [Restriction](#restriction), where:
+using the selected maps of [Restriction](topology.md#restriction), where:
 
 - $m$ is `transformation_law(("covariant",), 0)`, applied with the Jacobian
   of `B_selected` on the side at the points of `A_selected` (see
   [`TransformationLaw`](#transformationlaw)).
 - $\hat m$ is `replace(reference_normal, {cell_index(E.topology, i): q})`,
   using the normal from the side tables of side $s$ of group $i$ (see
-  [Side tables](#side-tables)).
+  [Side tables](topology.md#side-tables)).
 
 The composition is `w / square_root(w @ w)`. It requires full column rank
 of the cell Jacobian and $w \ne 0$ wherever evaluated.
@@ -1305,7 +947,7 @@ the library of the topology gives $\hat m$.
 
 #### The direction of the normal
 
-Orientation follows the [side-table contract](#side-tables). For $k=n$,
+Orientation follows the [side-table contract](topology.md#side-tables). For $k=n$,
 normals are opposite when the two regions adjoin on opposite sides of the
 interface; coincident geometry or side names alone do not imply this.
 For $k<n$, matching tangent spaces are also required. On a surface, a jump

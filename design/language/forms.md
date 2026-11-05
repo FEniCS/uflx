@@ -13,7 +13,7 @@ with or without a domain or topology.
 | `AbstractFunctionSpace` |                                                                                                                                                       |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                 | `Base` |
-| Provides                | `domain`, an [`AbstractDomain`](geometry.md#abstractdomain), an [`AbstractTopology`](geometry.md#abstracttopology) or `None`, `value_shape`, `scalar_type`, and `argument_spaces`, `()` for a space of fields |
+| Provides                | `domain`, an [`AbstractDomain`](topology.md#abstractdomain), an [`AbstractTopology`](topology.md#abstracttopology) or `None`, `value_shape`, `scalar_type`, and `argument_spaces`, `()` for a space of fields |
 | Defined by              | A subclass outside the core, such as a subclass for the finite element spaces of Basix, and [`DualSpace`](#dualspace) in the core                           |
 
 A space with the domain `None` has functions that do not depend on a domain.
@@ -82,7 +82,7 @@ may be a `tuple` of functions in several spaces.
 #### Examples
 
 The examples use a topology `T` of `ReferenceSimplex(2)` cells and the mesh
-`D = image(x, RD(2))`, so $k = n = 2$.
+`D = mesh(x, RD(2))`, so $k = n = 2$.
 
 - The Lagrange space of polynomial degree 1 on `T` has the value shape `()`.
 - The Nédélec and the Raviart–Thomas spaces on `T` both have the value shape

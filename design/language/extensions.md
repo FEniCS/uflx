@@ -192,7 +192,7 @@ output contract. For example, a compiler may reduce an `Indexed` of a
 > A language extension, not a rule of the core.
 
 `ShapeDerivative(f, x, h)` is the derivative of $f$ when the coordinate function
-$x$ of a mesh `image(x, Q)` moves in the direction $h$ (see [A shape
+$x$ of a mesh `mesh(x, Q)` moves in the direction $h$ (see [A shape
 derivative](../examples/surfaces.md#a-shape-derivative)). The pass of the extension runs
 between two spatial-lowering stages, where $x$ occurs explicitly in the
 parameterisations of the cells, and lowers the node to `DirectionalDerivative(f,
@@ -206,4 +206,4 @@ values on the reference cell, so the function moves with the mesh.
 The direction is any direction that the core derivatives allow, an expression
 on the topology of value shape `(n,)` or a constant. With an argument as the
 direction, the Gateaux derivative gives the shape gradient. An ALE mesh is
-`image(x0 + d, Q)`.
+`mesh(x0 + d, Q)`.

@@ -514,7 +514,7 @@ expansion. The cell pull-back rules use no derivative of $J$.
 
 For $\psi =$ `cell_map(Y, i, q)` of a topology or mesh $Y$ and a side $s$,
 `B_selected` and `A_selected` are the maps of
-[Restriction](geometry.md#restriction), selected by `q`.
+[Restriction](topology.md#restriction), selected by `q`.
 Cell maps retain explicit selection; unselected side restrictions remain.
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
@@ -708,8 +708,8 @@ contracts. The table lists the nodes allowed after `lower`.
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `RD(0)` |
 | [Maps between domains](geometry.md#maps-between-domains) | `PullBack` | By a `SideMap` of an expression other than an `Action` or `Form`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
-| [Meshes](geometry.md#meshes) | `Normal` | Always |
-| [Meshes](geometry.md#meshes) | `PushForward` | Under no pull-back by a cell |
+| [Fields and integration on a mesh](geometry.md#fields-and-integration-on-a-mesh) | `Normal` | Always |
+| [Fields and integration on a mesh](geometry.md#fields-and-integration-on-a-mesh) | `PushForward` | Under no pull-back by a cell |
 | [Function spaces](forms.md#function-spaces) | `Function` | Always |
 | [Variational forms](forms.md#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](forms.md#form)) |
 | [Variational forms](forms.md#variational-forms) | `Action` | Its form is a `Function`, a downstream terminal, a `Gradient`, a `PullBack` or another such `Action`, with each operand in the core normal form |

@@ -108,7 +108,7 @@ value is not a real number, such as `square_root(Integer(-1))`, is undefined.
 ### Domain
 
 An expression's `domain` is where it is defined: an
-[`AbstractDomain`](geometry.md#abstractdomain), or an [`AbstractTopology`](geometry.md#abstracttopology)
+[`AbstractDomain`](topology.md#abstractdomain), or an [`AbstractTopology`](topology.md#abstracttopology)
 whose cell types are reference cells. It is `None` when the result has no
 spatial argument, as for a literal or an integral.
 
@@ -146,7 +146,7 @@ but still varies when differentiated with respect to that function.
 
 An expression denotes an array-valued function on the domain of the
 expression. An expression on a topology denotes a function on the reference
-cell of each cell of the topology (see [`CellMap`](geometry.md#cellmap)). An expression
+cell of each cell of the topology (see [`CellMap`](topology.md#cellmap)). An expression
 with no domain has the [constant-field interpretation](#domain-free-expressions).
 An expression with argument spaces other than `()` denotes a multilinear map from
 the argument spaces to such functions (see [Variational

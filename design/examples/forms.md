@@ -11,7 +11,7 @@ the library supplies a triangle topology `T`, its coordinate function `x`
 of value shape `(2,)`, and a real scalar continuous Lagrange space `V` on `T`:
 
 ```python
-D = image(x, RD(2))
+D = mesh(x, RD(2))
 u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
 u_D, v_D, f_D = (
     push_forward(u, D, transformation_law(V)),
@@ -109,7 +109,7 @@ space `F` on `T`, and a real scalar space of constants `C` with no domain.
 The solver sets `sigma_x` and `sigma_y` to zero outside the layer:
 
 ```python
-D = image(x, RD(2))
+D = mesh(x, RD(2))
 k0 = function(C, "k0")
 sigma_x, sigma_y = (
     push_forward(function(F, "sigma_x"), D, transformation_law(F)),
@@ -161,7 +161,7 @@ real Raviart–Thomas space `RT` of value shape `(2,)`, and a real discontinuous
 Lagrange space `DG` of degree 0, both on `T`:
 
 ```python
-D = image(x, RD(2))
+D = mesh(x, RD(2))
 sigma, tau = function(RT, "sigma"), function(RT, "tau")
 u, v, f = function(DG, "u"), function(DG, "v"), function(DG, "f")
 sigma_D, tau_D = (
@@ -232,7 +232,7 @@ real scalar space `M` for the Lamé parameters, both on `T`, and a real space
 `R` of constant matrices of value shape `(2,2)` with no domain.
 
 ```python
-D = image(x, RD(2))
+D = mesh(x, RD(2))
 one, zero, two = Integer(1), Integer(0), Integer(2)
 I = tensor((tensor((one, zero)), tensor((zero, one))))
 i, j, k, l, a = index("i"), index("j"), index("k"), index("l"), index("a")
@@ -316,7 +316,7 @@ function on `square` with vertex values `((0,0), (1,0), (0,1), (1,1))`:
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
 square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
-D = image(x, RD(2))
+D = mesh(x, RD(2))
 boundary = StaticTopology((I,), (((0, 1), (1, 3), (3, 2), (2, 0)),), ((("inside", square, 0),),))
 lower = StaticTopology((K,), (((0, 1, 2),),), ((("inside", square, 0),),))
 left = StaticTopology((I,), (((2, 0),),), ((("inside", square, 0),),))
