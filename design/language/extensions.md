@@ -36,7 +36,7 @@ of concrete core classes (see [Leaves and subclassing](rules.md#leaves-and-subcl
 | Semantics | Its mathematical value |
 | Traversal | Expression operands distinguished from metadata |
 | Lowering, where one exists | A mathematically equal expression of core nodes |
-| Argument spaces, if nonempty | Action rules for each argument; dual arguments alone need no new node class |
+| Argument spaces, if nonempty | Full application rules; dual arguments alone need no new node class |
 
 #### Rule tables
 
@@ -80,8 +80,8 @@ as `Divergence` and `Curl` do for [Piola identities](geometry.md#pushforward).
   rewrites `Transpose(A)[i, j]` as `A[j, i]`. The table comes before the table
   of the core, which has a rule for every `Indexed`.
 
-[Shape derivatives](#shape-derivatives) give an example of an extension whose
-pass runs between two lowering stages.
+[Geometry-dependent reconstruction](#geometry-dependent-reconstruction) supplies
+library expressions or rules needed before core differentiation can proceed.
 
 ```{dropdown} Open: operator composition for preconditioning
 A linear preconditioner maps residuals in $V^\star$ to corrections in $V$.
@@ -187,23 +187,24 @@ A library selects rewrite rules and a strategy, with coverage determined by its
 output contract. For example, a compiler may reduce an `Indexed` of a
 `ComponentTensor` using [substitution and binding](evaluation.md#substitution-and-binding).
 
-### Shape derivatives
+### Geometry-dependent reconstruction
 
-> A language extension, not a rule of the core.
+Libraries may reconstruct independent coefficient data $c$ as $R(x)c$ on a
+fixed reference cell, then apply a spatial mapping. Both operations contribute
+to geometry derivatives. This is a library composition, not a new core node.
 
-`ShapeDerivative(f, x, h)` is the derivative of $f$ when the coordinate function
-$x$ of a mesh `mesh(x, Q)` moves in the direction $h$ (see [A shape
-derivative](../examples/surfaces.md#a-shape-derivative)). The pass of the extension runs
-between two spatial-lowering stages, where $x$ occurs explicitly in the
-parameterisations of the cells, and lowers the node to `DirectionalDerivative(f,
-x, x, h)`, which holds the domains fixed. The extension recipe first exposes
-geometry while retaining its own nodes, applies shape differentiation, then
-re-enters `lower` to finish derivatives, resulting actions and spatial operations
-and check core normal form. The first stage is not a completed call to core
-`lower`, since extension nodes remain. A function on the topology keeps its
-values on the reference cell, so the function moves with the mesh.
+On an affine interval of length $L$, for example, physical Hermite endpoint
+slopes $m_0,m_1$ give reference slopes $L m_0,L m_1$. Holding physical degrees
+of freedom fixed differentiates these factors; holding reference slopes fixed
+defines a different field family.
 
-The direction is any direction that the core derivatives allow, an expression
-on the topology of value shape `(n,)` or a constant. With an argument as the
-direction, the Gateaux derivative gives the shape gradient. An ALE mesh is
-`mesh(x0 + d, Q)`.
+Reconstruction must expose geometry dependencies as symbolic operands or
+explicit derivative rules. Runtime arrays are not constant merely because a
+compiler supplies them. Opaque derivative results must declare dependencies
+needed by later derivatives, or those derivatives must be rejected.
+
+The [cell-read contract](forms.md#functions-in-a-space) permits evaluation of
+mesh-dependent spaces but does not supply differentiable reconstruction.
+Geometry differentiation uses `DirectionalDerivative`; see
+[Geometry dependence](geometry.md#geometry-dependence) and the
+[shape-derivative example](../examples/surfaces.md#a-shape-derivative).

@@ -30,7 +30,7 @@ through singularities.
 | [Construction free function](expressions.md#node-class-or-free-function) | A pure free function that may validate inputs and builds fixed expression compositions or canonical space descriptions. |
 | [Pass](#passes) | A pure free function that walks a graph after construction to compute a result or rewrite the graph. |
 | [Evaluation traversal](evaluation.md#evaluation-traversal) | A walk through expression operands, excluding dependencies stored in geometry, spaces and labels. |
-| [Free occurrence](evaluation.md#free-occurrences) | An occurrence of a name outside its binding scope, on the walk chosen by the operation. |
+| [Free occurrence](evaluation.md#free-occurrences) | An occurrence of a name outside its binding scope, on the walk chosen by the operation; construction dependencies govern capture and geometry-dependence checks. |
 | [Independence](evaluation.md#independence) | An operand's value is unchanged when the operation's target varies with other inputs fixed. |
 | [Domain-free expression](expressions.md#domain-free-expressions) | An expression with no spatial argument, interpreted as a constant field where a domain is required. |
 | [Grammar pattern](evaluation.md#grammars) | A structural condition on a node and objects within a bounded number of edges, independent of pass results. |
@@ -40,6 +40,7 @@ through singularities.
 | [Array rank](expressions.md#abstractexpression), or **rank** | The number of axes in an expression's value shape. |
 | [Arity](forms.md#argument-spaces) | The number of argument spaces of a form, counting a product-space argument once. |
 | [Structurally equal](#the-base-object-base) | Objects with the same class and equal construction arguments, as tested by `==`. |
+| Alpha-equivalent | Expressions differing only in consistent lexical renaming of bound names, with free names and independent parameter signatures preserved; distinct from structural equality. |
 | [Mathematically equal](#the-base-object-base) | Expressions denoting the same value, whether or not their graphs are structurally equal. |
 
 ## Scope
@@ -186,8 +187,12 @@ existing subclass instances. A subclass may narrow a property's return type.
 | ---- | ----------------------------- | ------------------------- |
 | Property | Returns stored or derived data; creates no objects | Derived objects may be built and stored during construction |
 | Constructor | Creates a node and computes derived data; does not simplify expressions | Checks constraints not established statically, as in rule 8 |
-| Construction free function | Builds a fixed composition from expression static types and documented interfaces of explicit non-expression arguments; does not inspect expression structure to choose a composition | Checks constraints not established statically, itself or through constructors; may inspect structure for validation only. Space factories apply canonical forms; `indexed`, `component`, `component_tensor` and `index_sum` apply their empty-index identities |
+| Construction free function | Builds a fixed composition from expression static types and documented interfaces of explicit non-expression arguments; does not inspect expression structure to choose a composition | Checks constraints not established statically, itself or through constructors; may inspect structure for validation only. Space factories apply canonical forms; `indexed`, `component`, `component_tensor` and `index_sum` apply their empty-index identities; `apply(f, ())` returns an arity-zero `f` |
 | Pass | After construction, inspects graph structure and returns information or a rewritten graph | Enforces its own preconditions; constructors validate nodes it builds. Space substitution preserves canonical forms |
+
+`replace`, `partial` and `rebind` are explicit scope-aware transformation passes,
+not construction factories. They may inspect declarations and traverse bodies
+under their documented substitution rules; none evaluates unrelated lazy nodes.
 
 Free functions and passes are pure. A class method immediately calls a free
 function. Constructor arguments are positional only; the type checker rejects

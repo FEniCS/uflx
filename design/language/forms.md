@@ -42,8 +42,14 @@ the concrete subclass defines the function on the cells:
 - For a coordinate domain, such as a reference cell, a function is a terminal
   that the concrete subclass evaluates.
 
+A geometry-dependent cell read must expose its coordinate dependencies or
+provide a derivative rule before geometry differentiation can proceed.
+Independent data and its transport are specified by the library
+[reconstruction](extensions.md#geometry-dependent-reconstruction); a mesh-bound
+space alone does not determine that transport.
+
 The library evaluates these cell reads and their reference derivatives,
-including at supplied reference positions. It also evaluates actions on
+including at supplied reference positions. It also evaluates applications of
 functional terminals and spatial transformations of their outputs. Core
 lowering leaves these reads for the library; it does not compute basis or
 coefficient values.
@@ -128,8 +134,8 @@ common scalar type of `V` and `U`. For fields `u` in `U` and `v` in `V`:
 
 ```python
 A = function(matrix_space(V, U), "A")
-load = action(A, 1, u)
-value = action(load, 0, conjugate(v))
+load = form(apply(A, (conjugate(v), u)), (conjugate(v),))
+value = apply(load, (conjugate(v),))
 ```
 
 `load` has argument spaces `(conjugate_space(V),)`; `value` has none and
@@ -144,8 +150,8 @@ The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functio
 
 A variational form abstracts an expression over functions to make a multilinear
 map. It binds functions as [`ComponentTensor`](expressions.md#componenttensor-and-indexsum)
-binds indices; an action supplies an argument as [`Indexed`](expressions.md#indexed) supplies
-an index to an axis.
+binds indices; application supplies their values. Partial application selects explicit
+binders by identity, not by slot number.
 
 ### Argument spaces
 
@@ -253,8 +259,8 @@ element of `dual_space(conjugate_space(S))`. The core therefore fixes no
 convention on the argument in which a form is antilinear.
 
 For `l` with space `DualSpace(S)` and `w` in $S$, the pairing is
-`action(l, 0, conjugate(w))`: the argument space of `l` is conjugated, and
-[actions](#action) are linear in their arguments.
+`apply(l, (conjugate(w),))`: the argument space of `l` is conjugated, and
+[applications](#apply) are linear in their arguments.
 The library supplying `l` evaluates the pairing.
 
 #### The double dual
@@ -266,7 +272,7 @@ $$
 $$
 
 with the conjugation absent over real scalars. Thus
-`form(conjugate(action(l, 0, conjugate(u))), (conjugate(l),))`
+`form(conjugate(apply(l, (conjugate(u),))), (conjugate(l),))`
 represents $u$ in the double dual.
 
 Space membership and expression representation are separate. A
@@ -283,7 +289,7 @@ A function in a dual space pairs with a conjugated argument:
 
 ```python
 l = function(dual_space(V), "l")
-pairing = action(l, 0, conjugate(v))
+pairing = apply(l, (conjugate(v),))
 ```
 
 `l` has argument spaces `(conjugate_space(V),)`, and `pairing` is
@@ -305,7 +311,7 @@ For a product of spaces, the argument is a tuple:
 
 ```python
 m = function(dual_space((V, Q)), "m")
-pairing_mixed = action(m, 0, (conjugate(v), conjugate(q)))
+pairing_mixed = apply(m, ((conjugate(v), conjugate(q)),))
 ```
 
 `m` has argument spaces `((conjugate_space(V), conjugate_space(Q)),)`.
@@ -332,9 +338,9 @@ The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in
 | Free function                 | `form(expression, arguments)`                                                                                                                                                                      |
 | Takes                         | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]` |
 | Properties                    | `expression`, an expression, and `arguments`, a `tuple` of entries, each a [function](#function) `v`, the [conjugate](expressions.md#conjugate) `conjugate(v)` of a function, or a `tuple` of at least two of these |
-| Requires                      | Every function in `arguments` distinct and [bindable](#bindable-functions) |
+| Requires                      | Every function in `arguments` distinct and [bindable](#bindable-functions); no bound function occurs free in any resulting argument space, including inherited slots |
 | Static type                   | That of the expression, with the argument spaces of the expression followed by the space $V$ of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
-| Raises                        | `ValueError` for a conjugated expression that is not a function, a repeated or non-bindable function, or a `tuple` of fewer than two members |
+| Raises                        | `ValueError` for a conjugated expression that is not a function, a repeated or non-bindable function, a `tuple` of fewer than two members, or an argument space depending on a bound function |
 
 An entry's binder index is its index in `arguments`; its argument position
 is the arity of `expression` plus that index. An entry `v` declares
@@ -356,9 +362,18 @@ flattens `Form(Form(e, a), b)` into `Form(e, a + b)`, because products of forms
 would require argument reordering. Assembly reads argument order from the
 static type.
 
+A form may depend nonlinearly on free parameters while remaining multilinear
+in its declared arguments: mathematically, $a(x;v,u)$. Geometry $x$ can be such
+a parameter without occupying an argument slot. Argument-space independence
+is checked through construction dependencies, including domains and maps;
+labels are opaque. It applies also to slots inherited from `expression`.
+Spaces may depend on free geometry parameters, but differentiation in such a
+parameter requires the fixed-space representation described under
+[geometry dependence](geometry.md#geometry-dependence).
+
 A dual argument accepts a terminal load or a symbolic form with the same
 functional signature. Substituting a symbolic form into a pairing creates
-an action on that form (see [Applying actions](evaluation.md#applying-actions)).
+an application of that form (see [Expanding applications](evaluation.md#expanding-applications)).
 
 Tuple arguments express mixed problems without mixed spaces. Their members may
 have different value shapes and domains, such as a Raviart–Thomas field and a
@@ -419,102 +434,130 @@ construct known derivative forms directly with `Form`.
 In legacy UFL, the arguments of a form are the test functions and the trial functions in the integrand, with the argument numbers of the functions, and a form is not an expression. In UFLx, a function has no argument number, the form states the arguments, and a functional is any expression with the argument spaces `()`. The legacy UFL `MixedElement` and `split` are an argument that is a `tuple` of functions.
 ```
 
-### `Action`
+### `Apply`
 
-`Action` gives an expression to one argument of a form.
+`Apply` supplies every ordered argument of a multilinear expression, including
+sums and nested forms.
 
-| `Action(f, position, g)` |                                                                                                                                                        |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Extends                  | `AbstractExpression` |
-| Free function            | `action(f, position, g)`                                                                                                                               |
-| Takes                    | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]` |
-| Properties               | `form` $f$, `position`, an `int`, and `argument`, the expression $g$, or a `tuple` of expressions |
-| Requires                 | `0 <= position < len(f.argument_spaces)` and the conditions below |
-| Static type              | That of $f$, with the free indices of $f$ followed by those of $g$, each `Index` taken once, and the argument spaces of $f$ without the entry at `position` |
+| `Apply(f, arguments)` | |
+| -------------------- | - |
+| Extends | `AbstractExpression` |
+| Free function | `apply(f, arguments)` |
+| Takes | `f: AbstractExpression`, `arguments: tuple[AbstractExpression \| tuple[AbstractExpression, ...], ...]` |
+| Properties | `form` $f$ and `arguments`, the ordered tuple of supplied values |
+| Requires | `len(arguments) == len(f.argument_spaces) > 0`; each supplied value admissible for the corresponding space below |
+| Returns | `f` for `apply(f, ())` when `f.argument_spaces == ()`, otherwise `Apply(f, arguments)` |
+| Static type | The value shape, scalar type and domain of $f$; no argument spaces; the free indices of $f$ followed by those of all supplied values, each `Index` taken once |
+| Raises | `ValueError` for an incorrect argument count, inadmissible value or conflicting free-index extents |
 
-| Argument space at `position` | Admissible $g$ |
-| ---------------------------- | -------------- |
+#### Admissible argument values
+
+| Argument space | Admissible value $g$ |
+| -------------- | ------------------- |
 | $V$ | Same value shape and argument spaces as a function in $V$; its scalar type or real; its domain or no domain |
 | `ConjugateSpace(V)` | The conjugate type of an admissible value for $V$, including argument spaces; supplies the value of `conjugate(v)` |
 | Tuple of spaces | A tuple with one admissible member per space |
 
-An index free in both $f$ and $g$ must have the same extent in both.
+A product-space argument occupies one slot. Free indices give families of
+applications. Admissibility checks static signatures, not discrete-space
+membership. Real values enter complex arguments by complex embedding before
+substitution, member by member.
 
-Free indices in $g$ give a family of actions, one per index value. For a
-`tuple` $g$, its free indices are those of its members.
+For `Form(e, entries)`, the first `len(e.argument_spaces)` values supply
+inherited slots. Substitute the remaining values simultaneously for `entries`,
+then apply the resulting body to the inherited values. For a conjugated entry,
+substitute the conjugate value for its function. Internal binders freshen to
+avoid capture; supplied values are never substituted into one another.
 
-An admissible real value for a complex argument is interpreted in that
-argument's complex scalar type. Evaluation makes this embedding explicit
-before substitution (see [Type compatibility of rewrites](evaluation.md#type-compatibility-of-rewrites)).
+Applications distribute over compatible sums and split across products by
+operand arity. Libraries evaluate terminal applications. To leave slots open
+on an arbitrary map, bind fresh functions around its full application:
 
-Let $p$ be `position` and $n$ the arity of $e$. The value of
-`Action(Form(e, arguments), p, g)` is determined by the argument's position:
+```python
+load = form(apply(A, (conjugate(v), u)), (conjugate(v),))
+```
 
-| Position | Value |
-| -------- | ----- |
-| $p < n$ | `Form(Action(e, p, g), arguments)` |
-| $p \ge n$ | Remove argument entry $p-n$ and substitute $g$ for it in $e$; bind the remaining entries in `Form`, or return $e$ if none remain |
-
-Substitution renames a remaining bound function if it is free in $g$ (see
-[Substitution and binding](evaluation.md#substitution-and-binding)). For `conjugate(v)`,
-substitute `conjugate(g)` for `v`: $g$ is the value of the entry, making the
-action linear in $g$ at every position. For a tuple entry, substitute the
-members of $g$ simultaneously for the matching members.
-
-Actions on other forms follow by linearity. An action on a terminal is
-defined by its library, for each value of the free indices of $g$. It may
-leave argument slots open; further actions remain nested, with positions
-counted among the remaining slots. The library evaluates these partial or
-complete applications. A dual pairing is the one-slot case.
-
-Spatial differentiation and pull-back transform the output of a form, keeping
-the supplied argument fixed:
+Spatial differentiation and pull-back transform the output, preserving the
+supplied arguments:
 
 | Expression | Value |
 | ---------- | ----- |
-| `gradient(action(A, p, g), P)` | `action(gradient(A, P), p, g)` |
-| `pull_back(action(A, p, g), psi)` | `action(pull_back(A, psi), p, g)` |
+| `gradient(apply(A, G), P)` | `apply(gradient(A, P), G)` |
+| `pull_back(apply(A, G), psi)` | `apply(pull_back(A, psi), G)` |
 
-The transformed form retains its argument spaces. For $A(g) = a g$,
-$(\nabla A)(g) = \nabla(a g)$, including the derivative of $g$.
+Here `G` is the complete argument tuple. For $A(g)=a g$,
+$(\nabla A)(g)=\nabla(a g)$, including the spatial derivative of $g$.
 
-A dual argument may receive a symbolic form. With `P` from the
-[`DualSpace`](#dualspace) example and scalar fields `f`, `w` in `V` on `D`:
+### Partial application
 
-```python
-L = form(integral(f * conjugate(w), D), (conjugate(w),))
-transferred = action(P, 0, L)
-```
+`partial` supplies selected entries of an explicit outer `Form` by simultaneous
+substitution. It is a transformation pass, not a lazy node.
 
-Its value is `form(integral(f * conjugate(v), D), (conjugate(v),))`.
-For a conjugated dual binder, the same substitution rule applies: supplying
-`conjugate(L)` for `conjugate(l)` substitutes `L` for `l`, in value.
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `partial(F, mapping)` | | `F: Form`, `mapping: dict` | The form with selected outer entries supplied, or its body when none remain |
 
-#### Examples
+Keys must be complete entries of `F.arguments`, including conjugation and
+tuple grouping; values satisfy [argument admissibility](#admissible-argument-values).
+Inherited slots and inner binders are not selectors. Other expression types,
+including sums, are rejected; use `apply` instead.
 
-For scalar functions `u`, `v` and `w` in `V` on `D`, set:
+Retained entries keep their order and identities. If a retained function
+occurs free in any supplied value under the construction walk, raise
+`ValueError`; explicitly `rebind` it first. Internal binders may freshen.
+Conjugation and promotion follow `Apply`. An empty mapping returns `F`;
+supplying every outer entry returns the body, including any inherited slots.
+
+The result keeps `F`'s value shape, scalar type and domain. Its slots are the
+inherited slots followed by retained entries. Combine the free indices of `F`
+and all supplied values, requiring matching extents. Complete the body's type
+before rebuilding the binder, retaining indices even from unused values.
 
 ```python
 F = form(integral(u * v, D), (v, u))
-M = form(integral(u * conjugate(v), D), (conjugate(v), u))
+partial(F, {u: w})                 # form(integral(w * v, D), (v,))
+partial(F, {u: v})                 # ValueError: retained-argument capture
+partial(rebind(F, {v: p}), {u: v})  # form(integral(v * p, D), (p,))
+apply(F, (w, p))                   # integral(p * w, D)
 ```
 
-| Action | Value |
-| ------ | ----- |
-| `action(F, 1, w)` | `form(integral(w * v, D), (v,))` |
-| `action(F, 1, v)` | `form(integral(v * v_fresh, D), (v_fresh,))`, renaming the binder to keep the supplied `v` free |
-| `action(M, 0, conjugate(w))` | `form(integral(u * conjugate(w), D), (u,))` |
+For `stokes = form(e, ((v, q), (u, p)))`,
+`partial(stokes, {(u, p): (w, r)})` supplies one complete product-space entry.
 
-Actions distribute over compatible sums. `action(F, 1, directions[k])`
-retains the free index `k`. For `stokes = form(e, ((v, q), (u, p)))`,
-`action(stokes, 1, (w, r))` supplies both members of the second argument
-and leaves a linear form in `(v, q)`.
+### Rebinding
+
+`rebind` simultaneously renames declarations and their bound occurrences.
+It is a transformation pass; it preserves the bound map.
+
+| Free function | Overload | Takes | Returns |
+| ------------- | -------- | ----- | ------- |
+| `rebind(b, mapping)` | | `b: Form \| ComponentTensor \| IndexSum`, `mapping: dict` | The binder with selected declarations renamed |
+
+For `Form`, keys and values are complete argument entries; preserve order,
+grouping, member spaces and conjugation. For index binders, keys are declared
+indices and values are indices; preserve extents. Renaming respects lexical
+scope. Swaps are allowed; internal binders may freshen to prevent capture.
+
+Raise `ValueError` for unknown declarations, changed signatures, duplicate
+resulting names, or targets free in the original binder under the construction
+walk. Unsupported binders are Python type errors. An empty mapping returns `b`.
+
+Rebinding preserves alpha-equivalence: corresponding bound occurrences refer
+to the same lexical declarations, with free names and parameter signatures
+unchanged. It does not change structural equality, interning or structural keys:
+differently named binders need not compare equal. Dependent parameter types
+are not identified by alpha-renaming.
+
+`replace` substitutes free data; `rebind` renames declarations; `partial`
+supplies declared arguments. None overloads Python `()`.
 
 ```{dropdown} Legacy UFL
-Legacy UFL operations are actions and rebindings. The action on the last argument of a bilinear form is `action(f, 1, w)`. The adjoint of `form(e, (conjugate(v), u))` is `form(conjugate(e), (conjugate(u), v))`, because `conjugate(e)` is linear in `v` and antilinear in `u`. The Gateaux derivative with respect to a function adds an argument (see [Gateaux derivative](#gateaux-derivative)).
+The action on the trial argument of an explicit bilinear form becomes
+`partial(F, {u: w})`. Full evaluation uses `apply(F, (v_value, u_value))`.
+The adjoint of `form(e, (conjugate(v), u))` is
+`form(conjugate(e), (conjugate(u), v))`. A Gateaux derivative adds a direction
+argument, as described below.
 ```
-
-Worked examples for this chapter: [the Laplace-Beltrami operator](../examples/surfaces.md#the-laplace-beltrami-operator), [the flux through a surface](../examples/surfaces.md#the-flux-through-a-surface), [Helmholtz with a perfectly matched layer](../examples/forms.md#helmholtz-with-a-perfectly-matched-layer), [mixed Poisson with Raviart-Thomas elements](../examples/forms.md#mixed-poisson-with-raviart-thomas-elements), [dual-weighted residual error estimation](../examples/estimation.md#dual-weighted-residual-error-estimation), [a classic FEniCS layer for the Poisson problem](../examples/forms.md#a-classic-fenics-layer-for-the-poisson-problem).
 
 ### Gateaux derivative
 
@@ -529,7 +572,7 @@ argument $w$ after the arguments of $F$. It composes `Form` and
 The variable $x$ is a [bindable function](#bindable-functions), or a tuple of
 at least two distinct bindable functions. The point $a$ and entry $w$ match
 its tuple structure and length. Member by member, $a$ is an admissible value
-for the space of $x$ as in [`Action`](#action), and the function underlying
+for the space of $x$ as in [argument admissibility](#admissible-argument-values), and the function underlying
 $w$ belongs to that space. The functions of $w$ are distinct, none is free
 in $F$ or $a$, and tuple members of $w$ are either all plain functions or all
 conjugates. Shared free indices of $F$ and the points have matching extents.

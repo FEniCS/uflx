@@ -46,7 +46,7 @@ may depend on symbolic coefficients, deformation fields or scalar parameters,
 but have no free indices. Construction and reconstruction enforce this rule.
 A solver may evaluate a form for different coordinate values or manage several
 meshes outside the language. Shape differentiation does not require an indexed
-mesh (see [Shape derivatives](extensions.md#shape-derivatives)).
+mesh (see [Geometry dependence](#geometry-dependence)).
 
 Deformed surfaces, isogeometric patches and analytic maps are meshes of
 coordinate functions. Continuity across cells is a property of the space of
@@ -279,7 +279,8 @@ $$
 $$
 
 with $\varepsilon$ real and $f[x := s]$ the substitution of $s$ for free
-occurrences of $x$ in $f$ under the [value walk](evaluation.md#free-occurrences). The
+occurrences of $x$ in a compatible fixed-space representation of $f$, with
+its geometry dependence exposed as described [below](#geometry-dependence). The
 variable $x$ is a function or a `tuple` of functions. For a `tuple`, $a$ and $h$
 are `tuple`s with one member for each member of $x$, and the substitution
 replaces every member $x_k$ by $a_k + \varepsilon h_k$ at once. The functions of
@@ -291,7 +292,7 @@ binding](evaluation.md#substitution-and-binding)).
 | Extends                          | `AbstractExpression` |
 | Takes                            | `f: AbstractExpression`, `x: Function \| tuple[Function, ...]`, `a, h: AbstractExpression \| tuple[AbstractExpression, ...]` |
 | Properties                       | `expression` $f$, `variable` $x$, `point` $a$ and `direction` $h$ |
-| Requires                         | $x$ a [bindable function](forms.md#bindable-functions), or a `tuple` of at least two distinct bindable functions; member by member, $a$ and $h$ admissible values for the space of $x$ as in [`Action`](forms.md#action) |
+| Requires                         | $x$ a [bindable function](forms.md#bindable-functions), or a `tuple` of at least two distinct bindable functions; member by member, $a$ and $h$ admissible values for the space of $x$ as in [argument admissibility](forms.md#admissible-argument-values); variable spaces independent of all variable members |
 | Static type                      | The value shape of $f$, the free indices of $f$ followed by those of the members of $a$ and $h$, each `Index` taken once, and the argument spaces and the scalar type of $f$ |
 | Raises                           | `ValueError` if another requirement fails |
 
@@ -308,10 +309,6 @@ directions for a complex variable use the complex embedding of
 A dual function may be a variable. Its point and direction may be symbolic
 forms with the same functional signature; differentiation preserves the
 argument spaces of the expression being differentiated.
-
-The substitution does not enter domains, so the derivative holds the geometry
-fixed. A shape derivative, with respect to the coordinates of a mesh, is a
-language extension (see [Shape derivatives](extensions.md#shape-derivatives)).
 
 A real-linear differential is assumed. The gradient of a direction with no
 domain is zero, so the derivative with respect to a function `u` in a constant
@@ -335,6 +332,39 @@ d = directional_derivative(u * u, u, a, directions[i])
 `d` has free index `i` and value `Integer(2) * a * directions[i]`. Tensor derivatives
 use families of unit directions; the directions specify any symmetry. See
 [Hyperelasticity and the stress](../examples/forms.md#hyperelasticity-and-the-stress).
+
+#### Geometry dependence
+
+Differentiation counts dependencies through domains, maps, spaces and library
+reconstruction, holding independent field data fixed. Before applying ordinary
+chain rules, expose dependent geometry on fixed reference domains or use an
+explicit library derivative rule. Independent geometry needs no lowering.
+See [Geometry preparation](evaluation.md#geometry-preparation).
+
+Variable spaces must be independent of the variables. The differentiated
+expression requires a fixed input signature and output domain compatible with
+its declared type. A valid form whose argument spaces depend on free geometry
+must first be expressed on fixed data spaces. A field on a moving domain
+requires an explicit identification, such as a pull-back to a reference domain.
+Differentiation chooses no implicit transport or interpolation.
+
+Libraries must expose geometry-dependent reconstruction as symbolic operands
+or derivative rules, including basis and coefficient transformations. Hidden
+runtime dependencies violate this contract. Missing reconstruction or derivative
+rules raise `ValueError` identifying the unresolved dependency, never a silent
+zero derivative.
+
+Topology, connectivity, index extents and discrete element choices remain fixed.
+Derivatives assume admissible, differentiable geometry; topology changes and
+singular or nonsmooth configurations are excluded.
+
+#### Nested differentiation
+
+Resolve inner derivatives first, including their geometry dependence. Their
+points and directions lie outside the variable scope, so outer derivatives
+include those operands' free dependencies. Fixed-direction Hessians use
+independent direction functions. Mixed derivatives commute only under the
+required smoothness and fixed-direction hypotheses.
 
 ### `Integral`
 

@@ -17,7 +17,7 @@ reading order within each group at this renumbering. The
 | ---- | ---------- | ----------- |
 | SH01 | Every rewrite | For a valid input expression, a rewrite preserves its mathematical value and [binding](#substitution-and-binding) and must have a [compatible type](#type-compatibility-of-rewrites). It need not preserve floating-point results or simplify algebra. The [mathematical admissibility](rules.md#mathematical-admissibility) convention applies. Zero times an undefined value remains undefined. |
 
-The lazy nodes are `Action`, `DirectionalDerivative`, mesh `Integral`,
+The lazy nodes are `Apply`, `DirectionalDerivative`, mesh `Integral`,
 `PullBack`, `Gradient`, `Divergence`, `Curl` and `PushForward`. They store
 operations to evaluate later.
 
@@ -82,20 +82,20 @@ results.
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
 | SH07 | Result before type completion | The raw result must already have the required shape and argument spaces, matching extents for retained indices and no extra free indices. A real `e` requires a real result. A row giving zero uses `z`; this is what the tables mean by zero with the type of an expression. |
-| SH08 | Promotion and completion order | `Action` and `DirectionalDerivative` also promote real values before substitution for complex functions, member by member for tuples; `replace` does not. Promotion must precede evaluation of, for example, a square root at a negative real point. Index completion must precede rebuilding a binder. |
+| SH08 | Promotion and completion order | `Apply`, `partial` and `DirectionalDerivative` promote real values before substitution for complex functions, member by member for tuples; `replace` does not. Promotion precedes evaluation, for example of a square root at a negative real point. Index completion precedes rebuilding a binder. |
 
 ### Evaluation traversal
 
 | Rule | Dependency | Evaluation |
 | ---- | ---------- | ---------- |
-| SH09 | Root and value operands | Visit recursively in construction order; tuples member by member, including both `Action` operands |
+| SH09 | Root and value operands | Visit recursively in construction order; tuples member by member, including the form and all supplied arguments of `Apply` |
 | SH10 | Binding declarations; non-expression `Base` objects | Do not visit |
 | SH11 | Domains, maps, spaces, indices and labels | May inspect, but do not traverse or modify stored expressions |
 | SH12 | Expressions exposed by a rule | Visit as separate roots; includes newly built map parameterisations |
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
-| SH13 | Prepared geometry | Geometry is *prepared* when it satisfies core expressions, actions expanded, derivatives expanded and mesh integrals expanded. Reference recipes require the supplier to prepare geometry before exposing it. Constructors do not require this; another strategy may process unprepared geometry with suitable rules. |
+| SH13 | Prepared geometry | Geometry is *prepared* when it satisfies core expressions, applications expanded, derivatives expanded and mesh integrals expanded. Reference recipes require the supplier to prepare geometry before exposing it. Constructors do not require this; another strategy may process unprepared geometry with suitable rules. |
 
 Normal-form checks visit these same nodes. Stored dependencies are checked
 separately when needed; labels need no lowering. Substitution follows more
@@ -117,7 +117,7 @@ conditions, produces expressions in its output grammar. A rule guarantees only
 its own replacement and what it preserves. Extensions must define grammars
 and rules for their nodes before those nodes can be lowered to core expressions.
 
-The form layer contains every `Action` and every node with nonempty argument
+The form layer contains every `Apply` and every node with nonempty argument
 spaces. The integrand layer contains all other nodes. A contract may restrict
 these separately. A `Function` can satisfy core normal form even if its stored
 parameterisation contains a reducible gradient. That parameterisation is checked
@@ -128,7 +128,7 @@ separately when exposed.
 | Contract | Required representation |
 | -------- | ----------------------- |
 | Core expressions | Structurally valid concrete core nodes and downstream terminals |
-| Actions expanded | Every `Action` applies a `Function`, downstream terminal, `Gradient`, `PullBack` or another retained `Action` |
+| Applications expanded | Every `Apply` applies a `Function`, downstream terminal, `Gradient` or `PullBack` |
 | Derivatives expanded | No `DirectionalDerivative` |
 | Mesh integrals expanded | No `Integral` over a `Mesh` |
 | Gradients expanded | Every remaining `Gradient`, `Divergence` and `Curl` is allowed by [The core normal form](#the-core-normal-form) |
@@ -168,27 +168,27 @@ The reference recipes use the checks below.
 | Rule | Operation or question | Meaning or check |
 | ---- | --------------------- | ---------------- |
 | SH14 | Mathematical independence | Varying the operation's target leaves the operand's value unchanged, with other inputs fixed, wherever the expressions are defined |
-| SH15 | Directional differentiation with variable $x$ | No member of $x$ occurs free in the operand under the value walk SB22; a single function counts as one member |
+| SH15 | Directional differentiation with variable $x$ | After geometry preparation D21–D23, no member of $x$ occurs free in the operand under the value walk SB22; a single function counts as one member. This check alone must not discard a construction dependency. |
 | SH16 | Spatial differentiation on $P$ | The operand has domain `None`; interpret it on $P$ by [Domain-free expressions](expressions.md#domain-free-expressions) |
-| SH17 | `Action(f, p, g)` | Each unchanged expression operand contributes none of the selected argument slot, according to the node's argument-space definition. Slots are identified by position, not by equality of spaces. Binding declarations and fixed non-expression data do not contribute slots. |
+| SH17 | `Apply(f, G)` | Each unchanged expression operand has no argument slots, according to the node's argument-space definition. Ordered slots determine how `G` is distributed; equality of spaces never identifies slots. Binding declarations and fixed non-expression data do not contribute slots. |
 | SH18 | Stronger independence checks | A strategy may use an explicit analysis proving SH14. Reference recipes use SH15–SH17 only. Failure of a check means independence is unknown, not that dependence is proved. Any constant replacement must preserve mathematical admissibility and type. |
 
 | Example | Consequence |
 | ------- | ----------- |
 | `u - u` | Still contains a free `u`; cancellation requires a separate proof or rewrite |
 | `integral(u, P)` | Has no spatial domain, but a free `u` remains for directional differentiation |
-| Two argument slots with the same space | Remain distinct slots for an action |
+| Two argument slots with the same space | Remain distinct slots for an application |
 
 ### Commuting rules
 
 Differentiating a sum gives a sum of derivatives. This and the other commuting
 rules use SH15–SH17 for unchanged expression operands. Binding declarations
-and fixed non-expression data are not differentiated. Specific rules take
+and non-expression data can be held fixed only after the derivative dependency check D21–D23. Specific rules take
 precedence. Rename bound names where needed to avoid capturing names in inserted operands (see [Substitution and binding](#substitution-and-binding)).
 
 The commuting rows are grouped under [Structural rules](#structural-rules)
 and [Linearity](#linearity). Directional differentiation uses a real parameter
-and holds domains fixed. `RealPart` and `ImaginaryPart` have no argument spaces.
+; geometry dependence is handled by D21–D23 before commuting. `RealPart` and `ImaginaryPart` have no argument spaces.
 
 ## Substitution and binding
 
@@ -203,12 +203,13 @@ rules for two walks, chosen by the operation.
 | Rule | Walk or condition | Definition |
 | ---- | ----------------- | ---------- |
 | SB20 | Free occurrence of a name | Encounter a structurally equal name on the chosen walk with no enclosing binder binding it in that operand. Binding declarations do not themselves count as free occurrences. Names mentioned only in labels do not count. |
-| SB21 | Construction walk, used by substitution | Follow construction dependencies, including those stored in domains, maps and spaces, respecting the scopes SB02–SB04. Label reconstruction follows [Derived indices](expressions.md#derived-indices), but label contents add no free occurrences. |
-| SB22 | Value walk, used by directional differentiation | Follow expression value operands SB01, respecting SB02–SB04. A `Function` contributes itself; do not enter its space or label. Do not enter domains, maps or other stored non-expression dependencies. |
+| SB21 | Construction walk, used by substitution and capture checks | Follow construction dependencies, including domains, maps, spaces and the spaces of declared functions, respecting SB02–SB04. A declaration is not a free use of its own name; its space dependencies remain free. Label reconstruction follows [Derived indices](expressions.md#derived-indices), but label contents add no free occurrences. |
+| SB22 | Value walk, used after differentiation dependencies are exposed | Follow expression value operands SB01 and index operands, respecting SB02–SB04. A `Function` contributes itself; do not enter its space or label. Do not enter domains, maps or other non-expression dependencies. |
 
 Tuples are walked member by member. A name may be bound in one operand and
 free in another. Unless stated otherwise, substitution and capture avoidance
-use the construction walk; directional differentiation uses the value walk.
+use the construction walk. Directional differentiation uses it to detect
+hidden dependence before using the value walk on the prepared expression.
 
 | Example | Free occurrences |
 | ------- | ---------------- |
@@ -287,17 +288,19 @@ In these examples, `j` is a fresh index.
 
 ### Applying forms and preserving binding
 
-An action supplies a value for a form's argument. These rules cover explicit
-forms and binding during actions, derivatives and pull-backs.
+An application supplies every argument of a form. These rules cover explicit
+forms and binding during applications, derivatives and pull-backs. The separate
+`partial` operation follows the retained-name rejection rule in
+[Partial application](forms.md#partial-application).
 
-| Rule | Form $f$ | Rewrite of `Action(f, p, g)` |
+| Rule | Form $f$ | Rewrite of `Apply(f, G)` |
 | --- | --- | --- |
-| SB16 | `Form(e, arguments)`, $p \ge n$ with $n =$ `len(e.argument_spaces)` | Remove entry $p-n$, leaving `others`. Substitute $g$ for that entry in $e$, obtaining `e_new`; for `conjugate(v)`, substitute `conjugate(g)` for `v`, and for tuple entries substitute member by member simultaneously. Return `Form(e_new, others)`, or `e_new` if no entries remain. Preserve binding by SB07–SB14. |
+| SB16 | `Form(e, entries)`, with $n=$ `len(e.argument_spaces)` | In `Apply(Form(e, entries), G)`, substitute `G[n:]` for `entries` simultaneously in `e`, yielding `e_new`, then return `apply(e_new, G[:n])`. For a conjugated entry substitute the conjugate value for its function; handle product-space members simultaneously. Promote before substitution and preserve binding by SB07–SB14. Inserted values are not substituted into one another. |
 
 | Rule | Applies to | Requirement |
 | --- | --- | --- |
-| SB17 | Binding during action substitution | Substitution preserves all enclosing and inserted binders. In particular, commuting through `DirectionalDerivative` makes its variable fresh for `g`; occurrences in `g` are not differentiated. |
-| SB18 | Derivative substitution | For `DirectionalDerivative(b, x, a, h)`, match original operands before substituting `[x := a]` into undifferentiated operands; insert `h` unchanged. This substitution holds domains, maps and function spaces fixed, as specified by [DirectionalDerivative](geometry.md#directionalderivative). |
+| SB17 | Binding during application | Preserve enclosing and inserted binders. Before commuting an application through a derivative or index binder, make its bound names fresh for every supplied value; inserted values are not captured or differentiated by that inner operation. |
+| SB18 | Derivative substitution | After D21–D23, for `DirectionalDerivative(b, x, a, h)`, match original operands before substituting `[x := a]` into undifferentiated value operands; insert `h` unchanged. Remaining domains, maps and spaces must be independent of $x$ or handled by an explicit derivative rule. |
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
@@ -310,33 +313,32 @@ another rule or library. Commuting uses the shared conditions above.
 
 | Rule | Node class | Operands | Operations that commute |
 | --- | --- | --- | --- |
-| ST01 | `Indexed`, `ComponentTensor`, `IndexSum`, `BroadcastTo`, `Form`, `DirectionalDerivative`; for `Action` on a `Form`, require $p<n$, where $n =$ `len(e.argument_spaces)`; nested derivatives follow D13 | The expression operand (`value` for `BroadcastTo`, `f` for `DirectionalDerivative`, `e` for `Form`) | `Action`, `DirectionalDerivative`, spatial partial derivative |
+| ST01 | `Indexed`, `ComponentTensor`, `IndexSum`, `BroadcastTo`, `Form`, `DirectionalDerivative`; full application of a `Form` uses SB16 instead; nested derivatives follow D13 | The expression operand (`value` for `BroadcastTo`, `f` for `DirectionalDerivative`, `e` for `Form`) | `Apply`, `DirectionalDerivative`, spatial partial derivative |
 
-| Rule | Form $f$ | Rewrite of `Action(f, p, g)` |
+| Rule | Form $f$ | Rewrite of `Apply(f, G)` |
 | --- | --- | --- |
-| ST02 | `Product(a, b)`, with $n$ the arity of $a$ | `Product(Action(a, p, g), b)` for $p < n$, otherwise `Product(a, Action(b, p - n, g))` |
+| ST02 | `Product(a, b)`, with $n$ the arity of $a$ | `Product(apply(a, G[:n]), apply(b, G[n:]))` |
 | ST03 | `Gradient`, `PullBack` | Remains; the operation transforms the form's output |
 | ST04 | `Function` or a downstream terminal | Remains, for the supplying library |
-| ST05 | `Action` | Remains, as a further application of a remaining action |
-| ST06 | A core expression with `argument_spaces == ()` | No valid `Action` can select an argument position |
+| ST06 | An expression with `argument_spaces == ()` | `apply(f, ())` returns `f`; an `Apply` node requires at least one slot |
 
 | Rule | Expression or operation | Rewrite |
 | --- | --- | --- |
-| ST07 | `Gradient(Action(B, p, g), P)` | `Action(Gradient(B, P), p, g)` |
+| ST07 | `Gradient(Apply(B, G), P)` | `Apply(Gradient(B, P), G)` |
 | ST12 | `Gradient(b, P)`, $b$ with a domain and either a terminal, `Gradient`, `PushForward`, node matching CC06 or CC07, or `PullBack` by a cell or `SideMap`; exclude `Coordinate(P)` when $P$ has its ambient dimension | Retain the whole gradient unchanged |
-| ST08 | `Gradient(f, P)`, $f$ not an `Action` and the gradient does not match ST12 | `component_tensor(∂_j f[A], A + (j,))`, using the component rules selected by [Applying gradients](#applying-gradients) |
+| ST08 | `Gradient(f, P)`, $f$ not an `Apply` and the gradient does not match ST12 | `component_tensor(∂_j f[A], A + (j,))`, using the component rules selected by [Applying gradients](#applying-gradients) |
 | ST09 | $\partial_j b$, with `Gradient(b, P)` matching ST12 | `component_tensor(gradient(b, P)[B + (j,)], B)`, with one derived index in `B` per value axis of $b$; ST12 retains the introduced gradient |
-| ST10 | $\partial_j$ `Action(B, p, g)` | `Action(∂_j B, p, g)`, with $g$ unchanged |
+| ST10 | $\partial_j$ `Apply(B, G)` | `Apply(∂_j B, G)`, with every supplied value unchanged |
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
-| ST11 | `Action(A, p, g)` | `Action(PullBack(A, ψ), p, g)`, with $g$ unchanged |
+| ST11 | `Apply(A, G)` | `Apply(PullBack(A, ψ), G)`, with every supplied value unchanged |
 
 Gradient reconstruction uses derived indices $A$ and $j$, with one index in
 $A$ per value axis of $f$. Empty lists use the factory identities. The supplying
 library evaluates remaining terminal gradients. Downstream terminals may declare
 argument spaces, for example for assembled vectors or matrices; their libraries
-evaluate the remaining actions.
+evaluate the remaining applications.
 
 ### Tensor arithmetic components
 
@@ -352,6 +354,9 @@ Choose fresh names under SB07–SB14; operand free indices remain free.
 | ST15 | `Product(a, b)`, scalar `b` | `component_tensor(Product(a[K], b), K)` |
 | ST16 | `Division(a, b)` | `component_tensor(Division(a[K], b), K)` |
 
+ST05 (retained nested positional application) is retired: full `Apply` has no
+remaining argument slots.
+
 ## Linearity
 
 These rows apply only to the listed operations and operands, under the shared
@@ -360,15 +365,15 @@ for its components. Conjugation uses a real differentiation parameter.
 
 | Rule | Node class | Operands | Operations that commute |
 | --- | --- | --- | --- |
-| L01 | `Sum`, `Tensor` | Every operand | `Action`, `DirectionalDerivative`, spatial partial derivative |
-| L02 | `Division` | The numerator | `Action`, `DirectionalDerivative`, spatial partial derivative |
-| L03 | `Gradient`, `Divergence`, `Curl`, `PushForward`, `PullBack`, `Integral` | The expression | `DirectionalDerivative`; also `Action` except on `Gradient` or `PullBack` (ST03) |
+| L01 | `Sum`, `Tensor` | Every operand | `Apply`, `DirectionalDerivative`, spatial partial derivative |
+| L02 | `Division` | The numerator | `Apply`, `DirectionalDerivative`, spatial partial derivative |
+| L03 | `Gradient`, `Divergence`, `Curl`, `PushForward`, `PullBack`, `Integral` | The expression | `DirectionalDerivative`; also `Apply` except on `Gradient` or `PullBack` (ST03) |
 | L04 | `Conjugate`, `RealPart`, `ImaginaryPart` | The expression | `DirectionalDerivative`, spatial partial derivative |
 
-| Rule | Form $f$ | Rewrite of `Action(f, p, g)` |
+| Rule | Form $f$ | Rewrite of `Apply(f, G)` |
 | --- | --- | --- |
-| L05 | `Conjugate(e)` | `conjugate(action(e, p, conjugate(g)))`, with conjugation member by member for a `tuple` $g$ |
-| L07 | `Zero` | Zero with the type of the action |
+| L05 | `Conjugate(e)` | `conjugate(apply(e, conjugated_G))`, where `conjugated_G` conjugates every supplied member, preserving the tuple grouping of `G` |
+| L07 | `Zero` | Zero with the type of the application |
 
 | Rule | Expression $f$ | Rewrite of the derivative at $a$ |
 | --- | --- | --- |
@@ -412,15 +417,32 @@ bases where differentiable. Results are core expressions.
 
 ### Directional derivatives
 
+#### Geometry preparation
+
+Check construction dependencies before selecting constant or commuting rules.
+Prepare the derivative's body, preserving its type under SH02–SH04; its
+variable declaration, point and direction are not preparation targets.
+
+| Rule | Condition | Requirement |
+| ---- | --------- | ----------- |
+| D21 | Inner derivatives remain | Resolve them inside out, each with its own variable, point and direction |
+| D22 | A variable occurs in a non-value dependency | Expose the dependence through integral expansion, spatial mapping and library reconstruction, or use an explicit derivative rule. Recheck exposed expressions; independent geometry needs no expansion. |
+| D23 | Dependence remains unresolved or no compatible fixed-space representation is supplied | Raise `ValueError` identifying the dependency. Neither infer independence from value operands alone nor choose implicit transport. |
+
+Preparation uses the spatial strategies below, resolving newly exposed
+derivatives by the same procedure. Prepared-geometry and progress requirements
+apply; local algebraic rules do not invoke whole passes. Library derivative
+rules must retain dependencies needed by later derivatives or reject them.
+
 | Rule | Expression $f$ | Rewrite of the derivative at $a$ |
 | --- | --- | --- |
 | D11 | $f=x$ for a single function, or $f=x_k$ for a tuple variable | $h$ for a single function, or $h_k$ for the matching tuple member |
-| D12 | `Action(b, p, g)` | `Action(Db, p, g) + Action(b, p, Dg)`, with undifferentiated operands evaluated at $a$ |
-| D13 | `DirectionalDerivative` | Defer until the inner derivative is expanded |
+| D12 | `Apply(b, G)` | `apply(Db, G_at)` plus one `apply(b_at, G_at_with_Dg)` per slot: replace just that slot of `G_at` by its derivative. Differentiate tuple-valued slots member by member. Here `b_at` and `G_at` are evaluated at $a$; inserted directions remain unchanged. |
+| D13 | `DirectionalDerivative` | Resolve the inner derivative, including D21–D23, before differentiating its result. Its point and direction are outside its variable scope, so their free dependencies participate in the outer derivative. |
 
 | Rule | Applies to | Requirement |
 | --- | --- | --- |
-| D15 | Dependence on the derivative variable | Use the directional independence check SH15 and value walk SB22. Tuple variables vary member by member, including occurrences under conjugation. Dual directions and substitution points may be symbolic forms whose actions the recipe evaluates. |
+| D15 | Dependence on the derivative variable | First use the construction walk to detect dependencies, including geometry and spaces; apply D21–D23 before SH15 and SB22. Tuple variables vary simultaneously, including under conjugation. Dual points and directions may be symbolic forms whose applications the recipe evaluates. |
 
 For real scalar functions `u` and `a` in a space of constants,
 `directional_derivative(u * u, u, a, u)` rewrites to `u * a + a * u`.
@@ -449,7 +471,7 @@ the substitution rules; restrictions and transformation laws have their own grou
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
-| PB01 | $f$ with no domain, neither an `Action` nor a `Form` | The same spatially constant value $f$ under [Domain-free expressions](expressions.md#domain-free-expressions), with [type completion](#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
+| PB01 | $f$ with no domain, neither an `Apply` nor a `Form` | The same spatially constant value $f$ under [Domain-free expressions](expressions.md#domain-free-expressions), with [type completion](#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
 | PB02 | `Coordinate(Q)`; exclude R01 | The parameterisation of $\psi$ |
 | PB03 | `PullBack(g, φ)`, φ a `SideMap` or a cell; exclude R01 and R02 | Remains, so a pull-back nests only inside a read on a cell |
 | PB04 | `PullBack(g, φ)`, φ a `DomainMap`; exclude R01 | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](geometry.md#pullback)) |
@@ -519,7 +541,7 @@ Cell maps retain explicit selection; unselected side restrictions remain.
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
-| R01 | $\psi$ a `SideMap`, $f$ with a domain and neither an `Action` nor a `Form` | Remains until a pull-back by a cell of $P$ |
+| R01 | $\psi$ a `SideMap`, $f$ with a domain and neither an `Apply` nor a `Form` | Remains until a pull-back by a cell of $P$ |
 | R02 | `PullBack(g, SideMap(X, Y, s))`, $\psi$ = `cell_map(Y, i, q)` | `PullBack(PullBack(g, B_selected), A_selected)` |
 | R03 | `Normal(SideMap(D, E, s))`, $\psi$ = `cell_map(E, i, q)`; the cell Jacobian has full column rank and $w \ne 0$ | $w / \lvert w \rvert$, with $w$ defined in [The pull-back of Normal](geometry.md#the-pull-back-of-normal) |
 
@@ -570,7 +592,7 @@ selected by another strategy.
 These rules apply to the reference recipes. Retention is a rule result, not a
 permanent annotation on a node.
 
-| Rule | Event | Required action |
+| Rule | Event | Required application |
 | ---- | ----- | --------------- |
 | SH19 | Visit a node | Process its value operands in construction order under SH09–SH11, then rebuild if they changed and select a rule for the resulting node |
 | SH20 | A rule replaces a node | Apply type completion, then process the replacement, including its root and any new or changed subexpressions that this recipe handles. Reuse already processed, structurally unchanged subexpressions. Substitution itself still follows SB13. |
@@ -584,14 +606,14 @@ around a gradient must be reconsidered if a later gradient pass changes that
 operand into arithmetic. A recipe may revisit an unchanged retained node in a
 later round, but its retention rule returns it unchanged without new indices.
 
-### Applying actions
+### Expanding applications
 
-| `apply_actions(f)` |  |
+| `expand_applications(f)` |  |
 | ------------------ | - |
-| Evaluates          | `Action` |
+| Evaluates          | `Apply` |
 | Input contract     | Core expressions |
-| Output contract    | Actions expanded |
-| Strategy | SH19–SH23; inner actions first; first matching rule; process new actions, including those exposed by substitution |
+| Output contract    | Applications expanded |
+| Strategy | SH19–SH23; inner applications first; first matching rule; process new applications, including those exposed by substitution |
 
 | Selection | Rules |
 | --------- | ----- |
@@ -599,24 +621,24 @@ later round, but its retention rule returns it unchanged without new indices.
 | Conjugation and products | L05, ST02 |
 | Keep spatially transformed forms | ST03 |
 | Commute into operands | L01, ST01, L02–L03 |
-| Zero and remaining applications | L07, ST04–ST06 |
+| Zero and remaining applications | L07, ST04, ST06 |
 | Binding | SB01–SB15, SB17, SB20–SB21 |
 
 ### Applying derivatives
 
 | `apply_derivatives(f)` |  |
 | ---------------------- | - |
-| Evaluates              | `DirectionalDerivative` and actions created by its evaluation |
-| Input contract         | Core expressions; actions expanded |
-| Output contract        | Actions and derivatives expanded |
-| Strategy | SH19–SH23; inner derivatives first; first matching rule; process new derivatives and run `apply_actions` on exposed actions, then reconsider changed ancestors |
+| Evaluates              | `DirectionalDerivative` and applications created by its evaluation |
+| Input contract         | Core expressions; applications expanded |
+| Output contract        | Applications and derivatives expanded |
+| Strategy | SH19–SH23; inner derivatives first; prepare each derivative body under D21–D23 before algebraic rules; first matching rule; process new derivatives and run `expand_applications` on exposed applications, then reconsider changed ancestors |
 
 | Selection | Rules |
 | --------- | ----- |
-| Substitution and dependence | SB18, D15, SH15, SB20, SB22 |
+| Geometry preparation and inner derivatives | D21–D23, D13 |
+| Substitution and dependence | SB18, D15, SH15, SB20–SB22 |
 | Independent expression | L10 |
-| Variable and action derivatives | D11–D12 |
-| Defer an inner derivative | D13 |
+| Variable and application derivatives | D11–D12 |
 | Derivative fallback | D01–D02, D19–D20, D03–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \mathrm{D} b$ |
 
 ### Expanding integrals
@@ -637,19 +659,19 @@ later round, but its retention rule returns it unchanged without new indices.
 | `apply_gradients(f)` |  |
 | -------------------- | - |
 | Evaluates            | `Gradient`, `Divergence` and `Curl` |
-| Input contract       | Core expressions; actions and derivatives expanded |
-| Output contract      | Actions, derivatives and gradients expanded |
-| Strategy | SH19–SH24; inner expressions first; first matching rule; resolve component derivatives and run `apply_actions` on exposed actions, then reconsider changed ancestors |
+| Input contract       | Core expressions; applications and derivatives expanded |
+| Output contract      | Applications, derivatives and gradients expanded |
+| Strategy | SH19–SH24; inner expressions first; first matching rule; resolve component derivatives and run `expand_applications` on exposed applications, then reconsider changed ancestors |
 
 | Selection | Rules |
 | --------- | ----- |
-| Move an action outside the gradient | ST07 |
+| Move an application outside the gradient | ST07 |
 | Keep Piola patterns and terminal or mapped gradients | CC06–CC07, ST12 |
 | Expand divergence and curl | D16 |
 | Reconstruct the gradient from components | ST08 |
 | Constants and coordinates | L11, D17 |
 | Keep terminal and mapped gradients | ST09 |
-| Chain rule and actions | CC01, ST10 |
+| Chain rule and applications | CC01, ST10 |
 | Derivative fallback | D01–D02, D19–D20, D03–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \partial_j b$ |
 
 Gradients exposed by pull-backs are processed in the next call to `apply_gradients`.
@@ -659,13 +681,13 @@ Gradients exposed by pull-backs are processed in the next call to `apply_gradien
 | `expand_pull_backs(f)` |  |
 | ---------------------- | - |
 | Evaluates              | `PullBack` |
-| Input contract         | Core expressions; actions and derivatives expanded; prepared geometry when exposed |
-| Output contract        | Actions, derivatives and pull-backs expanded |
-| Strategy | SH19–SH23; inner pull-backs first; first matching rule; process new pull-backs and run `apply_actions` on exposed actions. Leave new gradients to the next spatial round. |
+| Input contract         | Core expressions; applications and derivatives expanded; prepared geometry when exposed |
+| Output contract        | Applications, derivatives and pull-backs expanded |
+| Strategy | SH19–SH23; inner pull-backs first; first matching rule; process new pull-backs and run `expand_applications` on exposed applications. Leave new gradients to the next spatial round. |
 
 | Selection | Rules |
 | --------- | ----- |
-| Actions and binding | ST11, SB19 |
+| Applications and binding | ST11, SB19 |
 | Keep a side restriction | R01 |
 | Constants and coordinates | PB01–PB02 |
 | Select the cell on a side | R02 |
@@ -692,7 +714,7 @@ Gradients exposed by pull-backs are processed in the next call to `apply_gradien
 ## The core normal form
 
 The core normal form combines
-the core expressions, actions expanded, derivatives expanded, mesh integrals
+the core expressions, applications expanded, derivatives expanded, mesh integrals
 expanded, gradients expanded, pull-backs expanded and tensor arithmetic expanded
 contracts. The table lists the nodes allowed after `lower`.
 
@@ -707,19 +729,19 @@ contracts. The table lists the nodes allowed after `lower`.
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Gradient` | Matches ST12 |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `RD(0)` |
-| [Maps between domains](geometry.md#maps-between-domains) | `PullBack` | By a `SideMap` of an expression other than an `Action` or `Form`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
+| [Maps between domains](geometry.md#maps-between-domains) | `PullBack` | By a `SideMap` of an expression other than an `Apply` or `Form`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
 | [Fields and integration on a mesh](geometry.md#fields-and-integration-on-a-mesh) | `Normal` | Always |
 | [Fields and integration on a mesh](geometry.md#fields-and-integration-on-a-mesh) | `PushForward` | Under no pull-back by a cell |
 | [Function spaces](forms.md#function-spaces) | `Function` | Always |
 | [Variational forms](forms.md#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](forms.md#form)) |
-| [Variational forms](forms.md#variational-forms) | `Action` | Its form is a `Function`, a downstream terminal, a `Gradient`, a `PullBack` or another such `Action`, with each operand in the core normal form |
+| [Variational forms](forms.md#variational-forms) | `Apply` | Its form is a `Function`, a downstream terminal, a `Gradient`, or a `PullBack`, with each operand in the core normal form |
 | | A terminal of a downstream library | Always |
 
 The normal-form check follows the [evaluation traversal](#evaluation-traversal);
 it does not check stored geometry or labels.
 
 Assembly code receives the form layer (see [Grammars](#grammars)), including
-sums and products of forms, real and complex zeros, nested forms, and actions
+sums and products of forms, real and complex zeros, nested forms, and applications
 on supplied or spatially transformed forms. The static type gives the argument
 order (see [`Form`](forms.md#form)).
 
@@ -747,14 +769,16 @@ them in every integral that needs them.
 | Stable output violates core normal form | `ValueError`, identifying offending nodes |
 | A complete spatial round returns to an earlier state | `ValueError`; a cycle is not completion |
 
-It runs these passes in order.
+It runs these passes in order. `apply_derivatives` may selectively expand
+integrals and spatial mappings within a derivative body under D21–D23; the
+subsequent spatial stages finish the rest of the expression.
 
 | Recipe step | Required result |
 | ----------- | --------------- |
-| [`apply_actions`](#applying-actions) | Actions expanded |
-| [`apply_derivatives`](#applying-derivatives), including action cleanup | Actions and derivatives expanded |
+| [`expand_applications`](#expanding-applications) | Applications expanded |
+| [`apply_derivatives`](#applying-derivatives), including application cleanup | Applications and derivatives expanded |
 | [`expand_integrals`](#expanding-integrals) | Also mesh integrals expanded |
-| Repeat [`apply_gradients`](#applying-gradients), then [`expand_pull_backs`](#expanding-pull-backs), with action cleanup and reconsideration under SH19–SH24 | Stop under the conditions below |
+| Repeat [`apply_gradients`](#applying-gradients), then [`expand_pull_backs`](#expanding-pull-backs), with application cleanup and reconsideration under SH19–SH24 | Stop under the conditions below |
 | [`expand_arithmetic`](#expanding-tensor-arithmetic) | Core normal form |
 
 Compare states after complete spatial rounds using structural equality,
@@ -762,7 +786,7 @@ including bound names and labels. Fresh naming alone is not progress.
 
 | Round result | Next step |
 | ------------ | --------- |
-| Neither spatial pass nor action cleanup changed the expression; all contracts except tensor arithmetic expanded hold | Proceed to `expand_arithmetic` |
+| Neither spatial pass nor application cleanup changed the expression; all contracts except tensor arithmetic expanded hold | Proceed to `expand_arithmetic` |
 | Neither changed it; another core normal-form contract fails | Raise `ValueError` with the remaining offending nodes |
 | Some step changed it, but the final state equals an earlier round boundary | Report a cycle; do not treat it as an unchanged round |
 | Otherwise | Run the next round |
@@ -774,10 +798,10 @@ remove an operation, move it to operands, or stop at an explicit retained case.
 
 | Rule family | Progress |
 | ----------- | -------- |
-| Actions and directional derivatives | Apply or differentiate the current node, then process operations on its operands. An inner derivative is processed before an outer one. Retained actions are not expanded again. |
+| Applications and directional derivatives | Apply or differentiate the current node, then process operations on its operands. An inner derivative is processed before an outer one. Retained applications are not expanded again. |
 | Mesh integration | Replace a mesh integral by reference-cell integrals. Repeating the pass cannot expand those as mesh integrals. |
 | Gradient reconstruction | Apply ST08 only to a gradient outside ST12. Component rules descend through operands. ST09 introduces a gradient that matches ST12, so reconstruction cannot wrap it again. |
-| Action transport | ST07, ST10 and ST11 move actions outside spatial operations. ST03 prevents action expansion from reversing this move. |
+| Application transport | ST07, ST10 and ST11 move applications outside spatial operations. ST03 prevents application expansion from reversing this move. |
 | Pull-back algebra | Move a pull-back into operands, compose an existing map, or retain a read. Composition exposes the existing map's parameterisation for processing; it does not recreate the original map composition. |
 | Cell transport and Piola identities | Replace the matched cell pull-back by its transformation formula. New gradients are handled in the next spatial round and stop at ST12 where appropriate. |
 | Tensor arithmetic | ST13–ST16 replace a tensor arithmetic node by scalar arithmetic and index notation. They introduce no tensor arithmetic nodes. |
@@ -858,7 +882,7 @@ handled in the same way without capturing `k`.
 This does not make `square_root(Integer(-1))` a defined real value. Symbolic
 traversal under SH19 is distinct from evaluating an array member.
 
-#### Piola identity exposed by an action
+#### Piola identity exposed by an application
 
 Let `v` and `u` be vector functions on the topology of mesh `D`, with geometry
 independent of them. Set `m = transformation_law(("contravariant",), 1)`,
@@ -866,7 +890,7 @@ independent of them. Set `m = transformation_law(("contravariant",), 1)`,
 
 | Step | Result |
 | ---- | ------ |
-| Start with `pull_back(divergence(action(F, 0, u), D), ψ)` | The Piola pattern is hidden by the action |
+| Start with `pull_back(divergence(apply(F, (u,)), D), ψ)` | The Piola pattern is hidden by the application |
 | Apply SB16 | `pull_back(divergence(push_forward(u, D, m), D), ψ)` |
 | Apply CC06 | Retain the divergence until the cell pull-back is processed |
 | Apply CC08 | The reference-cell divergence of `û`, carried by `transformation_law((), 1)` |
@@ -890,6 +914,6 @@ matching cell pull-back.
 
 Other recipes may choose individual rules or rule families, provided their
 conditions hold and geometry is prepared as required. For example,
-[shape differentiation](extensions.md#shape-derivatives) lowers spatially before
-and after differentiation. Index-notation simplification, such as reducing an
+[geometry differentiation](geometry.md#geometry-dependence) may require spatial
+preparation before derivative evaluation and spatial cleanup afterwards. Index-notation simplification, such as reducing an
 `Indexed` of a `ComponentTensor`, remains a compiler operation.

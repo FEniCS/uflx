@@ -178,25 +178,25 @@ computed primal solution, `z` the enriched adjoint solution and `z_h` its
 interpolant into `V`, the estimator is:
 
 ```python
-R = L - action(a, 1, u_h)
-eta = action(R, 0, z - z_h)
+R = L - partial(a, {u: u_h})
+eta = apply(R, (z - z_h,))
 ```
 
-`R` has one argument in `V`. An action accepts any expression with the static
+`R` has one argument in `V`. An application accepts any expression with the static
 type of a function in `V`, so `z-z_h` from the richer space is allowed.
 Substitution into `push_forward(v, D, transformation_law(V))` retains the
 explicit law.
-Galerkin orthogonality makes the action on `z_h` zero in value; `eta` is a
+Galerkin orthogonality makes the application to `z_h` zero in value; `eta` is a
 functional, one number after assembly.
 
 An assembled load can also be represented in the dual space:
 
 ```python
 l = function(dual_space(V), "l")
-R_h = l - action(a, 1, u_h)
+R_h = l - partial(a, {u: u_h})
 ```
 
-The library evaluates actions on `l` as pairings with the assembled data.
+The library evaluates applications of `l` as pairings with the assembled data.
 For complex forms, constructing the adjoint also conjugates the expression.
 To obtain cell-wise indicators, integrate `R` by parts into the cell residual
 and facet jumps of the [Bank–Weiser example](#a-bank-weiser-error-estimator),

@@ -28,7 +28,7 @@ are in the class sections.
 | `Integral`                                       | Nothing composes to integrate over a coordinate domain, and over a mesh a pass must meet the integral as written |
 | `PullBack`                                       | Nothing composes to move an expression between domains                                                        |
 | `PushForward` | Represents a topology field on a mesh and retains its transformation law for cellwise lowering and Piola identities |
-| `Form`, `Action`                                 | Binding arguments and giving an expression to an argument are not compositions                                |
+| `Form`, `Apply`                                 | Binding arguments and fully applying a map are not compositions                                |
 
 ## Appendix: Class hierarchy
 
@@ -151,7 +151,7 @@ Extend `AbstractFunctionSpace`:
 
 Extend `AbstractExpression`:
 
-[`Form`](forms.md#form), [`Action`](forms.md#action).
+[`Form`](forms.md#form), [`Apply`](forms.md#apply).
 <!-- end generated: class-hierarchy -->
 
 ## Appendix: Free functions
@@ -269,7 +269,9 @@ Extend `AbstractExpression`:
 | [`conjugate_space(V)`](forms.md#conjugatespace)                 |          | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise |
 | [`dual_space(S)`](forms.md#dualspace)                           |          | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                        | `S.space` for a `DualSpace`, otherwise `DualSpace(S)`                                   |
 | [`form(expression, arguments)`](forms.md#form)                  |          | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`  | `Form`                                                                                  |
-| [`action(f, position, g)`](forms.md#action)                     |          | `f: AbstractExpression`, `position: int`, `g: AbstractExpression \| tuple[AbstractExpression, ...]`                    | `Action`                                                                                |
+| [`apply(f, arguments)`](forms.md#apply)                         |          | `f: AbstractExpression`, `arguments: tuple[AbstractExpression \| tuple[AbstractExpression, ...], ...]`                 | `f` for `apply(f, ())` when `f.argument_spaces == ()`, otherwise `Apply(f, arguments)`  |
+| [`partial(F, mapping)`](forms.md#partial-application)           |          | `F: Form`, `mapping: dict`                                                                                             | The form with selected outer entries supplied, or its body when none remain             |
+| [`rebind(b, mapping)`](forms.md#rebinding)                      |          | `b: Form \| ComponentTensor \| IndexSum`, `mapping: dict`                                                              | The binder with selected declarations renamed                                           |
 | [`gateaux_derivative(F, x, a, w)`](forms.md#gateaux-derivative) |          | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | The `Form` constructed below                                                            |
 
 ### Pass recipes
@@ -289,7 +291,7 @@ Extend `AbstractExpression`:
 
 This normative table gives the argument spaces of each node class. An operand
 not named in the argument spaces column must have the argument spaces `()`,
-except binders and functional values accepted by `Form`, `Action` and the
+except binders and functional values accepted by `Form`, `Apply` and the
 derivatives. Their signatures are checked by the respective class contracts
 and are not added to the enclosing expression's argument spaces.
 
@@ -312,7 +314,7 @@ and are not added to the enclosing expression's argument spaces.
 | `Normal`                                 | `()`                                                           |
 | `Function`                               | Those of the space                                             |
 | `Form`                                   | Those of the expression, followed by the space of each entry, conjugated for a `conjugate(v)` entry |
-| `Action`                                 | Those of the form without the entry at `position`              |
+| `Apply`                                 | `()`              |
 | `Gradient`, `Divergence`, `Curl`         | Those of the operand                                           |
 | `PushForward`                            | Those of the expression                                        |
 | `DirectionalDerivative`                  | Those of the expression                                        |
@@ -338,7 +340,7 @@ from the default rules of [Domain](expressions.md#domain) and [Scalar type](expr
 | `Function`               | The domain of the space, or none   | The scalar type of the space      |
 | `PushForward`            | The mesh $D$                       | The scalar type of the expression |
 | `Form`                   | The domain of the expression      | The scalar type of the expression |
-| `Action`                 | The domain of the form            | The scalar type of the form       |
+| `Apply`                 | The domain of the form            | The scalar type of the form       |
 
 ## Appendix: Summary
 
@@ -351,6 +353,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 43    |
 | Expression node classes         | 33    |
-| Free functions                  | 52    |
+| Free functions                  | 54    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

@@ -168,8 +168,7 @@ Shape differentiation must expose the geometry before differentiating.
 Let `T` be a triangle topology, `X` a real vector Lagrange space of degree 1
 and value shape `(2,)`, and `V` a real scalar Lagrange space, both on `T`.
 The solver supplies coordinate values for `x`.
-`shape_derivative` is the construction function of the
-[extension](../language/extensions.md#shape-derivatives):
+Use ordinary directional differentiation:
 
 ```python
 x, h, v = function(X, "x"), function(X, "h"), function(X, "v")
@@ -178,17 +177,13 @@ grad_u = gradient(push_forward(function(V, "u"), D, transformation_law(V)), D)
 i = index("i")
 energy = integral(index_sum(grad_u[i] * grad_u[i], (i,)), D)
 
-d_energy = shape_derivative(energy, x, h)
-g_energy = form(shape_derivative(energy, x, v), (v,))
+d_energy = directional_derivative(energy, x, x, h)
+g_energy = gateaux_derivative(energy, x, x, v)
 ```
 
 `d_energy` is the derivative in the fixed direction `h`; `g_energy` binds an
-argument and is the shape gradient. The extension runs in this order:
-
-1. Lower the form so `x` appears in Jacobians and densities.
-2. Replace `ShapeDerivative(g, x, h)` by `directional_derivative(g, x, x, h)`.
-3. Apply derivatives and lower again.
-
-Differentiating `energy` directly before step 1 gives `Zero`: `x` occurs only
-inside the domain, which substitution does not enter. The extension needs
-only the new node and this lowering rule; core differentiation does the rest.
+argument and is the shape gradient. Derivative evaluation exposes the geometry
+of the integral before applying ordinary derivative rules. The independent
+coefficient data of `u` stays fixed; the push-forward, gradients and density
+all contribute their coordinate dependence. An unresolved geometry dependency
+raises an error rather than yielding `Zero`.

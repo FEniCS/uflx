@@ -430,11 +430,12 @@ target sampling rule and basis.
 For a source field `u` in `U` and `l` in `dual_space(V)`, the dual pairing is:
 
 ```python
-B = form(action(l, 0, conjugate(interpolate(u, V))), (l, conjugate(u)))
+B = form(apply(l, (conjugate(interpolate(u, V)),)), (l, conjugate(u)))
 ```
 
 `B` has argument spaces `(dual_space(V), conjugate_space(U))`. Supplying a
-target load at position 0 gives its dual transfer to `U`. Supplying
-`conjugate(u0)` at position 1 leaves a linear functional of the target load.
+target load with `partial(B, {l: L})` gives its dual transfer to `U`.
+`partial(B, {conjugate(u): conjugate(u0)})` leaves a linear functional of
+the target load.
 Its conjugate represents `interpolate(u0, V)` through the double-dual
 identification; pointwise evaluation uses the interpolant itself.
