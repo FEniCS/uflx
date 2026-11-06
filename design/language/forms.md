@@ -195,10 +195,9 @@ arguments remain an open question.
 | Derived             | `domain`, `value_shape` and `scalar_type`, those of $V$; `argument_spaces`, those of $V$ with each space conjugated, member by member for a `tuple` |
 | Raises              | `ValueError` for a real $V$ or a `ConjugateSpace`  |
 
-$\bar V$ has the functions of $V$ with the conjugate scalar multiplication, so
-a function in $\bar V$ is the conjugate of a function in $V$, and a linear
-form on $\bar V$ is an antilinear form on $V$. The core uses $\bar V$ only as
-an argument space, to record that a form is antilinear in an argument. The conjugate
+A linear form on $\bar V$ is an antilinear form on $V$.
+The core uses $\bar V$ only as an argument space, to record that a form
+is antilinear in an argument. The conjugate
 of an argument space is `conjugate_space(V)` for a space $V$ and $V$ for
 `ConjugateSpace(V)`, so conjugating twice gives the space back (see
 [`Conjugate`](expressions.md#conjugate)).
@@ -214,10 +213,11 @@ preserving these canonical forms.
 ### `DualSpace`
 
 `DualSpace` is the space of bounded antilinear functionals on a space or a
-product of spaces. All spaces in the language are reflexive: the core
-identifies the double dual with the original space, but keeps a space
-and its dual distinct. A Riesz map between them requires a chosen inner
-product and belongs to the supplying library.
+product of spaces.
+
+Every space $V$ is assumed reflexive. The core identifies $V$ with its
+double dual by the canonical map defined
+[below](#the-double-dual).
 
 | `DualSpace(S)` | |
 | -------------- | - |
@@ -366,8 +366,9 @@ discontinuous field, or a boundary Lagrange multiplier. A library may assemble
 one system or separate blocks. A block retains one member of each argument
 and replaces the other members by `Zero`.
 
-The expression may have any value shape and domain. A form of a field is a
-linear operator; a form of integrals has no domain, even if its arguments do.
+The expression may have any value shape and domain. A field-valued form
+with one linear argument is a linear operator; a form of integrals has no
+domain, even if its arguments do.
 
 Let `u` and `v` be scalar functions in a space `V` on `D`:
 
@@ -556,7 +557,7 @@ The real differential in a direction $v$ is
 $\delta F[v]$ = `directional_derivative(F, x, a, v)`, with the members of a
 `tuple` variable substituted at once (see
 [`DirectionalDerivative`](geometry.md#directionalderivative)). $\delta F$ is
-real-linear in $v$. Write $h$ for the function underlying $w$, member by
+assumed real-linear in $v$. Write $h$ for the function underlying $w$, member by
 member for a tuple; for a plain entry, $h=w$. Construction uses
 `i_unit = Complex(Integer(0), Integer(1))` and binds the entry as follows:
 
