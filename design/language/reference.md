@@ -264,15 +264,14 @@ Extend `AbstractExpression`:
 
 ### Variational forms
 
-| Function                                                        | Overload | Takes                                                                                                                  | Returns                                                                                 |
-| --------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| [`conjugate_space(V)`](forms.md#conjugatespace)                 |          | `V: AbstractFunctionSpace`                                                                                             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise |
-| [`dual_space(S)`](forms.md#dualspace)                           |          | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                        | `S.space` for a `DualSpace`, otherwise `DualSpace(S)`                                   |
-| [`form(expression, arguments)`](forms.md#form)                  |          | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]`  | `Form`                                                                                  |
-| [`apply(f, arguments)`](forms.md#apply)                         |          | `f: AbstractExpression`, `arguments: tuple[AbstractExpression \| tuple[AbstractExpression, ...], ...]`                 | `f` for `apply(f, ())` when `f.argument_spaces == ()`, otherwise `Apply(f, arguments)`  |
-| [`partial(F, mapping)`](forms.md#partial-application)           |          | `F: Form`, `mapping: dict`                                                                                             | The form with selected outer entries supplied, or its body when none remain             |
-| [`rebind(b, mapping)`](forms.md#rebinding)                      |          | `b: Form \| ComponentTensor \| IndexSum`, `mapping: dict`                                                              | The binder with selected declarations renamed                                           |
-| [`gateaux_derivative(F, x, a, w)`](forms.md#gateaux-derivative) |          | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | The `Form` constructed below                                                            |
+| Function                                              | Overload | Takes                                                                                                                 | Returns                                                                                 |
+| ----------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| [`conjugate_space(V)`](forms.md#conjugatespace)       |          | `V: AbstractFunctionSpace`                                                                                            | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise |
+| [`dual_space(S)`](forms.md#dualspace)                 |          | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                       | `S.space` for a `DualSpace`, otherwise `DualSpace(S)`                                   |
+| [`form(expression, arguments)`](forms.md#form)        |          | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]` | `Form`                                                                                  |
+| [`apply(f, arguments)`](forms.md#apply)               |          | `f: AbstractExpression`, `arguments: tuple[AbstractExpression \| tuple[AbstractExpression, ...], ...]`                | `f` for `apply(f, ())` when `f.argument_spaces == ()`, otherwise `Apply(f, arguments)`  |
+| [`partial(F, mapping)`](forms.md#partial-application) |          | `F: Form`, `mapping: dict`                                                                                            | The form with selected outer entries supplied, or its body when none remain             |
+| [`rebind(b, mapping)`](forms.md#rebinding)            |          | `b: Form \| ComponentTensor \| IndexSum`, `mapping: dict`                                                             | The binder with selected declarations renamed                                           |
 
 ### Pass recipes
 
@@ -353,6 +352,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 43    |
 | Expression node classes         | 33    |
-| Free functions                  | 54    |
+| Free functions                  | 53    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

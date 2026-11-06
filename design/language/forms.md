@@ -157,7 +157,8 @@ binders by identity, not by slot number.
 
 Every expression derives a `tuple` of argument spaces in position order, or
 `()` for a non-form. Each entry is an `AbstractFunctionSpace` for one function,
-or a `tuple` of at least two spaces for a product-space argument.
+or a `tuple` of at least two spaces with one scalar type for a product-space
+argument. Different slots may have different scalar types.
 
 Arity counts argument spaces, not functions within each argument: a functional
 has arity 0, a linear form 1 and a bilinear form 2.
@@ -338,16 +339,17 @@ The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in
 | Free function                 | `form(expression, arguments)`                                                                                                                                                                      |
 | Takes                         | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]` |
 | Properties                    | `expression`, an expression, and `arguments`, a `tuple` of entries, each a [function](#function) `v`, the [conjugate](expressions.md#conjugate) `conjugate(v)` of a function, or a `tuple` of at least two of these |
-| Requires                      | Every function in `arguments` distinct and [bindable](#bindable-functions); no bound function occurs free in any resulting argument space, including inherited slots |
+| Requires                      | Every function in `arguments` distinct and [bindable](#bindable-functions); each tuple entry has one scalar type; no bound function occurs free in any resulting argument space, including inherited slots |
 | Static type                   | That of the expression, with the argument spaces of the expression followed by the space $V$ of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
-| Raises                        | `ValueError` for a conjugated expression that is not a function, a repeated or non-bindable function, a `tuple` of fewer than two members, or an argument space depending on a bound function |
+| Raises                        | `ValueError` for a conjugated expression that is not a function, a repeated or non-bindable function, a tuple with fewer than two members or mixed scalar types, or an argument space depending on a bound function |
 
 An entry's binder index is its index in `arguments`; its argument position
 is the arity of `expression` plus that index. An entry `v` declares
 linearity in `v`; `conjugate(v)` declares linearity in $\bar v$, hence
 antilinearity in `v`. They give the same argument space for a real space.
-A `tuple` entry declares joint linearity in its members, so a term may depend
-on only one member. The user is responsible for these declarations. Construction checks the
+A `tuple` entry declares joint linearity over its members' common scalar
+field, so a term may depend on only one member. Output scalar type does not
+determine argument linearity: a real argument may have a complex-valued output. The user is responsible for these declarations. Construction checks the
 structural requirements above; an optional [linearity check](#checking-linearity)
 may help diagnose mistakes.
 
@@ -357,7 +359,7 @@ argument in one form and fixed in another. Substitution renames bound functions
 to avoid capture (see [Substitution and binding](evaluation.md#substitution-and-binding)).
 
 The expression may itself be a form; new arguments follow its existing
-arguments, as in a [Gateaux derivative](#gateaux-derivative). No core pass
+arguments, as in a [derivative form](#derivative-forms). No core pass
 flattens `Form(Form(e, a), b)` into `Form(e, a + b)`, because products of forms
 would require argument reordering. Assembly reads argument order from the
 static type.
@@ -555,77 +557,69 @@ supplies declared arguments. None overloads Python `()`.
 The action on the trial argument of an explicit bilinear form becomes
 `partial(F, {u: w})`. Full evaluation uses `apply(F, (v_value, u_value))`.
 The adjoint of `form(e, (conjugate(v), u))` is
-`form(conjugate(e), (conjugate(u), v))`. A Gateaux derivative adds a direction
-argument, as described below.
+`form(conjugate(e), (conjugate(u), v))`. Derivative forms bind direction
+arguments, as described below.
 ```
 
-### Gateaux derivative
+### Derivative forms
 
-`gateaux_derivative(F, x, a, w)` constructs a derivative form, adding an
-argument $w$ after the arguments of $F$. It composes `Form` and
-`DirectionalDerivative` with tensor-aware arithmetic; it introduces no node class.
+`directional_derivative` gives the full real differential. Bind a fresh real
+direction to construct a derivative form:
 
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `gateaux_derivative(F, x, a, w)` | | `F: AbstractExpression`, `x: Function \| tuple`, `a: AbstractExpression \| tuple`, `w: Function \| Conjugate \| tuple` | The `Form` constructed below |
-
-The variable $x$ is a [bindable function](#bindable-functions), or a tuple of
-at least two distinct bindable functions. The point $a$ and entry $w$ match
-its tuple structure and length. Member by member, $a$ is an admissible value
-for the space of $x$ as in [argument admissibility](#admissible-argument-values), and the function underlying
-$w$ belongs to that space. The functions of $w$ are distinct, none is free
-in $F$ or $a$, and tuple members of $w$ are either all plain functions or all
-conjugates. Shared free indices of $F$ and the points have matching extents.
-
-The types of $F$, $x$, $a$ and $w$ are checked statically. Construction raises
-`ValueError` if a remaining structural requirement fails.
-It checks these requirements, not existence of the differential
-or holomorphicity. The resulting form has the value shape of $F$, the free
-indices of $F$ and $a$, and the argument spaces of $F$ followed by the space
-of entry $w$. Its scalar type is that of $F$ for real $x$, and complex for
-complex $x$.
-
-The members of a `tuple` $x$ have one scalar type, the scalar type of $x$.
-The linear and the antilinear parts below are defined only on a complex
-space, and the product of a real and a complex space is a real space, so a
-`tuple` that mixes the two is rejected.
-
-```{dropdown} Open: mixed real and complex tuples
-A complex state with a real unknown, such as a Lagrange multiplier, needs a
-mixed `tuple`. A convention could put the part in the real members into
-$J_+$. Until then, take the derivatives separately.
+```python
+J = form(directional_derivative(F, x, a, w), (w,))
 ```
 
-The real differential in a direction $v$ is
-$\delta F[v]$ = `directional_derivative(F, x, a, v)`, with the members of a
-`tuple` variable substituted at once (see
-[`DirectionalDerivative`](geometry.md#directionalderivative)). $\delta F$ is
-assumed real-linear in $v$. Write $h$ for the function underlying $w$, member by
-member for a tuple; for a plain entry, $h=w$. Construction uses
-`i_unit = Complex(Integer(0), Integer(1))` and binds the entry as follows:
+The new slot follows `F`'s existing slots. The direction must be admissible
+for `x` and fresh in `F` and `a` under the construction walk. Complex
+directions require the projections or real direction blocks below unless the
+differential already has the declared complex linearity.
 
-| Space and entry | Construction |
-| --------------- | ------------ |
-| A real space, either entry convention | `Form(δF[h], (w,))` |
-| A complex space, plain entry `w` | `Form(Integer(1) / Integer(2) * (δF[h] - i_unit * δF[i_unit * h]), (w,))` |
-| A complex space, conjugate entry `w` | `Form(Integer(1) / Integer(2) * (δF[h] + i_unit * δF[i_unit * h]), (w,))` |
+#### Complex and Wirtinger derivatives
 
-For a tuple direction, multiplication by `i_unit` is member by member. The
-complex bodies are respectively the linear part $J_+[h]$ and the antilinear
-part $J_-[h]$ of the real differential. Binding follows the ordinary scopes
-of `Form` and `DirectionalDerivative`; no separate derivative-form binding
-rule or evaluation pass is needed.
+For a complex variable, write $D[h]$ for its real differential at $a$. Its
+complex-linear and antilinear contributions are
 
-The decomposition $\delta F = J_+ + J_-$ is unique. If the differential
-is complex-linear, $J_- = 0$; if complex-antilinear, $J_+ = 0$.
-Recognising these cases during lowering is optional. Users who know the
-dependence may construct the corresponding forms directly.
+$$
+D_+[h]=\tfrac12(D[h]-iD[ih]),\qquad
+D_-[h]=\tfrac12(D[h]+iD[ih]).
+$$
 
-The derivative form binds $w$ after the arguments of $F$. An action on that
-new argument gives the selected differential part. For complex variables,
-recover the full real differential by acting on $J_+$ with $h$ and on $J_-$
-with $\overline h$, then adding the results. The two forms themselves have
-different argument spaces and cannot be added.
+They sum to $D[h]$. For $F:\mathbb C\to\mathbb C$, $D_+[h]=F_z h$ and
+$D_-[h]=F_{\bar z}\bar h$; setting $h=1$ gives the Wirtinger derivatives.
+For fields, the parts are operators. For holomorphic $F$, $D_-=0$ and
+$D_+[h]=F'(z)h$; construction does not check holomorphicity.
 
-See [Complex residuals and Hessians](../examples/forms.md#complex-residuals-and-hessians)
-for Wirtinger derivatives and Newton's method.
+Bind a fresh complex direction `h`:
+
+```python
+i = Complex(Integer(0), Integer(1))
+d = directional_derivative(F, z, a, h)
+di = directional_derivative(F, z, a, i * h)
+J_plus = form((d - i * di) / Integer(2), (h,))
+J_minus = form((d + i * di) / Integer(2), (conjugate(h),))
+```
+
+Recover the full differential by supplying `k` to the new `J_plus` slot and
+`conjugate(k)` to `J_minus`. Add their applications; the forms have different
+argument spaces. Each contribution may be complex even when their sum is real.
+For complex tuples, rotate every direction member by $i$. Library helpers may
+provide these compositions.
+
+#### Mixed real and complex variables
+
+Derivative variables may mix real and complex spaces; each point and direction
+member must be admissible for its variable. Form slots instead require one
+scalar type per tuple. Use separate blocks, without rotating real variables.
+For complex `z`, choose a fresh real direction `q` in a compatible library space:
+
+```python
+J_real = form(directional_derivative(F, z, a, q), (q,))
+J_imag = form(directional_derivative(F, z, a, i * q), (q,))
+```
+
+The slots are real; outputs may be complex. Real-variable derivatives add
+further blocks. For real matrices, apply `real_part` or `imaginary_part` to
+derivative bodies before binding real test and direction functions.
+
+See [Complex residuals and Hessians](../examples/forms.md#complex-residuals-and-hessians).

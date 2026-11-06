@@ -289,12 +289,12 @@ symmetrisation, replace `N` by `component_tensor(I[i, k] * I[j, l], (i, j))`.
 Cauchy stress `sigma` are fields on `D`, which the solver can interpolate or
 evaluate for output.
 
-The energy's Gateaux derivatives give the residual and tangent:
+Binding the energy's directional derivatives gives the residual and tangent:
 
 ```python
 Pi = integral(psi, D)
-residual = gateaux_derivative(Pi, u, u, v)
-tangent = gateaux_derivative(residual, u, u, w)
+residual = form(directional_derivative(Pi, u, u, v), (v,))
+tangent = form(directional_derivative(residual, u, u, w), (w,))
 ```
 
 Since `V` is real, the first derivative binds `v`; the second binds `w`
@@ -393,33 +393,30 @@ no gradient in this sketch: matching legacy behaviour would require a mesh
 and a correctly shaped `Zero`.
 
 Mixed-space helpers, `derivative` and interior-facet restriction syntax are
-not implemented here. They would collect tuple arguments, construct Gateaux
+not implemented here. They would collect tuple arguments, bind directional
 derivatives and pull back through named sides respectively. Boundary
 conditions, assembly and solving remain outside the language.
 
 ## Complex residuals and Hessians
 
-For a real functional $\Pi$ on a complex space $V$, the
-[Gateaux derivative](../language/forms.md#gateaux-derivative) with entry
-`conjugate(h)` selects $J_-$, the Wirtinger derivative
-$\partial\Pi/\partial\bar u$. It represents an element of `dual_space(V)`;
-subtracting a load gives a residual.
+For a real functional $\Pi$ on a complex space $V$, bind its
+[antilinear differential](../language/forms.md#complex-and-wirtinger-derivatives)
+$D_-[h]$ with `conjugate(h)` to obtain an element of `dual_space(V)`.
 
-A complex-linear residual, such as that of the Helmholtz equation, has only
-$J_+$. In general its Jacobian is the pair of forms $J_+$ and $J_-$. Newton's
-method solves
+For a residual $R$, let $J_+$ and $J_-$ be its Wirtinger blocks. Newton's method
+solves
 
 $$
-J_+\,\delta u + J_-\,\overline{\delta u} = -R,
+J_+\,\delta u + J_-\,\overline{\delta u} = -R.
 $$
 
-using an algorithm chosen by the solver. The two forms have different argument
-spaces; their actions, rather than the forms themselves, are added.
+Equivalently, use real direction blocks $(J_++J_-)p+i(J_+-J_-)q$ for
+$\delta u=p+iq$, adding real-variable blocks for mixed systems. Real and
+imaginary projections with real test functions give a real matrix.
 
-Differentiating a residual form gives a tangent form. Repeated Gateaux
-derivatives on a complex space select Wirtinger blocks. The real Hessian is
-symmetric when the functional is twice continuously differentiable; the graph
-does not record symmetry.
+Repeated differentiation gives higher derivatives; complex projection remains
+explicit. The real Hessian is symmetric for a twice continuously differentiable
+functional with independent directions; the graph does not record symmetry.
 
 ## Dual transfer through interpolation
 

@@ -278,14 +278,11 @@ $$
 \mathrm{D}(f, x, a, h) = \frac{d}{d\varepsilon} f[x := a + \varepsilon h] \Big|_{\varepsilon = 0},
 $$
 
-with $\varepsilon$ real and $f[x := s]$ the substitution of $s$ for free
-occurrences of $x$ in a compatible fixed-space representation of $f$, with
-its geometry dependence exposed as described [below](#geometry-dependence). The
-variable $x$ is a function or a `tuple` of functions. For a `tuple`, $a$ and $h$
-are `tuple`s with one member for each member of $x$, and the substitution
-replaces every member $x_k$ by $a_k + \varepsilon h_k$ at once. The functions of
-$x$ are bound in $f$ (see [Substitution and
-binding](evaluation.md#substitution-and-binding)).
+with $\varepsilon$ real. Substitute free occurrences of $x$ in a compatible
+fixed-space representation of $f$ with [geometry dependence](#geometry-dependence) exposed.
+For tuple variables, matching tuples $a$ and $h$ supply all replacements
+$x_k:=a_k+\varepsilon h_k$ simultaneously. Members may mix real and complex
+spaces. The functions of $x$ are bound in $f$, not in $a$ or $h$.
 
 | `DirectionalDerivative(f, x, a, h)` |                                                                                                       |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -300,25 +297,18 @@ binding](evaluation.md#substitution-and-binding)).
 | ------------- | -------- | ----- | ------- |
 | `directional_derivative(f, x, a, h)` | | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple` | `DirectionalDerivative(f, x, a, h)` |
 
-This is a partial derivative: substitution replaces only occurrences of $x$.
-The point $a$ need not be a function. A `tuple` variable differentiates jointly
-in its members, as for the unknowns of a mixed problem. Real points and
-directions for a complex variable use the complex embedding of
-[type compatibility](evaluation.md#type-compatibility-of-rewrites) before substitution.
+A real-linear differential is assumed, even for complex variables and
+directions. Real points and directions enter complex spaces by
+[complex embedding](evaluation.md#type-compatibility-of-rewrites).
+Dual variables accept symbolic forms with matching functional signatures.
 
-A dual function may be a variable. Its point and direction may be symbolic
-forms with the same functional signature; differentiation preserves the
-argument spaces of the expression being differentiated.
-
-A real-linear differential is assumed. The gradient of a direction with no
-domain is zero, so the derivative with respect to a function `u` in a constant
-direction holds `gradient(u, P)` fixed. A direction that is a function in the
-space of `u` gives the Gateaux derivative (see [Gateaux
-derivative](forms.md#gateaux-derivative)).
+This is the sole derivative primitive for function variables. Binding and
+complex projection give [derivative forms](forms.md#derivative-forms).
+A domainless direction has zero spatial gradient, so varying `u` along it
+leaves `gradient(u, P)` unchanged when `P` is independent of `u`.
 
 For `u`, `a` and `h` in a real scalar space of constants,
-`directional_derivative(u * u, u, a, h)` has the value $2 a h$. The variable
-is `u`, the evaluation point is `a`, and the direction is `h`.
+`directional_derivative(u * u, u, a, h)` has value $2 a h$.
 
 An indexed direction gives a family of derivatives. For scalar constants
 `h0` and `h1` in the same space:
