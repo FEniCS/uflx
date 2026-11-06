@@ -234,6 +234,13 @@ check, not a replacement for that attribute.
 | SB03 | [`Form(e, arguments)`](forms.md#form) | `e` | The functions of `arguments` | `e` and `arguments` |
 | SB04 | [`DirectionalDerivative(f, x, a, h)`](geometry.md#directionalderivative) | `f`, `a`, `h` | $x$ | $f$ and $x$ |
 
+These binders share the same lexical rules. Their ordered parameter signatures
+are function spaces or index extents. Renaming preserves those signatures.
+Declarations are not free uses of their names; their types still contribute
+dependencies.
+Alpha-equivalence compares lexical declarations and preserves free identities,
+regardless of whether a name is a function or an index.
+
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
 | SB05 | Substitution traversal | Use the construction walk SB21 and the binding scopes SB02–SB04. Rebuild derived labels under [Derived indices](expressions.md#derived-indices). Each pass states which operands it transforms. |
