@@ -409,9 +409,15 @@ Extensions can add derivative rules to either group.
 | D05 | `Absolute(b)` | $\operatorname{Re}(\bar b \, \delta b) / \lvert b \rvert$, with `real_part`, so the derivative is real |
 | D06 | `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
 | D07 | `Logarithm(b)` | $\delta b / b$ |
-| D08 | `Determinant(A)`, $A$ invertible | $\det(A)\sum_{i,j}(A^{-1})_{ij}\,\delta A_{ji}$, with `inverse`, `index_sum` and derived indices $i,j$ |
-| D09 | `Inverse(A)`, equal axis extents, including symbolic extents, and $A$ invertible | `-inverse(A) @ delta_A @ inverse(A)`, with `delta_A` = $\delta A$ |
+| D08 | `Determinant(A)`, shape `(n, n)` | $\sum_{i,j=0}^{n-1} C_{ij}(A)\,\delta A_{ij}$, with cofactors as defined below |
+| D09 | `Inverse(A)`, equal axis extents, and $A$ invertible | `-inverse(A) @ delta_A @ inverse(A)`, with `delta_A` = $\delta A$ |
 | D10 | `Inverse(A)`, $A$ real with shape `(n, k)`, $k<n$, and full column rank | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
+
+D08 uses $C_{ij}(A)=(-1)^{i+j}\det(A_{\widehat i,\widehat j})$, where the
+minor removes row $i$ and column $j$. For `n >= 2`, construct each minor
+with `Tensor` and integer component selections, and expand the finite sum
+with scalar addition and multiplication. For `n == 1`, the result is
+`delta_A[0, 0]`. For `n == 0`, it is zero with the type of the derivative.
 
 Literal values in D19 and D20 are compared exactly, including signed zero;
 `Complex` has that value when its imaginary part is zero. These cases apply

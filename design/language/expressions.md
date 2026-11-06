@@ -30,8 +30,8 @@ An `AbstractExtent` is not an expression. A concrete
 | Extends          | `Base`                               |
 | Defined by       | A subclass outside the core          |
 
-An `AbstractExtent` has no arithmetic and no ordering, so the rules of the
-core, which compare extents by equality, accept an `AbstractExtent` unchanged.
+An `AbstractExtent` has no arithmetic and no ordering. Rules that compare
+extents by equality accept an `AbstractExtent` unchanged.
 A concrete `AbstractExtent` stores the arguments that identify the extent, such
 as a label.
 
@@ -817,11 +817,8 @@ with more rows than columns.
 | Free function | `inverse(A)`                                                                            |
 | Takes         | `A: AbstractExpression` |
 | Properties    | `operand` $A$ |
-| Requires      | $A$ with value shape `(n, k)`; either `n == k`, or both extents are integers with `k < n` and $A$ is real |
+| Requires      | $A$ with value shape `(n, k)` for fixed nonnegative integers `n` and `k`, and argument spaces `()`; either `n == k`, or `k < n` and $A$ is real |
 | Static type   | Value shape `(k, n)`                                                                    |
-
-Equal extents establish the square case even when they are symbolic.
-Unequal extents must both be integers; symbolic extents cannot be ordered.
 
 `Inverse(A)` is the pseudo-inverse $A^+ = (A^T A)^{-1} A^T$ of a matrix $A$
 of matrix rank $k$, the left inverse of $A$ with $A^+ A$ the identity. For
@@ -858,16 +855,15 @@ J = tensor((tensor((one,)), tensor((one,))))
 | Free function | `determinant(A)` |
 | Takes | `A: AbstractExpression` |
 | Properties | `operand` $A$ |
-| Requires | Value shape `(n, n)` and argument spaces `()` |
+| Requires | Value shape `(n, n)` for a fixed nonnegative integer `n`, and argument spaces `()` |
 | Static type | Value shape `()` |
 | Raises | `ValueError` if a requirement fails |
 
-The extent $n$ may be an `int` or an `AbstractExtent`; the two axes must
-have equal extents. The empty determinant, of shape `(0, 0)`, has value 1.
+The empty determinant, of shape `(0, 0)`, has value 1.
 Domain, free indices and scalar type follow the operand.
 
 The node remains in the core normal form. The compiler chooses its evaluation,
 such as an explicit formula for a small matrix or a factorisation. The
-[derivative rule](evaluation.md#derivatives-of-the-node-classes) uses `Inverse`.
+[derivative rule](evaluation.md#derivatives-of-the-node-classes) uses cofactors.
 
 Worked examples for this chapter: [transpose](../examples/tensors.md#transpose), [tensor algebra](../examples/tensors.md#tensor-algebra).
