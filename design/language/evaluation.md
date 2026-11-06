@@ -9,7 +9,7 @@ the input pattern and its conditions, then the replacement or retained result. C
 recipe schedules are not numbered. New rules take new IDs; existing IDs are
 not renumbered or reused. The prefixes identify the groups below; numbers follow
 reading order within each group at this renumbering. The
-[renumbering record](rule-renumbering.md) maps the former IDs to these IDs.
+[renumbering record](../scratch/language/rule-renumbering.md) maps the former IDs to these IDs.
 
 ## Shared requirements
 

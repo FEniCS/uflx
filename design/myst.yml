@@ -31,13 +31,10 @@ project:
     - rule: reference-target-explicit
       severity: ignore
   exclude:
-    - functional-analysis.md
+    - scratch/**
     - build/**
-    - open_issues.md
-    - gaps.md
     - design.md
     - design_choices.md
-    - final_todos.md
     - passes_draft.md
     - coordinate_functions_draft.md
 site:
