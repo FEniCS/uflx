@@ -1,0 +1,18 @@
+\usepackage{fvextra}
+\fvset{breaklines=true,breakanywhere=true}
+\usepackage[most]{tcolorbox}
+% Frame code blocks; move short examples intact when the page is nearly full.
+% Longer blocks may split once there is room for at least eight lines.
+% Pandoc defines Shaded after the header and only for notes with code.
+\AtBeginDocument{%
+  \ifdefined\Shaded
+    \renewenvironment{Shaded}{%
+      \begin{tcolorbox}[breakable, enhanced, colback=black!3, colframe=black!25,
+        boxrule=0.4pt, arc=2pt, left=6pt, right=6pt, top=4pt, bottom=4pt,
+        before skip=8pt, after skip=8pt, lines before break=8]%
+    }{\end{tcolorbox}}%
+  \fi
+}
+% Wide reference tables fit better one size down.
+\usepackage{etoolbox}
+\AtBeginEnvironment{longtable}{\footnotesize}
