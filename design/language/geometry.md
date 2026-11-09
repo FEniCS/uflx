@@ -288,7 +288,9 @@ holds structurally (see [`PushForward`](#pushforward)).
 specified function variable and measures the first-order change in
 `expression`. `point` supplies the variable's value at which to differentiate;
 `direction` supplies its perturbation. Here a point is a value in the
-variable's function space, not a spatial location.
+variable's function space, not a spatial location. This is the *Gâteaux
+directional derivative*, taken with a real perturbation parameter. The node
+represents its value for the supplied direction.
 
 Writing $f$, $x$, $a$ and $h$ for these four arguments, its value is
 

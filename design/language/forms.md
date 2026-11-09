@@ -602,12 +602,18 @@ arguments, as described below.
 
 ### Derivative forms
 
-`directional_derivative` gives the full real differential. Bind a fresh real
-direction to construct a derivative form:
+`directional_derivative` gives the derivative in a supplied direction. When
+the differential is linear in that direction, binding a fresh real direction
+function constructs the corresponding derivative form:
 
 ```python
 J = form(directional_derivative(F, x, a, w), (w,))
 ```
+
+The form represents the map from a direction `w` to the derivative of `F`
+with respect to `x` at `a` in that direction. Declaring it as a form assumes
+linearity in `w`; existence of directional derivatives alone does not
+establish this.
 
 The new slot follows `F`'s existing slots. The direction must be admissible
 for `x` and fresh in `F` and `a` under the construction walk. Complex
