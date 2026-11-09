@@ -202,7 +202,7 @@ under their documented substitution rules; none evaluates unrelated lazy nodes.
 Free functions and passes are pure. A class method immediately calls a free
 function. Constructor arguments are positional only; the type checker rejects
 named arguments. Free functions may take named arguments, such as
-`domain_map(P=T, psi=psi, Q=EuclideanSpace(2))`.
+`domain_map(parameter_domain=T, parameterisation=psi, ambient_domain=EuclideanSpace(2))`.
 
 A stored property returns a construction argument; a derived property depends
 on the class and those arguments. Concrete classes inherit the derived

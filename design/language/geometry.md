@@ -4,10 +4,10 @@ A local cell configuration acquires physical geometry through a coordinate expre
 
 ```python
 # T describes one triangle slot; the package supplies its local data.
-Q = EuclideanSpace(2)                       # Ambient space: the plane.
-X = Lagrange(T, 1, (2,))         # Library-supplied space of coordinate functions.
-x = function(X, "x")            # Physical positions, with values supplied by the solver.
-D = mesh(x, Q)                  # Physical mesh; its topology comes from x.
+Q = EuclideanSpace(2)  # Ambient space: the plane.
+X = Lagrange(T, 1, (2,))  # Library-supplied space of coordinate functions.
+x = function(X, "x")  # Physical positions, with values supplied by the solver.
+D = mesh(x, Q)  # Physical mesh; its topology comes from x.
 ```
 
 Changing the coordinate expression can change the physical geometry while
@@ -22,25 +22,30 @@ The only metric is the ambient Euclidean metric, which defines the tangential
 
 ### `Mesh`
 
-`Mesh(x, Q)` is one physical local field domain, with coordinate expression $x$ on
-an `AbstractTopology` $T$ and ambient domain $Q$. Cells keep their identities
-when their physical coordinates coincide. The mesh stores no
+`Mesh(coordinate_function, ambient_domain)` gives a local cell configuration
+its physical geometry. `coordinate_function` supplies physical coordinates
+on the topology; `ambient_domain` is the coordinate domain containing them.
+Cells keep their identities when their physical coordinates coincide. The mesh stores no
 global connectivity or coordinate values. The package supplies the local data.
 Its finitely many cell slots describe one kernel configuration, not a runtime mesh.
 
-| `Mesh(x, Q)` | |
+| `Mesh(coordinate_function, ambient_domain)` | |
 | ------------ | - |
 | Extends | `AbstractDomain` |
-| Free function | `mesh(x, Q)` |
-| Takes | `x: AbstractExpression`, `Q: AbstractCoordinateDomain` |
-| Properties | `coordinate_function` $x$, and `ambient_domain` $Q$ |
-| Requires | $x$ with domain $T$, a topology whose cell types are reference cells; $x$ real, with value shape `(n,)` for the ambient coordinate dimension of $Q$, free indices `()` and argument spaces `()`; `T.dimension <= n` |
-| Derived | `topology` $T$ = `x.domain`, `dimension` = `T.dimension`, and `pieces`, below |
+| Free function | `mesh(coordinate_function, ambient_domain)` |
+| Takes | `coordinate_function: AbstractExpression`, `ambient_domain: AbstractCoordinateDomain` |
+| Properties | `coordinate_function`, the coordinate expression on the topology, and `ambient_domain`, the coordinate domain containing its physical points |
+| Requires | `coordinate_function` has a topology domain whose cell types are reference cells; it is real, has value shape `(n,)` with `n = ambient_domain.dimension`, and has free indices `()` and argument spaces `()`; `topology.dimension <= n` |
+| Derived | `topology` is `coordinate_function.domain`; `dimension` is `topology.dimension`; `pieces` gives the coordinate maps of the local cells, as described below |
 | Raises | `TypeError` if the coordinate expression has no topology domain, and `ValueError` if another requirement fails |
 
-`mesh(x, Q)` returns `Mesh(x, Q)`. The topology is determined by $x$ and is
-not a separate construction argument. Mesh identity depends on $x$ and $Q$;
-replacing the coordinates reconstructs the mesh from the new coordinates.
+The factory constructs the corresponding `Mesh` directly. The topology is
+determined by `coordinate_function`; it is not a separate construction
+argument. Mesh identity depends on both stored properties. Replacing the
+coordinates reconstructs the mesh from the new coordinates.
+
+In the descriptions below, `D = mesh(x, Q)`, `x` is the coordinate expression,
+`Q` is its ambient domain, and `T = x.domain` is its topology.
 
 A mesh describes one geometry, not an indexed family of geometries. Coordinates
 may depend on symbolic coefficients, deformation fields or scalar parameters,
@@ -130,16 +135,16 @@ In legacy UFL, a `Mesh` is `mesh(x, Q)` for the coordinate element of `x`, and `
 `Coordinate` maps each point of a domain to its coordinates in the ambient
 coordinate domain. It is a terminal.
 
-| `Coordinate(P)` |                                                    |
+| `Coordinate(domain)` |                                                    |
 | --------------- | -------------------------------------------------- |
 | Extends         | `AbstractExpression` |
-| Free function   | `coordinate(P)`                                    |
-| Takes           | `P: AbstractDomain` |
-| Properties      | `domain`, an `AbstractDomain` $P$                  |
-| Static type     | Value shape `(n,)`, real, the domain $P$          |
+| Free function   | `coordinate(domain)`                                    |
+| Takes           | `domain: AbstractDomain` |
+| Properties | `domain`, the domain whose point coordinates are read |
+| Static type | Value shape `(n,)`, real, with domain `domain`; `n` is the dimension of its ambient coordinate domain |
 
-$n$ is the dimension of the ambient coordinate domain of $P$. For a
-coordinate domain $P$, the coordinate function is the identity,
+Let $P$ denote `domain` and $n$ its ambient coordinate dimension. On a
+coordinate domain, the coordinate function is the identity,
 $X : P \to R^n$, $X(p) = p$, and the gradient of $X$ is the identity matrix
 (see [`Gradient`](#gradient)).
 
@@ -154,29 +159,31 @@ For example, `coordinate(EuclideanSpace(3))` has value shape `(3,)` and domain `
 
 ### Valid pair
 
-An expression and a domain $(f, P)$ are a valid pair if $P$ is an
-[`AbstractDomain`](topology.md#abstractdomain) and $f$ has the domain $P$ or no domain.
-The type of $P$ is checked statically; construction raises `ValueError` if
-the domains do not match. For $f$ with no domain, use the
-[constant-field interpretation](expressions.md#domain-free-expressions) on $P$.
+An `expression` and a `domain` are a valid pair when `domain` is an
+[`AbstractDomain`](topology.md#abstractdomain), and `expression.domain` is
+`domain` or `None`. The domain's type is checked statically; construction
+raises `ValueError` if the domains do not match. For an expression with no
+domain, use the [constant-field interpretation](expressions.md#domain-free-expressions).
 
 ### `Gradient`
 
-`Gradient` is the gradient of an expression on a domain $P$. The gradient adds a
-last axis in the coordinate frame of the ambient coordinate domain of $P$, of
-dimension $n$.
+`Gradient(expression, domain)` differentiates `expression` with respect to
+position on `domain`. It adds a last array axis, with one entry for each
+ambient coordinate direction. Let `n` be the dimension of the ambient
+coordinate domain.
 
-| `Gradient(f, P)` |                                                                                                   |
+| `Gradient(expression, domain)` |                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------- |
 | Extends          | `AbstractExpression` |
-| Free function    | `gradient(f, P)`                                                                                  |
-| Takes            | `f: AbstractExpression`, `P: AbstractDomain` |
-| Properties       | `expression` $f$ and `domain` $P$, with $n$ the dimension of the ambient coordinate domain of $P$ |
-| Requires         | A [valid pair](#valid-pair) $(f, P)$                                                              |
-| Static type      | Value shape `f.value_shape + (n,)`                                                                |
-| Raises           | `ValueError` for $f$ if a requirement fails                               |
+| Free function    | `gradient(expression, domain)`                                                                                  |
+| Takes            | `expression: AbstractExpression`, `domain: AbstractDomain` |
+| Properties | `expression`, the field to differentiate, and `domain`, where the spatial derivative is taken |
+| Requires         | A [valid pair](#valid-pair) `expression, domain`                                                              |
+| Static type      | Value shape `expression.value_shape + (n,)`                                                                |
+| Raises           | `ValueError` for `expression` if a requirement fails                               |
 
-The gradient acts on each component of an array-valued $f$. Entry `j` of the
+Writing $f$ for the expression and $P$ for its domain, the gradient acts on
+each component of an array-valued $f$. Entry `j` of the
 last axis of `Gradient(f, P)` is the partial derivative $\partial_j f$ in the
 coordinate $X_j$ of the frame.
 
@@ -224,7 +231,7 @@ f = x * y * z
 | Expression                              | Value shape | Meaning                                       |
 | --------------------------------------- | ----------- | --------------------------------------------- |
 | `gradient(f, P)`                        | `(3,)`      | The gradient $(yz, xz, xy)$, after evaluation |
-| `gradient(gradient(f, P), P)`           | `(3, 3)`    | The Hessian of $f$                            |
+| `gradient(gradient(f, P), P)`           | `(3, 3)`    | The Hessian of `f`                            |
 | `gradient(X, P)`                        | `(3, 3)`    | The identity matrix, after evaluation         |
 
 - Let `M` be a mesh of dimension 2 in `EuclideanSpace(3)`, and `w` a field
@@ -236,31 +243,34 @@ f = x * y * z
 
 ### `Divergence` and `Curl`
 
-`Divergence` and `Curl` are the divergence and curl of an expression $u$ on a
-domain $P$, with $n$ the dimension of its ambient coordinate domain.
+`Divergence(expression, domain)` contracts the last value axis with the
+spatial derivative axis. `Curl(expression, domain)` takes the curl of a vector
+field in two or three ambient dimensions. Let `n` be the dimension of the
+ambient coordinate domain.
 
-| `Divergence(u, P)` |                                                                     |
+| `Divergence(expression, domain)` |                                                                     |
 | ------------------ | ------------------------------------------------------------------- |
 | Extends            | `AbstractExpression` |
-| Free function      | `divergence(u, P)`                                                  |
-| Takes              | `u: AbstractExpression`, `P: AbstractDomain` |
-| Properties         | `expression` $u$ and `domain` $P$                                   |
-| Requires           | A [valid pair](#valid-pair) $(u, P)$, and $u$ of rank at least 1 with the last extent $n$ |
-| Static type        | Value shape `u.value_shape[:-1]`                                    |
-| Raises             | `ValueError` for $u$ if a requirement fails |
+| Free function      | `divergence(expression, domain)`                                                  |
+| Takes              | `expression: AbstractExpression`, `domain: AbstractDomain` |
+| Properties | `expression`, the field to differentiate, and `domain`, where the spatial derivative is taken |
+| Requires           | A [valid pair](#valid-pair) `expression, domain`, and `expression` of rank at least 1 with last extent `n` |
+| Static type        | Value shape `expression.value_shape[:-1]`                                    |
+| Raises             | `ValueError` for `expression` if a requirement fails |
 
-| `Curl(u, P)`  |                                                                     |
+| `Curl(expression, domain)`  |                                                                     |
 | ------------- | ------------------------------------------------------------------- |
 | Extends       | `AbstractExpression` |
-| Free function | `curl(u, P)`                                                        |
-| Takes         | `u: AbstractExpression`, `P: AbstractDomain` |
-| Properties    | `expression` $u$ and `domain` $P$                                   |
-| Requires      | A [valid pair](#valid-pair) $(u, P)$, $n$ 2 or 3, and $u$ of value shape `(n,)` |
-| Static type   | Value shape `(3,)` for $n = 3$ and `()` for $n = 2$                 |
-| Raises        | `ValueError` for $u$ if a requirement fails |
+| Free function | `curl(expression, domain)`                                                        |
+| Takes         | `expression: AbstractExpression`, `domain: AbstractDomain` |
+| Properties | `expression`, the field to differentiate, and `domain`, where the spatial derivative is taken |
+| Requires      | A [valid pair](#valid-pair) `expression, domain`, `n` is 2 or 3, and `expression` of value shape `(n,)` |
+| Static type   | Value shape `(3,)` for `n == 3` and `()` for `n == 2`                 |
+| Raises        | `ValueError` for `expression` if a requirement fails |
 
-The value of `Divergence(u, P)` is the trace of `gradient(u, P)` over the last
-axis of $u$ and the axis of the gradient. With `G = gradient(u, P)`, so
+Writing `u` for `expression` and `P` for `domain`, the value of
+`Divergence(u, P)` is the trace of `gradient(u, P)` over the last
+axis of `u` and the axis of the gradient. With `G = gradient(u, P)`, so
 $G_{ij}=\partial_j u_i$, `Curl(u, P)` is the antisymmetric contraction:
 
 | Ambient dimension | Value |
@@ -274,8 +284,13 @@ holds structurally (see [`PushForward`](#pushforward)).
 
 ### `DirectionalDerivative`
 
-`DirectionalDerivative` differentiates an expression $f$ with respect to a
-variable $x$ at a point $a$ in a direction $h$,
+`DirectionalDerivative(expression, variable, point, direction)` varies the
+specified function variable and measures the first-order change in
+`expression`. `point` supplies the variable's value at which to differentiate;
+`direction` supplies its perturbation. Here a point is a value in the
+variable's function space, not a spatial location.
+
+Writing $f$, $x$, $a$ and $h$ for these four arguments, its value is
 
 $$
 \mathrm{D}(f, x, a, h) = \frac{d}{d\varepsilon} f[x := a + \varepsilon h] \Big|_{\varepsilon = 0},
@@ -287,18 +302,18 @@ For tuple variables, matching tuples $a$ and $h$ supply all replacements
 $x_k:=a_k+\varepsilon h_k$ simultaneously. Members may mix real and complex
 spaces. The functions of $x$ are bound in $f$, not in $a$ or $h$.
 
-| `DirectionalDerivative(f, x, a, h)` |                                                                                                       |
+| `DirectionalDerivative(expression, variable, point, direction)` |                                                                                                       |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Extends                          | `AbstractExpression` |
-| Takes                            | `f: AbstractExpression`, `x: Function \| tuple[Function, ...]`, `a, h: AbstractExpression \| tuple[AbstractExpression, ...]` |
-| Properties                       | `expression` $f$, `variable` $x$, `point` $a$ and `direction` $h$ |
-| Requires                         | $x$ a [bindable function](forms.md#bindable-functions), or a `tuple` of at least two distinct bindable functions; member by member, $a$ and $h$ admissible values for the space of $x$ as in [argument admissibility](forms.md#admissible-argument-values); variable spaces independent of all variable members |
-| Static type                      | The value shape of $f$, the free indices of $f$ followed by those of the members of $a$ and $h$, each `Index` taken once, and the argument spaces and the scalar type of $f$ |
+| Takes                            | `expression: AbstractExpression`, `variable: Function \| tuple[Function, ...]`, `point, direction: AbstractExpression \| tuple[AbstractExpression, ...]` |
+| Properties | `expression`, the body to differentiate; `variable`, the function or tuple of functions bound in that body; `point`, their evaluation values; and `direction`, their perturbations |
+| Requires                         | `variable` is a [bindable function](forms.md#bindable-functions), or a `tuple` of at least two distinct bindable functions; member by member, `point` and `direction` admissible values for the space of `variable` as in [argument admissibility](forms.md#admissible-argument-values); variable spaces independent of all variable members |
+| Static type                      | The value shape of `expression`, the free indices of `expression` followed by those of the members of `point` and `direction`, each `Index` taken once, and the argument spaces and the scalar type of `expression` |
 | Raises                           | `ValueError` if another requirement fails |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `directional_derivative(f, x, a, h)` | | `f: AbstractExpression`, `x: Function \| tuple`, `a, h: AbstractExpression \| tuple` | `DirectionalDerivative(f, x, a, h)` |
+| `directional_derivative(expression, variable, point, direction)` | | `expression: AbstractExpression`, `variable: Function \| tuple`, `point, direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, point, direction)` |
 
 A real-linear differential is assumed, even for complex variables and
 directions. Real points and directions enter complex spaces by
@@ -361,21 +376,24 @@ required smoothness and fixed-direction hypotheses.
 
 ### `Integral`
 
-`Integral` integrates an expression $f$ over a domain $P$. A basic integral
-needs no topological notion of the domain.
+`Integral(expression, integration_domain)` integrates `expression` over
+`integration_domain`, component by component. The result has no spatial
+domain, even though it may depend on the integrand and the domain's geometry.
+A basic integral needs no topological notion of the domain.
 
-| `Integral(f, P)` |                                                                                             |
+| `Integral(expression, integration_domain)` |                                                                                             |
 | ---------------- | ------------------------------------------------------------------------------------------- |
 | Extends          | `AbstractExpression` |
-| Free function    | `integral(f, P)`                                                                            |
-| Takes            | `f: AbstractExpression`, `P: AbstractDomain` |
-| Properties       | `expression` $f$ and `integration_domain` $P$                                                           |
-| Requires         | A [valid pair](#valid-pair) $(f, P)$, or $P$ a mesh and $f$ with the domain `P.ambient_domain` |
-| Static type      | The value shape and free indices of $f$, with no domain |
-| Raises           | `ValueError` for $f$ if a requirement fails                         |
+| Free function    | `integral(expression, integration_domain)`                                                                            |
+| Takes            | `expression: AbstractExpression`, `integration_domain: AbstractDomain` |
+| Properties | `expression`, the integrand, and `integration_domain`, the region over which it is integrated |
+| Requires | A [valid pair](#valid-pair) `expression, integration_domain`, or a mesh `integration_domain` with `expression.domain == integration_domain.ambient_domain` |
+| Static type      | The value shape and free indices of `expression`, with no domain |
+| Raises           | `ValueError` for `expression` if a requirement fails                         |
 
-For a coordinate domain $P$ of dimension $n$, `Integral(f, P)` is the
-Lebesgue integral in the coordinates $X$ of $P$,
+Let $f$ denote the integrand and $P$ the integration domain. When $P$ is a
+coordinate domain of dimension $n$, `Integral(f, P)` is the Lebesgue integral
+in the coordinates $X$ of $P$,
 
 $$
 \int_P f \,\mathrm{d}X.
@@ -404,23 +422,28 @@ With `T = UnitSimplex(2)` and `X = coordinate(T)`:
 
 ### `DomainMap`
 
-`DomainMap` is a map $\psi$ from a parameter domain $P$ into an ambient coordinate domain
-$Q$, with geometric image $\psi(P)$. The sections below write $D$ for the map
-or its parameterised image, retaining multiplicity. A `DomainMap` is not an
+`DomainMap(parameter_domain, parameterisation, ambient_domain)` describes a
+geometric map by giving the target coordinates at each parameter point.
+`parameter_domain` is where the map starts; `parameterisation` computes the
+coordinates; `ambient_domain` is the coordinate domain containing its image.
+
+Writing $P$, $\psi$ and $Q$ for these arguments, the map is $\psi: P \to Q$
+and its geometric image is $\psi(P)$. The sections below write $D$ for the
+map or its parameterised image, retaining multiplicity. A `DomainMap` is not an
 `AbstractDomain` and is not the domain of an expression.
 
-| `DomainMap(P, psi, Q)` |                                                                                                                                                                                                             |
+| `DomainMap(parameter_domain, parameterisation, ambient_domain)` |                                                                                                                                                                                                             |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                          | `Base` |
-| Free function                    | `domain_map(P, psi, Q)`                                                                                                                                                                           |
-| Takes                            | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain` |
-| Properties                       | `parameter_domain` $P$, an [`AbstractCoordinateDomain`](topology.md#abstractcoordinatedomain) or an [`AbstractTopology`](topology.md#abstracttopology) of dimension $k$, `parameterisation` $\psi$, and `ambient_domain` $Q$, an `AbstractCoordinateDomain`                                                   |
-| Requires                         | $\psi$ with the domain $P$ or no domain, $\psi$ real with value shape `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$ and the argument spaces `()`, and $k \le n$ |
-| Derived                          | `free_indices`, the free indices of $\psi$ |
+| Free function                    | `domain_map(parameter_domain, parameterisation, ambient_domain)`                                                                                                                                                                           |
+| Takes                            | `parameter_domain: AbstractCoordinateDomain \| AbstractTopology`, `parameterisation: AbstractExpression`, `ambient_domain: AbstractCoordinateDomain` |
+| Properties | `parameter_domain`, the domain of the map inputs; `parameterisation`, the coordinate expression; and `ambient_domain`, the coordinate domain of the outputs |
+| Requires | `parameterisation` has domain `parameter_domain` or no domain; it is real, has value shape `(n,)` with `n = ambient_domain.dimension`, and has argument spaces `()`; `parameter_domain.dimension <= n` |
+| Derived                          | `free_indices`, the free indices of `parameterisation` |
 | Raises                           | `ValueError` if another requirement fails                                                                                                                                   |
 
-The topological dimension is `P.dimension`; the geometric dimension is
-that of the ambient coordinate domain of $Q$. Maps need not be injective.
+The topological dimension is `parameter_domain.dimension`; the geometric
+dimension is `ambient_domain.dimension`. Maps need not be injective.
 Coordinates alone do not select a cell or reference preimage in a mesh;
 mesh-field evaluation uses [cell or side maps](#a-family-of-points-in-a-mesh).
 
@@ -435,9 +458,13 @@ for the edge in the plane, or `Q = UnitSimplex(2)` for the edge in the triangle.
 
 ### `PullBack`
 
-`PullBack` is the pull-back $\psi^* f$ of an expression $f$ on $Q$ by a map $D$
-with parameter domain $P$ and ambient domain $Q$. A `DomainMap` additionally
-specifies its coordinate parameterisation $\psi$.
+`PullBack(expression, map)` reads `expression` through `map`. The expression
+is defined on the map's target, or has no domain; the result is defined on
+the domain from which the map starts. Pull-back changes where a field is
+read, without transforming its value axes.
+
+In the formulas below, $f$ denotes the expression, $D$ the map and $\psi$
+its coordinate parameterisation when it is a `DomainMap`.
 
 Here $P$ and $Q$ denote the domains from which and into which the map goes.
 Their API properties depend on the map's role:
@@ -448,14 +475,14 @@ Their API properties depend on the map's role:
 | `CellMap` | `reference_cell` | `parent` |
 | `SideMap` | `restriction_domain` | `parent` |
 
-| `PullBack(f, D)` |                                                                                                            |
+| `PullBack(expression, map)` |                                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
 | Extends          | `AbstractExpression` |
-| Free function    | `pull_back(f, D)`                                                                                          |
-| Takes            | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap` |
-| Properties       | `expression` $f$, and `map` $D$, a `DomainMap`, a [`SideMap`](topology.md#sidemap) or a [`CellMap`](topology.md#cellmap) |
-| Requires         | $f$ with the domain $Q$ or no domain, and an equal extent for an `Index` free in both $f$ and $D$          |
-| Static type      | The value shape of $f$, and the free indices of $f$ followed by those of $D$, with each `Index` taken once |
+| Free function    | `pull_back(expression, map)`                                                                                          |
+| Takes            | `expression: AbstractExpression`, `map: DomainMap \| SideMap \| CellMap` |
+| Properties | `expression`, the field to read, and `map`, the coordinate, cell or side map through which it is read |
+| Requires | `expression` has the target domain listed above or no domain; any `Index` free in both `expression` and `map` has equal extent in both |
+| Static type      | The value shape of `expression`, and the free indices of `expression` followed by those of `map`, with each `Index` taken once |
 | Raises           | `ValueError` if another requirement fails                                         |
 
 For a `DomainMap`, the pull-back is the composition $f \circ \psi$, the
@@ -501,7 +528,7 @@ pull_back(f, edge_in_plane)  # Raises ValueError: f has domain T.
 
 ### Jacobian and density
 
-The free functions `jacobian(D)`, `inverse_jacobian(D)` and `density(D)` are
+The free functions `jacobian(map)`, `inverse_jacobian(map)` and `density(map)` are
 the Jacobian matrix, the left inverse of the Jacobian matrix and the density
 of a `DomainMap` or a `CellMap` of a mesh, with coordinate parameter domain
 $P$ of dimension $k$ and parameterisation $\psi$. $n$ is the physical
@@ -509,12 +536,13 @@ coordinate dimension of the target. A `CellMap` of a topology has no
 parameterisation and is rejected with `TypeError`.
 
 Each helper checks these input requirements before building its composition.
+The formulas below write `D` for `map`.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `jacobian(D)` | | `D: DomainMap \| CellMap` | `gradient(D.parameterisation, P)`, where `P` is `D.parameter_domain` for a `DomainMap` or `D.reference_cell` for a `CellMap` |
-| `inverse_jacobian(D)` | | `D: DomainMap \| CellMap` | `inverse(jacobian(D))` |
-| `density(D)` | | `D: DomainMap \| CellMap` | The density $\rho$ below |
+| `jacobian(map)` | | `map: DomainMap \| CellMap` | `gradient(map.parameterisation, P)`, where `P` is `map.parameter_domain` for a `DomainMap` or `map.reference_cell` for a `CellMap` |
+| `inverse_jacobian(map)` | | `map: DomainMap \| CellMap` | `inverse(jacobian(map))` |
+| `density(map)` | | `map: DomainMap \| CellMap` | The density $\rho$ below |
 
 The Jacobian matrix $J$ has value shape `(n, k)`, and $K$ =
 `inverse_jacobian(D)`, of value shape `(k, n)`, is the inverse of $J$ for
@@ -522,7 +550,7 @@ $k = n$ and the pseudo-inverse $(J^T J)^{-1} J^T$ for $k < n$. The density
 $\rho$ is the factor by which $\psi$ scales the length, the area or the volume
 of a small region of $P$:
 
-| Case | `density(D)` |
+| Case | `density(map)` |
 | ---- | ------------ |
 | $k = 0$ | `Integer(1)` |
 | $0 < k = n$ | `absolute(determinant(J))` |
@@ -666,13 +694,13 @@ to a cell of a mesh.
 | Extends                                | `Base` |
 | Free function                          | `transformation_law(variances, weight)`                               |
 | Takes                                  | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` |
-| Properties                             | `variances`, a `tuple` of `"covariant"` and `"contravariant"`, and `weight` $w$ |
+| Properties                             | `variances`, the transformation for each trailing value axis, and `weight`, the integer exponent of the determinant or density divisor |
 
 There is one variance for each of the last axes of the value shape, and the
 leading axes are unchanged. The permitted variance names are checked statically.
 
-For a cell $\psi$ of a mesh, with $J$, $K$ and $\rho$ of [Jacobian and
-density](#jacobian-and-density), $k$ the dimension of the topology and $n$ the
+Let $w$ denote `weight`. For a cell $\psi$ of a mesh, with $J$, $K$ and
+$\rho$ of [Jacobian and density](#jacobian-and-density), $k$ the dimension of the topology and $n$ the
 dimension of the ambient coordinate domain, the law $m$ maps a value $\hat f$
 on the reference cell to $m_\psi(\hat f)$. $m_\psi$ multiplies each covariant
 axis by $K^T$ and each contravariant axis by $J$, and divides by
@@ -702,22 +730,25 @@ freedom.
 
 ### `PushForward`
 
-`PushForward` gives the field on a mesh $D$ of an expression $f$ on its topology
-$T$.
+`PushForward(expression, mesh, law)` carries a field from the mesh's topology
+to the physical mesh. `law` specifies how its value axes and density weight
+transform under each cell's coordinate map.
 
-| `PushForward(f, D, m)` |                                                                     |
+| `PushForward(expression, mesh, law)` |                                                                     |
 | ---------------------- | ------------------------------------------------------------------- |
 | Extends                | `AbstractExpression` |
-| Takes                  | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw` |
-| Properties             | `expression` $f$, `mesh` $D$ and `law` $m$                        |
-| Requires               | $D$ a mesh with the topology $T$, $f$ with the domain $T$ or no domain, and the last axes of $f$, one for each variance of $m$, of the extent $k$ |
-| Static type            | The value shape of $f$ with the extent $n$ for each transformed axis, the domain $D$ |
+| Takes                  | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw` |
+| Properties | `expression`, the field on the topology; `mesh`, the physical destination; and `law`, the transformation of field values |
+| Requires | `expression` has domain `mesh.topology` or no domain; each trailing value axis selected by `law.variances` has extent `mesh.topology.dimension` |
+| Static type | The value shape of `expression` with each transformed axis replaced by the ambient coordinate dimension of `mesh`; domain `mesh` |
 | Raises                 | `ValueError` if another requirement fails |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `push_forward(f, D, m)` | | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw` | `PushForward(f, D, m)` |
+| `push_forward(expression, mesh, law)` | | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw` | `PushForward(expression, mesh, law)` |
 
+Writing `f`, `D` and `m` for these arguments and `T = D.topology`, let $k$
+be the topology dimension and $n$ the ambient coordinate dimension.
 The pull-back of `PushForward(f, D, m)` by `cell_map(D, j)` is
 $m_\psi(\hat f)$, with $\psi$ the cell and $\hat f$ =
 `pull_back(f, cell_map(T, j))`. The push-forward of the coordinate function
@@ -751,11 +782,16 @@ topology. On a physical mesh, a side domain also supplies the geometry.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `side_domain(D, S, s)` | | `D: Mesh`, `S: AbstractTopology`, `s: str` | `mesh(pull_back(x, side_map(T, S, s)), Q)` |
+| `side_domain(parent, restriction_topology, side)` | | `parent: Mesh`, `restriction_topology: AbstractTopology`, `side: str` | `mesh(pull_back(parent.coordinate_function, side_map(parent.topology, restriction_topology, side)), parent.ambient_domain)` |
 
-For a mesh $D$ = `mesh(x, Q)` with the topology $T$, the side domain of $S$
-is the mesh defined by the trace of $x$ from side $s$, so the side domain moves with
-$x$. The result has topology $S$ and geometry supplied by that side.
+`parent` is the mesh supplying the geometry, `restriction_topology` describes
+the side cells, and `side` names the parent side from which coordinates are
+read. The result is a mesh on `restriction_topology`.
+
+The coordinates are the trace of `parent.coordinate_function` from the
+chosen side, so the side domain moves when the parent coordinates change.
+The descriptions below write `D`, `S` and `s` for `parent`,
+`restriction_topology` and `side`.
 
 The chosen side supplies the integration measure. Any measure conversion
 belongs in the integrand.
@@ -923,18 +959,18 @@ to the selected side image in that parent, with orientation supplied by
 `reference_normal`.
 It points outward on boundary pieces.
 
-| `Normal(sm)` |                                                                                                       |
+| `Normal(side_map)` |                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------- |
 | Extends      | `AbstractExpression` |
-| Free function | `normal(sm)`                                                                                         |
-| Takes        | `sm: SideMap` |
-| Properties   | `side_map`, a [`SideMap`](topology.md#sidemap) `SideMap(D, E, s)`                                               |
-| Requires     | $D$ a mesh, and $E$ of the dimension $k - 1$ for the dimension $k$ of $D$                             |
-| Static type  | Value shape `(n,)` for the dimension $n$ of the ambient coordinate domain, the domain $E$, real      |
+| Free function | `normal(side_map)`                                                                                         |
+| Takes        | `side_map: SideMap` |
+| Properties | `side_map`, the side relation selecting the parent and restriction domain |
+| Requires | `side_map.parent` is a mesh, and `side_map.restriction_domain.dimension == side_map.parent.dimension - 1` |
+| Static type | Real, with domain `side_map.restriction_domain` and value shape `(n,)`, where `n` is the ambient coordinate dimension of `side_map.parent` |
 | Raises       | `ValueError` if the requirement fails           |
 
-The normal of `sm` belongs to the same side as the restriction
-`pull_back(f, sm)`, so a form writes both from one side map.
+The normal of `side_map` belongs to the same side as the restriction
+`pull_back(field, side_map)`, so a form writes both from one side map.
 
 Notation, for `sm` = `SideMap(D, E, s)` and the piece $i$ of $E$:
 
