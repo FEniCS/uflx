@@ -147,7 +147,7 @@ sampling rule to `f`.
 | Static type | The domain, value shape and scalar type of `V`, the free indices of `f`, and argument spaces `()` |
 
 The library of `V` defines each degree of freedom as a weighted combination
-of [point evaluations](geometry.md#point-evaluation), including any quadrature for
+of [point evaluations](geometry.md#evaluation-at-points), including any quadrature for
 moments. The supplied rule defines interpolation even when the moments are
 not exact. Interpolation is linear for a fixed rule and geometry.
 

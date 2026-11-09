@@ -127,7 +127,7 @@ Extend `AbstractExpression`:
 
 [`PullBack`](geometry.md#pullback).
 
-### Fields and integration on a mesh
+### Fields on a mesh
 
 Extend `Base`:
 
@@ -240,7 +240,7 @@ Extend `AbstractExpression`:
 | [`inverse_jacobian(map)`](geometry.md#jacobian-and-density)                               |          | `map: DomainMap \| CellMap`                                                                                                                          | `inverse(jacobian(map))`                                                                                                           |
 | [`density(map)`](geometry.md#jacobian-and-density)                                        |          | `map: DomainMap \| CellMap`                                                                                                                          | The density $\rho$ below                                                                                                           |
 
-### Fields and integration on a mesh
+### Fields on a mesh
 
 | Function                                                                      | Overload | Takes                                                                         | Returns                                                                                                                     |
 | ----------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |

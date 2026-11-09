@@ -69,7 +69,7 @@ supplies the selected cells and reference positions before an evaluation is
 constructed. At interfaces or overlaps, the cell selection is part of defining
 the value. A coordinate-only
 `DomainMap` into a mesh is invalid (see [A family of points in a
-mesh](geometry.md#a-family-of-points-in-a-mesh)).
+mesh](geometry.md#points-in-a-mesh)).
 
 The concrete subclass owns the polynomials, degrees of freedom and basis of
 the space, and stores the arguments identifying the space, such as the finite

@@ -36,7 +36,7 @@ Its finitely many cell slots describe one kernel configuration, not a runtime me
 | Takes | `coordinate_function: AbstractExpression`, `ambient_domain: AbstractCoordinateDomain` |
 | Properties | `coordinate_function`, the coordinate expression on the topology, and `ambient_domain`, the coordinate domain containing its physical points |
 | Requires | `coordinate_function` has a topology domain whose cell types are reference cells; it is real, has value shape `(n,)` with `n = ambient_domain.dimension`, and has free indices `()` and argument spaces `()`; `topology.dimension <= n` |
-| Derived | `topology` is `coordinate_function.domain`; `dimension` is `topology.dimension`; `pieces` gives the coordinate maps of the local cells, as described below |
+| Derived | `topology` is `coordinate_function.domain`; `dimension` is `topology.dimension` |
 | Raises | `TypeError` if the coordinate expression has no topology domain, and `ValueError` if another requirement fails |
 
 The factory constructs the corresponding `Mesh` directly. The topology is
@@ -61,32 +61,29 @@ independent cells; no sides are required. An indexed family used only for
 integration or sampling needs a `DomainMap`, not a mesh (see
 [Mapped integration families](#mapped-integration-families)).
 
-#### Cell maps and pieces
-
-For slot $j$ of $T$, let $K_j$ be its reference cell. `pieces` is the derived
-`tuple` of maps
-`domain_map(K_j, pull_back(x, cell_map(T, j)), Q)`.
-These maps are views of the local mesh, not construction arguments. They have
-no free indices and introduce no extra geometry parameters.
-
-The ambient domain $Q$ is a coordinate domain. A mesh embedded in another
-mesh has its own physical coordinates; cell or side maps specify its
-relation to the other mesh's cells.
-
 #### Mesh cell maps
 
-`cell_map(D, j)` returns `CellMap(D, j)`, whose target is the mesh $D$.
-Its parameterisation is `pull_back(x, cell_map(T, j))`. This expression
-is derived, not a construction argument. Substitution reconstructs the map
-from $D$ and $j$, preserving the selected cell independently of its
-coordinates. Piece $j$ instead
-has target $Q$ and records only physical coordinates. These maps have the
-same parameterisation but different meanings: only the cell map selects a
-cell of $D$ for evaluating a mesh field.
+For a mesh `D = mesh(x, Q)` on topology `T`, `cell_map(D, j)` selects local
+slot `j`. Its reference cell is `T.cell_types[j]` and its derived
+parameterisation is `pull_back(x, cell_map(T, j))`. Pulling back
+`coordinate(D)` gives this same expression.
 
-For a field $f$ on $D$, `pull_back(f, cell_map(D, j))` is its local
-expression on $K_j$ for local slot $j$. Pulling back
-`coordinate(D)` gives `pull_back(x, cell_map(T, j))`.
+The cell map retains the selected cell when its coordinates change:
+substitution reconstructs it from `D` and `j`. For a field `f` on `D`,
+`pull_back(f, cell_map(D, j))` is its reference-cell representation.
+
+To read a field on the ambient coordinate domain instead, construct a
+coordinate map from the cell map:
+
+```python
+cell = cell_map(D, j)
+coordinate_map = domain_map(cell.reference_cell, cell.parameterisation, D.ambient_domain)
+```
+
+These maps have the same parameterisation but different targets: `cell`
+selects a cell of `D`, while `coordinate_map` gives points in `D.ambient_domain`.
+A mesh embedded in another mesh still has its own physical coordinates;
+cell or side maps express the relation to the other mesh's cells.
 
 #### Examples
 
@@ -113,7 +110,7 @@ D = mesh(x, EuclideanSpace(2))
   $(1 - X_1, X_0 + X_1)$ for the supplied coordinates.
 
 For a local configuration `M` with types `(Kt, Kq)`, `mesh(x, EuclideanSpace(2))` has
-one triangle and one quadrilateral piece. A field `u` on `M` has local reads:
+one triangle cell and one quadrilateral cell. A field `u` on `M` has local reads:
 
 ```python
 u_tri = pull_back(u, cell_map(M, 0))
@@ -157,14 +154,6 @@ For a mesh `mesh(x, Q)`, the pull-back by `cell_map(D, j)` is
 
 For example, `coordinate(EuclideanSpace(3))` has value shape `(3,)` and domain `EuclideanSpace(3)`.
 
-### Valid pair
-
-An `expression` and a `domain` are a valid pair when `domain` is an
-[`AbstractDomain`](topology.md#abstractdomain), and `expression.domain` is
-`domain` or `None`. The domain's type is checked statically; construction
-raises `ValueError` if the domains do not match. For an expression with no
-domain, use the [constant-field interpretation](expressions.md#domain-free-expressions).
-
 ### `Gradient`
 
 `Gradient(expression, domain)` differentiates `expression` with respect to
@@ -178,7 +167,7 @@ coordinate domain.
 | Free function    | `gradient(expression, domain)`                                                                                  |
 | Takes            | `expression: AbstractExpression`, `domain: AbstractDomain` |
 | Properties | `expression`, the field to differentiate, and `domain`, where the spatial derivative is taken |
-| Requires         | A [valid pair](#valid-pair) `expression, domain`                                                              |
+| Requires         | `expression` has domain `domain` or no domain                                                              |
 | Static type      | Value shape `expression.value_shape + (n,)`                                                                |
 | Raises           | `ValueError` for `expression` if a requirement fails                               |
 
@@ -254,7 +243,7 @@ ambient coordinate domain.
 | Free function      | `divergence(expression, domain)`                                                  |
 | Takes              | `expression: AbstractExpression`, `domain: AbstractDomain` |
 | Properties | `expression`, the field to differentiate, and `domain`, where the spatial derivative is taken |
-| Requires           | A [valid pair](#valid-pair) `expression, domain`, and `expression` of rank at least 1 with last extent `n` |
+| Requires           | `expression` has domain `domain` or no domain, and `expression` of rank at least 1 with last extent `n` |
 | Static type        | Value shape `expression.value_shape[:-1]`                                    |
 | Raises             | `ValueError` for `expression` if a requirement fails |
 
@@ -264,7 +253,7 @@ ambient coordinate domain.
 | Free function | `curl(expression, domain)`                                                        |
 | Takes         | `expression: AbstractExpression`, `domain: AbstractDomain` |
 | Properties | `expression`, the field to differentiate, and `domain`, where the spatial derivative is taken |
-| Requires      | A [valid pair](#valid-pair) `expression, domain`, `n` is 2 or 3, and `expression` of value shape `(n,)` |
+| Requires      | `expression` has domain `domain` or no domain, `n` is 2 or 3, and `expression` of value shape `(n,)` |
 | Static type   | Value shape `(3,)` for `n == 3` and `()` for `n == 2`                 |
 | Raises        | `ValueError` for `expression` if a requirement fails |
 
@@ -381,7 +370,7 @@ required smoothness and fixed-direction hypotheses.
 `Integral(expression, integration_domain)` integrates `expression` over
 `integration_domain`, component by component. The result has no spatial
 domain, even though it may depend on the integrand and the domain's geometry.
-A basic integral needs no topological notion of the domain.
+The two core cases are coordinate domains and meshes.
 
 | `Integral(expression, integration_domain)` |                                                                                             |
 | ---------------- | ------------------------------------------------------------------------------------------- |
@@ -389,9 +378,11 @@ A basic integral needs no topological notion of the domain.
 | Free function    | `integral(expression, integration_domain)`                                                                            |
 | Takes            | `expression: AbstractExpression`, `integration_domain: AbstractDomain` |
 | Properties | `expression`, the integrand, and `integration_domain`, the region over which it is integrated |
-| Requires | A [valid pair](#valid-pair) `expression, integration_domain`, or a mesh `integration_domain` with `expression.domain == integration_domain.ambient_domain` |
+| Requires | `expression` has domain `integration_domain` or no domain; a mesh also accepts an expression on `integration_domain.ambient_domain` |
 | Static type      | The value shape and free indices of `expression`, with no domain |
 | Raises           | `ValueError` for `expression` if a requirement fails                         |
+
+#### Integration over coordinate domains
 
 Let $f$ denote the integrand and $P$ the integration domain. When $P$ is a
 coordinate domain of dimension $n$, `Integral(f, P)` is the Lebesgue integral
@@ -403,22 +394,61 @@ $$
 
 For $n = 0$, the integral is the value of $f$ at the single point of $R^0$.
 
-On a mesh, the integral sums the integrals over its pieces with
-their induced densities (see [the expansion](#integral-over-a-mesh)).
-
-An array-valued $f$ integrates component by component. A later pass might
-approximate an `Integral` over a coordinate domain by
+A later pass may approximate a coordinate-domain integral by
 [quadrature](#quadrature), or evaluate it exactly when the rule is exact.
+Expressions with no domain have the
+[constant-field interpretation](expressions.md#domain-free-expressions).
 
-#### Examples
-
-With `T = UnitSimplex(2)` and `X = coordinate(T)`:
+For example, with `T = UnitSimplex(2)` and `X = coordinate(T)`:
 
 - `integral(X[0], T)` is $\int_T X_0 \,\mathrm{d}X$. A later pass evaluates
   the integral to $1/6$.
 - `integral(Integer(1), T)` is the area $1/2$ of `T`.
 - `integral(X[0], T) * integral(X[1], T)` is a product of two integrals, with
   value shape `()` and no domain.
+
+#### Integration over mesh cells
+
+`Integral(f, D)` integrates over the fixed local cells of `D`, counting
+coincident slots separately. It returns a local contribution. The package
+iterates over concrete cells and assembles contributions outside UFLx.
+For slot $j$ of `D.topology`, let $K_j$ be its reference cell and
+`D_j = cell_map(D, j)`. For a scalar field on `D`, its contribution is:
+
+```python
+integral(pull_back(f, D_j) * density(D_j), K_j)
+```
+
+Expansion adds these terms over the statically known slots. No cell index,
+lookup table or cell-axis `IndexSum` is introduced. A single-cell kernel
+has one term. A fixed macro-element kernel has one term per subcell.
+
+For a field on `D.ambient_domain`, replace `D_j` in the pull-back by
+`domain_map(K_j, D_j.parameterisation, D.ambient_domain)`. Array-valued
+integrands are integrated component by component. Zero-dimensional cells have density `Integer(1)`.
+
+The [density](#jacobian-and-density) does not depend on orientation. For ambient fields, the result
+agrees with integration over the geometric union when each cell map is injective
+almost everywhere and distinct images overlap only on sets of zero measure.
+An empty runtime mesh selection requires no kernel calls, not an empty cell sum
+inside a kernel.
+
+Local cell-dependent data are fields on the topology or mesh. A field equal
+to 2 on one unit cell slot and 7 on another has local integral 9. A domain-free
+array with entries `[2, 7]` instead has the same value on both slots; its
+integral over that two-unit-cell configuration is `[4, 14]`. Array indices
+do not implicitly select slots.
+
+For the local square configuration above, `integral(Integer(1), D)` is the
+area 1, the sum of two reference-cell integrals. A boundary configuration
+`B` with the side `"inside"` gives the boundary contribution
+`integral(pull_back(f, side_map(D, B, "inside")), B)`.
+
+```{dropdown} Legacy UFL
+The cell, boundary-facet and interior-facet contributions to `dx`, `ds` and
+`dS` are local integrals over their respective configurations. The finite
+element package selects concrete entities and assembles the contributions.
+```
 
 ## Maps between domains
 
@@ -431,7 +461,7 @@ coordinates; `ambient_domain` is the coordinate domain containing its image.
 
 Writing $P$, $\psi$ and $Q$ for these arguments, the map is $\psi: P \to Q$
 and its geometric image is $\psi(P)$. The sections below write $D$ for the
-map or its parameterised image, retaining multiplicity. A `DomainMap` is not an
+map; its image is always named separately. A `DomainMap` is not an
 `AbstractDomain` and is not the domain of an expression.
 
 | `DomainMap(parameter_domain, parameterisation, ambient_domain)` |                                                                                                                                                                                                             |
@@ -447,10 +477,10 @@ map or its parameterised image, retaining multiplicity. A `DomainMap` is not an
 The topological dimension is `parameter_domain.dimension`; the geometric
 dimension is `ambient_domain.dimension`. Maps need not be injective.
 Coordinates alone do not select a cell or reference preimage in a mesh;
-mesh-field evaluation uses [cell or side maps](#a-family-of-points-in-a-mesh).
+mesh-field evaluation uses [cell or side maps](#points-in-a-mesh).
 
-A $\psi$ with free indices makes $D$ a family of domains, with one domain for
-each value of the free indices. For example, with an array `x` of value shape
+A parameterisation with free indices makes `D` a family of maps, with one
+map for each assignment of those indices. For example, with an array `x` of value shape
 `(m, n)` and an index `i`, `domain_map(EuclideanSpace(0), x[i], EuclideanSpace(n))` is a family of $m$
 points in `EuclideanSpace(n)`, retaining distinct members even at identical coordinates.
 
@@ -571,37 +601,36 @@ The core, passes and libraries use `jacobian(D)`, `determinant(jacobian(D))`
 and `inverse_jacobian(D)` for $J$, $\det J$ and $K$. These expressions let a
 pass identify and evaluate each geometric quantity once per $D$.
 
-### Concept: integral over a domain
+### Integration through a map
 
-Integration of an expression $f$ on $Q$ over $D$ = `DomainMap(P, psi, Q)`
-is defined by the parameterisation:
+For a scalar field `f` on `Q` and a map `D = domain_map(P, psi, Q)` with a
+coordinate parameter domain `P`, integration through the map is the composition
 
-$$
-\int_D f = \int_P (f \circ \psi) \, \rho \, \mathrm{d}X,
-$$
+```python
+integral(pull_back(f, D) * density(D), P)
+```
 
-which is `integral(pull_back(f, D) * density(D), P)` for a scalar $f$. The
-integral does not depend on the direction in which $\psi$ traverses $D$.
-
-Coverage is counted with multiplicity. The result equals the ordinary integral
-over the geometric image when the parameterisation is injective almost everywhere.
-
-The core has no orientation of a domain. An integral that depends on a
-direction, such as a circulation or a flux, is written with the Jacobian
-matrix, which carries the direction of $\psi$. For example, the circulation
-of a vector field $F$ along an edge $e$ = `DomainMap(S, psi, Q)` with $k = 1$
-is
+Writing $\psi$ for the parameterisation and $\rho$ for its density, this is
 
 $$
-\int_e F \cdot \mathrm{d}r = \int_S (F \circ \psi) \cdot \psi' \, \mathrm{d}t,
+\int_P (f \circ \psi)\,\rho\,\mathrm{d}X.
 $$
 
-which is `integral(index_sum(pull_back(F, e)[i] * jacobian(e)[i, 0], (i,)), S)`,
-and the circulation changes sign when $\psi$ runs the other way. Where the
-cells of a mesh must be oriented consistently, such as for the
-flux through a surface in $R^3$, a separately supplied scalar field gives
-a sign $+1$ or $-1$ for each cell (see
-[The flux through a surface](../examples/surfaces.md#the-flux-through-a-surface)).
+`Integral` still takes the domain `P`, not the map `D`. Coverage is counted
+with multiplicity; this equals integration over the image $\psi(P)$ when
+the parameterisation is injective almost everywhere. Reversing the traversal
+does not change the density.
+
+Direction-dependent integrals use the Jacobian explicitly. For a vector
+field `F` and an edge map `edge` with parameter domain `S`, circulation is
+
+```python
+integral(index_sum(pull_back(F, edge)[i] * jacobian(edge)[i, 0], (i,)), S)
+```
+
+Reversing the edge reverses its tangent and hence the circulation. A flux
+through an oriented surface likewise needs a separately supplied orientation
+field; see [The flux through a surface](../examples/surfaces.md#the-flux-through-a-surface).
 
 ### Mapped integration families
 
@@ -624,67 +653,75 @@ of `Integer(1)` with values 2, 3 and 5. An explicit sum over their member index
 gives 10. A topology-backed mesh of those segments also has total length 10,
 but additionally identifies a domain on which fields and spaces can be defined.
 
-### Points and point evaluation
+### Evaluation at points
 
-A point is the image of a domain map. A point in a domain $Q$ is
-`domain_map(EuclideanSpace(0), x, Q)`, with $x$ a constant expression of value shape
-`(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$. The core
-needs no node class and no free function for a point.
-
-#### Point evaluation
-
-The value of an expression `f` at a point or indexed family of points `p` is:
+Point evaluation uses a `DomainMap` whose parameter domain is
+`EuclideanSpace(0)`. For a point or indexed family of points represented by
+`point_map`, the common operation is
 
 ```python
-integral(pull_back(f, p), EuclideanSpace(0))
+integral(pull_back(field, point_map), EuclideanSpace(0))
 ```
 
-`p` has parameter domain `EuclideanSpace(0)`, and `f` is defined at its points. The
-result has no domain, preserves the value shape, scalar type and argument
-spaces of `f`, and carries the free indices of `f` followed by those of `p`,
-each taken once. Point indices are retained, not summed.
+The result has no spatial domain. It preserves the field's value shape,
+scalar type and argument spaces, and carries the free indices of `field`
+followed by those of `point_map`, each taken once. Point indices remain free;
+only an explicit sum combines samples.
 
-Evaluation preserves symbolic dependence on the expression and the points.
-Derivatives and value transformations are applied to the expression before
-sampling; sampling `gradient(f, Q)` gives the gradient on `Q` at the points.
-Basis tabulation and point observations use the same evaluation. The sampled
-values alone define no field between the points.
+#### Points in a coordinate domain
 
-For points in a mesh, see [A family of points in a
-mesh](#a-family-of-points-in-a-mesh).
+For a coordinate domain `Q`, use `domain_map(EuclideanSpace(0), position, Q)`.
+`position` is a domain-free expression with value shape `(Q.dimension,)`;
+free indices describe a family of points. No separate point class is needed.
+
+#### Points in a mesh
+
+A mesh-field value additionally needs a cell selection. The package locates
+points in concrete cells and supplies reference positions within a known
+local slot. For a mesh `D`, local slot `j` and a domain-free array `positions`
+of reference coordinates:
+
+```python
+cell = cell_map(D, j)
+local_field = pull_back(field, cell)
+point_map = domain_map(EuclideanSpace(0), positions[i], cell.reference_cell)
+values = integral(pull_back(local_field, point_map), EuclideanSpace(0))
+```
+
+`i` selects samples within that cell; it does not select mesh cells. Each
+local slot is read separately. For example, adjacent intervals `[0, 1]` and
+`[1, 2]` carrying the constant values 2 and 7 have different traces at
+physical coordinate 1. The selected cell determines which value is read,
+even when cells overlap. See [Adjacent and coincident cells](../examples/integration.md#adjacent-and-coincident-cells).
+
+A fixed point configuration that must support fields and integration can
+instead be a mesh of zero-dimensional cells, with side declarations selecting
+its parents. See [Points forming a domain](../examples/integration.md#points-forming-a-domain).
+
+Evaluation preserves symbolic dependence on both fields and points. Apply
+spatial derivatives and value transformations before sampling; for example,
+sample `gradient(field, Q)` to obtain its gradient on `Q`. Basis tabulation
+and point observations use the same operation. Samples alone define no field
+between points.
 
 #### Quadrature
 
 A quadrature rule on a coordinate domain is a weighted sum of point
-evaluations. For a family `p` with index `i` and weights `w`:
+evaluations. For a point-map family `p` with index `i` and weights `w`:
 
 ```python
 index_sum(w[i] * integral(pull_back(f, p), EuclideanSpace(0)), (i,))
 ```
 
-`integral(f, Q)` denotes the integral; this sum approximates it and is
-mathematically equal when the rule is exact for `f`. A quadrature pass
-applies a supplied rule. On a mapped domain, the integrand includes the density
-from [integral expansion](#integral-over-a-mesh).
+This approximates `integral(f, Q)` and is mathematically equal when the rule
+is exact for `f`. A quadrature pass applies a supplied rule. Integration
+through a map includes its density in the sampled integrand.
 
-#### Examples
+Worked examples: [quadrature](../examples/integration.md#quadrature),
+[cut-cell integration](../examples/integration.md#integrating-over-a-cut-cell),
+and [point evaluation in a triangle](../examples/integration.md#point-evaluation-in-a-triangle).
 
-The examples use the unit triangle `T = UnitSimplex(2)`, `X = coordinate(T)`,
-and `f = X[0] * X[1]`:
-
-```python
-third = Integer(1) / Integer(3)
-
-# DomainMap: the centroid of T, as a point in T.
-c = domain_map(EuclideanSpace(0), tensor((third, third)), T)
-
-# The value at the centroid: 1/9, with no domain and value shape ().
-fc = integral(pull_back(f, c), EuclideanSpace(0))
-```
-
-Worked examples for this chapter: [an affinely mapped triangle](../examples/integration.md#an-affinely-mapped-triangle), [circulation along an edge](../examples/integration.md#circulation-along-an-edge), [integrating over an edge](../examples/integration.md#integrating-over-an-edge), [integrating over the boundary of a triangle](../examples/integration.md#integrating-over-the-boundary-of-a-triangle), [quadrature](../examples/integration.md#quadrature), [integrating over a cut cell](../examples/integration.md#integrating-over-a-cut-cell), [the centroid of a triangle](../examples/integration.md#the-centroid-of-a-triangle).
-
-## Fields and integration on a mesh
+## Fields on a mesh
 
 ### `TransformationLaw`
 
@@ -836,124 +873,6 @@ sides and the effect of reversing the facet vertices.
 The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on the topology $S$ of the interior facets, whose sides are named `'+'` and `'-'`.
 ```
 
-### A family of points in a mesh
-
-The package supplies reference positions in a known local cell slot `j`.
-For a domain-free array `positions` of reference positions in $K_j$,
-evaluation is:
-
-```python
-R = domain_map(EuclideanSpace(0), positions[i], K_j)
-values = pull_back(pull_back(f, cell_map(D, j)), R)
-```
-
-The point index `i` remains free. It indexes samples within one local cell;
-it does not select mesh cells. Point location and partitioning samples among
-concrete cells belong to the package. Distinct local slots are read separately.
-
-#### Adjacent and coincident cells
-
-Let a configuration contain two interval slots with reference cell $K = [0, 1]$.
-On a mesh $D$ with cells $[0, 1]$ and $[1, 2]$, let $f$ equal 2 on cell 0
-and 7 on cell 1. These snippets describe symbolic values, not numerical
-execution by the core:
-
-```python
-f0 = pull_back(f, cell_map(D, 0))
-f1 = pull_back(f, cell_map(D, 1))
-midpoint = domain_map(EuclideanSpace(0), tensor((Float(0.5),)), K)
-left_endpoint = domain_map(EuclideanSpace(0), tensor((Integer(0),)), K)
-right_endpoint = domain_map(EuclideanSpace(0), tensor((Integer(1),)), K)
-
-pull_back(f0, midpoint)  # Physical coordinate 0.5; value 2.
-pull_back(f0, right_endpoint)  # Physical coordinate 1; value 2.
-pull_back(f1, left_endpoint)  # Physical coordinate 1; value 7.
-```
-
-The last two expressions are the two traces at the interface. Physical
-coordinate 1 alone does not choose between them.
-
-For a mesh `D_overlap` whose two cells both occupy $[0, 1]$, let $g$ again
-have values 2 and 7 on the respective cells:
-
-```python
-g0 = pull_back(g, cell_map(D_overlap, 0))
-g1 = pull_back(g, cell_map(D_overlap, 1))
-pull_back(g0, midpoint)  # Physical coordinate 0.5; value 2.
-pull_back(g1, midpoint)  # Physical coordinate 0.5; value 7.
-```
-
-The physical and reference coordinates coincide, but the selected cells differ.
-
-#### Points forming a domain
-
-A fixed local collection of points may have a topology `S` with one
-zero-dimensional slot per point and a side `("inside", T, j)` selecting
-its parent slot. Each slot's side data supply its reference position. Set
-`P = side_domain(D, S, "inside")`:
-
-```python
-inside = side_map(D, P, "inside")
-values = pull_back(pull_back(f, inside), cell_map(P, 0))
-total = integral(pull_back(f, inside), P)
-```
-
-This supports fields and integration on a fixed point configuration. A
-runtime-sized sampling or quadrature array instead uses the indexed
-pull-backs above.
-
-### `Integral` over a mesh
-
-`Integral(f, D)` integrates over the fixed local cells of `D`, counting
-coincident slots separately. It returns a local contribution. The package
-iterates over concrete cells and assembles contributions outside UFLx.
-The integrand has domain `D`, domain `D.ambient_domain`, or no domain.
-Every free index of `f` remains free.
-
-#### Expansion over cells
-
-For slot $j$ of `D.topology`, let $K_j$ be its reference cell and
-`D_j = cell_map(D, j)`. For a scalar field on `D`, its contribution is:
-
-```python
-integral(pull_back(f, D_j) * density(D_j), K_j)
-```
-
-Expansion adds these terms over the statically known slots. No cell index,
-lookup table or cell-axis `IndexSum` is introduced. A single-cell kernel
-has one term. A fixed macro-element kernel has one term per subcell.
-
-For a field on `D.ambient_domain`, use the map with the same parameterisation
-and that ambient domain as target. Array-valued integrands are integrated
-component by component. Zero-dimensional cells have density `Integer(1)`.
-
-The density does not depend on orientation. For ambient fields, the result
-agrees with integration over the geometric union when each cell map is injective
-almost everywhere and distinct images overlap only on sets of zero measure.
-An empty runtime mesh selection requires no kernel calls, not an empty cell sum
-inside a kernel.
-
-#### Local data and indexed loads
-
-Local cell-dependent data are fields on the topology or mesh. A field equal
-to 2 on one unit cell slot and 7 on another has local integral 9. A domain-free
-array with entries `[2, 7]` instead has the same value on both slots; its
-integral over that two-unit-cell configuration is `[4, 14]`. Array indices
-do not implicitly select slots.
-
-#### Examples
-
-For the local square configuration above, `integral(Integer(1), D)` is the
-area 1, the sum of two reference-cell integrals. A boundary configuration
-`B` with the side `"inside"` gives the boundary contribution
-`integral(pull_back(f, side_map(D, B, "inside")), B)`.
-
-```{dropdown} Legacy UFL
-The cell, boundary-facet and interior-facet contributions to `dx`, `ds` and
-`dS` are local integrals over their respective configurations. The finite
-element package selects concrete entities and assembles the contributions.
-```
-
 ### `Normal`
 
 `Normal` is the unit side conormal: tangent to the parent cell and orthogonal
@@ -1015,7 +934,7 @@ requires a separately supplied orientation field (see
 
 The examples use the following objects:
 
-- `B` of the [`Integral` over a mesh](#integral-over-a-mesh) examples.
+- `B` of the [integration over mesh cells](#integration-over-mesh-cells) examples.
 - The mesh `E` of the interior facets of `D`, with the sides
   `"+"` and `"-"`.
 - `grad_f = gradient(f, D)` and `i = index("i")`.

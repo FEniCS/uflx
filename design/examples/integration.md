@@ -271,3 +271,67 @@ array `c` and new local field data for each kernel call.
 `c[q]` plays the role of a UFL quadrature-element coefficient. It has no
 implied value between the points: changing their positions or ordering requires
 matching data.
+
+## Adjacent and coincident cells
+
+Let a configuration contain two interval slots with reference cell $K = [0, 1]$.
+On a mesh $D$ with cells $[0, 1]$ and $[1, 2]$, let $f$ equal 2 on cell 0
+and 7 on cell 1. These snippets describe symbolic values, not numerical
+execution by the core:
+
+```python
+f0 = pull_back(f, cell_map(D, 0))
+f1 = pull_back(f, cell_map(D, 1))
+midpoint = domain_map(EuclideanSpace(0), tensor((Float(0.5),)), K)
+left_endpoint = domain_map(EuclideanSpace(0), tensor((Integer(0),)), K)
+right_endpoint = domain_map(EuclideanSpace(0), tensor((Integer(1),)), K)
+
+pull_back(f0, midpoint)  # Physical coordinate 0.5; value 2.
+pull_back(f0, right_endpoint)  # Physical coordinate 1; value 2.
+pull_back(f1, left_endpoint)  # Physical coordinate 1; value 7.
+```
+
+The last two expressions are the two traces at the interface. Physical
+coordinate 1 alone does not choose between them.
+
+For a mesh `D_overlap` whose two cells both occupy $[0, 1]$, let $g$ again
+have values 2 and 7 on the respective cells:
+
+```python
+g0 = pull_back(g, cell_map(D_overlap, 0))
+g1 = pull_back(g, cell_map(D_overlap, 1))
+pull_back(g0, midpoint)  # Physical coordinate 0.5; value 2.
+pull_back(g1, midpoint)  # Physical coordinate 0.5; value 7.
+```
+
+The physical and reference coordinates coincide, but the selected cells differ.
+
+## Points forming a domain
+
+Let `D` be a mesh with topology `T` and `f` a field on `D`. A fixed local
+collection of points may have a topology `S` with one zero-dimensional slot per point and a side `("inside", T, j)` selecting
+its parent slot. Each slot's side data supply its reference position. Set
+`P = side_domain(D, S, "inside")`:
+
+```python
+inside = side_map(D, P, "inside")
+values = pull_back(pull_back(f, inside), cell_map(P, 0))
+total = integral(pull_back(f, inside), P)
+```
+
+This supports fields and integration on a fixed point configuration. A
+runtime-sized sampling or quadrature array instead uses the indexed
+[point evaluations](../language/geometry.md#evaluation-at-points).
+
+## Point evaluation in a triangle
+
+For the unit triangle `T = UnitSimplex(2)`, let `X = coordinate(T)` and
+`f = X[0] * X[1]`. Evaluate `f` at the centroid:
+
+```python
+third = Integer(1) / Integer(3)
+point_map = domain_map(EuclideanSpace(0), tensor((third, third)), T)
+value = integral(pull_back(f, point_map), EuclideanSpace(0))
+```
+
+The value is `1/9`, with value shape `()` and no spatial domain.
