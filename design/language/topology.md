@@ -133,7 +133,7 @@ coordinates and integration are defined through cell parameterisations.
 | Extends                    | `AbstractDomain` |
 | Provides                   | `dimension`, the nonnegative number of coordinate axes as an `int`              |
 | Derived                    | `ambient_domain`, the coordinate domain itself |
-| Defined by                 | A subclass, such as `RD` or a reference cell |
+| Defined by                 | A subclass, such as `EuclideanSpace` or a reference cell |
 
 Examples:
 
@@ -144,12 +144,12 @@ Examples:
   mesh from a topology and a coordinate expression; its cells are parameterised
   by reference triangles.
 
-### `RD`
+### `EuclideanSpace`
 
-`RD(dimension)` is the whole coordinate space with `dimension` axes.
+`EuclideanSpace(dimension)` is the whole coordinate space with `dimension` axes.
 Writing $n$ for `dimension`, this is $\mathbb{R}^n$.
 
-| `RD(dimension)`    |                                                                 |
+| `EuclideanSpace(dimension)`    |                                                                 |
 | ---------- | --------------------------------------------------------------- |
 | Extends    | `AbstractCoordinateDomain` |
 | Properties | `dimension`, the nonnegative number of coordinate axes as an `int`                                 |

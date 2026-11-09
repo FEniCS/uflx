@@ -71,7 +71,7 @@ real space of constants of value shape `(6,)`. The library supplies an
 selecting the stored value for each tensor entry:
 
 ```python
-D = mesh(x, RD(2))
+D = mesh(x, EuclideanSpace(2))
 u, v = function(V, "u"), function(V, "v")
 i, j, k, l = index("i"), index("j"), index("k"), index("l")
 two = Integer(2)

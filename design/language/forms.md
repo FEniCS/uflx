@@ -92,7 +92,7 @@ may be a `tuple` of functions in several spaces.
 #### Examples
 
 The examples use a topology `T` of `ReferenceSimplex(2)` cells and the mesh
-`D = mesh(x, RD(2))`, so $k = n = 2$.
+`D = mesh(x, EuclideanSpace(2))`, so $k = n = 2$.
 
 - The Lagrange space of polynomial degree 1 on `T` has the value shape `()`.
 - The Nédélec and the Raviart–Thomas spaces on `T` both have the value shape

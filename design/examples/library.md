@@ -280,7 +280,7 @@ topology](#side-data-of-a-static-topology)).
 of `Simplex(2)` cells has no reference cells. `ReferenceSimplex(2)` and
 `UnitSimplex(2)` are the same set but different coordinate domains, so an
 expression on one is not an expression on the other. Likewise,
-`ReferenceSimplex(0)` and `RD(0)` are different coordinate domains.
+`ReferenceSimplex(0)` and `EuclideanSpace(0)` are different coordinate domains.
 
 ## Implementation of the FEniCS layer
 

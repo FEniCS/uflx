@@ -4,7 +4,7 @@ A local cell configuration acquires physical geometry through a coordinate expre
 
 ```python
 # T describes one triangle slot; the package supplies its local data.
-Q = RD(2)                       # Ambient space: the plane.
+Q = EuclideanSpace(2)                       # Ambient space: the plane.
 X = Lagrange(T, 1, (2,))         # Library-supplied space of coordinate functions.
 x = function(X, "x")            # Physical positions, with values supplied by the solver.
 D = mesh(x, Q)                  # Physical mesh; its topology comes from x.
@@ -98,7 +98,7 @@ Let `x` be a vector Lagrange function of degree 1 on `square`, of value shape
 The resulting physical mesh is the square:
 
 ```python
-D = mesh(x, RD(2))
+D = mesh(x, EuclideanSpace(2))
 ```
 
 - `D.topology` is `square`, with two triangle slots. `cell_map(D, 0)`
@@ -107,7 +107,7 @@ D = mesh(x, RD(2))
   `pull_back(x, cell_map(square, 1))`, which the library evaluates to
   $(1 - X_1, X_0 + X_1)$ for the supplied coordinates.
 
-For a local configuration `M` with types `(Kt, Kq)`, `mesh(x, RD(2))` has
+For a local configuration `M` with types `(Kt, Kq)`, `mesh(x, EuclideanSpace(2))` has
 one triangle and one quadrilateral piece. A field `u` on `M` has local reads:
 
 ```python
@@ -150,7 +150,7 @@ the stored coordinate expression on the topology.
 For a mesh `mesh(x, Q)`, the pull-back by `cell_map(D, j)` is
 `pull_back(x, cell_map(T, j))`.
 
-For example, `coordinate(RD(3))` has value shape `(3,)` and domain `RD(3)`.
+For example, `coordinate(EuclideanSpace(3))` has value shape `(3,)` and domain `EuclideanSpace(3)`.
 
 ### Valid pair
 
@@ -212,10 +212,10 @@ on $Q$, evaluated at $\psi(p)$.
 
 #### Examples
 
-Start with a scalar expression on `RD(3)`:
+Start with a scalar expression on `EuclideanSpace(3)`:
 
 ```python
-P = RD(3)
+P = EuclideanSpace(3)
 X = coordinate(P)
 x, y, z = X[0], X[1], X[2]
 f = x * y * z
@@ -227,12 +227,12 @@ f = x * y * z
 | `gradient(gradient(f, P), P)`           | `(3, 3)`    | The Hessian of $f$                            |
 | `gradient(X, P)`                        | `(3, 3)`    | The identity matrix, after evaluation         |
 
-- Let `M` be a mesh of dimension 2 in `RD(3)`, and `w` a field
+- Let `M` be a mesh of dimension 2 in `EuclideanSpace(3)`, and `w` a field
   on `M`. `gradient(w, M)` is the surface gradient of `w`, with value shape
   `(3,)`. `gradient(coordinate(M), M)` is the orthogonal projection onto the
   tangent plane of `M`, with value shape `(3, 3)`.
-- `gradient(X, RD(2))` raises `ValueError`, because `X` has the domain
-  `RD(3)`.
+- `gradient(X, EuclideanSpace(2))` raises `ValueError`, because `X` has the domain
+  `EuclideanSpace(3)`.
 
 ### `Divergence` and `Curl`
 
@@ -426,11 +426,11 @@ mesh-field evaluation uses [cell or side maps](#a-family-of-points-in-a-mesh).
 
 A $\psi$ with free indices makes $D$ a family of domains, with one domain for
 each value of the free indices. For example, with an array `x` of value shape
-`(m, n)` and an index `i`, `domain_map(RD(0), x[i], RD(n))` is a family of $m$
-points in `RD(n)`, retaining distinct members even at identical coordinates.
+`(m, n)` and an index `i`, `domain_map(EuclideanSpace(0), x[i], EuclideanSpace(n))` is a family of $m$
+points in `EuclideanSpace(n)`, retaining distinct members even at identical coordinates.
 
 For example, the hypotenuse of the unit triangle has parameter domain
-$P = [0,1]$ and parameterisation $\psi(t) = (1-t,t)$. Choose `Q = RD(2)`
+$P = [0,1]$ and parameterisation $\psi(t) = (1-t,t)$. Choose `Q = EuclideanSpace(2)`
 for the edge in the plane, or `Q = UnitSimplex(2)` for the edge in the triangle.
 
 ### `PullBack`
@@ -480,7 +480,7 @@ ambient domain of $D$, such as `E` in the example below. Composition through
 a cell map instead keeps nested pull-backs, preserving the cell selection.
 
 For an edge of the reference triangle `T` and a coordinate map `psi` from
-`T` into `RD(2)`:
+`T` into `EuclideanSpace(2)`:
 
 ```python
 T, S = UnitSimplex(2), UnitSimplex(1)
@@ -489,13 +489,13 @@ one = Integer(1)
 e = domain_map(S, tensor((one - t, t)), T)
 f = X[0] * X[1]
 fe = pull_back(f, e)  # Value (1 - t) * t.
-E = domain_map(S, pull_back(psi, e), RD(2))
+E = domain_map(S, pull_back(psi, e), EuclideanSpace(2))
 ```
 
-Changing the target to `RD(2)` makes the pull-back of `f` invalid:
+Changing the target to `EuclideanSpace(2)` makes the pull-back of `f` invalid:
 
 ```python
-edge_in_plane = domain_map(S, tensor((one - t, t)), RD(2))
+edge_in_plane = domain_map(S, tensor((one - t, t)), EuclideanSpace(2))
 pull_back(f, edge_in_plane)  # Raises ValueError: f has domain T.
 ```
 
@@ -597,7 +597,7 @@ but additionally identifies a domain on which fields and spaces can be defined.
 ### Points and point evaluation
 
 A point is the image of a domain map. A point in a domain $Q$ is
-`domain_map(RD(0), x, Q)`, with $x$ a constant expression of value shape
+`domain_map(EuclideanSpace(0), x, Q)`, with $x$ a constant expression of value shape
 `(n,)` for the dimension $n$ of the ambient coordinate domain of $Q$. The core
 needs no node class and no free function for a point.
 
@@ -606,10 +606,10 @@ needs no node class and no free function for a point.
 The value of an expression `f` at a point or indexed family of points `p` is:
 
 ```python
-integral(pull_back(f, p), RD(0))
+integral(pull_back(f, p), EuclideanSpace(0))
 ```
 
-`p` has parameter domain `RD(0)`, and `f` is defined at its points. The
+`p` has parameter domain `EuclideanSpace(0)`, and `f` is defined at its points. The
 result has no domain, preserves the value shape, scalar type and argument
 spaces of `f`, and carries the free indices of `f` followed by those of `p`,
 each taken once. Point indices are retained, not summed.
@@ -629,7 +629,7 @@ A quadrature rule on a coordinate domain is a weighted sum of point
 evaluations. For a family `p` with index `i` and weights `w`:
 
 ```python
-index_sum(w[i] * integral(pull_back(f, p), RD(0)), (i,))
+index_sum(w[i] * integral(pull_back(f, p), EuclideanSpace(0)), (i,))
 ```
 
 `integral(f, Q)` denotes the integral; this sum approximates it and is
@@ -646,10 +646,10 @@ and `f = X[0] * X[1]`:
 third = Integer(1) / Integer(3)
 
 # DomainMap: the centroid of T, as a point in T.
-c = domain_map(RD(0), tensor((third, third)), T)
+c = domain_map(EuclideanSpace(0), tensor((third, third)), T)
 
 # The value at the centroid: 1/9, with no domain and value shape ().
-fc = integral(pull_back(f, c), RD(0))
+fc = integral(pull_back(f, c), EuclideanSpace(0))
 ```
 
 Worked examples for this chapter: [an affinely mapped triangle](../examples/integration.md#an-affinely-mapped-triangle), [circulation along an edge](../examples/integration.md#circulation-along-an-edge), [integrating over an edge](../examples/integration.md#integrating-over-an-edge), [integrating over the boundary of a triangle](../examples/integration.md#integrating-over-the-boundary-of-a-triangle), [quadrature](../examples/integration.md#quadrature), [integrating over a cut cell](../examples/integration.md#integrating-over-a-cut-cell), [the centroid of a triangle](../examples/integration.md#the-centroid-of-a-triangle).
@@ -805,7 +805,7 @@ For a domain-free array `positions` of reference positions in $K_j$,
 evaluation is:
 
 ```python
-R = domain_map(RD(0), positions[i], K_j)
+R = domain_map(EuclideanSpace(0), positions[i], K_j)
 values = pull_back(pull_back(f, cell_map(D, j)), R)
 ```
 
@@ -823,9 +823,9 @@ execution by the core:
 ```python
 f0 = pull_back(f, cell_map(D, 0))
 f1 = pull_back(f, cell_map(D, 1))
-midpoint = domain_map(RD(0), tensor((Float(0.5),)), K)
-left_endpoint = domain_map(RD(0), tensor((Integer(0),)), K)
-right_endpoint = domain_map(RD(0), tensor((Integer(1),)), K)
+midpoint = domain_map(EuclideanSpace(0), tensor((Float(0.5),)), K)
+left_endpoint = domain_map(EuclideanSpace(0), tensor((Integer(0),)), K)
+right_endpoint = domain_map(EuclideanSpace(0), tensor((Integer(1),)), K)
 
 pull_back(f0, midpoint)  # Physical coordinate 0.5; value 2.
 pull_back(f0, right_endpoint)  # Physical coordinate 1; value 2.

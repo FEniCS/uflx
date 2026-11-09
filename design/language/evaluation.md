@@ -728,7 +728,7 @@ contracts. The table lists the nodes allowed after `lower`.
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Coordinate` | Always |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Gradient` | Matches ST12 |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Divergence`, `Curl` | Of the identity of Piola, under no pull-back by a cell |
-| [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `RD(0)` |
+| [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `EuclideanSpace(0)` |
 | [Maps between domains](geometry.md#maps-between-domains) | `PullBack` | By a `SideMap` of an expression other than an `Apply` or `Form`, or of a terminal, of a `PullBack` by a `SideMap` or a cell, or of a `Gradient`, a `PushForward` or a node of the identity of Piola by a map that is not a cell |
 | [Fields and integration on a mesh](geometry.md#fields-and-integration-on-a-mesh) | `Normal` | Always |
 | [Fields and integration on a mesh](geometry.md#fields-and-integration-on-a-mesh) | `PushForward` | Under no pull-back by a cell |

@@ -448,7 +448,7 @@ rounded power, so the result of `power` depends on the math library.
 
 A matrix is a `Tensor` of `Tensor`s.
 
-Value shapes may contain extent 0, as in `coordinate(RD(0))`. An empty
+Value shapes may contain extent 0, as in `coordinate(EuclideanSpace(0))`. An empty
 `Tensor` cannot provide the entry shape `s`. Use `Zero` for a typed zero or
 [`broadcast_to`](#broadcastto) with an operand supplying the member type.
 

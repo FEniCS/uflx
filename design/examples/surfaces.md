@@ -12,7 +12,7 @@ function of value shape `(3,)`, and `V` a real scalar Lagrange space on `T`.
 The library supplies the topology, space and coordinate values:
 
 ```python
-M = mesh(x, RD(3))
+M = mesh(x, EuclideanSpace(3))
 
 u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
 u_M, v_M, f_M = (
@@ -29,7 +29,7 @@ a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), M), (v, u))
 L = form(integral(f_M * v_M, M), (v,))
 ```
 
-`M` has dimension 2 in `RD(3)`, so `grad_u` and `grad_v` are tangential
+`M` has dimension 2 in `EuclideanSpace(3)`, so `grad_u` and `grad_v` are tangential
 vectors with three components. Neither form needs an orientation.
 
 On each reference cell, with $J$ the $3\times2$ coordinate Jacobian,
@@ -60,7 +60,7 @@ $\pm1$ tell whether each cell's vertex order agrees with the outward orientation
 
 ```python
 K = ReferenceSimplex(2)
-M = mesh(x, RD(3))
+M = mesh(x, EuclideanSpace(3))
 cells = cell_map(M, 0)
 J = jacobian(cells)
 r, l = index("r"), index("l")
@@ -113,7 +113,7 @@ square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
 i = index("i")
 s = function(W, "s")
 
-D_s = mesh(x + s, RD(2))
+D_s = mesh(x + s, EuclideanSpace(2))
 
 volume = integral(Integer(1), D_s)
 
@@ -143,7 +143,7 @@ the same value shape:
 
 ```python
 w = function(W_T, "w")
-M_w = mesh(x_T + w, RD(3))
+M_w = mesh(x_T + w, EuclideanSpace(3))
 
 area = integral(Integer(1), M_w)
 ```
@@ -152,10 +152,10 @@ The cell Jacobian is $3\times2$ and the density is $\sqrt{\det(J^T J)}$.
 
 ```{dropdown} Isogeometric analysis and shells
 For extraction-based isogeometric analysis, store the NURBS map `F` as a
-function on the topology of knot spans and use `mesh(F, RD(3))`. Multiple
+function on the topology of knot spans and use `mesh(F, EuclideanSpace(3))`. Multiple
 patches use the combined topology; lowering inserts the geometric factors.
 
-For a shell midsurface `mesh(phi_0, RD(3))`, the cell Jacobian is the
+For a shell midsurface `mesh(phi_0, EuclideanSpace(3))`, the cell Jacobian is the
 reference gradient of `phi_0`. Its Gram matrix is the first fundamental form,
 and its density is the midsurface area element.
 ```
@@ -170,7 +170,7 @@ Use ordinary directional differentiation:
 
 ```python
 x, h, v = function(X, "x"), function(X, "h"), function(X, "v")
-D = mesh(x, RD(2))
+D = mesh(x, EuclideanSpace(2))
 grad_u = gradient(push_forward(function(V, "u"), D, transformation_law(V)), D)
 i = index("i")
 energy = integral(index_sum(grad_u[i] * grad_u[i], (i,)), D)

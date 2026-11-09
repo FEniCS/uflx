@@ -170,7 +170,7 @@ Construction validates immutable objects once; every existing object is structur
 ### Leaves and subclassing
 
 Only leaves are subclassed. A leaf is a primitive object rather than an
-operation, such as the coordinate domain `RD(n)` or a function whose values an
+operation, such as the coordinate domain `EuclideanSpace(n)` or a function whose values an
 external library supplies. Leaves may have graph dependencies: a `Function`
 depends on its space, and a `Coordinate` on its domain. A terminal is a leaf
 that is an expression, such as a literal, `Coordinate`, `Function` or `Normal`
@@ -202,7 +202,7 @@ under their documented substitution rules; none evaluates unrelated lazy nodes.
 Free functions and passes are pure. A class method immediately calls a free
 function. Constructor arguments are positional only; the type checker rejects
 named arguments. Free functions may take named arguments, such as
-`domain_map(P=T, psi=psi, Q=RD(2))`.
+`domain_map(P=T, psi=psi, Q=EuclideanSpace(2))`.
 
 A stored property returns a construction argument; a derived property depends
 on the class and those arguments. Concrete classes inherit the derived
@@ -263,6 +263,6 @@ Every number in an expression is written with literals, such as `Integer(2)`,
 `complex`, `Fraction` or NumPy scalar is never converted and is rejected by
 static type checking.
 
-With `X = coordinate(RD(2))`, `X[0]**Integer(2)` is accepted, but `X[0]**2`
+With `X = coordinate(EuclideanSpace(2))`, `X[0]**Integer(2)` is accepted, but `X[0]**2`
 is a static type error. The same rule applies inside containers:
 `tensor((Integer(1), Integer(2)))` is accepted, but `tensor((1, 2))` is not.
