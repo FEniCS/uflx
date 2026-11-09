@@ -618,8 +618,8 @@ an `AbstractExtent`, without knowing its value during construction.
 ### `AbstractIndexTable`
 
 `AbstractIndexTable` represents a table of index values supplied by the solver,
-such as a local basis permutation or the local facet number selecting a
-pretabulated reference map. The values are fixed but not known during construction. An
+such as a local basis permutation, a local-to-patch degree-of-freedom map,
+or the local facet number selecting a pretabulated reference map. The values are fixed but not known during construction. An
 `AbstractIndexTable` is not an expression and not a free index.
 
 | `AbstractIndexTable` |                                                        |

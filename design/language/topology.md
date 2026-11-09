@@ -3,8 +3,10 @@
 UFLx describes local kernels as mathematics. A topology describes the local
 cell configuration used by a kernel: its cell types and named side relations.
 The finite element package selects concrete mesh cells and supplies their
-local coefficient and coordinate data. Cell counts, global cell numbers,
-neighbour lookup, iteration over a mesh and assembly are outside the core.
+local coefficient and coordinate data. Mesh-wide cell counts, global cell
+numbers, neighbour lookup, iteration over a mesh and global assembly are
+outside the core. Runtime-sized local arrays and index maps can still describe
+a complete patch calculation.
 
 A local configuration may contain one cell, the two parents of an interface,
 or the cells of a fixed macro element. Distinct local cells retain their
@@ -74,8 +76,11 @@ whose cells should all be integrated together.
 
 The number of slots is fixed when the expression is constructed. An empty
 selection in the package causes no kernel calls; it does not require an empty
-symbolic topology. Runtime-sized patches require package-level composition
-of local kernels.
+symbolic topology. A runtime-sized patch can instead be expressed through
+packed local arrays, index tables and sums, as in the
+[patch problem](../examples/patches.md#a-mean-constrained-dg-patch-correction).
+The package supplies the packing and local-to-patch degree-of-freedom maps;
+no runtime topology is required.
 
 A topology whose cell types are reference cells may be the domain of an
 expression or space. Its points are cell-labelled reference points; continuity
