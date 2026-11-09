@@ -16,7 +16,14 @@ with or without a domain or topology.
 | Provides                | `domain`, an [`AbstractDomain`](topology.md#abstractdomain), an [`AbstractTopology`](topology.md#abstracttopology) or `None`, `value_shape`, `scalar_type`, and `argument_spaces`, `()` for a space of fields |
 | Defined by              | A subclass outside the core, such as a subclass for the finite element spaces of Basix, and [`DualSpace`](#dualspace) in the core                           |
 
-A space with the domain `None` has functions that do not depend on a domain.
+| Property | Meaning |
+| -------- | ------- |
+| `domain` | Where the space's fields are defined: a domain, a topology, or `None` for values with no spatial argument. |
+| `value_shape` | Array shape of a function's output, with `()` for a scalar. |
+| `scalar_type` | Real or complex arithmetic for the function's expression representation. |
+| `argument_spaces` | Ordered input spaces when a function represents a multilinear map; `()` for a field. |
+
+A space with `domain is None` has functions with no spatial argument.
 
 A library may supply `transformation_law(V)` for spaces with a
 [`TransformationLaw`](geometry.md#transformationlaw). This is not a required space property
@@ -24,8 +31,8 @@ or a core overload; the core constructor remains `transformation_law(variances, 
 
 #### Functions in a space
 
-`Function(V, label)` uses the domain of $V$ and the value
-shape, scalar type and argument spaces of $V$. These describe its expression
+`Function(space, label)` takes its domain, value shape, scalar type and
+argument spaces from `space`. These describe its expression
 representation; a form may represent the same space element differently
 (see [The double dual](#the-double-dual)). For fields on core domains and
 topologies, the concrete subclass supplies evaluation as follows:
@@ -65,7 +72,7 @@ the value. A coordinate-only
 mesh](geometry.md#a-family-of-points-in-a-mesh)).
 
 The concrete subclass owns the polynomials, degrees of freedom and basis of
-$V$, and stores the arguments identifying the space, such as the finite
+the space, and stores the arguments identifying the space, such as the finite
 element. Space identity is structural.
 
 A library may provide [cell-local interpolation](extensions.md#cell-local-interpolation)
@@ -76,7 +83,7 @@ data, not additional properties required by `AbstractFunctionSpace`.
 
 A space with the domain `None` and the argument spaces `()` is a space of
 constants. A function in the space is an expression with no domain, a
-single array with the value shape and the scalar type of $V$.
+single array with the value shape and scalar type supplied by the space.
 
 The integrals of a form decide the cells on which a constant acts.
 
@@ -111,13 +118,13 @@ In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element st
 field when its argument spaces are `()`, and otherwise a multilinear map
 with those argument spaces.
 
-| `Function(V, label)` |                                                                                                                              |
+| `Function(space, label)` |                                                                                                                              |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Extends              | `AbstractExpression` |
-| Free function        | `function(V, label)`                                                                                                         |
-| Takes                | `V: AbstractFunctionSpace`, `label: str \| tuple` |
-| Properties           | `space` $V$, an `AbstractFunctionSpace`, and `label`, a `str` or a `tuple` with the rules of the label of an [`Index`](expressions.md#index) |
-| Static type          | The value shape, scalar type and argument spaces of $V$, the domain of $V$, and no free indices |
+| Free function        | `function(space, label)`                                                                                                         |
+| Takes                | `space: AbstractFunctionSpace`, `label: str \| tuple` |
+| Properties | `space`, the function space supplying its type and evaluation rules, and `label`, the identifier distinguishing functions in that space; labels follow the rules of an [`Index`](expressions.md#index) |
+| Static type          | The value shape, scalar type and argument spaces of `space`, the domain of `space`, and no free indices |
 
 The label identifies the function, so two functions are the same only if the
 spaces and the labels are equal. `Function(DualSpace(S), label)` is an
@@ -194,17 +201,19 @@ arguments remain an open question.
 
 ### `ConjugateSpace`
 
-`ConjugateSpace` is the complex conjugate space $\bar V$ of a complex space $V$.
+`ConjugateSpace(space)` records conjugation of a complex function space.
+It lets a form declare antilinearity in an argument. Writing $V$ for `space`,
+the resulting space is $\bar V$.
 
-| `ConjugateSpace(V)` |                                                                                                   |
+| `ConjugateSpace(space)` |                                                                                                   |
 | ------------------- | ------------------------------------------------------------------------------------------------- |
 | Extends             | `AbstractFunctionSpace` |
-| Free function       | `conjugate_space(V)` |
-| Takes               | `V: AbstractFunctionSpace` |
-| Returns             | `V` for a real `V`, `V.space` for a `ConjugateSpace`, and `ConjugateSpace(V)` otherwise |
-| Properties          | `space` $V$, an `AbstractFunctionSpace` with the complex scalar type, not a `ConjugateSpace`       |
-| Derived             | `domain`, `value_shape` and `scalar_type`, those of $V$; `argument_spaces`, those of $V$ with each space conjugated, member by member for a `tuple` |
-| Raises              | `ValueError` for a real $V$ or a `ConjugateSpace`  |
+| Free function       | `conjugate_space(space)` |
+| Takes               | `space: AbstractFunctionSpace` |
+| Returns             | `space` for a real `space`, `space.space` for a `ConjugateSpace`, and `ConjugateSpace(space)` otherwise |
+| Properties | `space`, the original complex function space; it must not itself be a `ConjugateSpace` |
+| Derived             | `domain`, `value_shape` and `scalar_type`, those of `space`; `argument_spaces`, those of `space` with each space conjugated, member by member for a `tuple` |
+| Raises | The node constructor raises `ValueError` for a real space or a `ConjugateSpace`; the factory handles these cases as stated above |
 
 A linear form on $\bar V$ is an antilinear form on $V$.
 The core uses $\bar V$ only as an argument space, to record that a form
@@ -223,31 +232,36 @@ preserving these canonical forms.
 
 ### `DualSpace`
 
-`DualSpace` is the space of bounded antilinear functionals on a space or a
-product of spaces.
+`DualSpace(space)` describes bounded antilinear functionals: maps that take a
+member of `space` and return a scalar. `space` may also be a tuple of spaces,
+representing one product-space argument.
 
 Every space $V$ is assumed reflexive. The core identifies $V$ with its
 double dual by the canonical map defined
 [below](#the-double-dual).
 
-| `DualSpace(S)` | |
+| `DualSpace(space)` | |
 | -------------- | - |
 | Extends | `AbstractFunctionSpace` |
-| Takes | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` |
-| Properties | `space` $S$, a space other than a `DualSpace`, or a `tuple` of at least two spaces with the same scalar type |
+| Takes | `space: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` |
+| Properties | `space`, the space on whose members the functionals act, or a `tuple` of at least two spaces with the same scalar type; a single space must not be a `DualSpace` |
 | Derived | `domain`, `value_shape`, `scalar_type` and `argument_spaces`, below |
 | Raises | `ValueError` for a `DualSpace` or an invalid tuple |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `dual_space(S)` | | `S: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` | `S.space` for a `DualSpace`, otherwise `DualSpace(S)` |
+| `dual_space(space)` | | `space: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` | `space.space` for a `DualSpace`, otherwise `DualSpace(space)` |
 
-`DualSpace(S)` provides:
+The derived properties describe a function in the dual space:
 
-- No domain, and value shape `()`.
-- The argument spaces `(S',)`, with $S'$ = `conjugate_space(S)` for a
-  space, or the tuple of the conjugate spaces for a `tuple` $S$.
-- The scalar type of $S$, common to the members of a `tuple`.
+| Property | Meaning |
+| -------- | ------- |
+| `domain` | `None`; a functional has no spatial argument. |
+| `value_shape` | `()`; applying a functional produces a scalar. |
+| `scalar_type` | The scalar type of `space`, shared by all members when it is a tuple. |
+| `argument_spaces` | One slot: the conjugate of `space`, or a tuple of the conjugated member spaces when `space` is a tuple. |
+
+The descriptions below write `S` for `space`.
 
 Space substitution rebuilds a dual through `dual_space`, preserving its
 canonical form. For a `tuple` $S$, taking the dual twice returns that tuple;
@@ -335,17 +349,28 @@ The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in
 
 ### `Form`
 
-`Form` binds some functions of an expression as arguments of a variational form.
+`Form(expression, arguments)` turns selected functions in `expression` into
+inputs of a multilinear map. `expression` is the body to evaluate;
+`arguments` declares which functions are inputs and in what order. Other
+functions remain fixed data for that form.
 
 | `Form(expression, arguments)` |                                                                                                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                       | `AbstractExpression` |
 | Free function                 | `form(expression, arguments)`                                                                                                                                                                      |
 | Takes                         | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]` |
-| Properties                    | `expression`, an expression, and `arguments`, a `tuple` of entries, each a [function](#function) `v`, the [conjugate](expressions.md#conjugate) `conjugate(v)` of a function, or a `tuple` of at least two of these |
+| Properties | `expression`, the body of the form, and `arguments`, the ordered binding declarations described below |
 | Requires                      | Every function in `arguments` distinct and [bindable](#bindable-functions); each tuple entry has one scalar type; no bound function occurs free in any resulting argument space, including inherited slots |
-| Static type                   | That of the expression, with the argument spaces of the expression followed by the space $V$ of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
+| Static type                   | That of the expression, with the argument spaces of the expression followed by the space `V` of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
 | Raises                        | `ValueError` for a conjugated expression that is not a function, a repeated or non-bindable function, a tuple with fewer than two members or mixed scalar types, or an argument space depending on a bound function |
+
+Each entry of `arguments` declares one new argument slot:
+
+| Entry | Meaning |
+| ----- | ------- |
+| A bindable `Function` | The form is linear in this function. |
+| `conjugate(function)` for a bindable `Function` | The form is antilinear in this function. |
+| A tuple of at least two functions or conjugated functions | One product-space argument; the form is jointly linear in the declared values. |
 
 An entry's binder index is its index in `arguments`; its argument position
 is the arity of `expression` plus that index. An entry `v` declares
@@ -442,26 +467,31 @@ In legacy UFL, the arguments of a form are the test functions and the trial func
 
 ### `Apply`
 
-`Apply` supplies every ordered argument of a multilinear expression, including
-sums and nested forms.
+`Apply(form, arguments)` represents evaluation of a multilinear expression by supplying a
+value for every argument slot. `form` may be a `Form`, a compatible sum or
+product, or an externally supplied multilinear function. `arguments` contains
+the input values in the order given by `form.argument_spaces`.
 
-| `Apply(f, arguments)` | |
+The name `arguments` has different roles in `Form` and `Apply`: `Form.arguments`
+declares bound functions; `Apply.arguments` stores the values supplied to them.
+
+| `Apply(form, arguments)` | |
 | -------------------- | - |
 | Extends | `AbstractExpression` |
-| Free function | `apply(f, arguments)` |
-| Takes | `f: AbstractExpression`, `arguments: tuple[AbstractExpression \| tuple[AbstractExpression, ...], ...]` |
-| Properties | `form` $f$ and `arguments`, the ordered tuple of supplied values |
-| Requires | `len(arguments) == len(f.argument_spaces) > 0`; each supplied value admissible for the corresponding space below |
-| Returns | `f` for `apply(f, ())` when `f.argument_spaces == ()`, otherwise `Apply(f, arguments)` |
-| Static type | The value shape, scalar type and domain of $f$; no argument spaces; the free indices of $f$ followed by those of all supplied values, each `Index` taken once |
+| Free function | `apply(form, arguments)` |
+| Takes | `form: AbstractExpression`, `arguments: tuple[AbstractExpression \| tuple[AbstractExpression, ...], ...]` |
+| Properties | `form`, the multilinear expression to evaluate, and `arguments`, the ordered tuple of supplied values |
+| Requires | `len(arguments) == len(form.argument_spaces) > 0`; each supplied value admissible for the corresponding space below |
+| Returns | `form` for `apply(form, ())` when `form.argument_spaces == ()`, otherwise `Apply(form, arguments)` |
+| Static type | The value shape, scalar type and domain of `form`; no argument spaces; the free indices of `form` followed by those of all supplied values, each `Index` taken once |
 | Raises | `ValueError` for an incorrect argument count, inadmissible value or conflicting free-index extents |
 
 #### Admissible argument values
 
-| Argument space | Admissible value $g$ |
+| Argument space | Admissible value |
 | -------------- | ------------------- |
-| $V$ | Same value shape and argument spaces as a function in $V$; its scalar type or real; its domain or no domain |
-| `ConjugateSpace(V)` | The conjugate type of an admissible value for $V$, including argument spaces; supplies the value of `conjugate(v)` |
+| A space `space` | Same value shape and argument spaces as a function in `space`; scalar type `space.scalar_type` or real; domain `space.domain` or no domain |
+| `ConjugateSpace(space)` | The conjugate type of an admissible value for `space`, including argument spaces; supplies the conjugated function value |
 | Tuple of spaces | A tuple with one admissible member per space |
 
 A product-space argument occupies one slot. Free indices give families of
@@ -496,14 +526,16 @@ $(\nabla A)(g)=\nabla(a g)$, including the spatial derivative of $g$.
 
 ### Partial application
 
-`partial` supplies selected entries of an explicit outer `Form` by simultaneous
-substitution. It is a transformation pass, not a lazy node.
+`partial(form, mapping)` supplies values for selected arguments of an explicit
+outer `Form`, leaving the others open. `form` is the binder to partially
+apply; `mapping` associates each selected binding declaration with its supplied
+value. Substitution is simultaneous. This is a transformation pass, not a lazy node.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `partial(F, mapping)` | | `F: Form`, `mapping: dict` | The form with selected outer entries supplied, or its body when none remain |
+| `partial(form, mapping)` | | `form: Form`, `mapping: dict` | The form with selected outer entries supplied, or its body when none remain |
 
-Keys must be complete entries of `F.arguments`, including conjugation and
+Keys must be complete entries of `form.arguments`, including conjugation and
 tuple grouping; values satisfy [argument admissibility](#admissible-argument-values).
 Inherited slots and inner binders are not selectors. Other expression types,
 including sums, are rejected; use `apply` instead.
@@ -511,20 +543,20 @@ including sums, are rejected; use `apply` instead.
 Retained entries keep their order and identities. If a retained function
 occurs free in any supplied value under the construction walk, raise
 `ValueError`; explicitly `rebind` it first. Internal binders may freshen.
-Conjugation and promotion follow `Apply`. An empty mapping returns `F`;
+Conjugation and promotion follow `Apply`. An empty mapping returns `form`;
 supplying every outer entry returns the body, including any inherited slots.
 
-The result keeps `F`'s value shape, scalar type and domain. Its slots are the
-inherited slots followed by retained entries. Combine the free indices of `F`
+The result keeps `form`'s value shape, scalar type and domain. Its slots are the
+inherited slots followed by retained entries. Combine the free indices of `form`
 and all supplied values, requiring matching extents. Complete the body's type
 before rebuilding the binder, retaining indices even from unused values.
 
 ```python
 F = form(integral(u * v, D), (v, u))
-partial(F, {u: w})                 # form(integral(w * v, D), (v,))
-partial(F, {u: v})                 # ValueError: retained-argument capture
+partial(F, {u: w})  # form(integral(w * v, D), (v,))
+partial(F, {u: v})  # ValueError: retained-argument capture
 partial(rebind(F, {v: p}), {u: v})  # form(integral(v * p, D), (p,))
-apply(F, (w, p))                   # integral(p * w, D)
+apply(F, (w, p))  # integral(p * w, D)
 ```
 
 For `stokes = form(e, ((v, q), (u, p)))`,
@@ -532,12 +564,15 @@ For `stokes = form(e, ((v, q), (u, p)))`,
 
 ### Rebinding
 
-`rebind` simultaneously renames declarations and their bound occurrences.
-It is a transformation pass; it preserves the bound map.
+`rebind(binder, mapping)` renames selected declarations and their bound
+occurrences. `binder` is a form or index-binding node; `mapping` associates
+existing declarations with their replacement declarations. Renaming is
+simultaneous and preserves the meaning of the bound map. This is a
+transformation pass.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `rebind(b, mapping)` | | `b: Form \| ComponentTensor \| IndexSum`, `mapping: dict` | The binder with selected declarations renamed |
+| `rebind(binder, mapping)` | | `binder: Form \| ComponentTensor \| IndexSum`, `mapping: dict` | The binder with selected declarations renamed |
 
 For `Form`, keys and values are complete argument entries; preserve order,
 grouping, member spaces and conjugation. For index binders, keys are declared
@@ -546,7 +581,7 @@ scope. Swaps are allowed; internal binders may freshen to prevent capture.
 
 Raise `ValueError` for unknown declarations, changed signatures, duplicate
 resulting names, or targets free in the original binder under the construction
-walk. Unsupported binders are Python type errors. An empty mapping returns `b`.
+walk. Unsupported binders are Python type errors. An empty mapping returns `binder`.
 
 Rebinding preserves alpha-equivalence: corresponding bound occurrences refer
 to the same lexical declarations, with free names and parameter signatures
