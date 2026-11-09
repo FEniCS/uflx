@@ -4,7 +4,7 @@
 
 The core fixes its node classes; libraries add passes and subclass abstract
 leaves. Only language extensions add non-leaf classes. Passes follow the
-[rule-selection and contract policy](evaluation.md#transformations-recipes-and-contracts).
+[rule-selection and contract policy](rewriting.md#transformations-recipes-and-contracts).
 
 The core supports five kinds of extension:
 
@@ -40,7 +40,7 @@ of concrete core classes (see [Leaves and subclassing](rules.md#leaves-and-subcl
 
 #### Rule tables
 
-Extension rules use the core's [rules, strategies and contracts](evaluation.md#transformations-recipes-and-contracts).
+Extension rules use the core's [rules, recipes and contracts](rewriting.md#transformations-recipes-and-contracts).
 
 | Concern | Requirement |
 | ------- | ----------- |
@@ -185,7 +185,7 @@ of an `AbstractCoordinateDomain`, and passes handle its coordinate via `Coordina
 
 A library selects rewrite rules and a strategy, with coverage determined by its
 output contract. For example, a compiler may reduce an `Indexed` of a
-`ComponentTensor` using [substitution and binding](evaluation.md#substitution-and-binding).
+`ComponentTensor` using [substitution and binding](substitution.md#substitution-and-binding).
 
 ### Geometry-dependent reconstruction
 

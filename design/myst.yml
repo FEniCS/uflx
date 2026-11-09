@@ -15,6 +15,11 @@ project:
         - file: language/geometry.md
         - file: language/forms.md
         - file: language/evaluation.md
+          children:
+            - file: language/rewriting.md
+            - file: language/substitution.md
+            - file: language/differentiation.md
+            - file: language/lowering.md
         - file: language/extensions.md
         - file: language/reference.md
     - file: examples/index.md

@@ -17,6 +17,10 @@ PAGES = tuple(
         "geometry",
         "forms",
         "evaluation",
+        "rewriting",
+        "substitution",
+        "differentiation",
+        "lowering",
         "extensions",
         "reference",
     )

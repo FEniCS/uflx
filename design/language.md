@@ -22,6 +22,10 @@ languages for variational forms, such as UFL and ngsolve.
 - [Geometry and calculus](language/geometry.md)
 - [Functions and forms](language/forms.md)
 - [Rewriting and lowering](language/evaluation.md)
+  - [Rewrite machinery](language/rewriting.md)
+  - [Substitution](language/substitution.md)
+  - [Differentiation](language/differentiation.md)
+  - [Applications and mappings](language/lowering.md)
 - [Extensions](language/extensions.md)
 - [Reference](language/reference.md)
 

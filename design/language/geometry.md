@@ -308,7 +308,7 @@ spaces. The functions of $x$ are bound in $f$, not in $a$ or $h$.
 
 A real-linear differential is assumed, even for complex variables and
 directions. Real points and directions enter complex spaces by
-[complex embedding](evaluation.md#type-compatibility-of-rewrites).
+[complex embedding](rewriting.md#type-compatibility-of-rewrites).
 Dual variables accept symbolic forms with matching functional signatures.
 
 This is the sole derivative primitive for function variables. Binding and
@@ -338,7 +338,7 @@ Differentiation counts dependencies through domains, maps, spaces and library
 reconstruction, holding independent field data fixed. Before applying ordinary
 chain rules, expose dependent geometry on fixed reference domains or use an
 explicit library derivative rule. Independent geometry needs no lowering.
-See [Geometry preparation](evaluation.md#geometry-preparation).
+See [Geometry preparation](differentiation.md#geometry-preparation).
 
 Variable spaces must be independent of the variables. The differentiated
 expression requires a fixed input signature and output domain compatible with
@@ -747,7 +747,7 @@ $(\det J)^w$ for $k = n$ and by $\rho^w$ for $k < n$. Each transformed axis
 has the extent $k$ in $\hat f$ and $n$ in $m_\psi(\hat f)$.
 
 The pull-back of a gradient by a cell and the normal of a side use the
-covariant law of weight 0 (see [Expanding pull-backs](evaluation.md#expanding-pull-backs)).
+covariant law of weight 0 (see [Expanding pull-backs](lowering.md#expanding-pull-backs)).
 The density of an integral is not an instance, because a measure uses
 $\lvert \det J \rvert$ and the law uses $\det J$.
 
@@ -809,7 +809,7 @@ The identity of Piola holds on each cell of $D$, with no derivative of $J$:
   on $K_j$ of $\hat f$, carried by `(("contravariant",), 1)` for $n = 3$ and
   by `((), 1)` for $n = 2$.
 
-[`expand_pull_backs`](evaluation.md#expanding-pull-backs) applies the identity, and every
+[`expand_pull_backs`](lowering.md#expanding-pull-backs) applies the identity, and every
 other `Divergence` and `Curl` lowers to its composition of `Gradient`.
 
 ### Traces on a mesh

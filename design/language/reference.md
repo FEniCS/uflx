@@ -266,17 +266,17 @@ Extend `AbstractExpression`:
 | [`partial(form, mapping)`](forms.md#partial-application) |          | `form: Form`, `mapping: dict`                                                                                         | The form with selected outer entries supplied, or its body when none remain                             |
 | [`rebind(binder, mapping)`](forms.md#rebinding)          |          | `binder: Form \| ComponentTensor \| IndexSum`, `mapping: dict`                                                        | The binder with selected declarations renamed                                                           |
 
-### Pass recipes
-
-| Function                                                            | Overload | Takes                   | Returns                                                  |
-| ------------------------------------------------------------------- | -------- | ----------------------- | -------------------------------------------------------- |
-| [`expand_arithmetic(f)`](evaluation.md#expanding-tensor-arithmetic) |          | `f: AbstractExpression` | An equivalent expression with tensor arithmetic expanded |
-
 ### Standard lowering recipe
 
 | Function                                             | Overload | Takes                   | Returns                                      |
 | ---------------------------------------------------- | -------- | ----------------------- | -------------------------------------------- |
 | [`lower(f)`](evaluation.md#standard-lowering-recipe) |          | `f: AbstractExpression` | An equivalent expression in core normal form |
+
+### Expanding tensor arithmetic
+
+| Function                                                          | Overload | Takes                   | Returns                                                  |
+| ----------------------------------------------------------------- | -------- | ----------------------- | -------------------------------------------------------- |
+| [`expand_arithmetic(f)`](lowering.md#expanding-tensor-arithmetic) |          | `f: AbstractExpression` | An equivalent expression with tensor arithmetic expanded |
 <!-- end generated: free-functions -->
 
 ## Appendix: Static type table

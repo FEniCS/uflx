@@ -29,14 +29,14 @@ through singularities.
 | [Terminal](#leaves-and-subclassing) | A leaf that is an expression, such as a literal, `Coordinate`, `Function` or `Normal`. |
 | [Construction free function](expressions.md#node-class-or-free-function) | A pure free function that may validate inputs and builds fixed expression compositions or canonical space descriptions. |
 | [Pass](#passes) | A pure free function that walks a graph after construction to compute a result or rewrite the graph. |
-| [Evaluation traversal](evaluation.md#evaluation-traversal) | A walk through expression operands, excluding dependencies stored in geometry, spaces and labels. |
-| [Free occurrence](evaluation.md#free-occurrences) | An occurrence of a name outside its binding scope, on the walk chosen by the operation; construction dependencies govern capture and geometry-dependence checks. |
-| [Independence](evaluation.md#independence) | An operand's value is unchanged when the operation's target varies with other inputs fixed. |
+| [Evaluation traversal](rewriting.md#evaluation-traversal) | A walk through expression operands, excluding dependencies stored in geometry, spaces and labels. |
+| [Free occurrence](substitution.md#free-occurrences) | An occurrence of a name outside its binding scope, on the walk chosen by the operation; construction dependencies govern capture and geometry-dependence checks. |
+| [Independence](rewriting.md#independence) | An operand's value is unchanged when the operation's target varies with other inputs fixed. |
 | [Domain-free expression](expressions.md#domain-free-expressions) | An expression with no spatial argument, interpreted as a constant field where a domain is required. |
-| [Grammar pattern](evaluation.md#grammars) | A structural condition on a node and objects within a bounded number of edges, independent of pass results. |
+| [Grammar pattern](rewriting.md#grammars) | A structural condition on a node and objects within a bounded number of edges, independent of pass results. |
 | [Rule pattern](extensions.md#rule-tables) | A condition selecting a local rewrite from node structure, static types or explicit analyses. |
-| [Strategy](evaluation.md#transformations-recipes-and-contracts) | Selection and scheduling of rewrite rules, including traversal and stopping conditions. |
-| [Recipe](evaluation.md#transformations-recipes-and-contracts) | A composition of strategies with stated input, output and preservation contracts. |
+| [Strategy](rewriting.md#transformations-recipes-and-contracts) | A recipe's choice of rules, traversal and stopping conditions. |
+| [Recipe](rewriting.md#transformations-recipes-and-contracts) | Selection and scheduling of rules with stated input, output and preservation contracts. |
 | [Array rank](expressions.md#abstractexpression), or **rank** | The number of axes in an expression's value shape. |
 | [Arity](forms.md#argument-spaces) | The number of argument spaces of a form, counting a product-space argument once. |
 | [Structurally equal](#the-base-object-base) | Objects with the same class and equal construction arguments, as tested by `==`. |
@@ -225,9 +225,9 @@ results to be cached per object.
 
 Each pass states its traversal and purpose. Passes compose; the caller chooses
 which run and in what order. The core substitution pass is
-[`replace(e, mapping)`](evaluation.md#substitution-and-binding).
+[`replace(e, mapping)`](substitution.md#substitution-and-binding).
 
-Unmatched nodes and failures follow the [strategy and contract rules](evaluation.md#transformations-recipes-and-contracts)
+Unmatched nodes and failures follow the [strategy and contract rules](rewriting.md#transformations-recipes-and-contracts)
 and the [extension policy](extensions.md#rule-tables). Analyses may report
 operation-specific errors, such as inconsistent units.
 

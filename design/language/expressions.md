@@ -236,7 +236,7 @@ Complex(Integer(-1), Integer(0))  # Minus one with complex scalar type.
 
 `Complex` retains its parts and stays complex even when the imaginary part
 is zero. As a terminal, it has no evaluation operands (see
-[Evaluation traversal](evaluation.md#evaluation-traversal)).
+[Evaluation traversal](rewriting.md#evaluation-traversal)).
 
 General real expressions `a` and `b` form a complex expression through
 `a + Complex(Integer(0), Integer(1)) * b`. A real expression `r` is embedded
@@ -325,7 +325,7 @@ squared.exponent == Integer(2)
 ```
 
 These are value rules; construction retains `Power` and its static type.
-The exponent may have domain. The [derivative rules](evaluation.md#derivatives-of-the-node-classes)
+The exponent may have domain. The [derivative rules](differentiation.md#derivatives-of-the-node-classes)
 distinguish a fixed zero or one exponent from an exponent that only takes that
 value at the differentiation point.
 
@@ -635,7 +635,7 @@ to the bound `i` inside `p`.
 
 A pass that substitutes into the expression of a binder renames the bound
 indices that would capture a free index of the substituted expression (see
-[Substitution and binding](evaluation.md#substitution-and-binding)).
+[Substitution and binding](substitution.md#substitution-and-binding)).
 
 For a square matrix `A`, `index_sum(A[i, i], (i,))` is its trace, and
 `component_tensor(A[i, i], (i,))` is its diagonal. Both work when the extent is
@@ -716,7 +716,7 @@ allowed, because a counter makes construction depend on global state.
 
 A pass that needs fresh indices derives the indices in the same way, with the
 identifier of the pass, the arguments of the rewritten node and a number. The
-renamed index of [Substitution and binding](evaluation.md#substitution-and-binding) has the
+renamed index of [Substitution and binding](substitution.md#substitution-and-binding) has the
 label `("uflx.rename", i, body, (s_1, ..., s_n))`.
 
 A label refers only to objects that the index is fresh for, and never to an
@@ -731,9 +731,9 @@ the binding node, preventing termination.
 ```
 
 The edges of an index to the objects in the label of the index identify the
-index and are not operands (see [Evaluation traversal](evaluation.md#evaluation-traversal)).
+index and are not operands (see [Evaluation traversal](rewriting.md#evaluation-traversal)).
 
-Label contents add no [free occurrences](evaluation.md#free-occurrences),
+Label contents add no [free occurrences](substitution.md#free-occurrences),
 including in function labels. They still determine identity and are rebuilt
 according to the substitution rules above.
 
@@ -746,7 +746,7 @@ corresponding entry of `J`.
 ### Tensor arithmetic
 
 Addition, scalar multiplication and division retain their arithmetic nodes.
-[Component expansion](evaluation.md#expanding-tensor-arithmetic) introduces index
+[Component expansion](lowering.md#expanding-tensor-arithmetic) introduces index
 notation during lowering. The other operations below use fixed compositions.
 
 | Free function | Overload | Takes | Returns |
@@ -884,6 +884,6 @@ Domain, free indices and scalar type follow the operand.
 
 The node remains in the core normal form. The compiler chooses its evaluation,
 such as an explicit formula for a small matrix or a factorisation. The
-[derivative rule](evaluation.md#derivatives-of-the-node-classes) uses cofactors.
+[derivative rule](differentiation.md#derivatives-of-the-node-classes) uses cofactors.
 
 Worked examples for this chapter: [transpose](../examples/tensors.md#transpose), [tensor algebra](../examples/tensors.md#tensor-algebra).

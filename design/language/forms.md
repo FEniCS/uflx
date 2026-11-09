@@ -385,7 +385,7 @@ may help diagnose mistakes.
 Binding is lexical: an occurrence refers to the innermost enclosing `Form`
 that binds the function, and is fixed otherwise. Thus a function may be an
 argument in one form and fixed in another. Substitution renames bound functions
-to avoid capture (see [Substitution and binding](evaluation.md#substitution-and-binding)).
+to avoid capture (see [Substitution and binding](substitution.md#substitution-and-binding)).
 
 The expression may itself be a form; new arguments follow its existing
 arguments, as in a [derivative form](#derivative-forms). No core pass
@@ -404,7 +404,7 @@ parameter requires the fixed-space representation described under
 
 A dual argument accepts a terminal load or a symbolic form with the same
 functional signature. Substituting a symbolic form into a pairing creates
-an application of that form (see [Expanding applications](evaluation.md#expanding-applications)).
+an application of that form (see [Expanding applications](lowering.md#expanding-applications)).
 
 Tuple arguments express mixed problems without mixed spaces. Their members may
 have different value shapes and domains, such as a Raviart–Thomas field and a
