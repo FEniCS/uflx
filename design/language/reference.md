@@ -165,41 +165,41 @@ Extend `AbstractExpression`:
 
 ### Numbers and scalar operations
 
-| Function                                                    | Overload | Takes                               | Returns                    |
-| ----------------------------------------------------------- | -------- | ----------------------------------- | -------------------------- |
-| [`power(first, second)`](expressions.md#power)              | `**`     | `first, second: AbstractExpression` | `Power`                    |
-| [`negate(f)`](expressions.md#negation-and-subtraction)      | `-f`     | `f: AbstractExpression`             | `multiply(Integer(-1), f)` |
-| [`subtract(f, g)`](expressions.md#negation-and-subtraction) | `f - g`  | `f, g: AbstractExpression`          | `add(f, negate(g))`        |
-| [`absolute(f)`](expressions.md#absolute)                    | `abs(f)` | `f: AbstractExpression`             | `Absolute`                 |
-| [`conjugate(f)`](expressions.md#conjugate)                  |          | `f: AbstractExpression`             | `Conjugate`                |
-| [`square_root(f)`](expressions.md#elementary-functions)     |          | `f: AbstractExpression`             | `SquareRoot`               |
-| [`logarithm(f)`](expressions.md#elementary-functions)       |          | `f: AbstractExpression`             | `Logarithm`                |
+| Function                                                             | Overload         | Takes                                | Returns                          |
+| -------------------------------------------------------------------- | ---------------- | ------------------------------------ | -------------------------------- |
+| [`power(base, exponent)`](expressions.md#power)                      | `**`             | `base, exponent: AbstractExpression` | `Power`                          |
+| [`negate(operand)`](expressions.md#negation-and-subtraction)         | `-operand`       | `operand: AbstractExpression`        | `multiply(Integer(-1), operand)` |
+| [`subtract(first, second)`](expressions.md#negation-and-subtraction) | `first - second` | `first, second: AbstractExpression`  | `add(first, negate(second))`     |
+| [`absolute(operand)`](expressions.md#absolute)                       | `abs(operand)`   | `operand: AbstractExpression`        | `Absolute`                       |
+| [`conjugate(operand)`](expressions.md#conjugate)                     |                  | `operand: AbstractExpression`        | `Conjugate`                      |
+| [`square_root(operand)`](expressions.md#elementary-functions)        |                  | `operand: AbstractExpression`        | `SquareRoot`                     |
+| [`logarithm(operand)`](expressions.md#elementary-functions)          |                  | `operand: AbstractExpression`        | `Logarithm`                      |
 
 ### Tensors and indexing
 
-| Function                                                                               | Overload | Takes                                                                         | Returns                                                                                                                                                         |
-| -------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`tensor(entries)`](expressions.md#tensor)                                             |          | `entries: tuple[AbstractExpression, ...]`                                     | `Tensor`                                                                                                                                                        |
-| [`broadcast_to(value, value_shape)`](expressions.md#broadcastto)                       |          | `value: AbstractExpression`, `value_shape: tuple[int \| AbstractExtent, ...]` | `BroadcastTo`                                                                                                                                                   |
-| [`indexed(expression, indices)`](expressions.md#indexed)                               |          | `expression: AbstractExpression`, `indices: tuple`                            | `Indexed`                                                                                                                                                       |
-| [`component(f, entries)`](expressions.md#partial-indexing)                             | `[]`     | `f: AbstractExpression`, `entries: tuple`                                     | `f` if `entries == ()`; otherwise `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$, otherwise `indexed(f, entries)` |
-| [`component_tensor(expression, indices)`](expressions.md#componenttensor-and-indexsum) |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                | `ComponentTensor`                                                                                                                                               |
-| [`index_sum(expression, indices)`](expressions.md#componenttensor-and-indexsum)        |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                | `IndexSum`                                                                                                                                                      |
-| [`gathered_index(table, indices)`](expressions.md#gatheredindex)                       |          | `table: AbstractIndexTable`, `indices: tuple`                                 | `GatheredIndex`                                                                                                                                                 |
+| Function                                                                               | Overload | Takes                                                                         | Returns                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`tensor(entries)`](expressions.md#tensor)                                             |          | `entries: tuple[AbstractExpression, ...]`                                     | `Tensor`                                                                                                                                                                                            |
+| [`broadcast_to(value, value_shape)`](expressions.md#broadcastto)                       |          | `value: AbstractExpression`, `value_shape: tuple[int \| AbstractExtent, ...]` | `BroadcastTo`                                                                                                                                                                                       |
+| [`indexed(expression, indices)`](expressions.md#indexed)                               |          | `expression: AbstractExpression`, `indices: tuple`                            | `Indexed`                                                                                                                                                                                           |
+| [`component(expression, entries)`](expressions.md#partial-indexing)                    | `[]`     | `expression: AbstractExpression`, `entries: tuple`                            | `expression` if `entries == ()`; otherwise `component_tensor(indexed(expression, entries + K), K)` if the entries are fewer than the rank of `expression`, otherwise `indexed(expression, entries)` |
+| [`component_tensor(expression, indices)`](expressions.md#componenttensor-and-indexsum) |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                | `ComponentTensor`                                                                                                                                                                                   |
+| [`index_sum(expression, indices)`](expressions.md#componenttensor-and-indexsum)        |          | `expression: AbstractExpression`, `indices: tuple[Index, ...]`                | `IndexSum`                                                                                                                                                                                          |
+| [`gathered_index(table, indices)`](expressions.md#gatheredindex)                       |          | `table: AbstractIndexTable`, `indices: tuple`                                 | `GatheredIndex`                                                                                                                                                                                     |
 
 ### Tensor operations
 
-| Function                                                            | Overload | Takes                               | Returns                                                                            |
-| ------------------------------------------------------------------- | -------- | ----------------------------------- | ---------------------------------------------------------------------------------- |
-| [`add(first, second)`](expressions.md#tensor-arithmetic)            | `+`      | `first, second: AbstractExpression` | `Sum(first, second)`                                                               |
-| [`multiply(first, second)`](expressions.md#tensor-arithmetic)       | `*`      | `first, second: AbstractExpression` | `Product(first, second)`                                                           |
-| [`divide(first, second)`](expressions.md#tensor-arithmetic)         | `/`      | `first, second: AbstractExpression` | `Division(first, second)`                                                          |
-| [`real_part(f)`](expressions.md#tensor-arithmetic)                  |          | `f: AbstractExpression`             | `component_tensor(RealPart(f[K]), K)`                                              |
-| [`imaginary_part(f)`](expressions.md#tensor-arithmetic)             |          | `f: AbstractExpression`             | `component_tensor(ImaginaryPart(f[K]), K)`                                         |
-| [`matrix_product(first, second)`](expressions.md#tensor-arithmetic) | `@`      | `first, second: AbstractExpression` | The contraction of the last axis of `first` with the first axis of `second`, below |
-| [`transpose(A)`](expressions.md#tensor-arithmetic)                  |          | `A: AbstractExpression`             | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2        |
-| [`inverse(A)`](expressions.md#inverse)                              |          | `A: AbstractExpression`             | `Inverse`                                                                          |
-| [`determinant(A)`](expressions.md#determinant)                      |          | `A: AbstractExpression`             | `Determinant`                                                                      |
+| Function                                                             | Overload | Takes                                        | Returns                                                                               |
+| -------------------------------------------------------------------- | -------- | -------------------------------------------- | ------------------------------------------------------------------------------------- |
+| [`add(first, second)`](expressions.md#tensor-arithmetic)             | `+`      | `first, second: AbstractExpression`          | `Sum(first, second)`                                                                  |
+| [`multiply(first, second)`](expressions.md#tensor-arithmetic)        | `*`      | `first, second: AbstractExpression`          | `Product(first, second)`                                                              |
+| [`divide(numerator, denominator)`](expressions.md#tensor-arithmetic) | `/`      | `numerator, denominator: AbstractExpression` | `Division(numerator, denominator)`                                                    |
+| [`real_part(operand)`](expressions.md#tensor-arithmetic)             |          | `operand: AbstractExpression`                | `component_tensor(RealPart(operand[K]), K)`                                           |
+| [`imaginary_part(operand)`](expressions.md#tensor-arithmetic)        |          | `operand: AbstractExpression`                | `component_tensor(ImaginaryPart(operand[K]), K)`                                      |
+| [`matrix_product(first, second)`](expressions.md#tensor-arithmetic)  | `@`      | `first, second: AbstractExpression`          | The contraction of the last axis of `first` with the first axis of `second`, below    |
+| [`transpose(matrix)`](expressions.md#tensor-arithmetic)              |          | `matrix: AbstractExpression`                 | `component_tensor(matrix[k, l], (l, k))`, with `(k, l)` = `K`, for `matrix` of rank 2 |
+| [`inverse(matrix)`](expressions.md#inverse)                          |          | `matrix: AbstractExpression`                 | `Inverse`                                                                             |
+| [`determinant(matrix)`](expressions.md#determinant)                  |          | `matrix: AbstractExpression`                 | `Determinant`                                                                         |
 
 ### Reference cells
 

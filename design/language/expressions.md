@@ -1,13 +1,29 @@
 # Expressions
 
+API signatures use descriptive parameter names. A stored property has the same
+name as its constructor parameter. API names, attribute access and literal
+values use code typography; mathematical notation describes values and
+relationships. Examples may use short local names such as `A` or `i`.
+
 ## Expressions and static type
 
 ### `AbstractExpression`
+
+`AbstractExpression` is the base class for symbolic values. Its static type
+describes the result of an expression without evaluating it.
 
 | `AbstractExpression` |                                                                                      |
 | -------------------- | ------------------------------------------------------------------------------------ |
 | Extends              | `Base`                                                                               |
 | Provides             | `value_shape`, `free_indices`, `scalar_type`, `domain`, `argument_spaces` |
+
+| Property | Meaning |
+| -------- | ------- |
+| `value_shape` | Length of each array axis, in order; `()` for a scalar. |
+| `free_indices` | Unbound indices on which the value depends, paired with their extents in first-occurrence order. |
+| `scalar_type` | Real or complex arithmetic used to evaluate the expression. |
+| `domain` | Where the expression is defined; `None` when it has no spatial argument. |
+| `argument_spaces` | Spaces of the multilinear arguments on which the expression depends; `()` when there are none. |
 
 These five derived properties form the static type (see
 [Argument spaces](forms.md#argument-spaces)). The value shape is a `tuple` of
@@ -17,7 +33,7 @@ written simply as rank, is the number of axes.
 ### Extents
 
 An extent is the length of an axis of a value shape, or the extent of a free
-index. An extent is an `int` $n \ge 0$ or an `AbstractExtent`.
+index. An extent is a nonnegative `int` or an `AbstractExtent`.
 
 `AbstractExtent` represents an extent whose value is not known during
 construction. Its supplied value must be a nonnegative integer.
@@ -180,15 +196,15 @@ A literal is a number written in an expression, such as `Integer(2) * u`.
 `Integer` and `Float` are real terminals with value shape `()`, no free
 indices, no domain and argument spaces `()`.
 
-| `Integer(v)` |                       |
+| `Integer(value)` |                       |
 | ------------ | --------------------- |
 | Extends      | `AbstractExpression` |
-| Properties   | `value` $v$, an `int` |
+| Properties   | `value`, the stored integer, of exact Python type `int` |
 
-| `Float(v)` |                               |
+| `Float(value)` |                               |
 | ---------- | ----------------------------- |
 | Extends    | `AbstractExpression`         |
-| Properties | `value` $v$, a finite `float` |
+| Properties | `value`, the stored finite number, of exact Python type `float` |
 
 `Integer` and `Float` accept only exact Python types, as in rule 1 of
 [the base object](rules.md#the-base-object-base). So `Integer(True)` raises
@@ -201,8 +217,8 @@ the core has no rational literal.
 ### `Complex`
 
 `Complex` is a scalar complex constant built from two real literals. It is a
-terminal, and its value is
-`real` $+\,i\,$ `imag`.
+terminal. The `real` property supplies its real part and `imag` supplies its
+imaginary part.
 
 | `Complex(real, imag)` | |
 | --------------------- | - |
@@ -249,10 +265,10 @@ raise `ValueError`. Free indices follow the [default rule](#free-indices).
 
 | Node | Operand shapes | Value shape | Meaning |
 | ---- | -------------- | ----------- | ------- |
-| `Sum(a, b)` | Equal | Shape of `a` | Entrywise sum |
-| `Product(a, b)` | At least one scalar | Shape of the other operand, or `()` if both scalar | Scalar multiplication, preserving operand order |
-| `Division(a, b)` | Scalar `b` | Shape of `a` | Entrywise division by `b` |
-| `Power(a, b)` | Both scalar | `()` | Scalar power |
+| `Sum(first, second)` | Equal | Shape of `first` | Entrywise sum |
+| `Product(first, second)` | At least one scalar | Shape of the other operand, or `()` if both scalar | Scalar multiplication, preserving operand order |
+| `Division(numerator, denominator)` | Scalar `denominator` | Shape of `numerator` | Entrywise division by `denominator` |
+| `Power(base, exponent)` | Both scalar | `()` | Scalar power |
 
 | Class      | Free function | Overload |
 | ---------- | ------------- | -------- |
@@ -268,8 +284,8 @@ raise `ValueError`. Free indices follow the [default rule](#free-indices).
 | Extends              | `AbstractExpression` |
 | Free function        | [`add`](#tensor-arithmetic), with the overload `+` |
 | Takes                | `first, second: AbstractExpression` |
-| Properties           | `first` and `second` |
-| Requires             | The operands of [Arithmetic](#arithmetic)   |
+| Properties | `first` and `second`, the expressions to add |
+| Requires | `first` and `second` have equal value shapes |
 
 ### `Product`
 
@@ -278,18 +294,18 @@ raise `ValueError`. Free indices follow the [default rule](#free-indices).
 | Extends                  | `AbstractExpression` |
 | Free function            | [`multiply`](#tensor-arithmetic), with the overload `*` |
 | Takes                    | `first, second: AbstractExpression` |
-| Properties               | `first` and `second` |
-| Requires                 | The operands of [Arithmetic](#arithmetic)        |
+| Properties | `first` and `second`, the factors in their stored order |
+| Requires | At least one of `first` and `second` is scalar |
 
 ### `Power`
 
-| `Power(first, second)` |                                                                             |
+| `Power(base, exponent)` |                                                                             |
 | ---------------------- | --------------------------------------------------------------------------- |
 | Extends                | `AbstractExpression` |
-| Free function          | `power(first, second)`, with the overload `**`                              |
-| Takes                  | `first, second: AbstractExpression` |
-| Properties             | `first` and `second` |
-| Requires               | The operands of [Arithmetic](#arithmetic)                                   |
+| Free function          | `power(base, exponent)`, with the overload `**`                              |
+| Takes                  | `base, exponent: AbstractExpression` |
+| Properties | `base`, the value to raise, and `exponent`, the power to raise it to |
+| Requires | `base` and `exponent` are scalar |
 
 | Operands | Value |
 | -------- | ----- |
@@ -297,6 +313,14 @@ raise `ValueError`. Free indices follow the [default rule](#free-indices).
 | Defined base, exponent one | The base value, with the scalar type of the power |
 | Other defined powers | The real power for real operands, or the principal complex value consistent with `Logarithm` |
 | Either operand undefined | Undefined, including an undefined base raised to zero |
+
+For example, constructor keywords and property access use the same names:
+
+```python
+squared = Power(base=expression, exponent=Integer(2))
+squared.base == expression
+squared.exponent == Integer(2)
+```
 
 These are value rules; construction retains `Power` and its static type.
 The exponent may have domain. The [derivative rules](evaluation.md#derivatives-of-the-node-classes)
@@ -309,33 +333,33 @@ Negation and subtraction are free functions, not node classes:
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `negate(f)` | `-f` | `f: AbstractExpression` | `multiply(Integer(-1), f)` |
-| `subtract(f, g)` | `f - g` | `f, g: AbstractExpression` | `add(f, negate(g))` |
+| `negate(operand)` | `-operand` | `operand: AbstractExpression` | `multiply(Integer(-1), operand)` |
+| `subtract(first, second)` | `first - second` | `first, second: AbstractExpression` | `add(first, negate(second))` |
 
 These compositions inherit the tensor
 behaviour of `multiply` and `add` (see [Tensor arithmetic](#tensor-arithmetic)).
 
 ### `Division`
 
-| `Division(first, second)` |                                                                                        |
+| `Division(numerator, denominator)` |                                                                                        |
 | ------------------------- | -------------------------------------------------------------------------------------- |
 | Extends                   | `AbstractExpression` |
 | Free function             | [`divide`](#tensor-arithmetic), with the overload `/` |
-| Takes                     | `first, second: AbstractExpression` |
-| Properties                | `first` and `second` |
-| Requires                  | The operands of [Arithmetic](#arithmetic)                                              |
+| Takes                     | `numerator, denominator: AbstractExpression` |
+| Properties | `numerator`, the expression to divide, and `denominator`, the scalar divisor |
+| Requires | `denominator` is scalar; `numerator` may have any value shape |
 
 ### `Absolute`
 
 `Absolute` is the absolute value, or the modulus of a complex scalar.
 
-| `Absolute(f)` |                                           |
+| `Absolute(operand)` |                                           |
 | ------------- | ----------------------------------------- |
 | Extends       | `AbstractExpression` |
-| Free function | `absolute(f)`, with the overload `abs(f)` |
-| Takes         | `f: AbstractExpression` |
-| Properties    | `operand` $f$ |
-| Requires      | A scalar $f$                              |
+| Free function | `absolute(operand)`, with the overload `abs(operand)` |
+| Takes         | `operand: AbstractExpression` |
+| Properties    | `operand`, the scalar whose absolute value or complex modulus is taken |
+| Requires      | A scalar `operand`                              |
 | Static type   | Value shape `()`, real                    |
 
 ### `Conjugate`
@@ -343,13 +367,13 @@ behaviour of `multiply` and `add` (see [Tensor arithmetic](#tensor-arithmetic)).
 `Conjugate` is the complex conjugate of an expression of any value shape, entry
 by entry.
 
-| `Conjugate(f)` |                                                                                             |
+| `Conjugate(operand)` |                                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------- |
 | Extends        | `AbstractExpression` |
-| Free function  | `conjugate(f)`                                                                              |
-| Takes          | `f: AbstractExpression` |
-| Properties     | `operand` $f$ |
-| Static type    | The value shape and the free indices of $f$, and the argument spaces of $f$ with each space conjugated (see [`ConjugateSpace`](forms.md#conjugatespace)) |
+| Free function  | `conjugate(operand)`                                                                              |
+| Takes          | `operand: AbstractExpression` |
+| Properties     | `operand`, the expression to conjugate entry by entry |
+| Static type    | The value shape and the free indices of `operand`, and the argument spaces of `operand` with each space conjugated (see [`ConjugateSpace`](forms.md#conjugatespace)) |
 
 `Conjugate` accepts any value shape because
 [`Form`](forms.md#form) binds `conjugate(v)` even for a vector argument. Its entrywise
@@ -359,13 +383,13 @@ meaning is `conjugate(f)[e]` = `conjugate(f[e])` in value.
 
 `RealPart` and `ImaginaryPart` give the real and imaginary parts of a scalar.
 
-| `RealPart(f)`, `ImaginaryPart(f)` |                                       |
+| `RealPart(operand)`, `ImaginaryPart(operand)` |                                       |
 | --------------------------------- | ------------------------------------- |
 | Extends                           | `AbstractExpression` |
 | Free function                     | [`real_part`](#tensor-arithmetic), [`imaginary_part`](#tensor-arithmetic) |
-| Takes                             | `f: AbstractExpression` |
-| Properties                        | `operand` $f$ |
-| Requires                          | A scalar $f$                          |
+| Takes                             | `operand: AbstractExpression` |
+| Properties                        | `operand`, the scalar whose real or imaginary part is taken |
+| Requires                          | A scalar `operand`                          |
 | Static type                       | Value shape `()`, real                |
 
 These nodes and `Absolute` are the only nodes that take a complex operand to
@@ -376,7 +400,7 @@ Their free functions apply entrywise to tensors (see
 [Tensor arithmetic](#tensor-arithmetic)).
 
 The operand may be real. Construction does not simplify, so `real_part(f)`
-of a real $f$ is not $f$, and `imaginary_part(f)` of a real $f$ is not
+of a real `f` is not `f`, and `imaginary_part(f)` of a real `f` is not
 `Zero`.
 
 For `z = Complex(Integer(1), Integer(2))`, `real_part(z)` and
@@ -388,13 +412,13 @@ For `z = Complex(Integer(1), Integer(2))`, `real_part(z)` and
 scalar. The core provides these two; other layers are expected to provide
 a wider range of elementary functions.
 
-| `SquareRoot(f)`, `Logarithm(f)` |                                     |
+| `SquareRoot(operand)`, `Logarithm(operand)` |                                     |
 | ------------------------------- | ----------------------------------- |
 | Extends         | `AbstractExpression` |
-| Free function   | `square_root(f)` and `logarithm(f)` |
-| Takes           | `f: AbstractExpression` |
-| Properties      | `operand` $f$ |
-| Requires        | A scalar $f$                        |
+| Free function   | `square_root(operand)` and `logarithm(operand)` |
+| Takes           | `operand: AbstractExpression` |
+| Properties      | `operand`, the scalar to which the square root or logarithm is applied |
+| Requires        | A scalar `operand`                        |
 | Static type     | Value shape `()`                    |
 
 For a complex operand, `Logarithm` is the principal branch, with the imaginary
@@ -418,7 +442,7 @@ rounded power, so the result of `power` depends on the math library.
 | Free function     | `tensor(entries)`                                                                                         |
 | Takes             | `entries: tuple[AbstractExpression, ...]` |
 | Properties        | `entries`, a non-empty `tuple` of `AbstractExpression`s with the same value shape `s`                     |
-| Static type       | Value shape `(n,) + s`, with $n$ the number of entries                                                    |
+| Static type       | Value shape `(n,) + s`, with `n` the number of entries                                                    |
 
 A matrix is a `Tensor` of `Tensor`s.
 
@@ -501,7 +525,7 @@ indices](#derived-indices)).
 | Extends                        | `AbstractExpression` |
 | Free function                  | `indexed(expression, indices)`                                                    |
 | Takes                          | `expression: AbstractExpression`, `indices: tuple` |
-| Properties                     | `expression`, and `indices`, a non-empty `tuple` of entries of the kinds below    |
+| Properties                     | `expression`, the tensor to read, and `indices`, a non-empty `tuple` selecting one entry per axis as described below    |
 | Static type                    | Value shape `()`, and the free indices below                                      |
 | Raises                         | `ValueError` and `IndexError`, below                                 |
 
@@ -549,12 +573,12 @@ entries than the rank and indexes the leading axes:
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `component(f, entries)` | `[]` | `f: AbstractExpression`, `entries: tuple` | `f` if `entries == ()`; otherwise `component_tensor(indexed(f, entries + K), K)` if the entries are fewer than the rank of $f$, otherwise `indexed(f, entries)` |
+| `component(expression, entries)` | `[]` | `expression: AbstractExpression`, `entries: tuple` | `expression` if `entries == ()`; otherwise `component_tensor(indexed(expression, entries + K), K)` if the entries are fewer than the rank of `expression`, otherwise `indexed(expression, entries)` |
 
 `K` is the `tuple` of the derived indices
-`Index(("uflx.component", f, entries, m))`, one for each axis that the entries
-do not cover (see [Derived indices](#derived-indices)). `component` reads
-the rank of $f$ and the number of entries.
+`Index(("uflx.component", expression, entries, m))`, one for each axis that
+`entries` does not cover (see [Derived indices](#derived-indices)). `component`
+reads the rank of `expression` and the number of entries.
 In particular, `component(f, ())`, also written `f[()]`, returns `f` at any rank.
 `Indexed` validates the entries, so too many entries raise `IndexError`.
 
@@ -584,8 +608,8 @@ construction simplification.
 | Extends                                                                 | `AbstractExpression` |
 | Free function                                                           | `component_tensor(expression, indices)`, `index_sum(expression, indices)`                                                                                                                                         |
 | Takes                                                                   | `expression: AbstractExpression`, `indices: tuple[Index, ...]` |
-| Properties                                                              | `expression`, a scalar, and `indices`, a non-empty `tuple` of distinct `Index` entries free in the expression                                                                                 |
-| Static type                                                             | The free indices of the expression without the indices. `ComponentTensor` has the value shape of the extents of the indices in order, and `IndexSum` the value shape `()` |
+| Properties                                                              | `expression`, the scalar body, and `indices`, a non-empty `tuple` of distinct free `Index` entries to bind as axes or sum over, in order                                                                                 |
+| Static type                                                             | The free indices of `expression` with the bound `indices` removed. `ComponentTensor` has the value shape of the extents of the indices in order, and `IndexSum` the value shape `()` |
 
 The factories `component_tensor(f, ())` and `index_sum(f, ())` return the
 scalar expression `f` directly, preserving its entire static type. They raise
@@ -625,14 +649,14 @@ or the local facet number selecting a pretabulated reference map. The values are
 | `AbstractIndexTable` |                                                        |
 | -------------------- | ------------------------------------------------------ |
 | Extends              | `Base` |
-| Provides             | `extent`, an extent, and `shape`, a `tuple` of extents |
+| Provides             | `extent`, an extent giving the exclusive upper bound on each stored index value, and `shape`, a `tuple` of extents giving the table dimensions |
 | Defined by           | A subclass outside the core                            |
 
-The table has the shape `shape`, and each value is an `int` $v$ with
-$0 \le v <$ `extent`. An `AbstractIndexTable` with the shape `()` is one
+The table has the shape `shape`. Each stored value is a nonnegative `int`
+smaller than `extent`. An `AbstractIndexTable` with the shape `()` is one
 value. An expression reads the table only through a
 [`GatheredIndex`](#gatheredindex), so one value is read as
-`gathered_index(v, ())`.
+`gathered_index(table, ())`.
 
 ### `GatheredIndex`
 
@@ -644,7 +668,7 @@ nor a free index; its table indices determine its free indices.
 | Extends                         | `Base` |
 | Free function                   | `gathered_index(table, indices)`                                                                                                   |
 | Takes                           | `table: AbstractIndexTable`, `indices: tuple` |
-| Properties                      | `table`, an `AbstractIndexTable`, and `indices`, an `int`, an `Index` or a `GatheredIndex` for each axis of the shape of the table |
+| Properties                      | `table`, the index table to read, and `indices`, a `tuple` selecting one entry per table axis using an `int`, `Index` or `GatheredIndex` |
 | Derived                         | `extent` and `free_indices`, below |
 | Raises                          | `IndexError` for an incorrect number of entries or invalid bounds or gather extent, and `ValueError` for inconsistent extents of a repeated index |
 
@@ -727,16 +751,17 @@ notation during lowering. The other operations below use fixed compositions.
 | ------------- | -------- | ----- | ------- |
 | `add(first, second)` | `+` | `first, second: AbstractExpression` | `Sum(first, second)` |
 | `multiply(first, second)` | `*` | `first, second: AbstractExpression` | `Product(first, second)` |
-| `divide(first, second)` | `/` | `first, second: AbstractExpression` | `Division(first, second)` |
-| `real_part(f)` | | `f: AbstractExpression` | `component_tensor(RealPart(f[K]), K)` |
-| `imaginary_part(f)` | | `f: AbstractExpression` | `component_tensor(ImaginaryPart(f[K]), K)` |
+| `divide(numerator, denominator)` | `/` | `numerator, denominator: AbstractExpression` | `Division(numerator, denominator)` |
+| `real_part(operand)` | | `operand: AbstractExpression` | `component_tensor(RealPart(operand[K]), K)` |
+| `imaginary_part(operand)` | | `operand: AbstractExpression` | `component_tensor(ImaginaryPart(operand[K]), K)` |
 | `matrix_product(first, second)` | `@` | `first, second: AbstractExpression` | The contraction of the last axis of `first` with the first axis of `second`, below |
-| `transpose(A)` | | `A: AbstractExpression` | `component_tensor(A[k, l], (l, k))`, with `(k, l)` = `K`, for $A$ of rank 2 |
+| `transpose(matrix)` | | `matrix: AbstractExpression` | `component_tensor(matrix[k, l], (l, k))`, with `(k, l)` = `K`, for `matrix` of rank 2 |
 
 In each composition, `K` contains one [derived index](#derived-indices)
-per axis of the indexed operand: `Index((name, first, second, m))` for binary
-operations, or `Index((name, f, m))` for unary operations. `name` is the
-qualified function identifier and `m` runs from zero to rank minus one.
+per axis of the indexed operand. Its label contains the qualified function
+identifier, the function arguments in signature order, and the axis number.
+For example, `real_part(operand)` uses `Index(("uflx.real_part", operand, m))`,
+where `m` runs from zero to rank minus one.
 The empty-index factory identities give scalar operations when `K == ()`.
 Scalar constructors inside the compositions avoid recursive factory calls.
 Operand free indices remain free.
@@ -803,17 +828,18 @@ a matrix `A` of value shape `(2, 3)` and `i = index("i")`:
 `Inverse` is the inverse of a square matrix, or the pseudo-inverse of a matrix
 with more rows than columns.
 
-| `Inverse(A)`  |                                                                                         |
+| `Inverse(matrix)`  |                                                                                         |
 | ------------- | --------------------------------------------------------------------------------------- |
 | Extends       | `AbstractExpression` |
-| Free function | `inverse(A)`                                                                            |
-| Takes         | `A: AbstractExpression` |
-| Properties    | `operand` $A$ |
-| Requires      | $A$ with value shape `(n, k)` for fixed nonnegative integers `n` and `k`, and argument spaces `()`; either `n == k`, or `k < n` and $A$ is real |
+| Free function | `inverse(matrix)`                                                                            |
+| Takes         | `matrix: AbstractExpression` |
+| Properties    | `matrix`, the matrix to invert |
+| Requires      | `matrix` with value shape `(n, k)` for fixed nonnegative integers `n` and `k`, and argument spaces `()`; either `n == k`, or `k < n` and `matrix` is real |
 | Static type   | Value shape `(k, n)`                                                                    |
 
-`Inverse(A)` is the pseudo-inverse $A^+ = (A^T A)^{-1} A^T$ of a matrix $A$
-of matrix rank $k$, the left inverse of $A$ with $A^+ A$ the identity. For
+Let $A$ denote the value of `matrix`, with matrix rank $k$. The value of
+`Inverse(matrix)` is the pseudo-inverse $A^+ = (A^T A)^{-1} A^T$,
+the left inverse of $A$ with $A^+ A$ the identity. For
 $k = n$, $A^+$ is the inverse matrix $A^{-1}$.
 
 A pass chooses how to evaluate `Inverse`, in closed form for a small matrix or
@@ -839,14 +865,14 @@ J = tensor((tensor((one,)), tensor((one,))))
 
 ### `Determinant`
 
-`Determinant(A)` is the determinant of a square matrix $A$.
+`Determinant(matrix)` is the determinant of the square matrix `matrix`.
 
-| `Determinant(A)` | |
+| `Determinant(matrix)` | |
 | ---------------- | - |
 | Extends | `AbstractExpression` |
-| Free function | `determinant(A)` |
-| Takes | `A: AbstractExpression` |
-| Properties | `operand` $A$ |
+| Free function | `determinant(matrix)` |
+| Takes | `matrix: AbstractExpression` |
+| Properties | `matrix`, the matrix whose determinant is taken |
 | Requires | Value shape `(n, n)` for a fixed nonnegative integer `n`, and argument spaces `()` |
 | Static type | Value shape `()` |
 | Raises | `ValueError` if a requirement fails |
