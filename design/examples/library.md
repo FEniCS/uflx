@@ -124,8 +124,8 @@ class StaticTopology(AbstractTopology):
     def sides(self) -> tuple[tuple[tuple[str, AbstractTopology, int], ...], ...]:
         return self._sides
 
-    def side_data(self, i: int, side: str):
-        return static_side_data(self, i, side)
+    def side_data(self, cell_slot: int, side: str):
+        return static_side_data(self, cell_slot, side)
 ```
 
 With `K = ReferenceSimplex(2)` and `I = ReferenceSimplex(1)`

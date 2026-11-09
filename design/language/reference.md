@@ -203,15 +203,15 @@ Extend `AbstractExpression`:
 
 ### Reference cells
 
-| Function                                | Overload | Takes                                   | Returns         |
-| --------------------------------------- | -------- | --------------------------------------- | --------------- |
-| [`cell_map(X, j)`](topology.md#cellmap) |          | `X: AbstractTopology \| Mesh`, `j: int` | `CellMap(X, j)` |
+| Function                                             | Overload | Takes                                                | Returns                      |
+| ---------------------------------------------------- | -------- | ---------------------------------------------------- | ---------------------------- |
+| [`cell_map(parent, cell_slot)`](topology.md#cellmap) |          | `parent: AbstractTopology \| Mesh`, `cell_slot: int` | `CellMap(parent, cell_slot)` |
 
 ### Restriction
 
-| Function                                   | Overload | Takes                                      | Returns            |
-| ------------------------------------------ | -------- | ------------------------------------------ | ------------------ |
-| [`side_map(X, P, s)`](topology.md#sidemap) |          | `X, P: AbstractTopology \| Mesh`, `s: str` | `SideMap(X, P, s)` |
+| Function                                                            | Overload | Takes                                                               | Returns                                     |
+| ------------------------------------------------------------------- | -------- | ------------------------------------------------------------------- | ------------------------------------------- |
+| [`side_map(parent, restriction_domain, side)`](topology.md#sidemap) |          | `parent, restriction_domain: AbstractTopology \| Mesh`, `side: str` | `SideMap(parent, restriction_domain, side)` |
 
 ### Meshes
 
@@ -232,13 +232,13 @@ Extend `AbstractExpression`:
 
 ### Maps between domains
 
-| Function                                                  | Overload | Takes                                                                                                       | Returns                                            |
-| --------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| [`domain_map(P, psi, Q)`](geometry.md#domainmap)          |          | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain` | `DomainMap`                                        |
-| [`pull_back(f, D)`](geometry.md#pullback)                 |          | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap`                                               | `PullBack`                                         |
-| [`jacobian(D)`](geometry.md#jacobian-and-density)         |          | `D: DomainMap \| CellMap`                                                                                   | `gradient(D.parameterisation, D.parameter_domain)` |
-| [`inverse_jacobian(D)`](geometry.md#jacobian-and-density) |          | `D: DomainMap \| CellMap`                                                                                   | `inverse(jacobian(D))`                             |
-| [`density(D)`](geometry.md#jacobian-and-density)          |          | `D: DomainMap \| CellMap`                                                                                   | The density $\rho$ below                           |
+| Function                                                  | Overload | Takes                                                                                                       | Returns                                                                                                                      |
+| --------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| [`domain_map(P, psi, Q)`](geometry.md#domainmap)          |          | `P: AbstractCoordinateDomain \| AbstractTopology`, `psi: AbstractExpression`, `Q: AbstractCoordinateDomain` | `DomainMap`                                                                                                                  |
+| [`pull_back(f, D)`](geometry.md#pullback)                 |          | `f: AbstractExpression`, `D: DomainMap \| SideMap \| CellMap`                                               | `PullBack`                                                                                                                   |
+| [`jacobian(D)`](geometry.md#jacobian-and-density)         |          | `D: DomainMap \| CellMap`                                                                                   | `gradient(D.parameterisation, P)`, where `P` is `D.parameter_domain` for a `DomainMap` or `D.reference_cell` for a `CellMap` |
+| [`inverse_jacobian(D)`](geometry.md#jacobian-and-density) |          | `D: DomainMap \| CellMap`                                                                                   | `inverse(jacobian(D))`                                                                                                       |
+| [`density(D)`](geometry.md#jacobian-and-density)          |          | `D: DomainMap \| CellMap`                                                                                   | The density $\rho$ below                                                                                                     |
 
 ### Fields and integration on a mesh
 

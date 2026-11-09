@@ -35,7 +35,7 @@ and evaluates cell pull-backs and reference derivatives (see
 | `AbstractCellType` | |
 | ------------------ | - |
 | Extends | `Base` |
-| Provides | `dimension`, an `int` $n \ge 0$, and `num_vertices`, an `int` $m \ge 1$ |
+| Provides | `dimension`, the nonnegative topological dimension as an `int`, and `num_vertices`, the positive number of vertices as an `int` |
 | Defined by | A subclass outside the core, such as `Simplex` |
 
 The core does not number facets or other sub-entities. A library decides which
@@ -56,7 +56,7 @@ cells in the package's mesh.
 | `AbstractTopology` | |
 | ------------------ | - |
 | Extends | `Base` |
-| Provides | `cell_types`, `sides`, and `side_data(i, side)` for declared sides |
+| Provides | `cell_types`, `sides`, and `side_data(cell_slot, side)` for declared sides |
 | Derived | `dimension`, the dimension of the cell types |
 | Defined by | A subclass outside the core |
 
@@ -65,7 +65,8 @@ cells in the package's mesh.
   local cells of type `K`.
 - `sides` is `()`, or one tuple of side declarations per slot, as defined
   under [Sides of a topology](#sides-of-a-topology).
-- A cell slot `j` is an `int` satisfying `0 <= j < len(T.cell_types)`.
+- For a topology `topology`, a `cell_slot` is an `int` satisfying
+  `0 <= cell_slot < len(topology.cell_types)`.
   Negative numbers do not select slots from the end.
 
 For example, `(K,)` describes a single-cell kernel, `(K, K)` the parents of
@@ -107,12 +108,13 @@ The core provides coordinate domains and `Mesh`. Extensions may subclass
 | `AbstractDomain` |                                                                             |
 | ---------------- | --------------------------------------------------------------------------- |
 | Extends          | `Base` |
-| Provides         | `dimension`, an `int` $k \ge 0$, and `ambient_domain`, an `AbstractDomain` |
+| Provides         | `dimension`, the nonnegative topological dimension as an `int`, and `ambient_domain`, the `AbstractDomain` supplying coordinates for its points |
 | Defined by       | `AbstractCoordinateDomain`, `Mesh`, and extension subclasses |
 
-The ambient domain of $D$ supplies the coordinates naming its points. The
-first coordinate domain reached by following `ambient_domain` repeatedly is
-the *ambient coordinate domain*, of dimension $n \ge k$. A coordinate domain
+For a domain `domain`, `domain.ambient_domain` supplies the coordinates
+naming its points. The first coordinate domain reached by following
+`ambient_domain` repeatedly is the *ambient coordinate domain*. Its dimension
+is at least `domain.dimension`. A coordinate domain
 is its own ambient domain.
 
 ### `AbstractCoordinateDomain`
@@ -129,7 +131,7 @@ coordinates and integration are defined through cell parameterisations.
 | `AbstractCoordinateDomain` |                                              |
 | -------------------------- | -------------------------------------------- |
 | Extends                    | `AbstractDomain` |
-| Provides                   | `dimension`, an `int` $n \ge 0$              |
+| Provides                   | `dimension`, the nonnegative number of coordinate axes as an `int`              |
 | Derived                    | `ambient_domain`, the coordinate domain itself |
 | Defined by                 | A subclass, such as `RD` or a reference cell |
 
@@ -144,13 +146,14 @@ Examples:
 
 ### `RD`
 
-`RD(n)` is the whole of $R^n$.
+`RD(dimension)` is the whole coordinate space with `dimension` axes.
+Writing $n$ for `dimension`, this is $\mathbb{R}^n$.
 
-| `RD(n)`    |                                                                 |
+| `RD(dimension)`    |                                                                 |
 | ---------- | --------------------------------------------------------------- |
 | Extends    | `AbstractCoordinateDomain` |
-| Properties | `dimension`, an `int` $n \ge 0$                                 |
-| Raises     | `ValueError` if $n < 0$ |
+| Properties | `dimension`, the nonnegative number of coordinate axes as an `int`                                 |
+| Raises     | `ValueError` if `dimension` is negative |
 
 Worked examples for this chapter: [the unit simplex](../examples/library.md#the-unit-simplex).
 
@@ -171,34 +174,47 @@ cell](../examples/library.md#the-unit-simplex-as-a-reference-cell)).
 
 ### `CellMap`
 
-`CellMap(X, j)` reads the local cell slot `j` of a topology or physical local
-mesh `X`. Let `T` be `X` for a topology, and `X.topology` for a mesh. This is a
-map from the reference cell into that labelled local cell, not a runtime
-selection from the package's mesh.
+`CellMap(parent, cell_slot)` selects one local cell of `parent`, which is a
+topology or a physical local mesh. The map goes from that cell's reference
+cell into the labelled local cell of `parent`. Pulling a field back through
+it gives the field's reference-cell representation on the selected slot.
+The slot is part of the kernel's local configuration, not a runtime cell
+number in the package's mesh.
 
-| `CellMap(X, j)` | |
-| ------------------ | - |
+| `CellMap(parent, cell_slot)` | |
+| --------------------------- | - |
 | Extends | `Base` |
-| Takes | `X: AbstractTopology \| Mesh`, `j: int` |
-| Properties | `ambient_domain` $X$ and `cell_slot` $j$ |
-| Requires | `j` a valid slot of `T`, and `T.cell_types[j]` a reference cell $K_j$ |
-| Derived | `topology` $T$, `parameter_domain` $K_j$, `free_indices` always `()`, and, for a mesh, `parameterisation` |
+| Takes | `parent: AbstractTopology \| Mesh`, `cell_slot: int` |
+| Properties | `parent`, the topology or mesh carrying the field, and `cell_slot`, the local cell to read |
+| Requires | `cell_slot` is a valid slot of `topology`, and `topology.cell_types[cell_slot]` is a reference cell |
+| Derived | `topology`, `reference_cell`, `free_indices`, and, for a mesh, `parameterisation`, as described below |
 | Raises | `ValueError` if a requirement fails |
+
+| Derived property | Meaning |
+| ---------------- | ------- |
+| `topology` | `parent` itself when it is a topology; otherwise `parent.topology`. |
+| `reference_cell` | `topology.cell_types[cell_slot]`, the domain of the field after pull-back. |
+| `free_indices` | Always `()`; selecting a cell introduces no array index. |
+| `parameterisation` | For a mesh, its coordinate expression pulled back to the selected reference cell. |
 
 A cell map of a topology has no coordinate parameterisation. For a physical
 mesh its parameterisation and reconstruction are defined under
-[Mesh cell maps](geometry.md#mesh-cell-maps). The property `ambient_domain`
-names the target of the map; here that target may also be a topology.
+[Mesh cell maps](geometry.md#mesh-cell-maps).
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `cell_map(X, j)` | | `X: AbstractTopology \| Mesh`, `j: int` | `CellMap(X, j)` |
+| `cell_map(parent, cell_slot)` | | `parent: AbstractTopology \| Mesh`, `cell_slot: int` | `CellMap(parent, cell_slot)` |
 
-`pull_back(f, cell_map(X, j))` is the reference-cell representation of `f`
-on slot `j`. The library of its space supplies the local representation and
-its data (see [Functions in a space](forms.md#functions-in-a-space)).
-No cell index is introduced. Ordinary indices still describe basis functions,
-components, quadrature points and other local arrays.
+```python
+local_cell = cell_map(parent=volume_mesh, cell_slot=0)
+local_field = pull_back(field, local_cell)
+# local_field has domain local_cell.reference_cell.
+```
+
+The library of the field's space supplies its local representation and data
+(see [Functions in a space](forms.md#functions-in-a-space)). Ordinary indices
+still describe basis functions, components, quadrature points and other local
+arrays.
 
 ## Sides of a topology
 
@@ -211,8 +227,15 @@ neighbouring cells' data before kernel evaluation.
 
 `S.sides` is `()` when there are no sides. Otherwise it has one tuple per slot
 of `S`. A tuple may be empty; its entries have distinct names. Each entry is
-`(name, T, j)`, where `name` is a `str`, `T` is a topology and `j` a valid
-parent slot. Both the side cell and the selected parent cell must be reference
+`(side, parent_topology, parent_cell_slot)`:
+
+| Entry | Meaning |
+| ----- | ------- |
+| `side` | A `str` naming this side, such as `"+"` or `"inside"`. |
+| `parent_topology` | The topology containing the parent cell from which a field is read. |
+| `parent_cell_slot` | A valid integer cell slot in `parent_topology`. |
+
+Both the side cell and the selected parent cell must be reference
 cells. Side order has no meaning; names select sides. Parent dependencies
 obey the acyclic construction rules of `Base`.
 
@@ -237,17 +260,23 @@ a core check; periodic and mortar couplings may pair distinct physical points.
 
 ### Side data
 
-`S.side_data(i, s)` returns `(inclusion, reference_normal)` for the declared
-side `(s, T, j)` of slot `i`:
+`topology.side_data(cell_slot, side)` supplies the geometry of a declared
+side. `cell_slot` selects a cell of `topology`; `side` is the name of one of
+that cell's side declarations. The method returns
+`(inclusion, reference_normal)`.
 
-- `inclusion` is a [`DomainMap`](geometry.md#domainmap) from $F_i$ into $K_j$,
-  with no free indices. Its real parameterisation has no argument spaces.
-- For `F_i.dimension == K_j.dimension - 1`, `reference_normal` is a real
-  expression on $F_i$ or with no domain, of value shape `(K_j.dimension,)`,
-  with no free indices and no argument spaces. It is nonzero and orthogonal
-  to the image tangents wherever evaluated. Its length need not be one.
-  It points out of $K_j$ on a boundary piece; the library chooses its
-  orientation on an interior cut.
+The returned objects have the following roles:
+
+- `inclusion` is a [`DomainMap`](geometry.md#domainmap) from the selected
+  reference cell into the parent reference cell, with no free indices. Its
+  real parameterisation has no argument spaces.
+- When the selected cell has dimension one less than the parent cell,
+  `reference_normal` is a real vector expression on the selected reference
+  cell or with no domain. It has one component per parent reference
+  coordinate, no free indices and no argument spaces. It is nonzero and
+  orthogonal to the image tangents wherever evaluated. Its length need not
+  be one. It points out of the parent reference cell on a boundary piece;
+  the library chooses its orientation on an interior cut.
 - In other dimensions, `reference_normal` is `None`.
 
 The inclusion maps into the parent reference cell. Its differential has full
@@ -306,35 +335,62 @@ canonical jump; the form combines the named restrictions explicitly.
 
 ### `SideMap`
 
-`SideMap` describes the named local side relation, keeping restriction lazy
-until the integration cell is read.
+`SideMap(parent, restriction_domain, side)` describes how to read a field on
+`parent` from a named side of `restriction_domain`. Each cell of
+`restriction_domain` uses its side declaration to select a parent cell and
+an inclusion into that cell.
 
-| `SideMap(X, P, s)` | |
-| ------------------ | - |
+The map goes from `restriction_domain` into `parent`. Pulling a field back
+through it produces a field on `restriction_domain`. The restriction remains
+lazy until a cell of that domain is read.
+
+| `SideMap(parent, restriction_domain, side)` | |
+| ----------------------------------------- | - |
 | Extends | `Base` |
-| Takes | `X, P: AbstractTopology \| Mesh`, `s: str` |
-| Properties | `ambient_domain` $X$, `parameter_domain` $P$, and `side` $s$ |
+| Takes | `parent, restriction_domain: AbstractTopology \| Mesh`, `side: str` |
+| Properties | `parent`, `restriction_domain`, and `side`, as described below |
 | Derived | `free_indices`, always `()` |
 | Requires | The domain conditions below |
 | Raises | `ValueError` if a domain condition fails |
 
+| Property | Meaning |
+| -------- | ------- |
+| `parent` | The topology or mesh carrying the field to restrict. |
+| `restriction_domain` | The topology or mesh on which the restricted field is defined. |
+| `side` | The name selecting a parent cell and inclusion for each cell of `restriction_domain`. |
+
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `side_map(X, P, s)` | | `X, P: AbstractTopology \| Mesh`, `s: str` | `SideMap(X, P, s)` |
+| `side_map(parent, restriction_domain, side)` | | `parent, restriction_domain: AbstractTopology \| Mesh`, `side: str` | `SideMap(parent, restriction_domain, side)` |
+
+For the conditions below, the parent topology is `parent` itself when it is
+a topology, and `parent.topology` otherwise. The restriction topology is
+obtained from `restriction_domain` in the same way.
 
 | Domain condition | Requirement |
 | ---------------- | ----------- |
-| $X$, $P$ | Both topologies $T$, $S$, or both meshes on $T$, $S$ |
-| Slots of $S$ | Each has a side named $s$ with topology $T$ |
-| Reference cells | Every slot of $S$ and every selected parent slot is a reference cell |
+| Kind of inputs | `parent` and `restriction_domain` are both topologies or both meshes. |
+| Side declarations | Every slot of the restriction topology has a side named `side`, whose declared parent topology is the parent topology. |
+| Reference cells | Every slot of the restriction topology and every selected parent slot is a reference cell. |
 
-A mesh on `S` need not have geometry equal to the selected parent's trace.
-The helper [side_domain](geometry.md#side-domains) constructs one from a chosen
-side. Coupled fields share this integration domain even when their parent
-geometries differ.
+The geometry of `restriction_domain` need not equal the selected parent's
+trace. The helper [side_domain](geometry.md#side-domains) constructs a mesh
+from a chosen side. Coupled fields share the restriction domain even when
+their parent geometries differ.
 
-`pull_back(f, side_map(X, P, s))` has domain `P`. Its pull-back by
-`cell_map(P, i)` is `pull_back(pull_back(f, B_i), A_i)` as defined above.
+```python
+interface_side = side_map(
+    parent=volume_mesh,
+    restriction_domain=interface_mesh,
+    side="+",
+)
+restricted_field = pull_back(field, interface_side)
+# restricted_field has domain interface_side.restriction_domain.
+```
+
+Pulling `restricted_field` back by `cell_map(interface_mesh, i)` gives
+`pull_back(pull_back(field, B_i), A_i)`, with the selected parent cell map
+`B_i` and inclusion `A_i` defined under [The inclusion](#the-inclusion).
 
 ## A field on a topological mesh
 

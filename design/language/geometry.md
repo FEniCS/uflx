@@ -439,6 +439,15 @@ for the edge in the plane, or `Q = UnitSimplex(2)` for the edge in the triangle.
 with parameter domain $P$ and ambient domain $Q$. A `DomainMap` additionally
 specifies its coordinate parameterisation $\psi$.
 
+Here $P$ and $Q$ denote the domains from which and into which the map goes.
+Their API properties depend on the map's role:
+
+| Map class | Starting domain $P$ | Target $Q$ |
+| --------- | ------------------- | ---------- |
+| `DomainMap` | `parameter_domain` | `ambient_domain` |
+| `CellMap` | `reference_cell` | `parent` |
+| `SideMap` | `restriction_domain` | `parent` |
+
 | `PullBack(f, D)` |                                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
 | Extends          | `AbstractExpression` |
@@ -503,7 +512,7 @@ Each helper checks these input requirements before building its composition.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `jacobian(D)` | | `D: DomainMap \| CellMap` | `gradient(D.parameterisation, D.parameter_domain)` |
+| `jacobian(D)` | | `D: DomainMap \| CellMap` | `gradient(D.parameterisation, P)`, where `P` is `D.parameter_domain` for a `DomainMap` or `D.reference_cell` for a `CellMap` |
 | `inverse_jacobian(D)` | | `D: DomainMap \| CellMap` | `inverse(jacobian(D))` |
 | `density(D)` | | `D: DomainMap \| CellMap` | The density $\rho$ below |
 
