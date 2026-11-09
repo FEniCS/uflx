@@ -618,8 +618,8 @@ an `AbstractExtent`, without knowing its value during construction.
 ### `AbstractIndexTable`
 
 `AbstractIndexTable` represents a table of index values supplied by the solver,
-such as the cell on one side of each facet, or the local facet number in a facet
-integral. The values are fixed but not known during construction. An
+such as a local basis permutation or the local facet number selecting a
+pretabulated reference map. The values are fixed but not known during construction. An
 `AbstractIndexTable` is not an expression and not a free index.
 
 | `AbstractIndexTable` |                                                        |
@@ -658,29 +658,21 @@ once.
 
 #### Examples
 
-The examples use the following objects:
-
-- A table `cells` of the shape `(4,)`, the extent 2 and the values
-  `(0, 1, 1, 0)`, such as the cell of each of the four boundary edges of the
-  square divided into two triangles.
-- An array `a` of value shape `(2,)`, with one value for each triangle.
+A local permutation table `permutation` has shape `(3,)`, extent 3 and
+values `(2, 0, 1)`. The package supplies it to account for a local orientation.
+For a local coefficient array `a` of shape `(3,)`:
 
 ```python
-e = index("e")
-g = gathered_index(cells, (e,))
-
-# The value of a on the triangle of each edge, with the free index e of extent 4.
-a_e = a[g]
-
-# The array (a[0], a[1], a[1], a[0]) of value shape (4,).
-b = component_tensor(a_e, (e,))
+i = index("i")
+g = gathered_index(permutation, (i,))
+b = component_tensor(a[g], (i,))
 ```
 
-- Let `cell_vertices` be a table of the vertices of each triangle, of the shape
-  `(2, 3)` and the extent 4. `gathered_index(cell_vertices, (g, w))` is the
-  vertex `w` of the triangle of edge `e`, with the free indices `e` and `w`.
-- For an array `c` of value shape `(3,)`, `c[g]` raises `IndexError`, because
-  the extent 2 of `g` differs from the extent 3 of the axis.
+The result is `(a[2], a[0], a[1])`. For an array `c` of shape `(4,)`, `c[g]`
+raises `IndexError`, because the gather extent 3 differs from the axis extent 4.
+A second local permutation `p` can be composed as
+`gathered_index(p, (g,))`. These operations index local arrays; they do not
+select cells from a mesh.
 
 ### Derived indices
 

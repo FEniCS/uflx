@@ -53,7 +53,7 @@ in three dimensions. The domain dimensions determine the surface gradient.
 ## The flux through a surface
 
 Flux through a closed surface needs an outward orientation; area does not.
-Let `T` be a triangle topology with reference cell `K = ReferenceSimplex(2)`,
+Let `T` have one triangle slot with reference cell `K = ReferenceSimplex(2)`,
 and `x` its coordinate function of value shape `(3,)`. The library supplies
 `orientation`, a real, scalar, cellwise-constant field on `T`. Its values
 $\pm1$ tell whether each cell's vertex order agrees with the outward orientation.
@@ -61,7 +61,7 @@ $\pm1$ tell whether each cell's vertex order agrees with the outward orientation
 ```python
 K = ReferenceSimplex(2)
 M = mesh(x, RD(3))
-cells = cell_domain(M, 0)
+cells = cell_map(M, 0)
 J = jacobian(cells)
 r, l = index("r"), index("l")
 
@@ -80,18 +80,16 @@ nu = cross(component_tensor(J[r, 0], (r,)), component_tensor(J[r, 1], (r,)))
 
 o = pull_back(orientation, cell_map(T, 0))
 
-flux = index_sum(
-    integral(o * index_sum(pull_back(coordinate(M), cells)[l] * nu[l], (l,)), K),
-    (cell_index(T, 0),),
-)
+flux = integral(o * index_sum(pull_back(coordinate(M), cells)[l] * nu[l], (l,)), K)
 
 area = integral(Integer(1), M)
 ```
 
 `nu` is the directed cofactor normal: its magnitude already includes the
-surface density. Thus `flux` integrates on the reference cells without
-another density factor. The signs `o` make every contribution outward, and
-the position field's flux is three times the enclosed volume.
+surface density. Thus `flux` is one cell contribution without another
+density factor. The package sums the contributions over the surface. The
+supplied signs make them outward; the total position-field flux on a closed
+surface is three times the enclosed volume.
 
 Consistently outward vertex ordering makes `o` unnecessary. Arbitrary ordering
 without the signs instead lets contributions cancel incorrectly. `area` uses
@@ -111,7 +109,7 @@ space `W` of value shape `(2,)`, and a real scalar Lagrange space `V`, all on
 
 ```python
 K = ReferenceSimplex(2)
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
 i = index("i")
 s = function(W, "s")
 
@@ -127,7 +125,7 @@ grad_u, grad_v = (
 a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D_s), (v, u))
 ```
 
-For a cell `C = cell_domain(D_s, 0)`, the reference coordinate gradient is
+For a cell `C = cell_map(D_s, 0)`, the reference coordinate gradient is
 $J+\widehat\nabla s$. Lowering therefore inserts:
 
 | Quantity | Factor on the reference cell |

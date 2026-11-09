@@ -24,18 +24,21 @@ core names without imports, as in the other examples.
 
 | Input | Contract |
 | ----- | -------- |
-| `T` | Patch topology: reference tetrahedra, `num_cells = (N_cells,)`, `sides = ()`. |
-| `S` | Internal facets, each listed once: reference triangles, `num_cells = (N_facets,)`, `sides = ((("+", T, 0), ("-", T, 0)),)`. |
-| `N_cells`, `N_facets` | `AbstractExtent` objects, bound at runtime for each patch. |
+| `T` | A fixed local patch configuration, with one reference-tetrahedron slot per cell and `sides = ()`. |
+| `S` | A fixed configuration of internal facets, one reference-triangle slot per facet, with sides naming its two distinct parent slots in `T`. |
 | `X` | Real continuous vector P1 coordinate space on `T`, shape `(3,)`. |
 | `V` | Real scalar DG P1 space on `T`. |
 | `Q` | Real scalar space on `S`, constant independently on each facet. |
 | `C` | Real scalar constant space: `domain = None`, `value_shape = ()`, `argument_spaces = ()`. |
 
 The solver supplies geometry, dofmaps, penalties including size scaling, and
-[side tables](../language/topology.md#side-tables) pairing the two traces on each
-facet. The same symbolic form serves different patch sizes. `C` supplies one
-multiplier for the whole patch, not one per cell.
+[side data](../language/topology.md#side-data) pairing the two traces on each
+facet. This construction describes one fixed patch configuration. The package
+may specialise it for different configurations, or assemble a runtime-sized
+patch from single-cell and two-parent facet kernels. Runtime cell counts and
+neighbour lookup are not core inputs. `C` supplies one multiplier for the
+whole patch; assembly must associate all local constraint contributions with
+that same multiplier.
 
 ### Form
 
@@ -109,7 +112,7 @@ $$
 \qquad (m_p)_i=\int_{\omega_p}\phi_i\,dx.
 $$
 
-The solver binds each patch's data, assembles and solves this system, then
+The solver supplies each patch's data, assembles and solves this system, then
 scatters only the correction. An additive sweep uses the same global residual
 for all patches. The zero-mean corrections need a complementary component,
 such as a coarse correction, to address the remaining modes.

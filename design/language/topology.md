@@ -1,33 +1,28 @@
 # Topological meshes
 
-UFLx makes the topological mesh an explicit object on which fields and function
-spaces with geometry-independent reference-cell representations can be defined
-before physical coordinates are supplied. A coordinate expression on that
-topology then defines a physical mesh, represented by
-[`Mesh`](geometry.md#mesh) in the next chapter.
+UFLx describes local kernels as mathematics. A topology describes the local
+cell configuration used by a kernel: its cell types and named side relations.
+The finite element package selects concrete mesh cells and supplies their
+local coefficient and coordinate data. Cell counts, global cell numbers,
+neighbour lookup, iteration over a mesh and assembly are outside the core.
 
-```{dropdown} Legacy UFL and Firedrake
-Legacy UFL places functions on a mesh domain, with the mapping supplied by
-the element. UFLx places suitable functions on a topology and represents them
-on a physical mesh through an explicit [`PushForward`](geometry.md#pushforward).
-Firedrake already makes this separation at the solver level.
-```
+A local configuration may contain one cell, the two parents of an interface,
+or the cells of a fixed macro element. Distinct local cells retain their
+identities even when they have the same type or physical coordinates. A mixed
+mesh uses configurations for its cell and interface types; a library can
+specialise one mathematical recipe for these configurations.
+
+Fields with geometry-independent reference-cell representations can be defined
+on a topology before coordinates are supplied. A coordinate expression defines
+a physical local mesh, represented by [`Mesh`](geometry.md#mesh).
 
 ```{dropdown} Spaces defined directly on a mesh
 Spaces such as Hermite, Argyris and Morley have geometry-dependent
-reference-cell representations and are defined directly on a physical mesh.
-The element library constructs the local basis from the cell's coordinate map
+reference-cell representations and are defined directly on a physical local
+mesh. The element library constructs the local basis from the coordinate map
 and evaluates cell pull-backs and reference derivatives (see
 [Functions in a space](forms.md#functions-in-a-space)).
 ```
-
-A topology identifies cells and their side relations. It supports fields and
-function spaces when its cell types are reference cells.
-
-Reference-cell inclusions and reference normals describe relations between
-cells. These use reference coordinates, independently of physical geometry.
-Distinct cells retain their identities even when a later geometric realisation
-places them at the same physical coordinates.
 
 ## Topology
 
@@ -35,86 +30,62 @@ places them at the same physical coordinates.
 
 `AbstractCellType` describes a cell type with numbered vertices.
 
-| `AbstractCellType` |                                                                         |
-| ------------------ | ----------------------------------------------------------------------- |
-| Extends            | `Base` |
-| Provides           | `dimension`, an `int` $n \ge 0$, and `num_vertices`, an `int` $m \ge 1$ |
-| Defined by         | A subclass outside the core, such as `Simplex`                          |
+| `AbstractCellType` | |
+| ------------------ | - |
+| Extends | `Base` |
+| Provides | `dimension`, an `int` $n \ge 0$, and `num_vertices`, an `int` $m \ge 1$ |
+| Defined by | A subclass outside the core, such as `Simplex` |
 
-The core does not number the facets or the other sub-entities of a cell type.
-A sub-entity of a cell is named by the vertex numbers of the cell that the
-sub-entity contains, such as the vertex numbers of a facet, and the mesh or a
-library such as Basix decides which sets of vertices are sub-entities (see
-[Sides of a topology](#sides-of-a-topology)).
+The core does not number facets or other sub-entities. A library decides which
+sets of local vertices describe sub-entities and supplies their reference
+maps. A vertex set identifies an entity; an ordered correspondence determines
+its parameterisation. Pieces such as cuts need not be sub-entities.
 
-A topology of polygons, as for the virtual element method, has a cell type for
-each number of vertices. A number of vertices known only at run time is not yet
-covered.
+A polygon's vertex count belongs to its cell type. A vertex count known only
+at evaluation is not yet covered; a library specialises kernels by cell type.
 
 ### `AbstractTopology`
 
-`AbstractTopology` represents a topological mesh: a set of cells of given
-cell types, without physical coordinates.
+`AbstractTopology` describes a finite local cell configuration without physical
+coordinates. Each position in `cell_types` is a distinct local cell, called a
+*cell slot*. Slots identify the mathematical inputs of a kernel, not concrete
+cells in the package's mesh.
 
-| `AbstractTopology` |                                                                                             |
-| ------------------ | ------------------------------------------------------------------------------------------- |
-| Extends            | `Base` |
-| Provides           | `cell_types`, `num_cells`, `sides`, and `side_tables(i, side)` for a topology with sides |
-| Derived            | `dimension`, the dimension of the cell types                                                |
-| Defined by         | A subclass outside the core, such as the topology of the mesh of a solver                   |
+| `AbstractTopology` | |
+| ------------------ | - |
+| Extends | `Base` |
+| Provides | `cell_types`, `sides`, and `side_data(i, side)` for declared sides |
+| Derived | `dimension`, the dimension of the cell types |
+| Defined by | A subclass outside the core |
 
-- `cell_types` is a nonempty `tuple` of `AbstractCellType`s $C_0, C_1, \dots$ of the
-  same dimension, one for each group of cells. A cell of group $j$ has type
-  $C_j$ and its vertices are numbered as in $C_j$.
-  The cell types are distinct, except that two groups with different sides may
-  have the same cell type (see [Sides of a topology](#sides-of-a-topology)).
-- `num_cells` is a `tuple` of the same length as `cell_types`, with the number
-  of cells in each group: a nonnegative `int`, such as for a macro element,
-  or an `AbstractExtent`, such as for the mesh of a solver.
-- `sides` is `()`, or the sides of [Sides of a topology](#sides-of-a-topology).
+- `cell_types` is a nonempty `tuple` of `AbstractCellType`s of the same
+  dimension. Repeated types are allowed: `(K, K)` describes two distinct
+  local cells of type `K`.
+- `sides` is `()`, or one tuple of side declarations per slot, as defined
+  under [Sides of a topology](#sides-of-a-topology).
+- A cell slot `j` is an `int` satisfying `0 <= j < len(T.cell_types)`.
+  Negative numbers do not select slots from the end.
 
-Zero-cell groups are valid, including when every group is empty. An empty
-topology retains its cell types, which determine its dimension. An empty
-boundary selection likewise retains its facet types and side declarations;
-its side tables have zero entries along the cell axis. The supplying library
-must satisfy these contracts, including for counts supplied at evaluation.
+For example, `(K,)` describes a single-cell kernel, `(K, K)` the parents of
+an interior-facet kernel, and `(Kt, Kq)` a triangle–quadrilateral pair.
+An Alfeld macro element has three triangle slots `(K, K, K)`. A list of
+alternative kernel types is managed by the library; it is not a configuration
+whose cells should all be integrated together.
 
-A cell-group number `j` for a topology `T` is an `int` satisfying
-`0 <= j < len(T.cell_types)`. This applies to cell maps, side triples and
-`side_tables`; negative numbers do not select groups from the end.
+The number of slots is fixed when the expression is constructed. An empty
+selection in the package causes no kernel calls; it does not require an empty
+symbolic topology. Runtime-sized patches require package-level composition
+of local kernels.
 
 A topology whose cell types are reference cells may be the domain of an
-expression and the domain of a space, as the cell complex of its cells (see
-[`CellMap`](#cellmap)). A topology is not an `AbstractDomain`, so
-`Coordinate`, `Gradient` and `Integral` reject a topology.
+expression or space. Its points are cell-labelled reference points; continuity
+between cells is a property of the space. A topology is not an `AbstractDomain`,
+so `Coordinate`, `Gradient` and `Integral` reject it.
 
-Topology identity is structural: a concrete `AbstractTopology` stores its
-identifying arguments, such as a label.
-
-The free function `cell_index(T, j)` returns the derived index
-`Index(("uflx.cell_index", T, j, 0))` for the cells of group $j$, numbered from
-0. The index differs between groups and between topologies, even if the numbers of cells are equal.
-
-`cell_index` checks that $T$ is a topology and $j$ is an `int` with
-`0 <= j < len(T.cell_types)`.
-
-| Free function | Overload | Takes | Returns |
-| ------------- | -------- | ----- | ------- |
-| `cell_index(T, j)` | | `T: AbstractTopology`, `j: int` | `Index` |
-
-An expression with the free index `cell_index(T, j)` has one value per cell of
-group $j$.
-
-Examples:
-
-- The Alfeld split of a triangle, a macro element, has the numbers of cells
-  `(3,)`.
-- A mesh of a solver with triangles and quadrilaterals has two cell types, and
-  two `AbstractExtent`s as the numbers of cells.
-
-```{dropdown} Legacy UFL
-In legacy UFL, a `Mesh` holds both the topology and the coordinate element, and the measure `dx` hides the sum over the cells. In UFLx, the topology, the parameterisations of the pieces of a mesh and the `IndexSum` over `cell_index(T, j)` are separate.
-```
+Identity is structural. A concrete topology stores its identifying arguments,
+such as a label and the local configuration. The supplying library associates
+local coefficient and coordinate inputs with each slot. The same configuration
+can be evaluated repeatedly with data from different concrete cells.
 
 ## Domains
 
@@ -180,11 +151,10 @@ Worked examples for this chapter: [the unit simplex](../examples/library.md#the-
 
 ## Reference cells
 
-### Reference cell
+### `AbstractReferenceCell`
 
-An abstract subclass of `AbstractCoordinateDomain` and of `AbstractCellType`
-for a reference cell `AbstractReferenceCell`, a cell type that is also a
-coordinate domain. The core reads no vertices of a reference cell. A library
+`AbstractReferenceCell` is a cell type that is also a coordinate domain.
+It extends `AbstractCoordinateDomain` and `AbstractCellType`. The core reads no vertices of a reference cell. A library
 that builds inclusions, such as from vertex positions, keeps the vertices of
 its reference cells (see [The unit simplex as a reference
 cell](../examples/library.md#the-unit-simplex-as-a-reference-cell)).
@@ -196,198 +166,152 @@ cell](../examples/library.md#the-unit-simplex-as-a-reference-cell)).
 
 ### `CellMap`
 
-`CellMap(X, j, e)` selects cells of group $j$ of a topology or mesh $X$.
-Let $T$ be $X$ when $X$ is a topology, and `X.topology` when $X$ is a mesh.
-The selected cells retain their identities even when their physical
-coordinates coincide.
+`CellMap(X, j)` reads the local cell slot `j` of a topology or physical local
+mesh `X`. Let `T` be `X` for a topology, and `X.topology` for a mesh. This is a
+map from the reference cell into that labelled local cell, not a runtime
+selection from the package's mesh.
 
-| `CellMap(X, j, e)` | |
+| `CellMap(X, j)` | |
 | ------------------ | - |
 | Extends | `Base` |
-| Takes | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` |
-| Properties | `ambient_domain` $X$, `cell_group` $j$, and `entry` $e$ |
-| Requires | $j$ a valid cell-group number of $T$, `T.cell_types[j]` a reference cell $K_j$; an integer $e$ satisfies the bounds below, and a `GatheredIndex` has extent `T.num_cells[j]` |
-| Derived | `topology` $T$, `parameter_domain` $K_j$, `free_indices` and, for a mesh, `parameterisation`, as below |
-| Raises | `ValueError` if another requirement fails |
+| Takes | `X: AbstractTopology \| Mesh`, `j: int` |
+| Properties | `ambient_domain` $X$ and `cell_slot` $j$ |
+| Requires | `j` a valid slot of `T`, and `T.cell_types[j]` a reference cell $K_j$ |
+| Derived | `topology` $T$, `parameter_domain` $K_j$, `free_indices` always `()`, and, for a mesh, `parameterisation` |
+| Raises | `ValueError` if a requirement fails |
 
-For a symbolic cell count, construction cannot check the upper bound. An
-integer entry $e$ must be nonnegative. If `T.num_cells[j]` is an `int`,
-construction also checks `e < T.num_cells[j]`; otherwise the caller must ensure
-that $e$ is smaller than the supplied cell count.
-
-For an ordinary `Index` $e$, `free_indices` contains $e$ with extent
-`T.num_cells[j]`; the index itself stores no extent. For a `GatheredIndex`,
-it is the free indices of $e$. For an integer entry it is `()`.
-
-A cell map of a topology has no parameterisation. The same API selects cells
-of a physical mesh; its derived parameterisation and reconstruction are
-defined under [Mesh cell maps](geometry.md#mesh-cell-maps).
+A cell map of a topology has no coordinate parameterisation. For a physical
+mesh its parameterisation and reconstruction are defined under
+[Mesh cell maps](geometry.md#mesh-cell-maps). The property `ambient_domain`
+names the target of the map; here that target may also be a topology.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `cell_map(X, j, e)` | | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` | `CellMap(X, j, e)` |
-| `cell_map(X, j)` | | `X: AbstractTopology \| Mesh`, `j: int` | `CellMap(X, j, cell_index(T, j))`, with $T$ the topology of $X$ |
+| `cell_map(X, j)` | | `X: AbstractTopology \| Mesh`, `j: int` | `CellMap(X, j)` |
 
-[`pull_back(f, cell_map(X, j, e))`](geometry.md#pullback) is the value of an expression $f$ on $X$
-on the reference cell $K_j$ of each selected cell. For a function on a
-topology, the library of its space gives the value (see [Functions in a
-space](forms.md#functions-in-a-space)). For a mesh field, lowering uses the selected
-cell and its parameterisation (see [Expanding pull-backs](evaluation.md#expanding-pull-backs)).
-
-Worked examples for this chapter: [the unit simplex as a reference cell](../examples/library.md#the-unit-simplex-as-a-reference-cell).
+`pull_back(f, cell_map(X, j))` is the reference-cell representation of `f`
+on slot `j`. The library of its space supplies the local representation and
+its data (see [Functions in a space](forms.md#functions-in-a-space)).
+No cell index is introduced. Ordinary indices still describe basis functions,
+components, quadrature points and other local arrays.
 
 ## Sides of a topology
 
-A topology $S$ whose cells are sub-entities of cells of other topologies has
-sides. A cell of $S$ is seen from one cell of another topology on each side,
-and [Restriction](#restriction) picks the value of an expression on a cell of
-$S$ by the side name.
+A topology `S` can describe integration cells or pieces viewed from named
+parent cells. Side declarations identify parent slots; local side data supply
+the mathematical inclusions and normals. The package supplies the concrete
+neighbouring cells' data before kernel evaluation.
 
 ### `sides`
 
-`S.sides` describes the sides of $S$:
+`S.sides` is `()` when there are no sides. Otherwise it has one tuple per slot
+of `S`. A tuple may be empty; its entries have distinct names. Each entry is
+`(name, T, j)`, where `name` is a `str`, `T` is a topology and `j` a valid
+parent slot. Both the side cell and the selected parent cell must be reference
+cells. Side order has no meaning; names select sides. Parent dependencies
+obey the acyclic construction rules of `Base`.
 
-- `S.sides` has one entry for each cell group of $S$.
-- Entry $i$ is a `tuple` of one or more sides with distinct names.
-- Each side is a triple `(name, T, j)` of a side name, a `str`, a topology
-  $T$ and a cell-group number $j$ of $T$.
-- Entries for groups with the same cell type must differ. A group of cells of $S$ is
-  therefore fixed by the cell type and the sides together.
-- A topology whose cells are not seen from other cells has the sides `()`.
-
-Notation, for the group $i$ of $S$ with a side `(name, T, j)`:
-
-- $K_j$ is the reference cell of group $j$ of $T$, and $k_j$ is the
-  dimension of $K_j$.
-- $m$ is the number of vertices of the cell type of group $i$ of $S$.
+For a parent configuration `T` with cell types `(K, K)` and an interval `F`,
+a single interior facet has cell types `(F,)` and sides
+`((("+", T, 0), ("-", T, 1)),)`. The different parent slots preserve the two
+local fields. A boundary facet needs only `((("inside", T, 0),),)`.
+Parents may have different cell types or belong to different topologies.
 
 ### The image of a cell on a side
 
-Each side inclusion maps the cell type $F_i$ into the parent reference cell
-$K_j$. Its image may be the whole cell, a sub-entity, or a piece such as half
-a facet or a cut through the cell. A whole-cell inclusion preserves vertex
-order. The mesh library supplies the map; an affine inclusion can be built
-from the vertex positions in $K_j$ (see [A static topology](../examples/library.md#a-static-topology)).
-For periodic sides, those positions refer to the corresponding periodic image.
+For slot `i` of `S` with reference cell $F_i$ and side `(s, T, j)`, an
+inclusion $A_i:F_i\to K_j$ describes the points at which the parent field
+is evaluated. It can describe a whole cell, a facet, part of a facet or an
+interior cut. Vertex permutations are represented by the map, including for
+whole-cell inclusions.
 
-### Side tables
+All sides of one integration cell use the same parameter point in $F_i$.
+For an ordinary interface the parent coordinate maps composed with their
+inclusions agree. Physical coincidence is a library-supplied assumption, not
+a core check; periodic and mortar couplings may pair distinct physical points.
 
-A concrete topology with sides also provides `side_tables(i, side)`, the
-triple `(cells, inclusion, reference_normal)` for the side named `side` of
-group $i$, with the side `(side, T, j)`, the cell type $F_i$ of group $i$ and
-`e = cell_index(S, i)`:
+### Side data
 
-- `cells` is an [`AbstractIndexTable`](expressions.md#abstractindextable) of the shape
-  `(S.num_cells[i],)` and the extent `T.num_cells[j]`. Entry $e$ selects a cell of
-  group $j$ of $T$ on the side of the cell $e$ of $S$.
-- `inclusion` is a [`DomainMap`](geometry.md#domainmap) from $F_i$ into $K_j$ with the
-  free index `e`. Member $e$ is the inclusion of the cell $e$ into the cell on
-  the side.
-- `reference_normal` is an expression with the domain $F_i$ or no domain,
-  the value shape `(k_j,)` and the free index `e`, for a group of cells of
-  dimension $k_j - 1$, and `None` for any other group. A normal that varies
-  along the cell, such as on a curved piece, has the domain $F_i$. Member $e$ is a normal in $K_j$ of
-  the image of the cell $e$. The normal points out of $K_j$ for an image on the
-  boundary of $K_j$. For an image inside $K_j$, the supplying library chooses
-  its orientation.
+`S.side_data(i, s)` returns `(inclusion, reference_normal)` for the declared
+side `(s, T, j)` of slot `i`:
 
-Side inclusions pair points across sides. Physical coincidence is a
-library-supplied assumption for ordinary interfaces, not a core requirement;
-periodic and mortar couplings may pair distinct physical points.
-[Restriction](#restriction) and [`Normal`](geometry.md#normal) read the tables.
+- `inclusion` is a [`DomainMap`](geometry.md#domainmap) from $F_i$ into $K_j$,
+  with no free indices. Its real parameterisation has no argument spaces.
+- For `F_i.dimension == K_j.dimension - 1`, `reference_normal` is a real
+  expression on $F_i$ or with no domain, of value shape `(K_j.dimension,)`,
+  with no free indices and no argument spaces. It is nonzero and orthogonal
+  to the image tangents wherever evaluated. Its length need not be one.
+  It points out of $K_j$ on a boundary piece; the library chooses its
+  orientation on an interior cut.
+- In other dimensions, `reference_normal` is `None`.
 
-### What the concrete mesh decides
+The inclusion maps into the parent reference cell. Its differential has full
+column rank wherever geometry formulas require it; integration uses the given
+parameterisation and counts multiplicity. The core assumes these mathematical
+conditions rather than validating concrete mesh geometry.
 
-The mesh library chooses the cells or pieces of $S$, the side names, and
-one parent cell on each side. For a lower-dimensional entity shared by several
-cells, this choice affects the restriction of a discontinuous field.
-Sides may refer to different topologies, and a side topology may itself have
-sides, allowing facets of facets.
+The data may depend on supplied local coefficients. Expressing an inclusion
+in reference coordinates does not imply independence from physical geometry:
+a cut or mortar intersection can move. Libraries expose this dependence as
+symbolic operands or explicit reconstruction and derivative rules (see
+[Geometry dependence](geometry.md#geometry-dependence)). The package computes
+intersections and supplies data; UFLx describes the resulting mathematics.
+
+### Mixed cells and facet types
+
+A cell-type pair alone does not determine an interface. The configuration also
+specifies its reference integration cell and one inclusion per side. For a
+triangle and quadrilateral, take $F=[0,1]$ and, for example,
+$A_+(t)=(1-t,t)$ and $A_-(t)=(0,t)$. In three dimensions $F$ can be a reference
+triangle or quadrilateral. A library specialises the same form for the needed
+cell and interface configurations and supplies orientation-dependent local
+maps; the core does not enumerate combinations or dispatch kernels.
 
 ### Cells that are pieces
 
-Pieces cover hanging facets, mortar intersections and segments of a network
-inside mesh cells. The mesh library computes these intersections and their
-inclusions; a curved inclusion may be approximate. See the
-[network example](../examples/coupling.md#a-1d-network-in-a-3d-mesh).
-
-### Examples
-
-For a triangle topology `T` and facet cell type `I`, a boundary topology has
-cell types `(I,)` and sides `((("inside", T, 0),),)`. Interior facets instead
-have sides `((("+", T, 0), ("-", T, 0)),)`.
-
-See [Side topology examples](../examples/coupling.md#side-topology-examples)
-for corners, submeshes, periodic boundaries and mixed cell types.
-
-```{dropdown} Legacy UFL
-The legacy UFL measures `ds` and `dS` integrate over a topology of facets with one and two sides, and legacy UFL names the two sides `'+'` and `'-'`. The legacy UFL measure `dx(1)` integrates over a topology of the cells of a subdomain, and the legacy UFL measure `dP` integrates over a topology of vertices.
-```
-
-Worked examples for this chapter: [the simplex as a cell type](../examples/library.md#the-simplex-as-a-cell-type), [a static topology](../examples/library.md#a-static-topology).
+Hanging facets, mortar intersections and embedded network segments use the
+same side data. The package supplies each piece and its inclusions. A fixed
+local collection can be described by several slots; a runtime number of
+pieces can instead be processed by repeated kernel calls or local quadrature
+arrays. See the [network example](../examples/coupling.md#a-1d-network-in-a-3d-mesh).
 
 ## Restriction
 
-The restriction of an expression $f$ on a topology $T$ or a mesh $D$ to the
-cells of a topology $S$ with sides, from the side $s$, is the pull-back of $f$
-along the inclusion of each cell of $S$ into the cell on the side $s$. The
-side tables of $S$ give the cell on the side, through a
-[`GatheredIndex`](expressions.md#gatheredindex) entry, and the inclusion of each cell of $S$
-into that cell. The restriction is `pull_back(f, side_map(T, S, s))` for $f$
-on $T$, and `pull_back(f, side_map(D, E, s))` for $f$ on $D$ and a side
-domain $E$ (see [`SideMap`](#sidemap) and [Side domains](geometry.md#side-domains)).
-
-Notation, for the group $i$ of $S$ with the side `(s, T, j)`:
-
-- `(cells, inclusion, reference_normal)` are the side tables of the side $s$
-  of group $i$.
-- $F_i$ is the cell type of group $i$, and $K_j$ the reference cell of
-  group $j$ of $T$.
-- `e = cell_index(S, i)` and `g = gathered_index(cells, (e,))`.
+Restriction is evaluation through a named side's inclusion. For a field `f`
+on `T`, use `pull_back(f, side_map(T, S, s))`. For a field on a physical local
+mesh `D`, use `pull_back(f, side_map(D, E, s))`, where `E` is a mesh on `S`.
+Its geometry determines the integration measure, while the chosen side
+specifies where the field is read.
 
 ### The inclusion
 
-Two families of maps with the free index `e` make the inclusion of the cells
-of group $i$:
-
-- $B_i$, the cell on the side, is `cell_map(T, j, g)` on $T$, and
-  `cell_map(D, j, g)` on a mesh $D$ with the topology $T$.
-- $A_i$, the inclusion into the cell on the side, is `inclusion` of the side
-  tables, a domain map from $F_i$ into $K_j$. $F_i$ must be a reference cell.
-
-The restriction of $f$ to group $i$ from the side $s$ is
-`pull_back(pull_back(f, B_i), A_i)`, an expression on $F_i$ with the free index
-`e`.
-
-For an explicit cell selection `q` (an `int`, `Index` or `GatheredIndex`),
-use the same side data with their cell index replaced:
+For slot `i` with side `(s, T, j)`, let `(A_i, reference_normal)` be
+`S.side_data(i, s)`. Let `B_i = cell_map(T, j)` for a topology field, or
+`B_i = cell_map(D, j)` for a field on a mesh with topology `T`.
+The local restriction is
 
 ```python
-B_selected = replace(B_i, {e: q})
-A_selected = replace(A_i, {e: q})
+pull_back(pull_back(f, B_i), A_i)
 ```
 
-The selected restriction is `pull_back(pull_back(f, B_selected), A_selected)`.
-Substitute only into the side data, not into `f`; its free indices remain
-independent. The default selection `q = e` leaves the maps unchanged.
-
-Restrictions are compared at paired points; their difference is an ordinary
-interface jump when those points physically coincide (see [Side tables](#side-tables)).
-A cell with more than two sides has no jump; a form uses each side's
-restriction separately.
+It has domain $F_i$ and the free indices of `f`. There is no neighbour-table
+lookup, cell-index substitution or implicit summation. Restrictions can be
+combined at the paired points. For more than two sides the core defines no
+canonical jump; the form combines the named restrictions explicitly.
 
 ### `SideMap`
 
-`SideMap` is the lazy map of the cells of $S$ into $T$, or of the cells of a
-side domain $E$ into a mesh $D$, through the side $s$.
+`SideMap` describes the named local side relation, keeping restriction lazy
+until the integration cell is read.
 
-| `SideMap(X, P, s)` |                                                                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------- |
-| Extends            | `Base` |
-| Takes              | `X, P: AbstractTopology \| Mesh`, `s: str` |
-| Properties         | `ambient_domain` $X$, `parameter_domain` $P$, and `side` $s$ |
-| Derived            | `free_indices`, always `()` |
-| Requires           | The domain conditions below |
+| `SideMap(X, P, s)` | |
+| ------------------ | - |
+| Extends | `Base` |
+| Takes | `X, P: AbstractTopology \| Mesh`, `s: str` |
+| Properties | `ambient_domain` $X$, `parameter_domain` $P$, and `side` $s$ |
+| Derived | `free_indices`, always `()` |
+| Requires | The domain conditions below |
+| Raises | `ValueError` if a domain condition fails |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -395,38 +319,35 @@ side domain $E$ into a mesh $D$, through the side $s$.
 
 | Domain condition | Requirement |
 | ---------------- | ----------- |
-| $X$, $P$ | Topologies $T$, $S$, or a mesh on $T$ and a side domain on $S$ |
-| Cell types of $S$ | All are `AbstractReferenceCell` |
-| Groups of $S$ | Each has a side named $s$ with topology $T$ |
+| $X$, $P$ | Both topologies $T$, $S$, or both meshes on $T$, $S$ |
+| Slots of $S$ | Each has a side named $s$ with topology $T$ |
+| Reference cells | Every slot of $S$ and every selected parent slot is a reference cell |
 
-A side map of a mesh takes a side domain, so that a coupling of two meshes
-shares one side domain. `pull_back(f, side_map(X, P, s))` is an expression
-with the domain $P$, the restriction of $f$ to all the groups at once. The
-pull-back of that expression by `cell_map(P, i, q)` uses
-`pull_back(pull_back(f, B_selected), A_selected)`, with the selected maps
-defined above. This covers both topology and mesh targets.
+A mesh on `S` need not have geometry equal to the selected parent's trace.
+The helper [side_domain](geometry.md#side-domains) constructs one from a chosen
+side. Coupled fields share this integration domain even when their parent
+geometries differ.
+
+`pull_back(f, side_map(X, P, s))` has domain `P`. Its pull-back by
+`cell_map(P, i)` is `pull_back(pull_back(f, B_i), A_i)` as defined above.
 
 ## A field on a topological mesh
 
 Use the library's [static topology](../examples/library.md#a-static-topology)
-and reference triangle:
+to describe two distinct triangle slots:
 
 ```python
 K = ReferenceSimplex(2)
-T = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+T = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
+u0 = pull_back(u, cell_map(T, 0))
+u1 = pull_back(u, cell_map(T, 1))
 ```
 
-Let `u` be a scalar function in a space on `T`. Its library supplies a
-reference-cell expression for each cell (see [Functions in a
-space](forms.md#functions-in-a-space)):
+Here `u` is a scalar function in a library space on `T`. Both expressions have
+domain `K`, but use different local field data. The vertex labels describe
+this fixed configuration, not global mesh connectivity. The package can reuse
+the kernel for many pairs of triangles.
 
-```python
-u0 = pull_back(u, cell_map(T, 0, 0))
-u1 = pull_back(u, cell_map(T, 0, 1))
-```
-
-Both expressions have domain `K`, but select different cells of `T`.
-No physical vertex positions are needed. Reference derivatives such as
-`gradient(u0, K)` are defined on `K`; `gradient(u, T)` is not defined.
-The next chapter supplies physical coordinates with `D = mesh(x, Q)`.
-
+Reference derivatives such as `gradient(u0, K)` are defined on `K`;
+`gradient(u, T)` is not defined. The next chapter supplies physical local
+coordinates with `D = mesh(x, Q)`.

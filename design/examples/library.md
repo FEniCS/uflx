@@ -65,21 +65,17 @@ class Simplex(AbstractCellType):
 
 ## A static topology
 
-`StaticTopology(cell_types, cells, sides)` stores fixed connectivity, mainly
-for testing UFLx ideas, including Alfeld splits. Vertex positions come from a
-mesh's coordinate function.
+`StaticTopology(cell_types, cells, sides)` describes a fixed local configuration,
+mainly for examples and macro elements. `cells[j][v]` is the label of local
+vertex `v` of slot `j`. These labels identify vertices within the example;
+they are not mesh-wide cell numbers or runtime connectivity.
 
-| Convention | Meaning |
-| ---------- | ------- |
-| `cells[j][c][i]` | Topology vertex number of local vertex `i` in cell `c` of type `j`. |
-| Vertex pairing | Each side uses the same vertex numbers as its target topology. |
-| Inclusions | Affine maps through the paired reference vertices; sides cover sub-entities, not pieces of cells. |
-| Two cells in the same group | The lower-numbered cell is on the first side. |
-| Two cells in different groups | Each side's group selects its cell. |
-| Sub-entities below facet dimension | Select the lowest-numbered containing cell. |
-
-The library derives the containing cells, inclusions and facet normals as
-described in [Side tables](#side-tables-of-a-static-topology).
+A side `(name, T, j)` explicitly names the parent slot. The library pairs the
+side cell's vertex labels with that parent's vertex labels and builds an
+affine map through the corresponding reference vertices. This helper supports
+whole cells and sub-entities with nondegenerate affine inclusions; general
+cuts use another library implementation of `side_data`. Reference normals
+below assume planar facets of convex reference cells.
 
 ```python
 class StaticTopology(AbstractTopology):
@@ -88,11 +84,34 @@ class StaticTopology(AbstractTopology):
     def __init__(
         self,
         cell_types: tuple[AbstractCellType, ...],
-        cells: tuple[tuple[tuple[int, ...], ...], ...],
+        cells: tuple[tuple[int, ...], ...],
         sides: tuple[tuple[tuple[str, AbstractTopology, int], ...], ...],
     ):
-        if len(cells) != len(cell_types):
-            raise ValueError("Need one tuple of cells for each cell group.")
+        if not cell_types or len(cells) != len(cell_types):
+            raise ValueError("Need one vertex tuple per local cell slot.")
+        if any(K.dimension != cell_types[0].dimension for K in cell_types):
+            raise ValueError("All slots must have the same dimension.")
+        if any(
+            len(v) != K.num_vertices or len(set(v)) != len(v)
+            for K, v in zip(cell_types, cells)
+        ):
+            raise ValueError("Need distinct vertex labels for each cell's vertices.")
+        if sides and len(sides) != len(cell_types):
+            raise ValueError("Need one side tuple per local cell slot.")
+        for i, entries in enumerate(sides):
+            if len({name for name, _, _ in entries}) != len(entries):
+                raise ValueError("Side names must be distinct within a slot.")
+            for _, T, j in entries:
+                if not 0 <= j < len(T.cell_types):
+                    raise ValueError("Invalid parent slot.")
+                if not isinstance(
+                    cell_types[i], AbstractReferenceCell
+                ) or not isinstance(T.cell_types[j], AbstractReferenceCell):
+                    raise ValueError("Sides require reference cells.")
+                if not set(cells[i]) <= set(T._cells[j]):
+                    raise ValueError(
+                        "Side vertices must belong to the declared parent."
+                    )
         self._cell_types = cell_types
         self._cells = cells
         self._sides = sides
@@ -102,38 +121,41 @@ class StaticTopology(AbstractTopology):
         return self._cell_types
 
     @property
-    def num_cells(self) -> tuple[int, ...]:
-        return tuple(len(c) for c in self._cells)
-
-    @property
     def sides(self) -> tuple[tuple[tuple[str, AbstractTopology, int], ...], ...]:
         return self._sides
+
+    def side_data(self, i: int, side: str):
+        return static_side_data(self, i, side)
 ```
 
-With `K = Simplex(2)` and `I = Simplex(1)`:
+With `K = ReferenceSimplex(2)` and `I = ReferenceSimplex(1)`
+(defined below):
 
 ```python
 # Two triangles forming a square.
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
 
 # Three triangles meeting at vertex 3 (an Alfeld split).
-alfeld = StaticTopology((K,), (((0, 1, 3), (1, 2, 3), (2, 0, 3)),), ())
+alfeld = StaticTopology((K, K, K), ((0, 1, 3), (1, 2, 3), (2, 0, 3)), ())
 
 # Four boundary facets, each seen from one triangle.
-boundary = StaticTopology((I,), (((0, 1), (1, 3), (3, 2), (2, 0)),), ((("inside", square, 0),),))
+boundary = StaticTopology(
+    (I, I, I, I),
+    ((0, 1), (1, 3), (3, 2), (2, 0)),
+    tuple((("inside", square, j),) for j in (0, 1, 1, 0)),
+)
 
 # One diagonal facet, seen from two triangles.
-diagonal = StaticTopology((I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),))
+diagonal = StaticTopology((I,), ((1, 2),), ((("+", square, 0), ("-", square, 1)),))
 ```
 
-Facets are matched by vertex sets, using the facets of `K`. The square's
-diagonal and the Alfeld split's three facets containing vertex 3 each belong
-to two cells; their remaining facets belong to one. The four topologies have
-`num_cells` `(2,)`, `(3,)`, `(4,)` and `(1,)`, respectively.
+The four configurations have two, three, four and one local slots,
+respectively. The parent slot is explicit in each side declaration; no
+neighbour search or table read occurs inside the symbolic kernel.
 
-### Side tables of a static topology
+### Side data of a static topology
 
-The library builds [side tables](../language/topology.md#side-tables) from reference
+The library builds [side data](../language/topology.md#side-data) from reference
 vertices, which the core does not read. For a $k$-dimensional reference cell
 $F$ with vertices $V_v$, `affine_map(F, points)` maps the first $k+1$ vertices
 to rows $p_v$ of `points`:
@@ -167,34 +189,55 @@ row `K.vertices[w_v]` for point $v$. For example:
 | Unit triangle | `(1, 2)` | Unit interval | $t\mapsto(1-t,t)$ |
 | Unit interval | `(1,)` | Reference point | The endpoint $1$ |
 
-For group $i$ with reference cell `F_i`, let `e` be its cell index and
-`positions[e, v]` the position of vertex `v` in the side's reference cell
-`K_j`. With derived indices `v` and `k`, its inclusion is:
+The following helper constructs the pair `(inclusion, reference_normal)`.
+It uses the same vertex correspondence on both sides, so both traces are
+parameterised by the same reference point. The reference normal need not
+have unit length.
 
 ```python
-points = component_tensor(positions[e, v, k], (v, k))
-inclusion = domain_map(F_i, affine_map(F_i, points), K_j)
+def static_side_data(S, i, side):
+    if not 0 <= i < len(S.cell_types):
+        raise ValueError("Invalid local slot.")
+    entries = S.sides[i] if S.sides else ()
+    matches = [(T, j) for name, T, j in entries if name == side]
+    if len(matches) != 1:
+        raise ValueError("Unknown side.")
+    T, j = matches[0]
+    F, K = S.cell_types[i], T.cell_types[j]
+    parent_vertices = T._cells[j]
+    points = tensor(tuple(K.vertices[parent_vertices.index(v)] for v in S._cells[i]))
+    inclusion = domain_map(F, affine_map(F, points), K)
+    if F.dimension != K.dimension - 1:
+        return inclusion, None
+
+    k = K.dimension
+    J = jacobian(inclusion)
+    cofactors = []
+    for r in range(k):
+        C = tensor(
+            tuple(
+                tensor(
+                    (Integer(1 if q == r else 0),)
+                    + tuple(J[q, d] for d in range(k - 1))
+                )
+                for q in range(k)
+            )
+        )
+        cofactors.append(determinant(C))
+    m0 = tensor(tuple(cofactors))
+    centroid = K.vertices[0]
+    for v in range(1, K.num_vertices):
+        centroid = centroid + K.vertices[v]
+    centroid = centroid / Integer(K.num_vertices)
+    away = m0 @ (points[0] - centroid)
+    return inclusion, away / absolute(away) * m0
 ```
 
-For planar boundary facets of a full-dimensional convex $K_j$, with
-nondegenerate affine inclusions, the reference normal is the cofactor vector
-of the inclusion's Jacobian, turned away from the centroid of $K_j$:
-
-```python
-J_A = jacobian(inclusion)  # value shape (k, k - 1)
-C_r = tensor(
-    tuple(tensor((Integer(1 if q == r else 0), J_A[q, 0], ..., J_A[q, k - 2])) for q in range(k))
-)
-m0 = tensor((determinant(C_0), ..., determinant(C_(k - 1))))
-centroid = (V[0] + V[1] + ... + V[m_j - 1]) / Integer(m_j)
-away = m0 @ (points[0] - centroid)
-reference_normal = away / absolute(away) * m0
-```
-
-Here `V = K_j.vertices`, $m_j$ is its vertex count, and the sums nest to the
-left. Interior cuts instead require a supplier-chosen orientation. All sides
-preserve the vertex order of cell `e`, so their inclusions
-parameterise it in the same way.
+This formula assumes full-rank affine maps onto boundary facets of convex
+parents, so `away` is nonzero. Interior cuts need a supplier-chosen orientation.
+For nonsimplex cells the first `F.dimension + 1` vertices must be affinely
+independent and the remaining vertices must agree with the resulting map.
+These are assumptions of this example helper, not limitations on core side data.
 
 ## The unit simplex as a reference cell
 
@@ -230,8 +273,8 @@ class ReferenceSimplex(Simplex, AbstractReferenceCell):
 ```
 
 `vertices` is a property of the library, not of `AbstractReferenceCell`. The
-side tables of a `StaticTopology` read it (see [Side tables of a static
-topology](#side-tables-of-a-static-topology)).
+side data of a `StaticTopology` read it (see [Side data of a static
+topology](#side-data-of-a-static-topology)).
 
 `ReferenceSimplex(2)` and `Simplex(2)` are different cell types, so a topology
 of `Simplex(2)` cells has no reference cells. `ReferenceSimplex(2)` and

@@ -3,7 +3,8 @@
 These examples accompany [language.md](../language.md). Each states its
 library-supplied inputs locally and uses core names without import lists.
 The code constructs symbolic expressions; numerical results require later
-passes or a solver.
+passes or a solver. Topologies describe fixed local configurations; the
+package supplies concrete cell data, dispatches kernels and assembles results.
 
 Start with [Poisson](forms.md#poisson) for variational forms or the
 [affinely mapped triangle](integration.md#an-affinely-mapped-triangle)
@@ -27,8 +28,8 @@ shows the familiar UFL syntax.
   operators, oriented fluxes and shape derivatives on fixed or deformed geometry.
 - **[Error estimation](estimation.md).** Express local residual
   solves and goal-oriented error indicators.
-- **[Patch problems](patches.md).** Build a runtime-sized DG patch problem
+- **[Patch problems](patches.md).** Build contributions to a DG patch problem
   with a patch-wide multiplier and a zero-mean correction.
 
 The [reference library](library.md) collects the longer helper
-implementations: simplices, static topologies, side tables and the FEniCS layer.
+implementations: simplices, static topologies, side data and the FEniCS layer.

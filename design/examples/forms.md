@@ -7,7 +7,7 @@ imports. Shared helper definitions are in the
 ## Poisson
 
 For Poisson's equation $-\Delta u=f$ with homogeneous Dirichlet conditions,
-the library supplies a triangle topology `T`, its coordinate function `x`
+the library supplies a one-triangle local topology `T`, its coordinate function `x`
 of value shape `(2,)`, and a real scalar continuous Lagrange space `V` on `T`:
 
 ```python
@@ -28,8 +28,8 @@ L = form(integral(f_D * v_D, D), (v,))
 The functions live on `T`; pushing them forward gives fields on the physical
 mesh `D`. The entries `(v, u)` bind the test and trial arguments of `a`, in
 that order. `L` binds only `v`, leaving `f` as the source coefficient.
-The solver supplies its values, applies the boundary conditions and solves
-the assembled system.
+The package supplies local values for each kernel call, assembles the
+contributions, applies boundary conditions and solves the resulting system.
 
 ## Constants on a domain
 
@@ -306,7 +306,9 @@ A convenience layer can recover the familiar
 `inner(grad(u), grad(v)) * dx` syntax while producing ordinary core graphs.
 The hypothetical `uflx.legacy` module below is an
 [implementation sketch](library.md#implementation-of-the-fenics-layer), not an existing
-module. It adds no core subclasses.
+module. It adds no core subclasses. This sketch wraps a fixed local
+configuration; a package-level layer would additionally specialise recipes
+and dispatch kernels for the concrete mesh.
 
 ### Mesh and markers
 
@@ -315,11 +317,15 @@ function on `square` with vertex values `((0,0), (1,0), (0,1), (1,1))`:
 
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
 D = mesh(x, RD(2))
-boundary = StaticTopology((I,), (((0, 1), (1, 3), (3, 2), (2, 0)),), ((("inside", square, 0),),))
-lower = StaticTopology((K,), (((0, 1, 2),),), ((("inside", square, 0),),))
-left = StaticTopology((I,), (((2, 0),),), ((("inside", square, 0),),))
+boundary = StaticTopology(
+    (I, I, I, I),
+    ((0, 1), (1, 3), (3, 2), (2, 0)),
+    tuple((("inside", square, j),) for j in (0, 1, 1, 0)),
+)
+lower = StaticTopology((K,), ((0, 1, 2),), ((("inside", square, 0),),))
+left = StaticTopology((I,), ((2, 0),), ((("inside", square, 0),),))
 ```
 
 The layer wraps these in a mesh and marker dictionaries. Its user code sees

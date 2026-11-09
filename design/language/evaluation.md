@@ -509,8 +509,8 @@ the [geometry preparation contract](#evaluation-traversal).
 
 ### Gradients and mapped values
 
-For a mesh cell $\psi = D_j =$ `cell_map(D, j, e)` with topology $T$, let
-$K_j$ be its reference cell, $\hat f$ = `pull_back(f, cell_map(T, j, e))`,
+For a mesh cell $\psi = D_j =$ `cell_map(D, j)` with topology $T$, let
+$K_j$ be its reference cell, $\hat f$ = `pull_back(f, cell_map(T, j))`,
 and $m_\psi$ be the law $m$ on $\psi$ (see
 [`TransformationLaw`](geometry.md#transformationlaw)).
 
@@ -547,50 +547,37 @@ expansion. The cell pull-back rules use no derivative of $J$.
 
 ## Restriction
 
-For $\psi =$ `cell_map(Y, i, q)` of a topology or mesh $Y$ and a side $s$,
-`B_selected` and `A_selected` are the maps of
-[Restriction](topology.md#restriction), selected by `q`.
+For $\psi =$ `cell_map(Y, i)` of a topology or mesh $Y$ and a side $s$,
+`B_i` and `A_i` are the maps of
+[Restriction](topology.md#restriction).
 Cell maps retain explicit selection; unselected side restrictions remain.
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
 | R01 | $\psi$ a `SideMap`, $f$ with a domain and neither an `Apply` nor a `Form` | Remains until a pull-back by a cell of $P$ |
-| R02 | `PullBack(g, SideMap(X, Y, s))`, $\psi$ = `cell_map(Y, i, q)` | `PullBack(PullBack(g, B_selected), A_selected)` |
-| R03 | `Normal(SideMap(D, E, s))`, $\psi$ = `cell_map(E, i, q)`; the cell Jacobian has full column rank and $w \ne 0$ | $w / \lvert w \rvert$, with $w$ defined in [The pull-back of Normal](geometry.md#the-pull-back-of-normal) |
+| R02 | `PullBack(g, SideMap(X, Y, s))`, $\psi$ = `cell_map(Y, i)` | `PullBack(PullBack(g, B_i), A_i)` |
+| R03 | `Normal(SideMap(D, E, s))`, $\psi$ = `cell_map(E, i)`; the cell Jacobian has full column rank and $w \ne 0$ | $w / \lvert w \rvert$, with $w$ defined in [The pull-back of Normal](geometry.md#the-pull-back-of-normal) |
 
 ## Integration
 
-Mesh integration becomes a sum over cells, with each cell integral expressed
-on its reference cell. The density accounts for the change of coordinates.
-
-For group $j$ of `D.topology`, let $K_j$ be the reference cell and $c_j$ =
-`cell_index(D.topology, j)`.
-
-To choose the internal index without capturing $f$, form the template
-`index_sum(pull_back(Integer(1), cell_map(D, j)), (c_j,))`, make its binder
-fresh for $f$ using [Substitution and binding](#substitution-and-binding), and
-let $e_j$ be its resulting bound index. This retains $c_j$ when no renaming is
-needed, preserving shared geometry for ordinary integrands. Set
-`D_j = cell_map(D, j, e_j)` and
+Mesh integration produces a local contribution by adding the integrals over
+its statically known cell slots. For slot $j$ of `D.topology`, set
+`K_j = D.topology.cell_types[j]`, `D_j = cell_map(D, j)` and
 `piece_j = domain_map(K_j, D_j.parameterisation, D.ambient_domain)`.
 
-Let `K` contain one derived `Index` for each value axis of $f$, with `()`
+Let `K` contain one derived `Index` for each value axis of `f`, with `()`
 for a scalar, and set `f_K = indexed(f, K)`.
 
 | Rule | Integral | Rewrite |
 | ---- | -------- | ------- |
-| I01 | `Integral(f, D)`, $D$ a `Mesh` | `component_tensor(sum_j, K)`, where `sum_j` is the sum over groups $j$ of `index_sum(integral(g_j * density(D_j), K_j), (e_j,))` |
+| I01 | `Integral(f, D)`, $D$ a `Mesh` | `component_tensor(sum_j, K)`, where `sum_j` adds `integral(g_j * density(D_j), K_j)` over the fixed local slots $j$, in tuple order |
 
 $g_j$ is `pull_back(f_K, piece_j)` when $f$ has domain `D.ambient_domain`,
 and `pull_back(f_K, D_j)` otherwise, including domain-free $f$.
-The pull-back introduces the internal cell index; `IndexSum` sums over it and
-retains every free index of $f$ and the component indices `K`. The outer
-`component_tensor` restores the value shape, and is the identity for scalar
-$f$. The remaining integrals have coordinate domains.
-
-Expanding the same input again gives the same graph. Changing the order of
-substitution and expansion may change bound names when renaming is needed.
-The value and free indices must stay the same.
+No cell index is created or bound. The outer `component_tensor` restores the
+value shape and is the identity for a scalar. All free indices of `f` remain
+free. The remaining integrals have coordinate domains. The package performs
+mesh iteration and assembly outside this rewrite.
 
 ## Pass recipes
 

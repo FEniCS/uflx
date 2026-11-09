@@ -32,13 +32,13 @@ topologies, the concrete subclass supplies evaluation as follows:
 
 - A space whose values on the reference cell do not depend on the geometry is
   on a topology $T$. The concrete subclass defines
-  `pull_back(u, cell_map(T, j, e))` for every cell group $j$ and every entry
-  $e$, such as with one finite element for each cell type. The field on a
-  mesh is a [`PushForward`](geometry.md#pushforward).
+  `pull_back(u, cell_map(T, j))` for every local cell slot $j$, with local
+  data supplied by the package and an appropriate element for each cell
+  type. The field on a mesh is a [`PushForward`](geometry.md#pushforward).
 - A space whose values on the reference cell depend on the geometry is on a
   mesh $D$, such as Hermite, Argyris, Morley and the other elements that are
   not Piola equivalent. The concrete subclass defines
-  `pull_back(u, cell_map(D, j, e))`, and reads $x$ from the cell map.
+  `pull_back(u, cell_map(D, j))`, and reads $x$ from the cell map.
 - For a coordinate domain, such as a reference cell, a function is a terminal
   that the concrete subclass evaluates.
 

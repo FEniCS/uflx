@@ -6,7 +6,8 @@ polygon is needed. A subdivision used for quadrature does not define the space.
 
 Here a triangle and a quadrilateral share the edge between vertices 1 and 2.
 Each cell lists its vertex numbers in counterclockwise order. The illustrative
-`polygon_topology` factory groups cells by vertex count. Mesh, space and
+`polygon_topology` factory describes two local slots, with a triangle and
+a quadrilateral cell type. Mesh, space and
 physical calculus functions below are also extension functions; algebra and
 form binding use core names:
 
@@ -37,7 +38,8 @@ $$
 \nabla v|_K(x_{Kq})\cdot\nabla u|_K(x_{Kq}).
 $$
 
-Weights contain physical measure. Reads retain cell identity, so two traces
+The sum over $K$ has the two fixed local slots in this example. The package
+handles mesh iteration and kernel dispatch. Weights contain physical measure. Reads retain cell identity, so two traces
 at the same physical point can differ. Facet terms additionally need parent
 cells, physical normals and facet weights.
 

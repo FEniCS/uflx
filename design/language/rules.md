@@ -60,6 +60,11 @@ analysis or differential geometry. The core should therefore contain only the
 concepts and relations needed to write variational forms as code for later
 algorithmic transformation.
 
+The core describes local kernels. The finite element package selects concrete
+cells and neighbours, supplies local data, and performs mesh iteration and
+assembly. Cell and interface types, reference parameterisations and local
+field transformations remain symbolic.
+
 A UFLx program is ordinary Python code that builds a graph of symbolic objects,
 usually a bilinear form, linear form or functional.
 

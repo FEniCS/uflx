@@ -7,8 +7,8 @@ imports. Shared helper definitions are in the
 ## A Bank-Weiser error estimator
 
 The Bank–Weiser estimator solves an independent residual problem on each
-cell. A discontinuous space lets us write all these local problems as one
-global form, without requiring a global assembly.
+cell. The following fixed two-cell configuration shows the local cell and
+facet contributions; the package repeats them on the concrete mesh.
 
 For the Poisson problem, seek a quadratic correction `e` with zero vertex
 values on each cell:
@@ -30,9 +30,9 @@ Use a two-triangle square, with its diagonal as the interior facet:
 
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
 diagonal = StaticTopology(
-    (I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),)
+    (I,), ((1, 2),), ((("+", square, 0), ("-", square, 1)),)
 )
 D = mesh(x, RD(2))
 E = side_domain(D, diagonal, "+")
@@ -121,15 +121,15 @@ rows, solves and computes the estimator, with no global array.
 After solving for `e`, the cell-wise squared estimator is:
 
 ```python
-cell = cell_domain(D, 0)
+cell = cell_map(D, 0)
 energy_density = index_sum(grad_e[i] * grad_e[i], (i,))
 eta_squared = integral(pull_back(energy_density, cell) * density(cell), K)
 ```
 
-Its cell index remains free, giving one value per cell. Alternatively, a
-topology of `(cell, local facet)` pairs can use sides `"self"` and `"other"`.
-Restricting `v` from `"self"` alone then makes the facet kernel return only
-that cell's rows, with the pairs already grouped by cell.
+This gives the squared estimator for slot 0. The package obtains other
+cells' values by supplying their local data. A two-parent facet configuration
+can instead use sides `"self"` and `"other"`; restricting `v` from `"self"`
+alone returns only that parent's rows.
 
 ## Dual-weighted residual error estimation
 
@@ -187,16 +187,16 @@ type of a function in `V`, so `z-z_h` from the richer space is allowed.
 Substitution into `push_forward(v, D, transformation_law(V))` retains the
 explicit law.
 Galerkin orthogonality makes the application to `z_h` zero in value; `eta` is a
-functional, one number after assembly.
+local functional contribution, summed by the package after evaluation.
 
-An assembled load can also be represented in the dual space:
+A local load can also be represented in the dual space:
 
 ```python
 l = function(dual_space(V), "l")
 R_h = l - partial(a, {u: u_h})
 ```
 
-The library evaluates applications of `l` as pairings with the assembled data.
+The library evaluates applications of `l` as pairings with the supplied local load data.
 For complex forms, constructing the adjoint also conjugates the expression.
 To obtain cell-wise indicators, integrate `R` by parts into the cell residual
 and facet jumps of the [Bank–Weiser example](#a-bank-weiser-error-estimator),

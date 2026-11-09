@@ -1,8 +1,10 @@
 # Core UFLx language definition
 
 This note defines UFLx objects and the rules for constructing and evaluating
-them. It includes the core's rewrite passes, but leaves numerical algorithms
-and backend implementation to the compiler.
+them as local kernels. The finite element package supplies concrete cell and
+interface data, dispatches kernels and assembles their contributions. The note
+includes the core's rewrite passes, but leaves numerical algorithms and backend
+implementation to the compiler.
 
 The library classes of the examples and further worked examples are in
 [examples/index.md](examples/index.md). The note assumes knowledge of differential

@@ -1,9 +1,9 @@
 # Geometry and calculus
 
-A topological mesh acquires physical geometry through a coordinate expression:
+A local cell configuration acquires physical geometry through a coordinate expression:
 
 ```python
-# T is a triangle topology supplied by the mesh library.
+# T describes one triangle slot; the package supplies its local data.
 Q = RD(2)                       # Ambient space: the plane.
 X = Lagrange(T, 1, (2,))         # Library-supplied space of coordinate functions.
 x = function(X, "x")            # Physical positions, with values supplied by the solver.
@@ -22,10 +22,11 @@ The only metric is the ambient Euclidean metric, which defines the tangential
 
 ### `Mesh`
 
-`Mesh(x, Q)` is one physical field domain, with coordinate expression $x$ on
+`Mesh(x, Q)` is one physical local field domain, with coordinate expression $x$ on
 an `AbstractTopology` $T$ and ambient domain $Q$. Cells keep their identities
-when their physical coordinates coincide. The mesh stores no connectivity or
-coordinate values; those remain with the topology and coordinate-function library.
+when their physical coordinates coincide. The mesh stores no
+global connectivity or coordinate values. The package supplies the local data.
+Its finitely many cell slots describe one kernel configuration, not a runtime mesh.
 
 | `Mesh(x, Q)` | |
 | ------------ | - |
@@ -57,11 +58,11 @@ integration or sampling needs a `DomainMap`, not a mesh (see
 
 #### Cell maps and pieces
 
-For group $j$ of $T$, let $K_j$ be its reference cell. `pieces` is the derived
+For slot $j$ of $T$, let $K_j$ be its reference cell. `pieces` is the derived
 `tuple` of maps
 `domain_map(K_j, pull_back(x, cell_map(T, j)), Q)`.
-These maps are views of the mesh, not construction arguments. They carry the
-cell index `cell_index(T, j)` and do not introduce extra geometry parameters.
+These maps are views of the local mesh, not construction arguments. They have
+no free indices and introduce no extra geometry parameters.
 
 The ambient domain $Q$ is a coordinate domain. A mesh embedded in another
 mesh has its own physical coordinates; cell or side maps specify its
@@ -69,17 +70,17 @@ relation to the other mesh's cells.
 
 #### Mesh cell maps
 
-`cell_map(D, j, e)` returns `CellMap(D, j, e)`, whose target is the mesh $D$.
-Its parameterisation is `pull_back(x, cell_map(T, j, e))`. This expression
+`cell_map(D, j)` returns `CellMap(D, j)`, whose target is the mesh $D$.
+Its parameterisation is `pull_back(x, cell_map(T, j))`. This expression
 is derived, not a construction argument. Substitution reconstructs the map
-from $D$, $j$ and $e$, preserving the selected cell independently of its
+from $D$ and $j$, preserving the selected cell independently of its
 coordinates. Piece $j$ instead
 has target $Q$ and records only physical coordinates. These maps have the
 same parameterisation but different meanings: only the cell map selects a
 cell of $D$ for evaluating a mesh field.
 
 For a field $f$ on $D$, `pull_back(f, cell_map(D, j))` is its local
-expression on $K_j$, indexed by the cells of group $j$. Pulling back
+expression on $K_j$ for local slot $j$. Pulling back
 `coordinate(D)` gives `pull_back(x, cell_map(T, j))`.
 
 #### Examples
@@ -89,7 +90,7 @@ example](../examples/library.md#a-static-topology), on reference cells:
 
 ```python
 K = ReferenceSimplex(2)
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
 ```
 
 Let `x` be a vector Lagrange function of degree 1 on `square`, of value shape
@@ -100,21 +101,23 @@ The resulting physical mesh is the square:
 D = mesh(x, RD(2))
 ```
 
-- `D.topology` is `square`. `cell_map(D, 0)` is the family of the two
-  triangles, with the free index `cell_index(square, 0)`.
-- `pull_back(coordinate(D), cell_map(D, 0))` is
-  `pull_back(x, cell_map(square, 0))`, which the library of the space of `x`
-  evaluates on triangle 1 to $(1 - X_1, X_0 + X_1)$.
+- `D.topology` is `square`, with two triangle slots. `cell_map(D, 0)`
+  reads the first; `cell_map(D, 1)` reads the second.
+- `pull_back(coordinate(D), cell_map(D, 1))` is
+  `pull_back(x, cell_map(square, 1))`, which the library evaluates to
+  $(1 - X_1, X_0 + X_1)$ for the supplied coordinates.
 
-For a topology `M` of triangles and quadrilaterals, with the cell types
-`(Kt, Kq)`, `mesh(x, RD(2))` has one piece for each cell group. A function `u`
-on `M` is one expression, pulled back through each cell group:
+For a local configuration `M` with types `(Kt, Kq)`, `mesh(x, RD(2))` has
+one triangle and one quadrilateral piece. A field `u` on `M` has local reads:
 
 ```python
-# On Kt with the free index cell_index(M, 0), and on Kq with cell_index(M, 1).
 u_tri = pull_back(u, cell_map(M, 0))
 u_quad = pull_back(u, cell_map(M, 1))
 ```
+
+The package can reuse this configuration for triangle–quadrilateral
+interfaces. Separate cell kernels use single-slot configurations. A library
+specialises forms for the configurations needed by a mixed mesh.
 
 ```{dropdown} Legacy UFL
 In legacy UFL, a `Mesh` is `mesh(x, Q)` for the coordinate element of `x`, and `SpatialCoordinate(mesh)` is `coordinate(D)`.
@@ -144,8 +147,8 @@ For a mesh $D$, `coordinate(D)` is the physical coordinate field on $D$.
 Its pull-back by a cell map is that cell's parameterisation (see
 [`Mesh`](#mesh)). This differs from `D.coordinate_function`, which is
 the stored coordinate expression on the topology.
-For a mesh `mesh(x, Q)`, the pull-back by `cell_map(D, j, e)` is
-`pull_back(x, cell_map(T, j, e))`.
+For a mesh `mesh(x, Q)`, the pull-back by `cell_map(D, j)` is
+`pull_back(x, cell_map(T, j))`.
 
 For example, `coordinate(RD(3))` has value shape `(3,)` and domain `RD(3)`.
 
@@ -706,9 +709,9 @@ $T$.
 | ------------- | -------- | ----- | ------- |
 | `push_forward(f, D, m)` | | `f: AbstractExpression`, `D: Mesh`, `m: TransformationLaw` | `PushForward(f, D, m)` |
 
-The pull-back of `PushForward(f, D, m)` by `cell_map(D, j, e)` is
+The pull-back of `PushForward(f, D, m)` by `cell_map(D, j)` is
 $m_\psi(\hat f)$, with $\psi$ the cell and $\hat f$ =
-`pull_back(f, cell_map(T, j, e))`. The push-forward of the coordinate function
+`pull_back(f, cell_map(T, j))`. The push-forward of the coordinate function
 $x$ of $D$ by `transformation_law((), 0)` is `coordinate(D)`.
 
 The transformation law is always explicit, for example
@@ -769,7 +772,7 @@ The example uses `D` and `square` of the
 function `u` on `square`, and the diagonal of `square`:
 
 ```python
-diagonal = StaticTopology((I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),))
+diagonal = StaticTopology((I,), ((1, 2),), ((("+", square, 0), ("-", square, 1)),))
 plus = side_map(square, diagonal, "+")
 minus = side_map(square, diagonal, "-")
 jump = pull_back(u, plus) - pull_back(u, minus)
@@ -788,34 +791,29 @@ The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on th
 
 ### A family of points in a mesh
 
-The following constructions use cells and reference positions supplied by
-the solver (see [Functions in a space](forms.md#functions-in-a-space)).
-
-For a mesh $D$ with topology $T$, suppose a family indexed by $i$ has selected
-cells in group $j$, with reference cell $K_j$. The solver supplies a table
-`cells` with extent `T.num_cells[j]` and an expression `positions[i]` for the
-reference positions. Evaluation is the nested pull-back:
+The package supplies reference positions in a known local cell slot `j`.
+For a domain-free array `positions` of reference positions in $K_j$,
+evaluation is:
 
 ```python
-g = gathered_index(cells, (i,))
 R = domain_map(RD(0), positions[i], K_j)
-values = pull_back(pull_back(f, cell_map(D, j, g)), R)
+values = pull_back(pull_back(f, cell_map(D, j)), R)
 ```
 
-Families spanning several cell groups are split by group. The inner
-pull-back selects the cell; the outer pull-back evaluates within it. The
-cell selection is retained when maps are substituted or expressions lowered.
+The point index `i` remains free. It indexes samples within one local cell;
+it does not select mesh cells. Point location and partitioning samples among
+concrete cells belong to the package. Distinct local slots are read separately.
 
 #### Adjacent and coincident cells
 
-Let group 0 contain two interval cells with reference cell $K = [0, 1]$.
+Let a configuration contain two interval slots with reference cell $K = [0, 1]$.
 On a mesh $D$ with cells $[0, 1]$ and $[1, 2]$, let $f$ equal 2 on cell 0
 and 7 on cell 1. These snippets describe symbolic values, not numerical
 execution by the core:
 
 ```python
-f0 = pull_back(f, cell_map(D, 0, 0))
-f1 = pull_back(f, cell_map(D, 0, 1))
+f0 = pull_back(f, cell_map(D, 0))
+f1 = pull_back(f, cell_map(D, 1))
 midpoint = domain_map(RD(0), tensor((Float(0.5),)), K)
 left_endpoint = domain_map(RD(0), tensor((Integer(0),)), K)
 right_endpoint = domain_map(RD(0), tensor((Integer(1),)), K)
@@ -832,8 +830,8 @@ For a mesh `D_overlap` whose two cells both occupy $[0, 1]$, let $g$ again
 have values 2 and 7 on the respective cells:
 
 ```python
-g0 = pull_back(g, cell_map(D_overlap, 0, 0))
-g1 = pull_back(g, cell_map(D_overlap, 0, 1))
+g0 = pull_back(g, cell_map(D_overlap, 0))
+g1 = pull_back(g, cell_map(D_overlap, 1))
 pull_back(g0, midpoint)  # Physical coordinate 0.5; value 2.
 pull_back(g1, midpoint)  # Physical coordinate 0.5; value 7.
 ```
@@ -842,10 +840,10 @@ The physical and reference coordinates coincide, but the selected cells differ.
 
 #### Points forming a domain
 
-A reusable domain of points may instead have a topology $S$ with one
-zero-dimensional cell per point and a side `("inside", T, j)`. Its side
-tables store the selected cells and reference positions supplied by the
-solver. Set `P = side_domain(D, S, "inside")`:
+A fixed local collection of points may have a topology `S` with one
+zero-dimensional slot per point and a side `("inside", T, j)` selecting
+its parent slot. Each slot's side data supply its reference position. Set
+`P = side_domain(D, S, "inside")`:
 
 ```python
 inside = side_map(D, P, "inside")
@@ -853,80 +851,67 @@ values = pull_back(pull_back(f, inside), cell_map(P, 0))
 total = integral(pull_back(f, inside), P)
 ```
 
-This representation supports fields, restrictions and integration on the
-points. A single evaluation or indexed family needs only the nested
-pull-backs above, without constructing a point topology.
+This supports fields and integration on a fixed point configuration. A
+runtime-sized sampling or quadrature array instead uses the indexed
+pull-backs above.
 
 ### `Integral` over a mesh
 
-`Integral(f, D)` sums over all cells of mesh $D$, counting coincident cells
-separately. The integrand has domain $D$, domain `D.ambient_domain`, or no
-domain. Every free index of $f$ remains free in the result. The cell indices
-used by integration are internal to the expansion; a matching name in $f$
-does not make that index a cell selector.
-
-If all cell counts are zero, the mesh is empty and the integral has value
-zero with its declared static type. Each zero-cell group contributes an empty
-index sum, without evaluating the integrand or geometry for any cell. This
-also applies when symbolic cell counts are supplied as zero.
+`Integral(f, D)` integrates over the fixed local cells of `D`, counting
+coincident slots separately. It returns a local contribution. The package
+iterates over concrete cells and assembles contributions outside UFLx.
+The integrand has domain `D`, domain `D.ambient_domain`, or no domain.
+Every free index of `f` remains free.
 
 #### Expansion over cells
 
-For group $j$ of `D.topology`, let $K_j$ be its reference cell and $e_j$ an
-internal cell index fresh for $f$. The deterministic choice of $e_j$ is stated
-in [Expanding integrals](evaluation.md#expanding-integrals). Set
-`D_j = cell_map(D, j, e_j)`. For a scalar field on $D$, the contribution is:
+For slot $j$ of `D.topology`, let $K_j$ be its reference cell and
+`D_j = cell_map(D, j)`. For a scalar field on `D`, its contribution is:
 
 ```python
-index_sum(integral(pull_back(f, D_j) * density(D_j), K_j), (e_j,))
+integral(pull_back(f, D_j) * density(D_j), K_j)
 ```
 
+Expansion adds these terms over the statically known slots. No cell index,
+lookup table or cell-axis `IndexSum` is introduced. A single-cell kernel
+has one term. A fixed macro-element kernel has one term per subcell.
+
 For a field on `D.ambient_domain`, use the map with the same parameterisation
-and that ambient domain in the pull-back. A domain-free integrand is also
-pulled back, so the internal cell index is present even for zero-dimensional
-cells, whose density is `Integer(1)`. Array-valued integrands are integrated
-component by component.
+and that ambient domain as target. Array-valued integrands are integrated
+component by component. Zero-dimensional cells have density `Integer(1)`.
 
 The density does not depend on orientation. For ambient fields, the result
 agrees with integration over the geometric union when each cell map is injective
 almost everywhere and distinct images overlap only on sets of zero measure.
+An empty runtime mesh selection requires no kernel calls, not an empty cell sum
+inside a kernel.
 
-#### Cell data and indexed loads
+#### Local data and indexed loads
 
-Cell-dependent data are fields on the topology or mesh. A field equal to 2
-on one unit cell and 7 on another has integral 9. In contrast, a domain-free
-indexed load with values `[2, 7]` is integrated over the whole two-cell mesh
-for each index value, giving `[4, 14]`. Its index remains free, even when it
-has the name `cell_index(D.topology, j)`.
-
-To pair a raw indexed datum with explicit cell maps, pull back to reference
-cells and use `IndexSum` explicitly. Mesh integration does not infer that
-pairing from the names. Substitution into a mesh integral therefore cannot
-capture an integrand index; the expansion enforces the same rule.
+Local cell-dependent data are fields on the topology or mesh. A field equal
+to 2 on one unit cell slot and 7 on another has local integral 9. A domain-free
+array with entries `[2, 7]` instead has the same value on both slots; its
+integral over that two-unit-cell configuration is `[4, 14]`. Array indices
+do not implicitly select slots.
 
 #### Examples
 
-The examples use the following objects:
-
-- `D` and `square` of the [`Mesh`](#mesh) example.
-- A field `f` on `D`, such as `push_forward(u, D, m)` for a function `u` on
-  `square` (see [`PushForward`](#pushforward)).
-- The mesh `B` of the boundary facets of `D`, with the side
-  `"inside"`.
-
-- `integral(Integer(1), D)` is the area 1 of the square, the sum of two
-  integrals over `K`.
-- `integral(pull_back(f, side_map(D, B, "inside")), B)` restricts `f` to the
-  boundary before integrating it.
+For the local square configuration above, `integral(Integer(1), D)` is the
+area 1, the sum of two reference-cell integrals. A boundary configuration
+`B` with the side `"inside"` gives the boundary contribution
+`integral(pull_back(f, side_map(D, B, "inside")), B)`.
 
 ```{dropdown} Legacy UFL
-`f * dx`, `f * ds` and `f * dS` are `integral(f, D)` over the mesh of the cells, of the boundary facets and of the interior facets, with the fields restricted to the facets in `f`. The three are one integral over three domains.
+The cell, boundary-facet and interior-facet contributions to `dx`, `ds` and
+`dS` are local integrals over their respective configurations. The finite
+element package selects concrete entities and assembles the contributions.
 ```
 
 ### `Normal`
 
 `Normal` is the unit side conormal: tangent to the parent cell and orthogonal
-to the side cell, with the orientation supplied by `reference_normal`.
+to the selected side image in that parent, with orientation supplied by
+`reference_normal`.
 It points outward on boundary pieces.
 
 | `Normal(sm)` |                                                                                                       |
@@ -951,16 +936,15 @@ Notation, for `sm` = `SideMap(D, E, s)` and the piece $i$ of $E$:
 
 #### The pull-back of `Normal`
 
-The pull-back of `Normal(SideMap(D, E, s))` by `cell_map(E, i, q)` is
-$\nu = w / \lvert w \rvert$, with $w = m_{B_{\mathrm{selected}}}(\hat m)$,
-using the selected maps of [Restriction](topology.md#restriction), where:
+The pull-back of `Normal(SideMap(D, E, s))` by `cell_map(E, i)` is
+$\nu = w / \lvert w \rvert$, with $w = m_{B_i}(\hat m)$,
+using the local maps of [Restriction](topology.md#restriction), where:
 
 - $m$ is `transformation_law(("covariant",), 0)`, applied with the Jacobian
-  of `B_selected` on the side at the points of `A_selected` (see
+  of `B_i` on the side at the points of `A_i` (see
   [`TransformationLaw`](#transformationlaw)).
-- $\hat m$ is `replace(reference_normal, {cell_index(E.topology, i): q})`,
-  using the normal from the side tables of side $s$ of group $i$ (see
-  [Side tables](topology.md#side-tables)).
+- $\hat m$ is the `reference_normal` from `E.topology.side_data(i, s)`
+  (see [Side data](topology.md#side-data)).
 
 The composition is `w / square_root(w @ w)`. It requires full column rank
 of the cell Jacobian and $w \ne 0$ wherever evaluated.
@@ -970,7 +954,7 @@ the library of the topology gives $\hat m$.
 
 #### The direction of the normal
 
-Orientation follows the [side-table contract](topology.md#side-tables). For $k=n$,
+Orientation follows the [side-data contract](topology.md#side-data). For $k=n$,
 normals are opposite when the two regions adjoin on opposite sides of the
 interface; coincident geometry or side names alone do not imply this.
 For $k<n$, matching tangent spaces are also required. On a surface, a jump

@@ -227,8 +227,8 @@ a = index_sum(weights[i] * integral(pull_back(f, xs), RD(0)), (i,))
 
 The level set determines the solver's quadrature data; it does not appear in
 the expression, since the core has no conditional. Point counts may differ
-between cells. Representing all such rules in one topology-wide expression
-requires the still-open [ragged indexing](../language/expressions.md#extents) convention.
+between kernel calls; the package binds `q` and supplies each local array.
+No topology-wide ragged array is needed.
 
 ## A quadrature-point coefficient
 
@@ -236,7 +236,7 @@ Material data can be stored at quadrature points without interpolating a field
 across the cell. For a weighted mass form, supply one scalar coefficient value
 per cell and quadrature point.
 
-The library supplies a topology `T` of `ReferenceSimplex(2)` triangles, its
+The library supplies a topology `T` with one `ReferenceSimplex(2)` slot, its
 coordinate function `x` of value shape `(2,)`, a real scalar Lagrange space `V`
 on `T`, and `runtime_array` for solver data. Use a three-point rule shared by
 all cells; `points` and `weights` are reference-cell data, and `c` holds the
@@ -245,11 +245,11 @@ material values at the corresponding physical points:
 ```python
 K = ReferenceSimplex(2)
 D = mesh(x, RD(2))
-cells = cell_domain(D, 0)
-e, q = cell_index(T, 0), index("q")
+cells = cell_map(D, 0)
+q = index("q")
 points = runtime_array("points", (3, 2))
 weights = runtime_array("weights", (3,))
-c = runtime_array("c", (T.num_cells[0], 3))
+c = runtime_array("c", (3,))
 
 u, v = function(V, "u"), function(V, "v")
 sample = domain_map(RD(0), points[q], K)
@@ -258,16 +258,16 @@ v_q = pull_back(pull_back(push_forward(v, D, transformation_law(V)), cells), sam
 rho_q = pull_back(density(cells), sample)
 
 a = form(
-    index_sum(integral(weights[q] * c[e, q] * u_q * v_q * rho_q, RD(0)), (e, q)),
+    index_sum(integral(weights[q] * c[q] * u_q * v_q * rho_q, RD(0)), (q,)),
     (v, u),
 )
 ```
 
 The inner pull-backs select a cell; the outer pull-backs sample on its reference points.
 The density converts the reference weights to physical volume weights. The
-sum over `q` forms the cell contribution, and the sum over `e` includes all
-cells.
+sum over `q` forms the local cell contribution. The package supplies a new
+array `c` and new local field data for each kernel call.
 
-`c[e, q]` plays the role of a UFL quadrature-element coefficient. It has no
+`c[q]` plays the role of a UFL quadrature-element coefficient. It has no
 implied value between the points: changing their positions or ordering requires
 matching data.

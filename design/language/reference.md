@@ -201,18 +201,11 @@ Extend `AbstractExpression`:
 | [`inverse(A)`](expressions.md#inverse)                              |          | `A: AbstractExpression`             | `Inverse`                                                                          |
 | [`determinant(A)`](expressions.md#determinant)                      |          | `A: AbstractExpression`             | `Determinant`                                                                      |
 
-### Topology
-
-| Function                                           | Overload | Takes                           | Returns |
-| -------------------------------------------------- | -------- | ------------------------------- | ------- |
-| [`cell_index(T, j)`](topology.md#abstracttopology) |          | `T: AbstractTopology`, `j: int` | `Index` |
-
 ### Reference cells
 
-| Function                                   | Overload | Takes                                                                       | Returns                                                         |
-| ------------------------------------------ | -------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [`cell_map(X, j, e)`](topology.md#cellmap) |          | `X: AbstractTopology \| Mesh`, `j: int`, `e: int \| Index \| GatheredIndex` | `CellMap(X, j, e)`                                              |
-| [`cell_map(X, j)`](topology.md#cellmap)    |          | `X: AbstractTopology \| Mesh`, `j: int`                                     | `CellMap(X, j, cell_index(T, j))`, with $T$ the topology of $X$ |
+| Function                                | Overload | Takes                                   | Returns         |
+| --------------------------------------- | -------- | --------------------------------------- | --------------- |
+| [`cell_map(X, j)`](topology.md#cellmap) |          | `X: AbstractTopology \| Mesh`, `j: int` | `CellMap(X, j)` |
 
 ### Restriction
 
@@ -352,6 +345,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 43    |
 | Expression node classes         | 33    |
-| Free functions                  | 53    |
+| Free functions                  | 51    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

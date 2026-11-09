@@ -1,7 +1,8 @@
 # UFLx design notes
 
 UFLx is a minimal core language for finite element variational forms,
-embedded in Python. These notes specify the language and argue for its
+embedded in Python, for describing local kernels as mathematics. The finite
+element package supplies concrete cells and local data and handles assembly. These notes specify the language and argue for its
 design. The notes are written for users and developers who know a language
 for variational forms, such as UFL.
 

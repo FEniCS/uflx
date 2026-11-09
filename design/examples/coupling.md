@@ -18,8 +18,8 @@ and [StaticTopology](library.md#a-static-topology):
 
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
-diagonal = StaticTopology((I,), (((1, 2),),), ((("+", square, 0), ("-", square, 0)),))
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
+diagonal = StaticTopology((I,), ((1, 2),), ((("+", square, 0), ("-", square, 1)),))
 ```
 
 The library supplies `X_space`, a vector Lagrange space of degree 1 and value
@@ -33,7 +33,6 @@ The solver gives the coordinate function `x` the vertex values
 x = function(X_space, "x")
 D = mesh(x, RD(2))
 E = side_domain(D, diagonal, "+")
-e = cell_index(diagonal, 0)
 
 u, v = function(V, "u"), function(V, "v")
 u_D, v_D = push_forward(u, D, transformation_law(V)), push_forward(v, D, transformation_law(V))
@@ -55,8 +54,8 @@ dv_p, dv_m = pull_back(grad_v, plus), pull_back(grad_v, minus)
 ```
 
 Use the normal out of the `"+"` cell for both averaged normal derivatives.
-`alpha[e]` is the penalty on facet `e`, including the usual cell-size factor
-$1/h$.
+`alpha` is the supplied scalar penalty for this local facet, including the
+usual cell-size factor $1/h$.
 
 ```python
 i = index("i")
@@ -65,15 +64,15 @@ half = Integer(1) / Integer(2)
 jump_u, jump_v = u_p - u_m, v_p - v_m
 avg_dn_u = half * index_sum((du_p[i] + du_m[i]) * n[i], (i,))
 avg_dn_v = half * index_sum((dv_p[i] + dv_m[i]) * n[i], (i,))
-alpha = runtime_array("alpha", (diagonal.num_cells[0],))
+alpha = runtime_array("alpha", ())
 
-f = -avg_dn_u * jump_v - jump_u * avg_dn_v + alpha[e] * jump_u * jump_v
+f = -avg_dn_u * jump_v - jump_u * avg_dn_v + alpha * jump_u * jump_v
 a_facet = form(integral(f, E), (v, u))
 ```
 
 `a_facet` binds the functions `v` and `u` on `square`. Its integrand has
-domain `E` and the free index `e` from the penalty array; the traces themselves
-have no free index. Swapping the sides negates the normal and both jumps,
+domain `E` and no free indices. The package supplies the two cells' local
+inputs and the facet penalty for each kernel call. Swapping the sides negates the normal and both jumps,
 leaving every term unchanged.
 
 For this square, the reference-facet inclusions are
@@ -90,20 +89,21 @@ above. For a scalar field `u` on `square`, set
 `minus_T = side_map(square, diagonal, "-")`. The traces are
 `pull_back(u, plus_T)` and `pull_back(u, minus_T)`.
 
-From `"+"`, the side tables are the cells `(0,)` and the inclusion
+From `"+"`, the parent is slot 0 and the inclusion is
 $A_+(t) = (1 - t, t)$, through the local vertices 1 and 2 of `K`. From
-`"-"`, the side tables are the cells `(1,)` and the inclusion
+`"-"`, the parent is slot 1 and the inclusion is
 $A_-(t) = (0, t)$, through the local vertices 0 and 2. The coordinates of
 `E` are $(1 - t, t)$.
 
-Suppose the reference-cell value `pull_back(u, cell_map(square, 0))` is:
+Suppose the local fields on the two slots have affine reference values:
 
 ```python
-a[c, 0] + a[c, 1] * X[0] + a[c, 2] * X[1]
+u0 = a0[0] + a0[1] * X[0] + a0[2] * X[1]
+u1 = a1[0] + a1[1] * X[0] + a1[2] * X[1]
 ```
 
-Here `c = cell_index(square, 0)` and `X = coordinate(K)`. Substituting the cell
-number and inclusion from each side gives:
+Here `a0` and `a1` are separate local coefficient arrays and
+`X = coordinate(K)`. Composing with the two inclusions gives:
 
 $$
 \begin{aligned}
@@ -120,68 +120,49 @@ diagonal, leaving the jump at each point unchanged.
 
 ### From the facet integral to a kernel
 
-`expand_integrals` expresses the integral on the reference interval:
+`expand_integrals` expresses this single-facet contribution on the reference
+interval, without a cell-index sum:
 
 ```python
-facet_cell = cell_domain(E, 0)
-form(
-    index_sum(integral(pull_back(f, facet_cell) * density(facet_cell), I), (e,)),
-    (v, u),
-)
+facet_cell = cell_map(E, 0)
+form(integral(pull_back(f, facet_cell) * density(facet_cell), I), (v, u))
 ```
 
-The side tables supply the neighbouring cell numbers `cells_p`, `cells_m`
-and the reference coordinates of the facet vertices `positions_p`,
-`positions_m`. The latter define the affine inclusions $A_\pm$ through
-[affine_map](library.md#side-tables-of-a-static-topology). For example, the `"+"` trace
-lowers to:
+The side declarations identify the local parents. Side data supply the maps
+and normals. For example, the `"+"` trace lowers through:
 
 ```python
-g_p = gathered_index(cells_p, (e,))
-C_p = cell_map(square, 0, g_p)
-t = coordinate(I)[0]
-A_p = domain_map(I, tensor((Integer(1) - t, t)), K)
+C_p = cell_map(square, 0)
+A_p, m_p = diagonal.side_data(0, "+")
 pull_back(pull_back(u, C_p), A_p)
 ```
 
-The coordinate trace follows the same route, so the facet parameterisation is `pull_back(pull_back(x, C_p), A_p)`;
-its Jacobian gives the facet density.
-
-At a reference-facet point $t$, let $\hat u_+$ be the reference-cell field,
-$J_+$ the cell Jacobian evaluated at $A_+(t)$, and $\hat m_+$ the outward
-reference normal supplied by the side tables. The lowering stage gives:
+The coordinate trace is `pull_back(pull_back(x, C_p), A_p)`; its Jacobian
+gives the facet density. At a reference-facet point $t$, let $J_+$ be the
+parent Jacobian evaluated at $A_+(t)$ and $\hat m_+$ the reference normal.
 
 | Expression on `E` | Value at the facet point |
 | ----------------- | ------------------------ |
 | `u_p` | $\hat u_+(A_+(t))$ |
 | `du_p` | $J_+^{-T}\widehat\nabla\hat u_+(A_+(t))$ |
 | `n` | $J_+^{-T}\hat m_+ / \lvert J_+^{-T}\hat m_+\rvert$ |
-| `alpha[e]` | Unchanged: it has no domain and shares the facet index. |
+| `alpha` | Supplied scalar local penalty |
 
-The `"-"` traces follow the same rules on the other cell. Here
-$\hat m_+ = (1,1)/\sqrt{2}$. The compiler's `reduce_component_tensors` pass
-then reduces the indexed vertex-coordinate expressions to reads from
-`positions_p` and `positions_m`. The resulting form has the structure:
-
-```python
-form(index_sum(integral(g, I), (e,)), (v, u))
-```
-
-`g` is the lowered integrand on `I`, with the facet index `e` free. The
-assembler loops over `e`, packing the two cell numbers, coordinate
-coefficients, facet-vertex positions and penalty. For a fixed `e`, the kernel
-reads the reference bases of `u`, `v` and `x` on both cells at $A_\pm(t)$.
-The vertex positions replace legacy local-facet numbers and determine the
-facet direction on each side.
+The minus trace uses slot 1 and its own inclusion. The resulting form is
+`form(integral(g, I), (v, u))`. The package selects a concrete interface,
+packs both parents' local geometry and coefficient data, and calls this
+kernel. Neighbour lookup and mesh iteration are outside the expression.
 
 ### Variations
 
-- The penalty can use computed cell sizes instead of an array. With
-  `B_p = cell_domain(D, 0, g_p)`, `integral(density(B_p), K)` is the measure
-  of the `"+"` cell; a solver's per-cell size array `h` is read as `h[g_p]`.
-- Restricting values alone needs no mesh:
+- A computed cell size can use `B_p = cell_map(D, 0)` and
+  `integral(density(B_p), K)`. Alternatively supply the parent's size as
+  a scalar local input.
+- Restricting values alone needs no physical mesh:
   `pull_back(u, side_map(square, diagonal, "+"))` is a trace on the topology.
-  Pushing it forward to `E` with the identity law gives `u_p`.
+- A triangle–quadrilateral interface uses parent types `(Kt, Kq)` and an
+  interval integration cell. The same facet formula applies with the
+  library's corresponding local bases and reference inclusions.
 
 ```{dropdown} Legacy UFL
 This is the `dS` form
@@ -189,6 +170,36 @@ This is the `dS` form
 Here the side maps make restriction explicit; jumps and averages are ordinary
 arithmetic on the traces.
 ```
+
+## A triangle–quadrilateral interface
+
+Let `K` be the unit reference triangle, `I` the unit interval, and `Q` a
+library reference quadrilateral with vertices `(0,0)`, `(1,0)`, `(1,1)`,
+`(0,1)` in that order. The package supplies the local data for one parent
+of each type. Their local configuration and common integration facet are:
+
+```python
+mixed = StaticTopology((K, Q), ((0, 1, 2), (1, 3, 4, 2)), ())
+edge = StaticTopology((I,), ((1, 2),), ((("+", mixed, 0), ("-", mixed, 1)),))
+A_plus, m_plus = edge.side_data(0, "+")
+A_minus, m_minus = edge.side_data(0, "-")
+```
+
+The inclusions are $A_+(t)=(1-t,t)$ into `K` and $A_-(t)=(0,t)$ into `Q`.
+For a library field `u` on `mixed`, its two traces are:
+
+```python
+u_plus = pull_back(pull_back(u, cell_map(mixed, 0)), A_plus)
+u_minus = pull_back(pull_back(u, cell_map(mixed, 1)), A_minus)
+jump = u_plus - u_minus
+```
+
+Both have domain `I`, although their parent bases and local coefficient
+counts can differ. For instance, parent coordinate maps $x_+(r,s)=(r,s)$
+and $x_-(r,s)=(1+r-s,r+s)$ pair both sides at $(1-t,t)$.
+The SIPG construction above uses the corresponding physical local mesh and
+side domain unchanged. A library constructs the required configurations from
+one form recipe; the package dispatches concrete interfaces to their kernels.
 
 ## A fluid and a solid
 
@@ -204,33 +215,32 @@ function `x` on `square`, with vertex values `((0,0), (1,0), (0,1), (1,1))`:
 
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
-square = StaticTopology((K,), (((0, 1, 2), (1, 3, 2)),), ())
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
 D = mesh(x, RD(2))
 ```
 
-A marked region is a topology with a side into its parent. Its side domain
-is the submesh, and its side table is the entity map:
+Each local material cell has a side into its parent slot. Its side domain
+uses the parent coordinate map:
 
 ```python
-fluid_cells = StaticTopology((K,), (((0, 1, 2),),), ((("inside", square, 0),),))
-solid_cells = StaticTopology((K,), (((1, 3, 2),),), ((("inside", square, 0),),))
+fluid_cells = StaticTopology((K,), ((0, 1, 2),), ((("inside", square, 0),),))
+solid_cells = StaticTopology((K,), ((1, 3, 2),), ((("inside", square, 1),),))
 
 F = side_domain(D, fluid_cells, "inside")
 S = side_domain(D, solid_cells, "inside")
 
 interface = StaticTopology(
-    (I,), (((1, 2),),), ((("fluid", fluid_cells, 0), ("solid", solid_cells, 0)),)
+    (I,), ((1, 2),), ((("fluid", fluid_cells, 0), ("solid", solid_cells, 0)),)
 )
 G = side_domain(F, interface, "fluid")
 
-inlet = StaticTopology((I,), (((2, 0),),), ((("fluid", fluid_cells, 0),),))
+inlet = StaticTopology((I,), ((2, 0),), ((("fluid", fluid_cells, 0),),))
 G_in = side_domain(F, inlet, "fluid")
 ```
 
 `interface` names the fluid and solid topologies. Restricting a field from
-`D` would require a third side `("parent", square, 0)`. For a solver mesh,
-the library supplies these topologies and side tables from markers and
-entity maps; the remaining construction is unchanged.
+`D` would require a third side `("parent", square, 0)`. The package uses markers and entity maps to select the concrete cells,
+then supplies their data to this local configuration.
 
 ### Fields and bulk terms
 
@@ -310,25 +320,25 @@ The interface is the image of the coordinate trace from `F`.
 `normal(from_fluid)` points out of the fluid, and `normal(from_solid)` is
 its negative. Lowering follows the [facet example](#from-the-facet-integral-to-a-kernel):
 the coupling kernel reads the fluid and solid reference bases on their
-respective cells and the multiplier basis on the facet. The two side tables
-tell the assembler which cells to pack.
+respective cells and the multiplier basis on the facet. The package chooses the cells to pack; the side declarations distinguish
+their local roles.
 
 ### Variations
 
 - Two marker values with the same cell type and sides use separate topologies;
   legacy `ds((3, 4))` is a sum of two integrals. Their kernels agree after
   renaming the topology placeholders. Different cell types use separate
-  topology groups.
-- A material coefficient varying by cell needs no submesh when all fields
-  live on `square`: supply a table `nu_cells` and use `nu_cells[c]`, with
-  `c = cell_index(square, 0)`, under an integral over `D`.
+  local configurations.
+- A material coefficient varying by cell is supplied as local field data;
+  a single-cell kernel can receive a scalar `nu` directly.
 - For a moving fluid mesh, use `mesh(F.coordinate_function + m, RD(2))`,
   where the mesh displacement `m` on `fluid_cells` extends the solid motion.
   Functions on that topology push forward to the moved mesh unchanged.
 
 ```{dropdown} Legacy UFL
 `dx(1)` and `ds(3)` become integrals over side domains of marked topologies.
-A submesh's entity map becomes its side table into the parent.
+The package uses entity maps to supply local data; side inclusions express
+the reference-coordinate relation.
 ```
 
 ## A 1D network in a 3D mesh
@@ -376,10 +386,10 @@ combine on their different domains. Restricting `p3` to `T1` makes the
 exchange possible; pushing it forward then gives a field on `D1`.
 The three integrals have no domain and add into one form.
 
-For each segment, the side tables select a containing tetrahedron and its
-reference-edge inclusion. Continuity of `p3` makes the trace independent of
-which neighbouring tetrahedron is selected. The shared vertices also let the
-partition of `T3` determine that of `T1`.
+For one segment kernel, the package supplies a containing tetrahedron and
+its local data. The side declaration names that parent slot, and its side
+data give the reference-edge inclusion. Continuity of `p3` makes the trace
+independent of which containing tetrahedron the package chooses.
 
 Lowering follows the [facet walkthrough](#from-the-facet-integral-to-a-kernel).
 The coupling kernel reads one segment and one tetrahedron, and its local
@@ -397,58 +407,42 @@ at run time, as for a cut cell.
 ### Averaging around the network
 
 A general $H^1(\Omega)$ field has no trace on a curve. A model may instead
-average the tissue pressure over a ring of radius $R$ around each network
-point. The solver supplies two orthonormal directions perpendicular to the
-segment, in a real vector space `N` on `T1` of value shape `(3,)`. It also
-supplies cosines, sines and weights summing to one as runtime tables; the core
-has no `cos`.
+average tissue pressure over a ring around each network point. The package
+constructs the ring quadrature, locates its points in concrete tissue cells,
+and supplies their reference positions. A local sampling kernel evaluates:
 
 ```python
-L = runtime_extent("L")
-l = index("l")
-R = runtime_array("R", ())
-n1, n2 = function(N, "n1"), function(N, "n2")
-cs, w = runtime_array("cs", (L, 2)), runtime_array("w", (L,))
-x1 = D1.coordinate_function
-
-ring = domain_map(T1, component_tensor(x1[m] + R * (cs[l, 0] * n1[m] + cs[l, 1] * n2[m]), (m,)), D3)
-p3_avg = index_sum(w[l] * pull_back(push_forward(p3, D3, transformation_law(V3)), ring), (l,))
-q3_avg = index_sum(w[l] * pull_back(push_forward(q3, D3, transformation_law(V3)), ring), (l,))
-
-exchange_avg = push_forward(beta * (p1 - p3_avg) * (q1 - q3_avg), D1, identity)
-coupling_avg = integral(exchange_avg, D1)
+R = domain_map(RD(0), positions[l], K3)
+p_samples = pull_back(pull_back(p3, cell_map(T3, 0)), R)
+weighted_samples = weights[l] * p_samples
 ```
 
-`ring` maps `T1` into `D3`, with free index `l`. Summing over `l` gives a
-field on `T1`, ready to combine with `p1`. At zero radius it reduces in value
-to the conforming trace.
-
-The ring pull-back remains after core lowering. After quadrature on the
-segments, a point-location pass identifies the tetrahedron and reference
-position of each ring point. The family has segment, quadrature-point and
-ring-point indices; a segment kernel therefore reads a list of tissue cells
-rather than one cell. Its interface follows from the expression.
+Here `T3` has one tetrahedron slot with reference cell `K3`; `positions` and
+`weights` are local arrays for points assigned to that cell. The package
+combines the sampled contributions into the network average. If an entire
+fixed neighbourhood is represented in one local configuration, its separate
+parent slots can be read explicitly instead. A physical point alone does
+not select a cell, and core lowering performs no point-location search.
 
 ## Side topology examples
 
-The examples use a triangle topology `T` with cell types `(K,)`,
-`I = Simplex(1)` and `P = Simplex(0)`. For restriction, use reference cells
-instead, such as `ReferenceSimplex(1)` for `I`.
+Use reference cells `K = ReferenceSimplex(2)`, `I = ReferenceSimplex(1)`
+and `P = ReferenceSimplex(0)`. Each example describes a local configuration.
 
-- A boundary topology `B` has cell types `(I,)` and one side,
-  `((("inside", T, 0),),)`. Its facet index is `cell_index(B, 0)`.
-- Interior facets have two sides: `((("+", T, 0), ("-", T, 0)),)`.
-- Corners of the boundary have cell types `(P,)` and sides
-  `((("+", B, 0), ("-", B, 0)),)`: a side topology can itself have sides.
-- For a boundary submesh `M` with cell types `(I,)`, the sides
-  `((("mesh", T, 0), ("submesh", M, 0)),)` refer to different topologies.
-- A periodic left boundary has sides `((("left", T, 0), ("right", T, 0)),)`.
-  From `"right"`, each vertex is located one period to the right.
-- For a topology `M` of triangles and quadrilaterals, interior facets have
-  cell types `(I, I, I)` and sides
-  `((("+", M, 0), ("-", M, 0)), (("+", M, 0), ("-", M, 1)), (("+", M, 1), ("-", M, 1)))`.
-  The same facet type occurs in three groups, distinguished by the adjacent
-  cell types. An integral has one term per group.
-- For a prism topology `U3` with cell types `(W,)`, the boundary has two
-  different facet types `(K, Q)`, triangular and quadrilateral, with sides
-  `((("inside", U3, 0),), (("inside", U3, 0),))`.
+- A boundary facet has types `(I,)` and sides `((("inside", T, 0),),)`
+  into a one-triangle configuration `T`.
+- An interior facet has sides `((("+", T, 0), ("-", T, 1)),)` into
+  a two-triangle configuration `T` with types `(K, K)`.
+- A corner shared by two boundary edges has types `(P,)` and sides
+  `((("+", B, 0), ("-", B, 1)),)`, where `B` contains two interval slots.
+- A local boundary submesh `M` can be paired with a parent through
+  `((("mesh", T, 0), ("submesh", M, 0)),)`.
+- A periodic interface names two parent slots and supplies the two reference
+  inclusions. Their physical images may be separated by a period.
+- A triangle–quadrilateral pair `M` has types `(K, Q)`. Its interface has
+  types `(I,)` and sides `((("+", M, 0), ("-", M, 1)),)`. A library
+  builds the other required pair configurations from the same form recipe.
+- A prism configuration `U3` with types `(W,)` can have a local boundary
+  containing one triangular and one quadrilateral facet, with types `(K, Q)`
+  and sides `((("inside", U3, 0),), (("inside", U3, 0),))`. Each slot has
+  its own inclusion; integrating this configuration adds both contributions.
