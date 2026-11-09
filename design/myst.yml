@@ -21,6 +21,7 @@ project:
       children:
         - file: examples/tensors.md
         - file: examples/integration.md
+        - file: examples/physical_meshes.md
         - file: examples/coupling.md
         - file: examples/forms.md
         - file: examples/surfaces.md

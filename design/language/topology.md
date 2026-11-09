@@ -125,17 +125,14 @@ coordinates and for the physical domains of the next chapter.
 ### `AbstractDomain`
 
 `AbstractDomain` represents a domain, the set on which an expression is defined.
-A domain is a coordinate domain supplied by a library (see
-[`AbstractCoordinateDomain`](#abstractcoordinatedomain)), or a mesh with a
-topology and coordinate expression (see [`Mesh`](geometry.md#mesh)). Every node class
-taking a domain accepts either kind; its section defines its value on a mesh
-through its cells.
+The core provides coordinate domains and `Mesh`. Extensions may subclass
+`AbstractDomain`, supplying their own geometric semantics and rewrite rules.
 
 | `AbstractDomain` |                                                                             |
 | ---------------- | --------------------------------------------------------------------------- |
 | Extends          | `Base` |
 | Provides         | `dimension`, an `int` $k \ge 0$, and `ambient_domain`, an `AbstractDomain` |
-| Defined by       | `AbstractCoordinateDomain` and `Mesh`                           |
+| Defined by       | `AbstractCoordinateDomain`, `Mesh`, and extension subclasses |
 
 The ambient domain of $D$ supplies the coordinates naming its points. The
 first coordinate domain reached by following `ambient_domain` repeatedly is
@@ -150,8 +147,8 @@ build the set from smaller objects. A library defines a new coordinate domain,
 such as a reference cell, by extending this abstract class. On a coordinate
 domain the coordinates are canonical: the coordinate function is the identity
 (see [`Coordinate`](geometry.md#coordinate)), and the integral is the Lebesgue integral in
-the coordinates (see [`Integral`](geometry.md#integral)). Every other domain gets these by
-pull-back.
+the coordinates (see [`Integral`](geometry.md#integral)). On a core `Mesh`,
+coordinates and integration are defined through cell parameterisations.
 
 | `AbstractCoordinateDomain` |                                              |
 | -------------------------- | -------------------------------------------- |

@@ -17,6 +17,8 @@ shows the familiar UFL syntax.
   from indices and represent symmetry in stored data.
 - **[Geometry and integration](integration.md).** Map reference
   cells, integrate over edges and cells, and introduce quadrature and cut-cell rules.
+- **[Physical polygon meshes](physical_meshes.md).** Sketch a language extension
+  and compiler for physical polynomial DG spaces.
 - **[Facets and coupled meshes](coupling.md).** Use traces and side
   maps for facet forms, fluid–solid coupling and embedded networks.
 - **[Variational forms](forms.md).** Build constrained, complex,

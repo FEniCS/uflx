@@ -25,6 +25,7 @@ else
     language.md examples/index.md
     examples/tensors.md
     examples/integration.md
+    examples/physical_meshes.md
     examples/coupling.md
     examples/forms.md
     examples/surfaces.md

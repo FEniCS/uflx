@@ -27,8 +27,8 @@ or a core overload; the core constructor remains `transformation_law(variances, 
 `Function(V, label)` uses the domain of $V$ and the value
 shape, scalar type and argument spaces of $V$. These describe its expression
 representation; a form may represent the same space element differently
-(see [The double dual](#the-double-dual)). For a field,
-the concrete subclass defines the function on the cells:
+(see [The double dual](#the-double-dual)). For fields on core domains and
+topologies, the concrete subclass supplies evaluation as follows:
 
 - A space whose values on the reference cell do not depend on the geometry is
   on a topology $T$. The concrete subclass defines
@@ -54,9 +54,13 @@ functional terminals and spatial transformations of their outputs. Core
 lowering leaves these reads for the library; it does not compute basis or
 coefficient values.
 
-The solver locates physical points and supplies the selected cells and
-reference positions before an evaluation is constructed. At interfaces or
-overlaps, the cell selection is part of defining the value. A coordinate-only
+Extension-defined domains use their own evaluation rules; reference-cell
+reads are not required. Geometry dependencies must still be exposed.
+
+For evaluation on a core `Mesh`, the solver locates physical points and
+supplies the selected cells and reference positions before an evaluation is
+constructed. At interfaces or overlaps, the cell selection is part of defining
+the value. A coordinate-only
 `DomainMap` into a mesh is invalid (see [A family of points in a
 mesh](geometry.md#a-family-of-points-in-a-mesh)).
 
