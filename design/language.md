@@ -26,6 +26,7 @@ languages for variational forms, such as UFL and ngsolve.
   - [Substitution](language/substitution.md)
   - [Differentiation](language/differentiation.md)
   - [Applications and mappings](language/lowering.md)
+- [Compiling numerical kernels](language/compiler.md)
 - [Extensions](language/extensions.md)
 - [Reference](language/reference.md)
 

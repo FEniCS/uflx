@@ -11,8 +11,8 @@ Rules give individual rewrites; recipes compose them to meet contracts.
 `lower` is one recipe for reaching the [core normal form](#the-core-normal-form).
 Other recipes may reach that form or satisfy different contracts, subject to
 the [shared requirements](rewriting.md#shared-requirements).
-Core normal form leaves reference-cell integrals, terminal gradients and field
-reads for a library or compiler to evaluate.
+Core normal form leaves reference-cell integrals, terminal gradients and function
+evaluations for a library or compiler to handle.
 
 | Page | Contents |
 | --- | --- |
@@ -102,6 +102,14 @@ expressions. Its allowed nodes are:
 
 The normal-form check follows the [evaluation traversal](rewriting.md#evaluation-traversal);
 it does not check stored geometry or labels.
+
+Core normal form does not imply algebraic simplification or an efficient
+evaluation order. It may retain component-tensor selections, identity-tensor
+contractions, redundant computations and unfactorised sums. Consumers may
+simplify or reorganise these expressions; no particular optimisation or
+schedule is required.
+
+[Compiling numerical kernels](compiler.md) describes possible consumer choices.
 
 Assembly code receives the form layer (see [Grammars](rewriting.md#grammars)), including
 sums and products of forms, real and complex zeros, nested forms, and applications

@@ -4,7 +4,7 @@
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
-| SH01 | Every rewrite | For a valid input expression, a rewrite preserves its mathematical value and [binding](substitution.md#substitution-and-binding) and must have a [compatible type](#type-compatibility-of-rewrites). It need not preserve floating-point results or simplify algebra. The [mathematical admissibility](rules.md#mathematical-admissibility) convention applies. Zero times an undefined value remains undefined. |
+| SH01 | Every rewrite | For a valid input expression, a rewrite preserves its mathematical value and [binding](substitution.md#substitution-and-binding) and must have a [compatible type](#type-compatibility-of-rewrites). Floating-point evaluation of the original and rewritten expressions may differ. Algebraic simplification is not required. The [mathematical admissibility](rules.md#mathematical-admissibility) convention applies. Zero times an undefined value remains undefined. |
 
 The lazy nodes are `Apply`, `DirectionalDerivative`, mesh `Integral`,
 `PullBack`, `Gradient`, `Divergence`, `Curl` and `PushForward`. They store
