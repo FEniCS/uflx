@@ -12,7 +12,8 @@ A compiler can use core normal form or another suitable representation.
 Expression optimisation may be provided by UFLx as a reusable facility, with
 compilers choosing when to invoke it, which transformations to explore and how
 to assess execution cost. It may run before or after discretisation. Such
-optimisation is separate from establishing core normal form.
+optimisation is separate from establishing core normal form and follows the
+[optimisation contract](optimisation.md).
 
 The core does not specify an ABI or perform global assembly.
 

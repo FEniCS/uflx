@@ -20,6 +20,7 @@ evaluations for a library or compiler to handle.
 | [Substitution](substitution.md) | Binding scopes, capture avoidance and fresh names |
 | [Differentiation](differentiation.md) | Directional and spatial derivative recipes, retained gradients and derivative formulas |
 | [Applications and mappings](lowering.md) | Applications, mesh integration, pull-backs and tensor arithmetic |
+| [Expression optimisation](optimisation.md) | Optional simplification, numerical contract and examples by node class |
 
 ## Standard lowering recipe
 
@@ -106,8 +107,9 @@ it does not check stored geometry or labels.
 Core normal form does not imply algebraic simplification or an efficient
 evaluation order. It may retain component-tensor selections, identity-tensor
 contractions, redundant computations and unfactorised sums. Consumers may
-simplify or reorganise these expressions; no particular optimisation or
-schedule is required.
+simplify or reorganise these expressions under the
+[optimisation contract](optimisation.md); no particular
+optimisation or schedule is required.
 
 [Compiling numerical kernels](compiler.md) describes possible consumer choices.
 

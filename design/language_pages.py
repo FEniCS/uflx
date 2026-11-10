@@ -21,6 +21,7 @@ PAGES = tuple(
         "substitution",
         "differentiation",
         "lowering",
+        "optimisation",
         "compiler",
         "extensions",
         "reference",

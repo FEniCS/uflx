@@ -20,6 +20,7 @@ project:
             - file: language/substitution.md
             - file: language/differentiation.md
             - file: language/lowering.md
+            - file: language/optimisation.md
         - file: language/compiler.md
         - file: language/extensions.md
         - file: language/reference.md
