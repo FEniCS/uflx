@@ -1,30 +1,14 @@
 # Topological meshes
 
-UFLx describes local kernels as mathematics. A topology describes the local
-cell configuration used by a kernel. Explicit side maps relate configurations.
-The finite element package selects concrete mesh cells and supplies their
-local coefficient and coordinate data. Mesh-wide cell counts, global cell
-numbers, neighbour lookup, iteration over a mesh and global assembly are
-outside the core. Runtime-sized local arrays and index maps can still describe
-a complete patch calculation.
+A topology describes the local cell configuration of a kernel: one cell, the
+parents of an interface, or the cells of a macro element. Side maps relate
+these configurations. The library selects concrete mesh cells, supplies their
+coefficient and coordinate data, and assembles the results.
 
-A local configuration may contain one cell, the two parents of an interface,
-or the cells of a fixed macro element. Distinct local cells retain their
-identities even when they have the same type or physical coordinates. A mixed
-mesh uses configurations for its cell and interface types; a library can
-specialise one mathematical recipe for these configurations.
-
-Fields with geometry-independent reference-cell representations can be defined
-on a topology before coordinates are supplied. A coordinate expression defines
-a physical local mesh, represented by [`Mesh`](geometry.md#mesh).
-
-```{dropdown} Spaces defined directly on a mesh
-Spaces such as Hermite, Argyris and Morley have geometry-dependent
-reference-cell representations and are defined directly on a physical local
-mesh. The element library constructs the local basis from the coordinate map
-and evaluates cell pull-backs and reference derivatives (see
-[Functions in a space](forms.md#functions-in-a-space)).
-```
+Fields with geometry-independent reference representations can be defined on
+a topology. A coordinate expression gives it a physical geometry, represented
+by [`Mesh`](geometry.md#mesh). Spaces with geometry-dependent bases are defined
+directly on a mesh (see [Functions in a space](forms.md#functions-in-a-space)).
 
 ## Topology
 
@@ -38,21 +22,16 @@ and evaluates cell pull-backs and reference derivatives (see
 | Provides | `dimension`, the nonnegative topological dimension as an `int`, and `num_vertices`, the positive number of vertices as an `int` |
 | Defined by | A subclass outside the core, such as `Simplex` |
 
-The core does not number facets or other sub-entities. A library decides which
-sets of local vertices describe sub-entities and supplies their reference
-maps. A vertex set identifies an entity; an ordered correspondence determines
-its parameterisation. Pieces such as cuts need not be sub-entities.
-
-A polygon's vertex count belongs to its cell type. A vertex count known only
-at evaluation is not yet covered; a library specialises kernels by cell type.
+The library defines facets and other sub-entities and supplies their reference
+maps. General inclusions, such as cuts, need not follow sub-entities.
 
 ### `AbstractTopology`
 
 `AbstractTopology` describes a finite local cell configuration without physical
 coordinates. Each position in `cell_types` is a distinct local cell, called a
-*cell slot*. Slots identify the mathematical inputs of a kernel, not concrete
-cells in the package's mesh. For reference cells, it is a labelled disjoint union; even a one-slot topology
-retains its identity independently of its reusable reference cell.
+*cell slot*. Slots identify the mathematical inputs of a kernel. For reference
+cells, the topology is a labelled disjoint union: each slot retains its identity even
+when reference cells or physical coordinates coincide.
 
 | `AbstractTopology` | |
 | ------------------ | - |
@@ -70,35 +49,23 @@ retains its identity independently of its reusable reference cell.
 
 For example, `(K,)` describes a single-cell kernel, `(K, K)` the parents of
 an interior-facet kernel, and `(Kt, Kq)` a triangle–quadrilateral pair.
-An Alfeld macro element has three triangle slots `(K, K, K)`. A list of
-alternative kernel types is managed by the library; it is not a configuration
-whose cells should all be integrated together.
+The number of slots is fixed when the expression is constructed.
 
-The number of slots is fixed when the expression is constructed. An empty
-selection in the package causes no kernel calls; it does not require an empty
-symbolic topology. A runtime-sized patch can instead be expressed through
-packed local arrays, index tables and sums, as in the
-[patch problem](../examples/patches.md#a-mean-constrained-dg-patch-correction).
-The package supplies the packing and local-to-patch degree-of-freedom maps;
-no runtime topology is required.
+A topology of reference cells may be the domain of an expression or space.
+Its points are cell-labelled reference points. The library supplies field
+continuity through its [spaces and bindings](forms.md#abstractfunctionspace).
+A topology is not an `AbstractDomain`: coordinates, gradients and integrals
+are defined on its reference cells or on a physical mesh.
 
-A topology whose cell types are reference cells may be the domain of an
-expression or space. Its points are cell-labelled reference points; shared
-vertices or sides do not identify field coefficients across slots. See
-[local spaces and library bindings](forms.md#abstractfunctionspace).
-A topology is not an `AbstractDomain`,
-so `Coordinate`, `Gradient` and `Integral` reject it.
-
-Identity is structural. A concrete topology stores its identifying arguments,
-such as a label and the local configuration. The supplying library associates
-local coefficient and coordinate inputs with each slot. The same configuration
-can be evaluated repeatedly with data from different concrete cells.
+Identity is structural, determined by the concrete topology's construction
+arguments, such as a label and its cell configuration. A one-slot topology is
+distinct from its reference cell. The library may evaluate the same
+configuration repeatedly with data from different concrete cells.
 
 ## Domains
 
-Reference cells have coordinates of their own, independently of any physical
-mesh. The following domain classes provide the foundation for these reference
-coordinates and for the physical domains of the next chapter.
+Reference cells have coordinates independently of any physical mesh. The
+following classes describe reference and physical domains.
 
 ### `AbstractDomain`
 
@@ -120,14 +87,11 @@ is its own ambient domain.
 
 ### `AbstractCoordinateDomain`
 
-A coordinate domain is a subset of $R^n$ with non-empty interior in $R^n$ whose
-points are named by the coordinates of the points themselves. The core cannot
-build the set from smaller objects. A library defines a new coordinate domain,
-such as a reference cell, by extending this abstract class. On a coordinate
-domain the coordinates are canonical: the coordinate function is the identity
-(see [`Coordinate`](geometry.md#coordinate)), and the integral is the Lebesgue integral in
-the coordinates (see [`Integral`](geometry.md#integral)). On a core `Mesh`,
-coordinates and integration are defined through cell parameterisations.
+A coordinate domain is a subset of $R^n$ with non-empty interior in $R^n$,
+defined by a library. Its [`Coordinate`](geometry.md#coordinate) is the identity,
+and its [`Integral`](geometry.md#integral) is the Lebesgue integral in those
+coordinates. On a `Mesh`, coordinates and integration are instead defined
+through cell parameterisations.
 
 | `AbstractCoordinateDomain` |                                              |
 | -------------------------- | -------------------------------------------- |
@@ -163,10 +127,8 @@ Worked examples for this chapter: [the unit simplex](../examples/library.md#the-
 ### `AbstractReferenceCell`
 
 `AbstractReferenceCell` is a cell type that is also a coordinate domain.
-It extends `AbstractCoordinateDomain` and `AbstractCellType`. The core reads no vertices of a reference cell. A library
-that builds inclusions, such as from vertex positions, keeps the vertices of
-its reference cells (see [The unit simplex as a reference
-cell](../examples/library.md#the-unit-simplex-as-a-reference-cell)).
+Libraries may supply vertex coordinates for constructing inclusions; these
+are not required by the core.
 
 | `AbstractReferenceCell` |                                                                                                                                                            |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -179,8 +141,6 @@ cell](../examples/library.md#the-unit-simplex-as-a-reference-cell)).
 topology or a physical local mesh. The map goes from that cell's reference
 cell into the labelled local cell of `parent`. Pulling a field back through
 it gives the field's reference-cell representation on the selected slot.
-The slot is part of the kernel's local configuration, not a runtime cell
-number in the package's mesh.
 
 | `CellMap(parent, cell_slot)` | |
 | --------------------------- | - |
@@ -198,9 +158,8 @@ number in the package's mesh.
 | `free_indices` | Always `()`; selecting a cell introduces no array index. |
 | `parameterisation` | For a mesh, its coordinate expression pulled back to the selected reference cell. |
 
-A cell map of a topology has no coordinate parameterisation. For a physical
-mesh its parameterisation and reconstruction are defined under
-[Mesh cell maps](geometry.md#mesh-cell-maps).
+For a physical mesh, see [Mesh cell maps](geometry.md#mesh-cell-maps) for the
+parameterisation and reconstruction rules.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -212,16 +171,10 @@ local_field = pull_back(field, local_cell)
 # local_field has domain local_cell.reference_cell.
 ```
 
-The library of the field's space supplies its local representation and data
-(see [Functions in a space](forms.md#functions-in-a-space)). Ordinary indices
-still describe basis functions, components, quadrature points and other local
-arrays.
-
 ## Restriction
 
 A side map is a relation from a source configuration to a parent configuration.
-Each source slot selects a parent slot and a reference inclusion. The topology
-itself stores no side declarations, names or normal data.
+Each source slot selects a parent slot and a reference inclusion.
 
 ### `SideMap`
 
@@ -253,10 +206,9 @@ minus = side_map(D, E, (1, A_minus))
 jump = pull_back(u, plus) - pull_back(u, minus)
 ```
 
-`E` is the shared source, with independently specified geometry. Its measure
-need not be the measure induced by either parent trace. Names such as `plus`
-or `"+"` are library aliases for constructed maps, not map properties.
-Orientation belongs to [Normal](geometry.md#normal), not to the map identity.
+`E` has its own geometry and measure, independently of either parent trace.
+`plus` and `minus` name the constructed maps. Orientation is supplied
+separately to [Normal](geometry.md#normal).
 
 ### The inclusion
 
@@ -269,8 +221,7 @@ pull_back(pull_back(f, sm), cell_map(source, i))
 pull_back(pull_back(f, B_i), A_i)
 ```
 
-There is no connectivity lookup or implicit sum. The result has domain $F_i$
-and the free indices of the field.
+The result has domain $F_i$ and the free indices of the field.
 
 ### Composition
 
@@ -281,11 +232,9 @@ entry is `(k, C)`, where
 C = domain_map(A.parameter_domain, pull_back(B.parameterisation, A), B.ambient_domain)
 ```
 
-The composite has `inner.source` and `outer.parent` as endpoints. Exact
-intermediate endpoint identity is required; matching reference-cell types is
-insufficient. Composition constructs another `SideMap`, without a new node or
-an implied rule for composing outward normals. It handles subconfigurations,
-permutations, repeated selections and nested inclusions uniformly.
+The composite is a `SideMap` from `inner.source` to `outer.parent`, requiring
+`inner.parent == outer.source`. This covers permutations, repeated selections
+and nested inclusions.
 
 ## A field on a topological mesh
 
@@ -300,9 +249,8 @@ u1 = pull_back(u, cell_map(T, 1))
 ```
 
 Here `u` is a scalar function in a library space on `T`. Both expressions have
-domain `K`, but use different local field data. The vertex labels describe
-this fixed configuration, not global mesh connectivity. The package can reuse
-the kernel for many pairs of triangles.
+domain `K`, but use different local field data. The library can reuse the
+kernel for many pairs of triangles.
 
 Reference derivatives such as `gradient(u0, K)` are defined on `K`;
 `gradient(u, T)` is not defined. The next chapter supplies physical local
