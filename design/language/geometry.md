@@ -193,20 +193,20 @@ parameterisation and $n$ its target coordinate dimension.
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `jacobian(map)` | | `map: DomainMap \| CellMap` | `gradient(map.parameterisation, P)`, where `P` is `map.parameter_domain` for a `DomainMap` or `map.reference_cell` for a `CellMap` |
-| `inverse_jacobian(map)` | | `map: DomainMap \| CellMap` | `inverse(jacobian(map))` |
-| `density(map)` | | `map: DomainMap \| CellMap` | The density $\rho$ below |
+| `density(map)` | | `map: DomainMap \| CellMap` | `square_root(determinant(transpose(J) @ J))`, with `J = jacobian(map)` |
 
 The Jacobian matrix $J$ has value shape `(n, k)`, and $K$ =
-`inverse_jacobian(D)`, of value shape `(k, n)`, is the inverse of $J$ for
+`inverse(jacobian(D))`, of value shape `(k, n)`, is the inverse of $J$ for
 $k = n$ and the pseudo-inverse $(J^T J)^{-1} J^T$ for $k < n$. The density
 $\rho$ is the factor by which $\psi$ scales the length, the area or the volume
 of a small region of $P$:
 
-| Case | `density(map)` |
-| ---- | ------------ |
-| $k = 0$ | `Integer(1)` |
-| $0 < k = n$ | `absolute(determinant(J))` |
-| $0 < k < n$ | `square_root(determinant(G))`, with $G = J^T J$ |
+$$
+\rho = \sqrt{\det(J^T J)}.
+$$
+
+This equals $|\det J|$ for square $J$ and gives $1$ when $k=0$, since the
+empty determinant is $1$.
 
 $J^T J$ is `component_tensor(index_sum(J[l, a] * J[l, b], (l,)), (a, b))`, with
 derived indices.
@@ -215,7 +215,7 @@ An inverse Jacobian requires $\operatorname{rank} J = k$ wherever evaluated.
 The density alone does not require full rank and may vanish.
 
 The canonical expressions for $J$, $\det J$ and $K$ are `jacobian(D)`,
-`determinant(jacobian(D))` and `inverse_jacobian(D)`.
+`determinant(jacobian(D))` and `inverse(jacobian(D))`.
 
 ### `Integral`
 
@@ -251,6 +251,17 @@ For each slot `j`, let `K_j` be its reference cell. The cell contribution is
 integral(pull_back(f, D[j]) * density(D[j]), K_j)
 ```
 
+For a scalar field `f` on `D`, the sum can be constructed with a Python loop:
+
+```python
+sum(
+    (integral(pull_back(f, D[j]) * density(D[j]), K) for j, K in enumerate(D.topology.cell_types)),
+    Integer(0),
+)
+```
+
+The loop runs when constructing the expression.
+
 For the square mesh above, `integral(Integer(1), D)` is the sum of the two triangle areas, giving 1.
 
 For a field on `D.ambient_domain`, the pull-back instead uses
@@ -264,106 +275,82 @@ has the same value on every cell; its indices do not select cell slots.
 
 ## Calculus through maps
 
-A [`DomainMap`](topology.md#domainmap) supplies a coordinate parameterisation;
-[`PullBack`](topology.md#pullback) evaluates a field through it.
+For a map $\psi: P \to Q$, pull-back expresses a field on $Q$ as a field on
+$P$. This lets evaluation and integration on the mapped geometry be written
+using operations on the parameter domain $P$.
 
 ### Coordinate-map evaluation
 
-Free indices in a `DomainMap` parameterisation describe a family of maps,
-retaining distinct members even at identical coordinates.
+For `D = domain_map(P, psi, Q)` and a field `f` on `Q`, `pull_back(f, D)`
+has domain `P` and value $f(\psi(X))$ at each parameter point $X$.
 
-To compose coordinate maps, pull back the outer parameterisation through the
-inner map. Composition through a cell map keeps nested pull-backs to preserve
-cell selection.
-
-For an edge of the reference triangle `T`, choose a coordinate expression
-`psi` that stretches the first coordinate by a factor of two:
+For example, parameterise the diagonal edge of the unit triangle by
+$\psi(t) = (1-t,t)$:
 
 ```python
 T, S = UnitSimplex(2), UnitSimplex(1)
 X, t = coordinate(T), coordinate(S)[0]
-psi = tensor((Integer(2) * X[0], X[1]))
-one = Integer(1)
-e = domain_map(S, tensor((one - t, t)), T)
+edge = domain_map(S, tensor((Integer(1) - t, t)), T)
 f = X[0] * X[1]
-fe = pull_back(f, e)  # Value (1 - t) * t.
-E = domain_map(S, pull_back(psi, e), EuclideanSpace(2))
+trace = pull_back(f, edge)  # Value (1 - t) * t on S.
 ```
 
-Changing the target to `EuclideanSpace(2)` makes the pull-back of `f` invalid:
+The map's target must match the field's domain: this `edge` reads fields on
+`T`. A map into `EuclideanSpace(2)` would instead read fields on that space.
 
-```python
-edge_in_plane = domain_map(S, tensor((one - t, t)), EuclideanSpace(2))
-pull_back(f, edge_in_plane)  # Raises ValueError: f has domain T.
-```
+Coordinate maps compose by pulling back their parameterisations. If `E`
+maps a coordinate domain `R` into `P`, their composition is
+`domain_map(R, pull_back(psi, E), Q)`. Composition through a cell map keeps
+nested pull-backs to retain cell selection.
 
 ### Integration through a map
 
-For a scalar field `f` on `Q` and a map `D = domain_map(P, psi, Q)` with a
-coordinate parameter domain `P`, integration through the map is the composition
+To integrate a scalar field `f` through `D = domain_map(P, psi, Q)`, pull it
+back to the coordinate domain `P` and multiply by the map's density:
 
 ```python
 integral(pull_back(f, D) * density(D), P)
 ```
 
-Writing $\psi$ for the parameterisation and $\rho$ for its density, this is
+Writing $\rho$ for `density(D)`, this is the parameter-domain integral
 
 $$
-\int_P (f \circ \psi)\,\rho\,\mathrm{d}X.
+\int_P f(\psi(X))\,\rho\,\mathrm{d}X.
 $$
 
-`Integral` still takes the domain `P`, not the map `D`. Coverage is counted
-with multiplicity; this equals integration over the image $\psi(P)$ when
-the parameterisation is injective almost everywhere. Reversing the traversal
-does not change the density.
+For the edge above, `density(edge)` is $\sqrt{2}$, so
+`integral(trace * density(edge), S)` is $\sqrt{2}/6$.
 
-Direction-dependent integrals use the Jacobian explicitly. For a vector
-field `F` and an edge map `edge` with parameter domain `S`, circulation is
+The integral equals integration over the image when the parameterisation is
+injective almost everywhere; repeated coverage is counted with multiplicity.
+Density is independent of orientation. Circulation uses the oriented tangent
+from the Jacobian, and flux uses an oriented normal field (see
+[The flux through a surface](../examples/surfaces.md#the-flux-through-a-surface)).
 
-```python
-integral(index_sum(pull_back(F, edge)[i] * jacobian(edge)[i, 0], (i,)), S)
-```
-
-Reversing the edge reverses its tangent and hence the circulation. A flux
-through an oriented surface likewise needs a separately supplied orientation
-field; see [The flux through a surface](../examples/surfaces.md#the-flux-through-a-surface).
-
-### Mapped integration families
-
-An indexed `DomainMap` describes a family of maps and retains its indices.
-For a scalar field $f$ on $Q$ and `M = domain_map(P, psi[i, k], Q)`, with a
-coordinate parameter domain $P$:
-
-```python
-per_member = integral(pull_back(f, M) * density(M), P)
-per_configuration = index_sum(per_member, (i,))
-```
-
-The first expression retains `i` and `k`. The second sums only over `i` and
-retains `k`. For several unrelated maps, add their reference-domain integrals
-explicitly. No field domain is created by this construction. Integration counts
-each map member separately, including coincident members.
+Integration preserves free indices in the field and the map. An explicit
+`index_sum` sums the resulting integrals over a free index.
 
 ### Evaluation at points
 
-Point evaluation uses a `DomainMap` whose parameter domain is
-`EuclideanSpace(0)`. For a point or indexed family of points represented by
-`point_map`, the common operation is
-
-```python
-integral(pull_back(field, point_map), EuclideanSpace(0))
-```
-
-The result has no spatial domain. It preserves the field's value shape,
-scalar type and argument spaces, and carries the free indices of `field`
-followed by those of `point_map`, each taken once. Point indices remain free;
-only an explicit sum combines samples.
+A point is a map from `EuclideanSpace(0)`, which contains a single point.
+Pull-back evaluates the field there; integration over this zero-dimensional
+domain returns the value with no spatial domain. Its density is $1$.
 
 #### Points in a coordinate domain
 
-For a coordinate domain `Q`, use `domain_map(EuclideanSpace(0), position, Q)`.
-`position` is a domain-free expression with value shape `(Q.dimension,)`;
-free indices describe a family of points. No separate point class is needed.
+For a field `f` on a coordinate domain `Q` and a domain-free coordinate vector
+`position` of shape `(Q.dimension,)`:
+
+```python
+P0 = EuclideanSpace(0)
+point_map = domain_map(P0, position, Q)
+value = integral(pull_back(f, point_map), P0)
+```
+
+The result preserves the field's value shape, scalar type and argument spaces.
+Its free indices are those of `f` followed by those of `point_map`, each taken
+once. Indexed positions give a family of samples; only an explicit sum combines
+them.
 
 #### Points in a mesh
 
@@ -373,7 +360,7 @@ local slot. For a mesh `D`, local slot `j` and a domain-free array `positions`
 of reference coordinates:
 
 ```python
-cell = cell_map(D, j)
+cell = D[j]
 local_field = pull_back(field, cell)
 point_map = domain_map(EuclideanSpace(0), positions[i], cell.reference_cell)
 values = integral(pull_back(local_field, point_map), EuclideanSpace(0))
@@ -383,16 +370,16 @@ values = integral(pull_back(local_field, point_map), EuclideanSpace(0))
 trace is read at a shared point (see
 [Adjacent and coincident cells](../examples/integration.md#adjacent-and-coincident-cells)).
 
-Evaluation preserves symbolic dependence on both fields and points. Apply
-spatial derivatives and value transformations before sampling; for example,
-sample `gradient(field, Q)` to obtain its gradient on `Q`. Basis tabulation
-and point observations use the same operation. Samples alone define no field
-between points.
+Samples retain symbolic dependence on fields and positions, but define no
+field between points. Apply spatial derivatives and value transformations
+before sampling: for a mesh field, sample `gradient(field, D)` to obtain its
+physical gradient.
 
 #### Quadrature
 
 A quadrature rule on a coordinate domain is a weighted sum of point
-evaluations. For a point-map family `p` with index `i` and weights `w`:
+evaluations. For a field `f` on `Q`, point-map family `p` into `Q` with
+parameter domain `EuclideanSpace(0)` and free index `i`, and weights `w`:
 
 ```python
 index_sum(w[i] * integral(pull_back(f, p), EuclideanSpace(0)), (i,))

@@ -241,8 +241,7 @@ Extend `AbstractExpression`:
 | [`divergence(expression, domain)`](geometry.md#divergence-and-curl) |          | `expression: AbstractExpression`, `domain: AbstractDomain`             | `Divergence`                                                                                                                       |
 | [`curl(expression, domain)`](geometry.md#divergence-and-curl)       |          | `expression: AbstractExpression`, `domain: AbstractDomain`             | `Curl`                                                                                                                             |
 | [`jacobian(map)`](geometry.md#jacobian-and-density)                 |          | `map: DomainMap \| CellMap`                                            | `gradient(map.parameterisation, P)`, where `P` is `map.parameter_domain` for a `DomainMap` or `map.reference_cell` for a `CellMap` |
-| [`inverse_jacobian(map)`](geometry.md#jacobian-and-density)         |          | `map: DomainMap \| CellMap`                                            | `inverse(jacobian(map))`                                                                                                           |
-| [`density(map)`](geometry.md#jacobian-and-density)                  |          | `map: DomainMap \| CellMap`                                            | The density $\rho$ below                                                                                                           |
+| [`density(map)`](geometry.md#jacobian-and-density)                  |          | `map: DomainMap \| CellMap`                                            | `square_root(determinant(transpose(J) @ J))`, with `J = jacobian(map)`                                                             |
 | [`integral(expression, integration_domain)`](geometry.md#integral)  |          | `expression: AbstractExpression`, `integration_domain: AbstractDomain` | `Integral`                                                                                                                         |
 
 ### Fields on a mesh
@@ -356,6 +355,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 43    |
 | Expression node classes         | 33    |
-| Free functions                  | 51    |
+| Free functions                  | 50    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->
