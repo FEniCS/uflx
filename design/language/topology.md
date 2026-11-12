@@ -165,11 +165,40 @@ parameterisation and reconstruction rules.
 | ------------- | -------- | ----- | ------- |
 | `cell_map(parent, cell_slot)` | | `parent: AbstractTopology \| Mesh`, `cell_slot: int` | `CellMap(parent, cell_slot)` |
 
+The examples below build one configuration step by step. They use the library's
+[`ReferenceSimplex`](../examples/library.md#the-unit-simplex-as-a-reference-cell),
+[`StaticTopology`](../examples/library.md#a-static-topology), and scalar
+`Lagrange(topology, degree, shape)` space. All maps and pull-backs use the core
+language directly.
+
+First declare two triangle slots and a scalar field on them:
+
 ```python
-local_cell = cell_map(parent=volume_mesh, cell_slot=0)
-local_field = pull_back(field, local_cell)
-# local_field has domain local_cell.reference_cell.
+K = ReferenceSimplex(2)                 # Unit reference triangle.
+T = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
+V = Lagrange(T, 1, ())                   # Scalar, degree-one local representation.
+u = function(V, "u")                    # Field on the two-slot topology T.
+
+# Each slot has its own copy of K. Numbers below are library vertex labels.
+#
+#       slot 0                    slot 1
+#       2                         2
+#       |\                        |\
+#       | \                       | \
+#       0--1                      1--3
+#
+# In both copies, the reference coordinates are:
+# bottom-left (0,0), bottom-right (1,0), top-left (0,1).
+
+c0 = cell_map(T, 0)                     # K -> slot 0 of T.
+c1 = cell_map(T, 1)                     # K -> slot 1 of T.
+u0 = pull_back(u, c0)                   # Slot 0's field, expressed on K.
+u1 = pull_back(u, c1)                   # Slot 1's field, expressed on K.
 ```
+
+Both `u0` and `u1` have domain `K`; their cell maps select different local
+field data. The vertex labels let the library describe a common edge `(1, 2)`.
+We construct the two inclusions of that edge explicitly next.
 
 ## Restriction
 
@@ -198,30 +227,72 @@ topology determines its reference cells.
 | `side_map(parent, source, *entries)` | | `parent, source: AbstractTopology \| Mesh`, `entries: tuple[int, DomainMap]` | `SideMap(parent, source, entries)` |
 | `compose(outer, inner)` | | `outer, inner: SideMap` | The composed `SideMap`, requiring `inner.parent == outer.source` |
 
-The variadic factory collects entries into the node's tuple:
+Continue with one interval slot for the common edge. Its coordinate `t` runs
+from vertex label 1 to vertex label 2:
 
 ```python
-plus = side_map(D, E, (0, A_plus))
-minus = side_map(D, E, (1, A_minus))
-jump = pull_back(u, plus) - pull_back(u, minus)
+I = ReferenceSimplex(1)                 # Unit interval, 0 <= t <= 1.
+S = StaticTopology((I,), ((1, 2),))      # One edge slot.
+t = coordinate(I)[0]
+
+#                 source interval I
+#                1 ---------------- 2
+#               t=0                t=1
+#                 /              \
+#              A0/                \A1
+#               v                  v
+#     slot 0: diagonal edge    slot 1: left edge
+#       (1-t, t)                  (0, t)
+
+A0 = domain_map(I, tensor((Integer(1) - t, t)), K)
+A1 = domain_map(I, tensor((Integer(0), t)), K)
+
+plus = side_map(T, S, (0, A0))           # Read slot 0 through A0.
+minus = side_map(T, S, (1, A1))          # Read slot 1 through A1.
+u_plus = pull_back(u, plus)             # Both traces have domain S.
+u_minus = pull_back(u, minus)
+jump = u_plus - u_minus                 # A field on the edge topology S.
 ```
 
-`E` has its own geometry and measure, independently of either parent trace.
-`plus` and `minus` name the constructed maps. Orientation is supplied
-separately to [Normal](geometry.md#normal).
+There is one entry in each side map because `S` has one slot. In `(1, A1)`,
+the integer selects parent slot 1, while `A1` specifies the reference points
+at which its field is read. At `t = 0`, `A0` reads `(1, 0)` in slot 0 and
+`A1` reads `(0, 0)` in slot 1: both correspond to vertex label 1.
+
+`plus` and `minus` are names for these maps. Neither chooses a normal;
+orientation is supplied separately to [Normal](geometry.md#normal).
+The same construction accepts physical meshes as endpoints. A source mesh
+then has its own geometry and measure, independently of either parent trace.
 
 ### The inclusion
 
-For `sm = SideMap(parent, source, entries)` and `entries[i] = (j, A_i)`, define
-`B_i = cell_map(parent, j)`. Restriction satisfies
+To express the edge trace in the interval coordinate `t`, select the sole
+cell of `S`. Reading through the side map is equivalent to selecting the
+parent cell first, then applying its inclusion:
 
 ```python
-pull_back(pull_back(f, sm), cell_map(source, i))
-# becomes
-pull_back(pull_back(f, B_i), A_i)
+edge = cell_map(S, 0)                   # I -> the edge slot of S.
+trace0 = pull_back(u_plus, edge)        # Domain I.
+
+# The same field, with the parent read written out:
+trace0_explicit = pull_back(u0, A0)     # u0(1-t, t).
+trace1_explicit = pull_back(u1, A1)     # u1(0, t).
+jump_on_I = pull_back(jump, edge)       # u0(1-t, t) - u1(0, t).
 ```
 
-The result has domain $F_i$ and the free indices of the field.
+For example, if the supplied local fields are $u_0(\xi,\eta)=\xi+2\eta$
+and $u_1(\xi,\eta)=3\xi-\eta$, the two traces are $1+t$ and $-t$.
+Their jump is $1+2t$.
+
+In general, for `sm.entries[i] = (j, A)`, restriction satisfies
+
+```python
+pull_back(pull_back(f, sm), cell_map(sm.source, i))
+# becomes
+pull_back(pull_back(f, cell_map(sm.parent, j)), A)
+```
+
+The result has domain `A.parameter_domain` and the free indices of `f`.
 
 ### Composition
 
@@ -236,22 +307,38 @@ The composite is a `SideMap` from `inner.source` to `outer.parent`, requiring
 `inner.parent == outer.source`. This covers permutations, repeated selections
 and nested inclusions.
 
-## A field on a topological mesh
-
-Use the library's [static topology](../examples/library.md#a-static-topology)
-to describe two distinct triangle slots:
+For a concrete composition, reverse the edge parameterisation from the
+preceding example:
 
 ```python
-K = ReferenceSimplex(2)
-T = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
-u0 = pull_back(u, cell_map(T, 0))
-u1 = pull_back(u, cell_map(T, 1))
+R = StaticTopology((I,), ((2, 1),))      # Edge ordered from label 2 to label 1.
+B = domain_map(I, tensor((Integer(1) - t,)), I)
+reverse = side_map(S, R, (0, B))        # R -> S, with t mapped to 1-t.
+reversed_plus = compose(plus, reverse)  # R -> T, reading parent slot 0.
+
+#       R                 S                    T, slot 0
+#       t  -- reverse --> 1-t  ---- plus ----> (t, 1-t)
+
+reversed_trace = pull_back(u, reversed_plus)
+# Equivalent to:
+reversed_trace_nested = pull_back(pull_back(u, plus), reverse)
 ```
 
-Here `u` is a scalar function in a library space on `T`. Both expressions have
-domain `K`, but use different local field data. The library can reuse the
-kernel for many pairs of triangles.
+Both expressions have domain `R`. Composition selects the same parent slot
+as `plus` and composes the reference maps: `A0(B(t)) = (t, 1-t)`.
 
-Reference derivatives such as `gradient(u0, K)` are defined on `K`;
-`gradient(u, T)` is not defined. The next chapter supplies physical local
-coordinates with `D = mesh(x, Q)`.
+## A field on a topological mesh
+
+The domains of the resulting expressions are:
+
+| Expression | Domain | Meaning |
+| ---------- | ------ | ------- |
+| `u` | `T` | Field on two labelled triangle slots |
+| `u0`, `u1` | `K` | One selected triangle's reference representation |
+| `u_plus`, `u_minus`, `jump` | `S` | Traces and their difference on one labelled edge slot |
+| `trace0`, `jump_on_I` | `I` | Edge fields expressed in the interval coordinate |
+
+Reference derivatives such as `gradient(u0, K)` are defined on `K`.
+Selecting a cell is what exposes those coordinates; `gradient(u, T)` is
+not defined. Physical coordinates are introduced by a coordinate field on
+`T`, as described next in [Geometry](geometry.md).
