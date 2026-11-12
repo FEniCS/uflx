@@ -47,7 +47,7 @@ Pulling back from either side gives an expression on `E`, so the traces can
 be subtracted at the same physical point:
 
 ```python
-plus, minus = side_map(D, E, *diagonal_sides["+"].entries), side_map(D, E, *diagonal_sides["-"].entries)
+plus, minus = SideMap(D, E, diagonal_sides["+"].entries), SideMap(D, E, diagonal_sides["-"].entries)
 u_p, u_m = pull_back(u_D, plus), pull_back(u_D, minus)
 v_p, v_m = pull_back(v_D, plus), pull_back(v_D, minus)
 du_p, du_m = pull_back(grad_u, plus), pull_back(grad_u, minus)
@@ -86,8 +86,8 @@ $(1,1)/\sqrt{2}$ and the facet density is $\sqrt{2}$.
 
 Use the topology `square`, diagonal and reference coordinate `X = coordinate(K)`
 above. For a scalar field `u` on `square`, set
-`plus_T = side_map(square, diagonal, *diagonal_sides["+"].entries)` and
-`minus_T = side_map(square, diagonal, *diagonal_sides["-"].entries)`. The traces are
+`plus_T = SideMap(square, diagonal, diagonal_sides["+"].entries)` and
+`minus_T = SideMap(square, diagonal, diagonal_sides["-"].entries)`. The traces are
 `pull_back(u, plus_T)` and `pull_back(u, minus_T)`.
 
 From `"+"`, the parent is slot 0 and the inclusion is
@@ -161,7 +161,7 @@ kernel. Neighbour lookup and mesh iteration are outside the expression.
   `integral(density(B_p), K)`. Alternatively supply the parent's size as
   a scalar local input.
 - Restricting values alone needs no physical mesh:
-  `pull_back(u, side_map(square, diagonal, *diagonal_sides["+"].entries))` is a trace on the topology.
+  `pull_back(u, SideMap(square, diagonal, diagonal_sides["+"].entries))` is a trace on the topology.
 - A triangle–quadrilateral interface uses parent types `(Kt, Kq)` and an
   interval integration cell. The same facet formula applies with the
   library's corresponding local bases and reference inclusions.
@@ -300,7 +300,7 @@ Restrict both fields to `G` before combining them. `lam` supplies the
 traction, and `mu` tests the constraint $u=(d-d_{old})/dt$:
 
 ```python
-from_fluid, from_solid = side_map(F, G, *interface_sides["fluid"].entries), side_map(S, G, *interface_sides["solid"].entries)
+from_fluid, from_solid = SideMap(F, G, interface_sides["fluid"].entries), SideMap(S, G, interface_sides["solid"].entries)
 u_G, v_G = pull_back(u_F, from_fluid), pull_back(v_F, from_fluid)
 d_G, w_G = pull_back(d_S, from_solid), pull_back(w_S, from_solid)
 d_old_G = pull_back(d_old_S, from_solid)
@@ -314,7 +314,7 @@ a = form(fluid + solid + coupling, ((v, q, w, mu), (u, p, d, lam)))
 The load contains the inlet traction and old displacement:
 
 ```python
-traction = integral(index_sum(g[i] * pull_back(v_F, side_map(F, G_in, *inlet_sides["fluid"].entries))[i], (i,)), G_in)
+traction = integral(index_sum(g[i] * pull_back(v_F, SideMap(F, G_in, inlet_sides["fluid"].entries))[i], (i,)), G_in)
 l = form(traction + integral(index_sum(mu_G[i] * d_old_G[i], (i,)) / dt, G), ((v, q, w, mu),))
 ```
 

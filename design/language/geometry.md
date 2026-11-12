@@ -65,20 +65,20 @@ integration or sampling needs a `DomainMap`, not a mesh (see
 
 #### Mesh cell maps
 
-For a mesh `D = mesh(x, Q)` on topology `T`, `cell_map(D, j)` selects local
-slot `j`. Its reference cell is `T.cell_types[j]` and its derived
-parameterisation is `pull_back(x, cell_map(T, j))`. Pulling back
+For a mesh `D = mesh(x, Q)` on topology `T`, `D[j]` (equivalently
+`cell_map(D, j)`) selects local slot `j`. Its reference cell is `T.cell_types[j]` and its derived
+parameterisation is `pull_back(x, T[j])`. Pulling back
 `coordinate(D)` gives this same expression.
 
 The cell map retains the selected cell when its coordinates change:
 substitution reconstructs it from `D` and `j`. For a field `f` on `D`,
-`pull_back(f, cell_map(D, j))` is its reference-cell representation.
+`pull_back(f, D[j])` is its reference-cell representation.
 
 To read a field on the ambient coordinate domain instead, construct a
 coordinate map from the cell map:
 
 ```python
-cell = cell_map(D, j)
+cell = D[j]
 coordinate_map = domain_map(cell.reference_cell, cell.parameterisation, D.ambient_domain)
 ```
 
@@ -105,18 +105,18 @@ The resulting physical mesh is the square:
 D = mesh(x, EuclideanSpace(2))
 ```
 
-- `D.topology` is `square`, with two triangle slots. `cell_map(D, 0)`
-  reads the first; `cell_map(D, 1)` reads the second.
-- `pull_back(coordinate(D), cell_map(D, 1))` is
-  `pull_back(x, cell_map(square, 1))`, which the library evaluates to
+- `D.topology` is `square`, with two triangle slots. `D[0]`
+  reads the first; `D[1]` reads the second.
+- `pull_back(coordinate(D), D[1])` is
+  `pull_back(x, square[1])`, which the library evaluates to
   $(1 - X_1, X_0 + X_1)$ for the supplied coordinates.
 
 For a local configuration `M` with types `(Kt, Kq)`, `mesh(x, EuclideanSpace(2))` has
 one triangle cell and one quadrilateral cell. A field `u` on `M` has local reads:
 
 ```python
-u_tri = pull_back(u, cell_map(M, 0))
-u_quad = pull_back(u, cell_map(M, 1))
+u_tri = pull_back(u, M[0])
+u_quad = pull_back(u, M[1])
 ```
 
 The package can reuse this configuration for triangle–quadrilateral
@@ -444,7 +444,7 @@ do not implicitly select slots.
 For the local square configuration above, `integral(Integer(1), D)` is the
 area 1, the sum of two reference-cell integrals. A boundary configuration
 `B` with the side `"inside"` gives the boundary contribution
-`integral(pull_back(f, side_map(D, B, *boundary_sides["inside"].entries)), B)`.
+`integral(pull_back(f, SideMap(D, B, boundary_sides["inside"].entries)), B)`.
 
 ```{dropdown} Legacy UFL
 The cell, boundary-facet and interior-facet contributions to `dx`, `ds` and
@@ -766,7 +766,7 @@ choice is independent of subsequent restrictions into other parents.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `side_domain(parent, source, *entries)` | | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]` | `mesh(pull_back(parent.coordinate_function, side_map(parent.topology, source, *entries)), parent.ambient_domain)` |
+| `side_domain(parent, source, *entries)` | | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]` | `mesh(pull_back(parent.coordinate_function, SideMap(parent.topology, source, entries)), parent.ambient_domain)` |
 
 Coordinate functions may be vector-valued or tensors of scalar functions. For a
 conforming interface, the package supplies coordinates and facet correspondence
@@ -788,7 +788,7 @@ of $S$, from the side:
 - The restriction of `gradient(f, D)` is the whole gradient of `f` on the cell
   on the side, as for a normal derivative. The last axis is in the frame of
   the ambient coordinate domain from every side.
-- `gradient(pull_back(f, side_map(D, E, *diagonal_sides[s].entries)), E)` is the tangential gradient of
+- `gradient(pull_back(f, SideMap(D, E, diagonal_sides[s].entries)), E)` is the tangential gradient of
   the restriction along the cells of $E$.
 
 The unit side conormal is [Normal](#normal), with orientation supplied
@@ -805,8 +805,8 @@ diagonal = StaticTopology((I,), ((1, 2),))
 t = coordinate(I)[0]
 A_plus = domain_map(I, tensor((Integer(1) - t, t)), K)
 A_minus = domain_map(I, tensor((Integer(0), t)), K)
-plus = side_map(square, diagonal, (0, A_plus))
-minus = side_map(square, diagonal, (1, A_minus))
+plus = side_map(diagonal, (square[0], A_plus))
+minus = side_map(diagonal, (square[1], A_minus))
 jump = pull_back(u, plus) - pull_back(u, minus)
 E = side_domain(D, diagonal, (0, A_plus))
 ```
@@ -818,7 +818,9 @@ See [Evaluating a trace](../examples/coupling.md#evaluating-a-trace) for both
 sides and the effect of reversing the facet vertices.
 
 ```{dropdown} Legacy UFL
-The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on the topology $S$ of the interior facets, whose sides are named `'+'` and `'-'`.
+A library can express the legacy UFL restriction `f('+')` as
+`pull_back(f, sides["+"])`, where `sides` holds already constructed side maps.
+The names belong to the library.
 ```
 
 ### `Normal`
@@ -883,7 +885,7 @@ The examples use the following objects:
 - `grad_f = gradient(f, D)` and `i = index("i")`.
 
 ```python
-inside, plus, minus = side_map(D, B, *boundary_sides["inside"].entries), side_map(D, E, *diagonal_sides["+"].entries), side_map(D, E, *diagonal_sides["-"].entries)
+inside, plus, minus = SideMap(D, B, boundary_sides["inside"].entries), SideMap(D, E, diagonal_sides["+"].entries), SideMap(D, E, diagonal_sides["-"].entries)
 n_B = outward_normal(inside)
 
 # The flux of grad f out of the square, the legacy UFL dot(grad(f), n) * ds.

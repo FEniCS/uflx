@@ -79,13 +79,13 @@ lap_u = divergence(grad_u, D)
 r_cell = integral((f_D + lap_u) * v_D, D)
 
 # Interior-facet residual, shared by both cells.
-plus, minus = side_map(D, E, *diagonal_sides["+"].entries), side_map(D, E, *diagonal_sides["-"].entries)
+plus, minus = SideMap(D, E, diagonal_sides["+"].entries), SideMap(D, E, diagonal_sides["-"].entries)
 n = outward_normal(plus)
 jump_n = index_sum((pull_back(grad_u, plus)[i] - pull_back(grad_u, minus)[i]) * n[i], (i,))
 r_facets = integral(-half * jump_n * (pull_back(v_D, plus) + pull_back(v_D, minus)), E)
 
 # The Neumann residual on the boundary.
-inside = side_map(D, B, *neumann_facets_sides["inside"].entries)
+inside = SideMap(D, B, neumann_facets_sides["inside"].entries)
 n_B = outward_normal(inside)
 dn_u = index_sum(pull_back(grad_u, inside)[i] * n_B[i], (i,))
 r_boundary = integral((pull_back(g_D, inside) - dn_u) * pull_back(v_D, inside), B)

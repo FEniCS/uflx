@@ -315,7 +315,7 @@ reference-point inclusion. Set
 `P = side_domain(D, S, *S_sides["inside"].entries)`:
 
 ```python
-inside = side_map(D, P, *S_sides["inside"].entries)
+inside = SideMap(D, P, S_sides["inside"].entries)
 values = pull_back(pull_back(f, inside), cell_map(P, 0))
 total = integral(pull_back(f, inside), P)
 ```

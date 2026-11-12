@@ -118,8 +118,8 @@ def static_side_map(parent, source, *parent_slots):
     for i, j in enumerate(parent_slots):
         F, K = S.cell_types[i], T.cell_types[j]
         positions = tensor(tuple(K.vertices[T.cells[j].index(v)] for v in S.cells[i]))
-        entries.append((j, domain_map(F, affine_map(F, positions), K)))
-    return side_map(parent, source, *entries)
+        entries.append((parent[j], domain_map(F, affine_map(F, positions), K)))
+    return side_map(source, *entries)
 ```
 
 Examples may collect reference maps in a dictionary. This convenience is outside
@@ -140,7 +140,7 @@ def static_sides(source, selections):
 #### Worked edge inclusions
 
 The [topological-mesh walkthrough](../language/topology.md#sidemap) takes
-`A0` and `A1` as library inputs. For its two unit reference triangles, the
+`inclusion_a` and `inclusion_b` as library inputs. For its two unit reference triangles, the
 library can construct them explicitly:
 
 ```python
@@ -149,17 +149,17 @@ I = ReferenceSimplex(1)
 t = coordinate(I)[0]
 
 # Source vertex order is 1 -> 2 in each parent cell.
-A0 = domain_map(I, tensor((Integer(1) - t, t)), K)  # Slot 0: diagonal edge.
-A1 = domain_map(I, tensor((Integer(0), t)), K)      # Slot 1: left edge.
+inclusion_a = domain_map(I, tensor((Integer(1) - t, t)), K)  # Cell A: diagonal edge.
+inclusion_b = domain_map(I, tensor((Integer(0), t)), K)      # Cell B: left edge.
 ```
 
-At `t = 0`, `A0` reads `(1, 0)` and `A1` reads `(0, 0)` in their respective
+At `t = 0`, `inclusion_a` reads `(1, 0)` and `inclusion_b` reads `(0, 0)` in their respective
 parent cells; both points have vertex label 1. At `t = 1`, both read `(0, 1)`,
 with label 2. The library's `static_side_map` constructs these inclusions from
 the vertex correspondence rather than requiring the caller to write formulae.
 
-For local fields $u_0(\xi,\eta)=\xi+2\eta$ and
-$u_1(\xi,\eta)=3\xi-\eta$, these inclusions give traces $1+t$ and $-t$,
+For local fields $u_a(\xi,\eta)=\xi+2\eta$ and
+$u_b(\xi,\eta)=3\xi-\eta$, these inclusions give traces $1+t$ and $-t$,
 and a jump $1+2t$.
 
 ### Reference orientation
@@ -408,7 +408,7 @@ class Measure:
             reference = mesh.boundary
         if reference is not None:
             E = side_domain(mesh.domain, reference.source, *reference.entries)
-            relation = side_map(mesh.domain, E, *reference.entries)
+            relation = SideMap(mesh.domain, E, reference.entries)
             integrand = restrict(integrand, E, relation)
         else:
             E = integrand.domain if mesh is None else mesh.domain

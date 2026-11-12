@@ -216,9 +216,9 @@ Extend `AbstractExpression`:
 
 ### Restriction
 
-| Function                                                    | Overload | Takes                                                                        | Returns                            |
-| ----------------------------------------------------------- | -------- | ---------------------------------------------------------------------------- | ---------------------------------- |
-| [`side_map(parent, source, *entries)`](topology.md#sidemap) |          | `parent, source: AbstractTopology \| Mesh`, `entries: tuple[int, DomainMap]` | `SideMap(parent, source, entries)` |
+| Function                                            | Overload | Takes                                                                    | Returns                                                                |
+| --------------------------------------------------- | -------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| [`side_map(source, *entries)`](topology.md#sidemap) |          | `source: AbstractTopology \| Mesh`, `entries: tuple[CellMap, DomainMap]` | A `SideMap` with the common parent and selected slots of the cell maps |
 
 ### Meshes
 
@@ -247,12 +247,12 @@ Extend `AbstractExpression`:
 
 ### Fields on a mesh
 
-| Function                                                                 | Overload | Takes                                                                         | Returns                                                                                                           |
-| ------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [`transformation_law(variances, weight)`](geometry.md#transformationlaw) |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                                                                                               |
-| [`push_forward(expression, mesh, law)`](geometry.md#pushforward)         |          | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw`      | `PushForward(expression, mesh, law)`                                                                              |
-| [`side_domain(parent, source, *entries)`](geometry.md#side-domains)      |          | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]`  | `mesh(pull_back(parent.coordinate_function, side_map(parent.topology, source, *entries)), parent.ambient_domain)` |
-| [`normal(side_map, *reference_conormals)`](geometry.md#normal)           |          | `side_map: SideMap`, `reference_conormals: tuple[AbstractExpression, ...]`    | `Normal`                                                                                                          |
+| Function                                                                 | Overload | Takes                                                                         | Returns                                                                                                         |
+| ------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| [`transformation_law(variances, weight)`](geometry.md#transformationlaw) |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                                                                                             |
+| [`push_forward(expression, mesh, law)`](geometry.md#pushforward)         |          | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw`      | `PushForward(expression, mesh, law)`                                                                            |
+| [`side_domain(parent, source, *entries)`](geometry.md#side-domains)      |          | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]`  | `mesh(pull_back(parent.coordinate_function, SideMap(parent.topology, source, entries)), parent.ambient_domain)` |
+| [`normal(side_map, *reference_conormals)`](geometry.md#normal)           |          | `side_map: SideMap`, `reference_conormals: tuple[AbstractExpression, ...]`    | `Normal`                                                                                                        |
 
 ### Function spaces
 

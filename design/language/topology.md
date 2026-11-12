@@ -248,29 +248,36 @@ parameterisation and reconstruction rules.
 | ------------- | -------- | ----- | ------- |
 | `cell_map(parent, cell_slot)` | | `parent: AbstractTopology \| Mesh`, `cell_slot: int` | `CellMap(parent, cell_slot)` |
 
+Indexing a topology or mesh is shorthand for cell selection:
+`parent[i]` constructs exactly `cell_map(parent, i)`. It retains the parent
+and slot identity; `T.cell_types[i]` returns only the cell type. Indexing
+accepts the same nonnegative integer slots as `cell_map`, without slicing
+or implicit iteration.
+
 The examples below build one configuration step by step. They use the library's
 [`ReferenceSimplex`](../examples/library.md#the-unit-simplex-as-a-reference-cell),
 [`StaticTopology`](../examples/library.md#a-static-topology), and scalar
 `Lagrange(topology, degree, shape)` space. All maps and pull-backs use the core
 language directly.
 
-First declare two triangle slots and a scalar field on them.
+First declare two triangle slots and a scalar field on them. Here we also
+name the cell handles A and B; a library can supply these handles directly.
 `function(V, "u")` declares a symbolic field in the space `V`; the library
 supplies its values.
 
 ```python
-K = ReferenceSimplex(2)  # Unit reference triangle.
+K = ReferenceSimplex(2)     # Unit reference triangle.
 T = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
-V = Lagrange(T, 1, ())   # Scalar, degree-one local representation.
-u = function(V, "u")     # Field on the two-slot topology T.
+V = Lagrange(T, 1, ())      # Scalar, degree-one local representation.
+u = function(V, "u")        # Field on the two-slot topology T.
 
-c0 = cell_map(T, 0)      # K -> slot 0 of T.
-c1 = cell_map(T, 1)      # K -> slot 1 of T.
-u0 = pull_back(u, c0)    # Slot 0's field, expressed on K.
-u1 = pull_back(u, c1)    # Slot 1's field, expressed on K.
+cell_a = T[0]               # K -> slot 0 of T.
+cell_b = T[1]               # K -> slot 1 of T.
+u_a = pull_back(u, cell_a)  # Cell A's field, expressed on K.
+u_b = pull_back(u, cell_b)  # Cell B's field, expressed on K.
 ```
 
-Both `u0` and `u1` have domain `K`; their cell maps select different local
+Both `u_a` and `u_b` have domain `K`; their cell maps select different local
 field data. The vertex labels describe the correspondence along edge `(1, 2)`
 in the two reference cells. The library supplies the reference inclusions for
 this correspondence; physical geometry has not yet been specified.
@@ -299,45 +306,51 @@ topology determines its reference cells.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `side_map(parent, source, *entries)` | | `parent, source: AbstractTopology \| Mesh`, `entries: tuple[int, DomainMap]` | `SideMap(parent, source, entries)` |
+| `side_map(source, *entries)` | | `source: AbstractTopology \| Mesh`, `entries: tuple[CellMap, DomainMap]` | A `SideMap` with the common parent and selected slots of the cell maps |
+
+The factory takes one `(cell, inclusion)` entry per source slot, where `cell`
+is a `CellMap`. At least one entry is required, and all cell maps must have
+the same parent. Missing entries or differing parents raise `ValueError`;
+selectors that are not cell maps raise `TypeError`. It constructs the node above using their `cell_slot` values.
+Names for the handles are ordinary Python bindings, not part of map identity.
 
 Continue with one interval slot for the edge, ordered from vertex label 1
-to vertex label 2. The library supplies `A0` and `A1`, reference inclusions
+to vertex label 2. The library supplies `inclusion_a` and `inclusion_b`, reference inclusions
 from the edge's reference interval into `K`, respecting that vertex correspondence:
 
 ```python
 I = ReferenceSimplex(1)              # Unit reference interval.
 S = StaticTopology((I,), ((1, 2),))  # One edge slot.
 
-# A0, A1: library-supplied reference inclusions I -> K.
+# inclusion_a, inclusion_b: library-supplied reference inclusions I -> K.
 ```
 
 ```{figure} ../figures/reference-slots.*
 :label: reference-cell-slots
-:alt: Two copies of the unit reference triangle. Slot 0 has vertex labels 0, 1, 2 and its diagonal edge highlighted in blue. Slot 1 has labels 1, 3, 2 and its left edge highlighted in amber. Both selected edges run from label 1 to label 2.
+:alt: Two copies of the unit reference triangle. Cell A has vertex labels 0, 1, 2 and its diagonal edge highlighted in blue. Cell B has labels 1, 3, 2 and its left edge highlighted in amber. Both selected edges run from label 1 to label 2.
 :width: 700px
 
 These are reference triangles, not placements of cells in physical space.
 Each slot has its own copy. Bold numbers are library vertex labels. The
-highlighted edges show the library-supplied inclusions $A_0$ and $A_1$;
+highlighted edges show the library-supplied inclusions `inclusion_a` and `inclusion_b`;
 the arrows follow the source ordering from label 1 to label 2.
 ```
 
 ```{mermaid}
 flowchart LR
     accTitle: Two inclusions of the source interval
-    accDescr: A0 maps the source interval to the diagonal of the reference triangle for slot 0. A1 maps it to the left edge of the reference triangle for slot 1.
+    accDescr: inclusion_a maps the source interval to the diagonal of the reference triangle for cell A. inclusion_b maps it to the left edge of the reference triangle for cell B.
     I["Source interval I<br/>Vertex order 1 → 2"]
-    K0["K for slot 0<br/>Diagonal edge"]
-    K1["K for slot 1<br/>Left edge"]
-    I -->|A0| K0
-    I -->|A1| K1
+    KA["K for cell A<br/>Diagonal edge"]
+    KB["K for cell B<br/>Left edge"]
+    I -->|inclusion_a| KA
+    I -->|inclusion_b| KB
     classDef source fill:#f1f5f9,stroke:#64748b,color:#1e293b
     classDef first fill:#eff6ff,stroke:#2563a6,color:#1e293b
     classDef second fill:#fffbeb,stroke:#b45309,color:#1e293b
     class I source
-    class K0 first
-    class K1 second
+    class KA first
+    class KB second
     linkStyle 0 stroke:#2563a6,stroke-width:2px
     linkStyle 1 stroke:#b45309,stroke-width:2px
 ```
@@ -345,22 +358,22 @@ flowchart LR
 Each side map selects a parent slot and its inclusion:
 
 ```python
-plus = side_map(T, S, (0, A0))       # Read slot 0 through A0.
-minus = side_map(T, S, (1, A1))      # Read slot 1 through A1.
-u_plus = pull_back(u, plus)          # Both traces have domain S.
-u_minus = pull_back(u, minus)
-jump = u_plus - u_minus              # A field on the edge topology S.
+side_a = side_map(S, (cell_a, inclusion_a))  # Read cell A through its inclusion.
+side_b = side_map(S, (cell_b, inclusion_b))  # Read cell B through its inclusion.
+u_a_on_side = pull_back(u, side_a)           # Cell A's edge values, on S.
+u_b_on_side = pull_back(u, side_b)           # Cell B's edge values, on S.
+jump = u_a_on_side - u_b_on_side             # A field on the edge topology S.
 ```
 
 The [library example](../examples/library.md#worked-edge-inclusions) shows
-how to construct `A0` and `A1`.
+how to construct `inclusion_a` and `inclusion_b`.
 
-There is one entry in each side map because `S` has one slot. In `(1, A1)`,
-the integer selects parent slot 1, while `A1` specifies the reference points
-at which its field is read. Both inclusions respect the source vertex order,
+There is one entry in each side map because `S` has one slot. In
+`(cell_b, inclusion_b)`, the cell map selects the parent cell, while `inclusion_b` specifies
+the reference points at which its field is read. Both inclusions respect the source vertex order,
 so the two traces read corresponding points along the edge.
 
-`plus` and `minus` are names for these maps. Neither chooses a normal;
+`side_a` and `side_b` are names for these maps. Neither chooses a normal;
 orientation is supplied separately to [Normal](geometry.md#normal).
 The same construction accepts meshes carrying physical geometry as endpoints.
 A source mesh then has its own physical geometry and measure, independently
@@ -373,17 +386,17 @@ To express both edge fields on the reference interval, select the sole
 cell of `S`:
 
 ```python
-edge = cell_map(S, 0)                  # I -> the edge slot of S.
-u0_on_edge = pull_back(u_plus, edge)   # Slot 0's edge values, on I.
-u1_on_edge = pull_back(u_minus, edge)  # Slot 1's edge values, on I.
-jump_on_I = pull_back(jump, edge)      # Their difference, on I.
+edge = S[0]                              # I -> the edge slot of S.
+u_a_on_I = pull_back(u_a_on_side, edge)  # Cell A's edge values, on I.
+u_b_on_I = pull_back(u_b_on_side, edge)  # Cell B's edge values, on I.
+jump_on_I = pull_back(jump, edge)        # Their difference, on I.
 ```
 
 Equivalently, select the parent cell first and apply its reference inclusion:
 
 ```python
-u0_on_edge = pull_back(u0, A0)
-u1_on_edge = pull_back(u1, A1)
+u_a_on_I = pull_back(u_a, inclusion_a)
+u_b_on_I = pull_back(u_b, inclusion_b)
 ```
 
 In general, for `sm.entries[i] = (j, A)`, restriction satisfies
@@ -403,11 +416,11 @@ The domains of the resulting expressions are:
 | Expression | Domain | Meaning |
 | ---------- | ------ | ------- |
 | `u` | `T` | Field on two labelled triangle slots |
-| `u0`, `u1` | `K` | One selected triangle's reference representation |
-| `u_plus`, `u_minus`, `jump` | `S` | Traces and their difference on one labelled edge slot |
-| `u0_on_edge`, `u1_on_edge`, `jump_on_I` | `I` | Edge fields expressed in the interval coordinate |
+| `u_a`, `u_b` | `K` | One selected triangle's reference representation |
+| `u_a_on_side`, `u_b_on_side`, `jump` | `S` | Traces and their difference on one labelled edge slot |
+| `u_a_on_I`, `u_b_on_I`, `jump_on_I` | `I` | Edge fields expressed in the interval coordinate |
 
-Reference derivatives such as `gradient(u0, K)` are defined on `K`.
+Reference derivatives such as `gradient(u_a, K)` are defined on `K`.
 Selecting a cell is what exposes those coordinates; `gradient(u, T)` is
 not defined. A coordinate field `x` on `T` supplies physical geometry through
 `D = mesh(x, Q)`, where `Q` is the physical coordinate space.
