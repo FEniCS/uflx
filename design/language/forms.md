@@ -8,7 +8,7 @@ argument of a variational form.
 ### `AbstractFunctionSpace`
 
 `AbstractFunctionSpace` describes a space of fields or multilinear maps,
-with or without a domain or topology.
+with or without a spatial argument.
 
 | `AbstractFunctionSpace` |                                                                                                                                                       |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -18,7 +18,7 @@ with or without a domain or topology.
 
 | Property | Meaning |
 | -------- | ------- |
-| `domain` | Where the space's fields are defined: a domain, a topology, or `None` for values with no spatial argument. |
+| `domain` | Where the space's fields are defined: an `AbstractTopology`, an `AbstractDomain`, or `None` for values with no spatial argument. |
 | `value_shape` | Array shape of a function's output, with `()` for a scalar. |
 | `scalar_type` | Real or complex arithmetic for the function's expression representation. |
 | `argument_spaces` | Ordered input spaces when a function represents a multilinear map; `()` for a field. |

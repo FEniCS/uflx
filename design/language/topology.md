@@ -16,59 +16,6 @@ Fields whose reference representations are independent of physical geometry
 can be defined on a topology. Spaces whose bases depend on physical geometry
 are defined directly on a mesh (see [Functions in a space](forms.md#functions-in-a-space)).
 
-## Topology
-
-### `AbstractCellType`
-
-`AbstractCellType` describes a cell type with numbered vertices.
-
-| `AbstractCellType` | |
-| ------------------ | - |
-| Extends | `Base` |
-| Provides | `dimension`, the nonnegative topological dimension as an `int`, and `num_vertices`, the positive number of vertices as an `int` |
-| Defined by | A subclass outside the core, such as `Simplex` |
-
-The library defines facets and other sub-entities and supplies their reference
-maps. General inclusions, such as cuts, need not follow sub-entities.
-
-### `AbstractTopology`
-
-`AbstractTopology` describes a finite local cell configuration without specifying
-its physical geometry. Each position in `cell_types` is a distinct local cell,
-called a *cell slot*. Slots identify the mathematical inputs of a kernel.
-For reference cells, the topology is a labelled disjoint union: each slot has
-reference geometry and retains its identity even when reference cells or
-physical coordinates coincide.
-
-| `AbstractTopology` | |
-| ------------------ | - |
-| Extends | `Base` |
-| Provides | `cell_types` |
-| Derived | `dimension`, the dimension of the cell types |
-| Defined by | A subclass outside the core |
-
-- `cell_types` is a nonempty `tuple` of `AbstractCellType`s of the same
-  dimension. Repeated types are allowed: `(K, K)` describes two distinct
-  local cells of type `K`.
-- For a topology `topology`, a `cell_slot` is an `int` satisfying
-  `0 <= cell_slot < len(topology.cell_types)`.
-  Negative numbers do not select slots from the end.
-
-For example, `(K,)` describes a single-cell kernel, `(K, K)` the parents of
-an interior-facet kernel, and `(Kt, Kq)` a triangle–quadrilateral pair.
-The number of slots is fixed when the expression is constructed.
-
-A topology of reference cells may be the domain of an expression or space.
-Its points are cell-labelled reference points. The library supplies field
-continuity through its [spaces and bindings](forms.md#abstractfunctionspace).
-A topology is not an `AbstractDomain`: coordinates, gradients and integrals
-are defined on its reference cells or on a physical mesh.
-
-Identity is structural, determined by the concrete topology's construction
-arguments, such as a label and its cell configuration. A one-slot topology is
-distinct from its reference cell. The library may evaluate the same
-configuration repeatedly with data from different concrete cells.
-
 ## Domains
 
 Reference coordinates describe points within a reference cell. A physical
@@ -77,9 +24,10 @@ describe the domains used for both kinds of geometry.
 
 ### `AbstractDomain`
 
-`AbstractDomain` represents a domain, the set on which an expression is defined.
-The core provides coordinate domains and `Mesh`. Extensions may subclass
-`AbstractDomain`, supplying their own geometric semantics and rewrite rules.
+`AbstractDomain` supplies the ambient-coordinate contract used by coordinates,
+differentiation and integration. The core provides coordinate domains and `Mesh`.
+Extensions may subclass `AbstractDomain`, supplying their own geometric semantics
+and rewrite rules.
 
 | `AbstractDomain` |                                                                             |
 | ---------------- | --------------------------------------------------------------------------- |
@@ -87,7 +35,7 @@ The core provides coordinate domains and `Mesh`. Extensions may subclass
 | Provides         | `dimension`, the nonnegative topological dimension as an `int`, and `ambient_domain`, the `AbstractDomain` supplying coordinates for its points |
 | Defined by       | `AbstractCoordinateDomain`, `Mesh`, and extension subclasses |
 
-For a domain `domain`, `domain.ambient_domain` supplies the coordinates
+For an `AbstractDomain` instance `domain`, `domain.ambient_domain` supplies the coordinates
 naming its points. The first coordinate domain reached by following
 `ambient_domain` repeatedly is the *ambient coordinate domain*. Its dimension
 is at least `domain.dimension`. A coordinate domain
@@ -132,6 +80,19 @@ Worked examples for this chapter: [the unit simplex](../examples/library.md#the-
 
 ## Reference cells
 
+### `AbstractCellType`
+
+`AbstractCellType` describes a cell type with numbered vertices.
+
+| `AbstractCellType` | |
+| ------------------ | - |
+| Extends | `Base` |
+| Provides | `dimension`, the nonnegative topological dimension as an `int`, and `num_vertices`, the positive number of vertices as an `int` |
+| Defined by | A subclass outside the core, such as `Simplex` |
+
+The library defines facets and other sub-entities and supplies their reference
+maps. General inclusions, such as cuts, need not follow sub-entities.
+
 ### `AbstractReferenceCell`
 
 `AbstractReferenceCell` is a cell type that is also a coordinate domain.
@@ -142,6 +103,120 @@ are not required by the core.
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                 | `AbstractCoordinateDomain`, `AbstractCellType` |
 | Defined by              | A subclass outside the core, such as [`ReferenceSimplex`](../examples/library.md#the-unit-simplex-as-a-reference-cell)                                                   |
+
+## Topology
+
+### `AbstractTopology`
+
+`AbstractTopology` describes a finite local cell configuration without specifying
+its physical geometry. Each position in `cell_types` is a distinct local cell,
+called a *cell slot*. Slots identify the mathematical inputs of a kernel.
+For reference cells, the topology is a labelled disjoint union: each slot has
+reference geometry and retains its identity even when reference cells or
+physical coordinates coincide.
+
+| `AbstractTopology` | |
+| ------------------ | - |
+| Extends | `Base` |
+| Provides | `cell_types` |
+| Derived | `dimension`, the dimension of the cell types |
+| Defined by | A subclass outside the core |
+
+- `cell_types` is a nonempty `tuple` of `AbstractCellType`s of the same
+  dimension. Repeated types are allowed: `(K, K)` describes two distinct
+  local cells of type `K`.
+- For a topology `topology`, a `cell_slot` is an `int` satisfying
+  `0 <= cell_slot < len(topology.cell_types)`.
+  Negative numbers do not select slots from the end.
+
+For example, `(K,)` describes a single-cell kernel, `(K, K)` the parents of
+an interior-facet kernel, and `(Kt, Kq)` a triangle–quadrilateral pair.
+The number of slots is fixed when the expression is constructed.
+
+A topology of reference cells may be the domain of an expression or space.
+Its points are cell-labelled reference points. The library supplies field
+continuity through its [spaces and bindings](forms.md#abstractfunctionspace).
+For an `AbstractTopology`, the language exposes coordinates, gradients and
+integrals through its reference cells or through a mesh carrying physical geometry.
+
+Identity is structural, determined by the concrete topology's construction
+arguments, such as a label and its cell configuration. A one-slot topology is
+distinct from its reference cell. The library may evaluate the same
+configuration repeatedly with data from different concrete cells.
+
+## Maps between domains
+
+A map sends points from a starting domain to a target domain. A pull-back
+reads a field on the target at those mapped points, producing a field on
+the starting domain.
+
+### `DomainMap`
+
+`DomainMap(parameter_domain, parameterisation, ambient_domain)` describes a
+geometric map by giving the target coordinates at each parameter point.
+`parameter_domain` is where the map starts; `parameterisation` computes the
+coordinates; `ambient_domain` is the coordinate domain containing its image.
+
+Writing $P$, $\psi$ and $Q$ for these arguments, the map is $\psi: P \to Q$
+and its geometric image is $\psi(P)$. We write $D$ for the map; its image is
+always named separately. A `DomainMap` is not an
+`AbstractDomain` and is not the domain of an expression.
+
+| `DomainMap(parameter_domain, parameterisation, ambient_domain)` |                                                                                                                                                                                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extends                          | `Base` |
+| Free function                    | `domain_map(parameter_domain, parameterisation, ambient_domain)`                                                                                                                                                                           |
+| Takes                            | `parameter_domain: AbstractCoordinateDomain \| AbstractTopology`, `parameterisation: AbstractExpression`, `ambient_domain: AbstractCoordinateDomain` |
+| Properties | `parameter_domain`, the domain of the map inputs; `parameterisation`, the coordinate expression; and `ambient_domain`, the coordinate domain of the outputs |
+| Requires | `parameterisation` has domain `parameter_domain` or no domain; it is real, has value shape `(n,)` with `n = ambient_domain.dimension`, and has argument spaces `()`; `parameter_domain.dimension <= n` |
+| Derived                          | `free_indices`, the free indices of `parameterisation` |
+| Raises                           | `ValueError` if another requirement fails                                                                                                                                   |
+
+The topological dimension is `parameter_domain.dimension`; the geometric
+dimension is `ambient_domain.dimension`. Maps need not be injective.
+Coordinates alone do not select a cell or reference preimage in a mesh;
+mesh-field evaluation uses [cell](#cellmap) or [side maps](#sidemap).
+
+### `PullBack`
+
+`PullBack(expression, map)` reads `expression` through `map`. The expression
+is defined on the map's target, or has no domain; the result is defined on
+the domain from which the map starts. Pull-back changes where a field is
+read, without transforming its value axes.
+
+In the formulas below, $f$ denotes the expression, $D$ the map and $\psi$
+its coordinate parameterisation when it is a `DomainMap`.
+
+Here $P$ and $Q$ denote the domains from which and into which the map goes.
+Their API properties depend on the map's role:
+
+| Map class | Starting domain $P$ | Target $Q$ |
+| --------- | ------------------- | ---------- |
+| `DomainMap` | `parameter_domain` | `ambient_domain` |
+| [`CellMap`](#cellmap) | `reference_cell` | `parent` |
+| [`SideMap`](#sidemap) | `source` | `parent` |
+
+| `PullBack(expression, map)` |                                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------------- |
+| Extends          | `AbstractExpression` |
+| Free function    | `pull_back(expression, map)`                                                                                          |
+| Takes            | `expression: AbstractExpression`, `map: DomainMap \| SideMap \| CellMap` |
+| Properties | `expression`, the field to read, and `map`, the coordinate, cell or side map through which it is read |
+| Requires | `expression` has the target domain listed above or no domain; any `Index` free in both `expression` and `map` has equal extent in both |
+| Static type      | The value shape of `expression`, and the free indices of `expression` followed by those of `map`, with each `Index` taken once |
+| Raises           | `ValueError` if another requirement fails                                         |
+
+For a `DomainMap`, the pull-back is the composition $f \circ \psi$, the
+expression on $P$ with the value $f(\psi(p))$ at each point $p$ of $P$.
+For a `CellMap` or `SideMap`, the map selects cells and reference positions;
+its physical coordinates alone do not define the evaluation. The axes of the
+value shape are not transformed. An axis of an expression on $Q$ is an array in the
+coordinate frame of $Q$, so the pull-back keeps the frame of $Q$.
+
+Pull-backs of terminals remain for their supplying libraries to evaluate
+(see [Functions in a space](forms.md#functions-in-a-space)).
+
+## Cell selection
 
 ### `CellMap`
 
@@ -179,29 +254,20 @@ The examples below build one configuration step by step. They use the library's
 `Lagrange(topology, degree, shape)` space. All maps and pull-backs use the core
 language directly.
 
-First declare two triangle slots and a scalar field on them:
-
-```{figure} ../figures/reference-slots.*
-:label: reference-cell-slots
-:alt: Two copies of the unit reference triangle. Slot 0 has vertex labels 0, 1, 2 and its diagonal edge highlighted in blue. Slot 1 has labels 1, 3, 2 and its left edge highlighted in amber. Both selected edges run from label 1 to label 2.
-:width: 700px
-
-These are reference triangles, not placements of cells in physical space.
-Each slot has its own copy. Bold numbers are library vertex labels. The
-highlighted edges show the library-supplied inclusions $A_0$ and $A_1$;
-the arrows follow the source ordering from label 1 to label 2.
-```
+First declare two triangle slots and a scalar field on them.
+`function(V, "u")` declares a symbolic field in the space `V`; the library
+supplies its values.
 
 ```python
-K = ReferenceSimplex(2)                 # Unit reference triangle.
+K = ReferenceSimplex(2)  # Unit reference triangle.
 T = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
-V = Lagrange(T, 1, ())                   # Scalar, degree-one local representation.
-u = function(V, "u")                    # Field on the two-slot topology T.
+V = Lagrange(T, 1, ())   # Scalar, degree-one local representation.
+u = function(V, "u")     # Field on the two-slot topology T.
 
-c0 = cell_map(T, 0)                     # K -> slot 0 of T.
-c1 = cell_map(T, 1)                     # K -> slot 1 of T.
-u0 = pull_back(u, c0)                   # Slot 0's field, expressed on K.
-u1 = pull_back(u, c1)                   # Slot 1's field, expressed on K.
+c0 = cell_map(T, 0)      # K -> slot 0 of T.
+c1 = cell_map(T, 1)      # K -> slot 1 of T.
+u0 = pull_back(u, c0)    # Slot 0's field, expressed on K.
+u1 = pull_back(u, c1)    # Slot 1's field, expressed on K.
 ```
 
 Both `u0` and `u1` have domain `K`; their cell maps select different local
@@ -234,13 +300,28 @@ topology determines its reference cells.
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `side_map(parent, source, *entries)` | | `parent, source: AbstractTopology \| Mesh`, `entries: tuple[int, DomainMap]` | `SideMap(parent, source, entries)` |
-| `compose(outer, inner)` | | `outer, inner: SideMap` | The composed `SideMap`, requiring `inner.parent == outer.source` |
 
-Continue with one interval slot for that edge, ordered from vertex label 1
-to vertex label 2. Let `A0` and `A1` be library-supplied `DomainMap`s from
-its reference interval `I` into `K`, selecting the indicated edges. Their
-[construction](../examples/library.md#worked-edge-inclusions) is separate from
-the core side-map declarations:
+Continue with one interval slot for the edge, ordered from vertex label 1
+to vertex label 2. The library supplies `A0` and `A1`, reference inclusions
+from the edge's reference interval into `K`, respecting that vertex correspondence:
+
+```python
+I = ReferenceSimplex(1)              # Unit reference interval.
+S = StaticTopology((I,), ((1, 2),))  # One edge slot.
+
+# A0, A1: library-supplied reference inclusions I -> K.
+```
+
+```{figure} ../figures/reference-slots.*
+:label: reference-cell-slots
+:alt: Two copies of the unit reference triangle. Slot 0 has vertex labels 0, 1, 2 and its diagonal edge highlighted in blue. Slot 1 has labels 1, 3, 2 and its left edge highlighted in amber. Both selected edges run from label 1 to label 2.
+:width: 700px
+
+These are reference triangles, not placements of cells in physical space.
+Each slot has its own copy. Bold numbers are library vertex labels. The
+highlighted edges show the library-supplied inclusions $A_0$ and $A_1$;
+the arrows follow the source ordering from label 1 to label 2.
+```
 
 ```{mermaid}
 flowchart LR
@@ -261,18 +342,18 @@ flowchart LR
     linkStyle 1 stroke:#b45309,stroke-width:2px
 ```
 
+Each side map selects a parent slot and its inclusion:
+
 ```python
-I = ReferenceSimplex(1)                 # Unit reference interval.
-S = StaticTopology((I,), ((1, 2),))      # One edge slot.
-
-# A0, A1: library-supplied reference inclusions I -> K.
-
-plus = side_map(T, S, (0, A0))           # Read slot 0 through A0.
-minus = side_map(T, S, (1, A1))          # Read slot 1 through A1.
-u_plus = pull_back(u, plus)             # Both traces have domain S.
+plus = side_map(T, S, (0, A0))       # Read slot 0 through A0.
+minus = side_map(T, S, (1, A1))      # Read slot 1 through A1.
+u_plus = pull_back(u, plus)          # Both traces have domain S.
 u_minus = pull_back(u, minus)
-jump = u_plus - u_minus                 # A field on the edge topology S.
+jump = u_plus - u_minus              # A field on the edge topology S.
 ```
+
+The [library example](../examples/library.md#worked-edge-inclusions) shows
+how to construct `A0` and `A1`.
 
 There is one entry in each side map because `S` has one slot. In `(1, A1)`,
 the integer selects parent slot 1, while `A1` specifies the reference points
@@ -283,24 +364,26 @@ so the two traces read corresponding points along the edge.
 orientation is supplied separately to [Normal](geometry.md#normal).
 The same construction accepts meshes carrying physical geometry as endpoints.
 A source mesh then has its own physical geometry and measure, independently
-of either parent trace. For the two traces to describe a matching physical
-interface, the parent coordinate fields must satisfy
-$x_0(A_0(t)) = x_1(A_1(t))$. The reference inclusions alone do not impose this.
+of either parent trace. See [Traces on a mesh](geometry.md#traces-on-a-mesh)
+for the physical-interface matching condition.
 
-### The inclusion
+### Expressing edge values on the reference interval
 
-To express the edge trace on the reference interval, select the sole
-cell of `S`. Reading through the side map is equivalent to selecting the
-parent cell first, then applying its inclusion:
+To express both edge fields on the reference interval, select the sole
+cell of `S`:
 
 ```python
-edge = cell_map(S, 0)                   # I -> the edge slot of S.
-trace0 = pull_back(u_plus, edge)        # Domain I.
+edge = cell_map(S, 0)                  # I -> the edge slot of S.
+u0_on_edge = pull_back(u_plus, edge)   # Slot 0's edge values, on I.
+u1_on_edge = pull_back(u_minus, edge)  # Slot 1's edge values, on I.
+jump_on_I = pull_back(jump, edge)      # Their difference, on I.
+```
 
-# The same field, with the parent read written out:
-trace0_explicit = pull_back(u0, A0)     # Slot 0's trace on I.
-trace1_explicit = pull_back(u1, A1)     # Slot 1's trace on I.
-jump_on_I = pull_back(jump, edge)       # Their difference, on I.
+Equivalently, select the parent cell first and apply its reference inclusion:
+
+```python
+u0_on_edge = pull_back(u0, A0)
+u1_on_edge = pull_back(u1, A1)
 ```
 
 In general, for `sm.entries[i] = (j, A)`, restriction satisfies
@@ -313,54 +396,7 @@ pull_back(pull_back(f, cell_map(sm.parent, j)), A)
 
 The result has domain `A.parameter_domain` and the free indices of `f`.
 
-### Composition
-
-If `inner.entries[i] = (j, A)` and `outer.entries[j] = (k, B)`, the composite
-entry is `(k, C)`, where
-
-```python
-C = domain_map(A.parameter_domain, pull_back(B.parameterisation, A), B.ambient_domain)
-```
-
-The composite is a `SideMap` from `inner.source` to `outer.parent`, requiring
-`inner.parent == outer.source`. This covers permutations, repeated selections
-and nested inclusions.
-
-For a concrete composition, reverse the edge ordering from the preceding
-example. Let `B` be the library-supplied reference map that reverses `I`:
-
-```{mermaid}
-flowchart LR
-    accTitle: Composition with a reversed edge
-    accDescr: Reverse maps R to S, then plus maps S to triangle slot 0 of T. The direct map reversed_plus is their composite.
-    R["R · edge slot<br/>Vertex order 2 → 1"]
-    S["S · edge slot<br/>Vertex order 1 → 2"]
-    T["T · slot 0"]
-    R -->|reverse| S
-    S -->|plus| T
-    R -->|reversed_plus| T
-    classDef edge fill:#f1f5f9,stroke:#64748b,color:#1e293b
-    classDef parent fill:#eff6ff,stroke:#2563a6,color:#1e293b
-    class R,S edge
-    class T parent
-    linkStyle 2 stroke:#2563a6,stroke-width:2px
-```
-
-```python
-R = StaticTopology((I,), ((2, 1),))      # Edge ordered from label 2 to label 1.
-# B: library-supplied reversal I -> I.
-reverse = side_map(S, R, (0, B))        # R -> S, reversing the edge ordering.
-reversed_plus = compose(plus, reverse)  # R -> T, reading parent slot 0.
-
-reversed_trace = pull_back(u, reversed_plus)
-# Equivalent to:
-reversed_trace_nested = pull_back(pull_back(u, plus), reverse)
-```
-
-Both expressions have domain `R`. Composition selects the same parent slot
-as `plus`, with its inclusion composed with `B`.
-
-## A field on a topological mesh
+## Domains in the example
 
 The domains of the resulting expressions are:
 
@@ -369,11 +405,10 @@ The domains of the resulting expressions are:
 | `u` | `T` | Field on two labelled triangle slots |
 | `u0`, `u1` | `K` | One selected triangle's reference representation |
 | `u_plus`, `u_minus`, `jump` | `S` | Traces and their difference on one labelled edge slot |
-| `trace0`, `jump_on_I` | `I` | Edge fields expressed in the interval coordinate |
+| `u0_on_edge`, `u1_on_edge`, `jump_on_I` | `I` | Edge fields expressed in the interval coordinate |
 
 Reference derivatives such as `gradient(u0, K)` are defined on `K`.
 Selecting a cell is what exposes those coordinates; `gradient(u, T)` is
 not defined. A coordinate field `x` on `T` supplies physical geometry through
-`D = mesh(x, Q)`, where `Q` is the physical coordinate space. On slot 0, for
-example, the reference edge point `A0(t)` has physical position `x0(A0(t))`,
-where `x0 = pull_back(x, c0)`. See [Geometry](geometry.md) for this construction.
+`D = mesh(x, Q)`, where `Q` is the physical coordinate space.
+See [Geometry](geometry.md) for this construction.

@@ -50,12 +50,12 @@ classDiagram
     Base <|-- AbstractExpression
     Base <|-- AbstractExtent
     Base <|-- AbstractIndexTable
-    Base <|-- AbstractCellType
-    Base <|-- AbstractTopology
     Base <|-- AbstractDomain
     AbstractDomain <|-- AbstractCoordinateDomain
+    Base <|-- AbstractCellType
     AbstractCoordinateDomain <|-- AbstractReferenceCell
     AbstractCellType <|-- AbstractReferenceCell
+    Base <|-- AbstractTopology
     Base <|-- AbstractFunctionSpace
 ```
 
@@ -93,7 +93,17 @@ Extend `AbstractCoordinateDomain`:
 
 [`EuclideanSpace`](topology.md#euclideanspace).
 
-### Reference cells
+### Maps between domains
+
+Extend `Base`:
+
+[`DomainMap`](topology.md#domainmap).
+
+Extend `AbstractExpression`:
+
+[`PullBack`](topology.md#pullback).
+
+### Cell selection
 
 Extend `Base`:
 
@@ -116,16 +126,6 @@ Extend `AbstractDomain`:
 Extend `AbstractExpression`:
 
 [`Coordinate`](geometry.md#coordinate), [`Gradient`](geometry.md#gradient), [`Divergence`](geometry.md#divergence-and-curl), [`Curl`](geometry.md#divergence-and-curl), [`DirectionalDerivative`](geometry.md#directionalderivative), [`Integral`](geometry.md#integral).
-
-### Maps between domains
-
-Extend `Base`:
-
-[`DomainMap`](geometry.md#domainmap).
-
-Extend `AbstractExpression`:
-
-[`PullBack`](geometry.md#pullback).
 
 ### Fields on a mesh
 
@@ -201,7 +201,14 @@ Extend `AbstractExpression`:
 | [`inverse(matrix)`](expressions.md#inverse)                          |          | `matrix: AbstractExpression`                 | `Inverse`                                                                             |
 | [`determinant(matrix)`](expressions.md#determinant)                  |          | `matrix: AbstractExpression`                 | `Determinant`                                                                         |
 
-### Reference cells
+### Maps between domains
+
+| Function                                                                                  | Overload | Takes                                                                                                                                                | Returns     |
+| ----------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| [`domain_map(parameter_domain, parameterisation, ambient_domain)`](topology.md#domainmap) |          | `parameter_domain: AbstractCoordinateDomain \| AbstractTopology`, `parameterisation: AbstractExpression`, `ambient_domain: AbstractCoordinateDomain` | `DomainMap` |
+| [`pull_back(expression, map)`](topology.md#pullback)                                      |          | `expression: AbstractExpression`, `map: DomainMap \| SideMap \| CellMap`                                                                             | `PullBack`  |
+
+### Cell selection
 
 | Function                                             | Overload | Takes                                                | Returns                      |
 | ---------------------------------------------------- | -------- | ---------------------------------------------------- | ---------------------------- |
@@ -209,10 +216,9 @@ Extend `AbstractExpression`:
 
 ### Restriction
 
-| Function                                                    | Overload | Takes                                                                        | Returns                                                          |
-| ----------------------------------------------------------- | -------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| [`side_map(parent, source, *entries)`](topology.md#sidemap) |          | `parent, source: AbstractTopology \| Mesh`, `entries: tuple[int, DomainMap]` | `SideMap(parent, source, entries)`                               |
-| [`compose(outer, inner)`](topology.md#sidemap)              |          | `outer, inner: SideMap`                                                      | The composed `SideMap`, requiring `inner.parent == outer.source` |
+| Function                                                    | Overload | Takes                                                                        | Returns                            |
+| ----------------------------------------------------------- | -------- | ---------------------------------------------------------------------------- | ---------------------------------- |
+| [`side_map(parent, source, *entries)`](topology.md#sidemap) |          | `parent, source: AbstractTopology \| Mesh`, `entries: tuple[int, DomainMap]` | `SideMap(parent, source, entries)` |
 
 ### Meshes
 
@@ -231,15 +237,13 @@ Extend `AbstractExpression`:
 | [`directional_derivative(expression, variable, point, direction)`](geometry.md#directionalderivative) |          | `expression: AbstractExpression`, `variable: Function \| tuple`, `point, direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, point, direction)` |
 | [`integral(expression, integration_domain)`](geometry.md#integral)                                    |          | `expression: AbstractExpression`, `integration_domain: AbstractDomain`                                           | `Integral`                                                      |
 
-### Maps between domains
+### Calculus through maps
 
-| Function                                                                                  | Overload | Takes                                                                                                                                                | Returns                                                                                                                            |
-| ----------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [`domain_map(parameter_domain, parameterisation, ambient_domain)`](geometry.md#domainmap) |          | `parameter_domain: AbstractCoordinateDomain \| AbstractTopology`, `parameterisation: AbstractExpression`, `ambient_domain: AbstractCoordinateDomain` | `DomainMap`                                                                                                                        |
-| [`pull_back(expression, map)`](geometry.md#pullback)                                      |          | `expression: AbstractExpression`, `map: DomainMap \| SideMap \| CellMap`                                                                             | `PullBack`                                                                                                                         |
-| [`jacobian(map)`](geometry.md#jacobian-and-density)                                       |          | `map: DomainMap \| CellMap`                                                                                                                          | `gradient(map.parameterisation, P)`, where `P` is `map.parameter_domain` for a `DomainMap` or `map.reference_cell` for a `CellMap` |
-| [`inverse_jacobian(map)`](geometry.md#jacobian-and-density)                               |          | `map: DomainMap \| CellMap`                                                                                                                          | `inverse(jacobian(map))`                                                                                                           |
-| [`density(map)`](geometry.md#jacobian-and-density)                                        |          | `map: DomainMap \| CellMap`                                                                                                                          | The density $\rho$ below                                                                                                           |
+| Function                                                    | Overload | Takes                       | Returns                                                                                                                            |
+| ----------------------------------------------------------- | -------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [`jacobian(map)`](geometry.md#jacobian-and-density)         |          | `map: DomainMap \| CellMap` | `gradient(map.parameterisation, P)`, where `P` is `map.parameter_domain` for a `DomainMap` or `map.reference_cell` for a `CellMap` |
+| [`inverse_jacobian(map)`](geometry.md#jacobian-and-density) |          | `map: DomainMap \| CellMap` | `inverse(jacobian(map))`                                                                                                           |
+| [`density(map)`](geometry.md#jacobian-and-density)          |          | `map: DomainMap \| CellMap` | The density $\rho$ below                                                                                                           |
 
 ### Fields on a mesh
 
@@ -346,6 +350,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 43    |
 | Expression node classes         | 33    |
-| Free functions                  | 52    |
+| Free functions                  | 51    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

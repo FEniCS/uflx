@@ -123,10 +123,17 @@ value is not a real number, such as `square_root(Integer(-1))`, is undefined.
 
 ### Domain
 
-An expression's `domain` is where it is defined: an
-[`AbstractDomain`](topology.md#abstractdomain), or an [`AbstractTopology`](topology.md#abstracttopology)
-whose cell types are reference cells. It is `None` when the result has no
-spatial argument, as for a literal or an integral.
+An expression's `domain` identifies where it is defined:
+
+```python
+domain: AbstractTopology | AbstractDomain | None
+```
+
+An [`AbstractTopology`](topology.md#abstracttopology) supplies labelled reference-cell
+slots; its cell types must be reference cells when used as a field domain.
+An [`AbstractDomain`](topology.md#abstractdomain) supplies the ambient-coordinate
+contract. `None` means the result has no spatial argument, as for a literal or
+an integral.
 
 Unless the [static type table](reference.md#appendix-static-type-table) states otherwise,
 a node inherits the domain of its expression operands with a domain. All such

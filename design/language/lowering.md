@@ -115,7 +115,7 @@ procedure. Leave new gradients to a later call to `apply_gradients`.
 | PB01 | $f$ with no domain, neither an `Apply` nor a `Form` | The same spatially constant value $f$ under [Domain-free expressions](expressions.md#domain-free-expressions), with [type completion](rewriting.md#type-compatibility-of-rewrites) to retain the free indices of $\psi$ |
 | PB02 | `Coordinate(Q)`; exclude R01 | The parameterisation of $\psi$ |
 | PB03 | `PullBack(g, φ)`, φ a `SideMap` or a cell; exclude R01 and R02 | Remains, so a pull-back nests only inside a read on a cell |
-| PB04 | `PullBack(g, φ)`, φ a `DomainMap`; exclude R01 | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](geometry.md#pullback)) |
+| PB04 | `PullBack(g, φ)`, φ a `DomainMap`; exclude R01 | `PullBack(g, domain_map(P, pull_back(φ.parameterisation, ψ), φ.ambient_domain))`, the pull-back by the image of $\psi$ under φ (see [`PullBack`](topology.md#pullback)) |
 | PB05 | A terminal not matching PB01, PB02, R01 or R03 | Remains, for the library of the terminal |
 | PB06 | $f$ has a domain, $\psi$ is not a `SideMap`, and $f$ belongs to a class in the table below | Make its binders fresh for $\psi$; rebuild from the pull-backs of the listed operands, preserving the other construction arguments |
 

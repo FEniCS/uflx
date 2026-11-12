@@ -93,7 +93,7 @@ expressions. Its allowed nodes are:
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Gradient` | A [retained gradient](differentiation.md#retained-gradients) |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Divergence`, `Curl` | A [retained Piola pattern](differentiation.md#retained-piola-patterns), under no pull-back by a cell |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `EuclideanSpace(0)` |
-| [Maps between domains](geometry.md#maps-between-domains) | `PullBack` | A [retained pull-back](lowering.md#retained-pull-backs) |
+| [Maps between domains](topology.md#maps-between-domains) | `PullBack` | A [retained pull-back](lowering.md#retained-pull-backs) |
 | [Fields on a mesh](geometry.md#fields-on-a-mesh) | `Normal` | Always |
 | [Fields on a mesh](geometry.md#fields-on-a-mesh) | `PushForward` | Under no pull-back by a cell |
 | [Function spaces](forms.md#function-spaces) | `Function` | Always |

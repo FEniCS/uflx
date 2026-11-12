@@ -3,7 +3,9 @@
 A local cell configuration acquires physical geometry through a coordinate expression:
 
 ```python
-# T describes one triangle slot; the package supplies its local data.
+# One triangle slot; the package supplies its local data.
+K = ReferenceSimplex(2)
+T = StaticTopology((K,), ((0, 1, 2),))
 Q = EuclideanSpace(2)  # Ambient space: the plane.
 X = Lagrange(T, 1, (2,))  # Library-supplied space of coordinate functions.
 x = function(X, "x")  # Physical positions, with values supplied by the solver.
@@ -450,36 +452,15 @@ The cell, boundary-facet and interior-facet contributions to `dx`, `ds` and
 element package selects concrete entities and assembles the contributions.
 ```
 
-## Maps between domains
+## Calculus through maps
 
-### `DomainMap`
+The basic [`DomainMap`](topology.md#domainmap) and
+[`PullBack`](topology.md#pullback) definitions precede cell and side selection.
+Here we use their coordinate parameterisations for evaluation and calculus.
 
-`DomainMap(parameter_domain, parameterisation, ambient_domain)` describes a
-geometric map by giving the target coordinates at each parameter point.
-`parameter_domain` is where the map starts; `parameterisation` computes the
-coordinates; `ambient_domain` is the coordinate domain containing its image.
+### Coordinate-map evaluation
 
-Writing $P$, $\psi$ and $Q$ for these arguments, the map is $\psi: P \to Q$
-and its geometric image is $\psi(P)$. The sections below write $D$ for the
-map; its image is always named separately. A `DomainMap` is not an
-`AbstractDomain` and is not the domain of an expression.
-
-| `DomainMap(parameter_domain, parameterisation, ambient_domain)` |                                                                                                                                                                                                             |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Extends                          | `Base` |
-| Free function                    | `domain_map(parameter_domain, parameterisation, ambient_domain)`                                                                                                                                                                           |
-| Takes                            | `parameter_domain: AbstractCoordinateDomain \| AbstractTopology`, `parameterisation: AbstractExpression`, `ambient_domain: AbstractCoordinateDomain` |
-| Properties | `parameter_domain`, the domain of the map inputs; `parameterisation`, the coordinate expression; and `ambient_domain`, the coordinate domain of the outputs |
-| Requires | `parameterisation` has domain `parameter_domain` or no domain; it is real, has value shape `(n,)` with `n = ambient_domain.dimension`, and has argument spaces `()`; `parameter_domain.dimension <= n` |
-| Derived                          | `free_indices`, the free indices of `parameterisation` |
-| Raises                           | `ValueError` if another requirement fails                                                                                                                                   |
-
-The topological dimension is `parameter_domain.dimension`; the geometric
-dimension is `ambient_domain.dimension`. Maps need not be injective.
-Coordinates alone do not select a cell or reference preimage in a mesh;
-mesh-field evaluation uses [cell or side maps](#points-in-a-mesh).
-
-A parameterisation with free indices makes `D` a family of maps, with one
+A `DomainMap` with free indices in its parameterisation is a family, with one
 map for each assignment of those indices. For example, with an array `x` of value shape
 `(m, n)` and an index `i`, `domain_map(EuclideanSpace(0), x[i], EuclideanSpace(n))` is a family of $m$
 points in `EuclideanSpace(n)`, retaining distinct members even at identical coordinates.
@@ -488,62 +469,19 @@ For example, the hypotenuse of the unit triangle has parameter domain
 $P = [0,1]$ and parameterisation $\psi(t) = (1-t,t)$. Choose `Q = EuclideanSpace(2)`
 for the edge in the plane, or `Q = UnitSimplex(2)` for the edge in the triangle.
 
-### `PullBack`
-
-`PullBack(expression, map)` reads `expression` through `map`. The expression
-is defined on the map's target, or has no domain; the result is defined on
-the domain from which the map starts. Pull-back changes where a field is
-read, without transforming its value axes.
-
-In the formulas below, $f$ denotes the expression, $D$ the map and $\psi$
-its coordinate parameterisation when it is a `DomainMap`.
-
-Here $P$ and $Q$ denote the domains from which and into which the map goes.
-Their API properties depend on the map's role:
-
-| Map class | Starting domain $P$ | Target $Q$ |
-| --------- | ------------------- | ---------- |
-| `DomainMap` | `parameter_domain` | `ambient_domain` |
-| `CellMap` | `reference_cell` | `parent` |
-| `SideMap` | `source` | `parent` |
-
-| `PullBack(expression, map)` |                                                                                                            |
-| ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| Extends          | `AbstractExpression` |
-| Free function    | `pull_back(expression, map)`                                                                                          |
-| Takes            | `expression: AbstractExpression`, `map: DomainMap \| SideMap \| CellMap` |
-| Properties | `expression`, the field to read, and `map`, the coordinate, cell or side map through which it is read |
-| Requires | `expression` has the target domain listed above or no domain; any `Index` free in both `expression` and `map` has equal extent in both |
-| Static type      | The value shape of `expression`, and the free indices of `expression` followed by those of `map`, with each `Index` taken once |
-| Raises           | `ValueError` if another requirement fails                                         |
-
-For a `DomainMap`, the pull-back is the composition $f \circ \psi$, the
-expression on $P$ with the value $f(\psi(p))$ at each point $p$ of $P$.
-For a `CellMap` or `SideMap`, the map selects cells and reference positions;
-its physical coordinates alone do not define the evaluation. The axes of the
-value shape are not transformed. An axis of an expression on $Q$ is an array in the
-coordinate frame of $Q$, so the pull-back keeps the frame of $Q$.
-
-[`PushForward`](#pushforward) gives the corresponding forward value
-transformation from $T$ to the mesh $D$. With the identity law it reverses
-the pull-back cellwise; other laws also transform the values. It does not
-denote a dual or adjoint operator.
-
-Pull-backs of terminals remain for their supplying libraries to evaluate
-(see [Functions in a space](forms.md#functions-in-a-space)).
-
 For coordinate maps $D$ and $E$, with $E$ mapping into the parameter domain
 of $D$, their composition is the domain map with the parameterisation
 `pull_back(D.parameterisation, E)` on the parameter domain of $E$, in the
 ambient domain of $D$, such as `E` in the example below. Composition through
 a cell map instead keeps nested pull-backs, preserving the cell selection.
 
-For an edge of the reference triangle `T` and a coordinate map `psi` from
-`T` into `EuclideanSpace(2)`:
+For an edge of the reference triangle `T`, choose a coordinate expression
+`psi` that stretches the first coordinate by a factor of two:
 
 ```python
 T, S = UnitSimplex(2), UnitSimplex(1)
 X, t = coordinate(T), coordinate(S)[0]
+psi = tensor((Integer(2) * X[0], X[1]))
 one = Integer(1)
 e = domain_map(S, tensor((one - t, t)), T)
 f = X[0] * X[1]
@@ -773,6 +711,10 @@ freedom.
 to the physical mesh. `law` specifies how its value axes and density weight
 transform under each cell's coordinate map.
 
+With the identity law, push-forward reverses the pull-back cellwise;
+other laws also transform the values. It does not denote a dual or adjoint
+operator.
+
 | `PushForward(expression, mesh, law)` |                                                                     |
 | ---------------------- | ------------------------------------------------------------------- |
 | Extends                | `AbstractExpression` |
@@ -829,6 +771,14 @@ choice is independent of subsequent restrictions into other parents.
 Coordinate functions may be vector-valued or tensors of scalar functions. For a
 conforming interface, the package supplies coordinates and facet correspondence
 whose physical traces agree; the coordinate element alone does not ensure this.
+For parent-cell parameterisations $x_0$ and $x_1$ and reference inclusions
+$A_0$ and $A_1$ from a common interval, matching requires
+
+$$
+x_0(A_0(t)) = x_1(A_1(t))
+$$
+
+at each interval point $t$. The reference inclusions alone do not impose this.
 
 #### Traces and normals
 
