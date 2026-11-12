@@ -26,7 +26,7 @@ through singularities.
 | Term | Meaning |
 | ---- | ------- |
 | [Leaf](#leaves-and-subclassing) | A primitive object rather than an operation; it may have graph dependencies. |
-| [Terminal](#leaves-and-subclassing) | A leaf that is an expression, such as a literal, `Coordinate`, `Function` or `Normal`. |
+| [Terminal](#leaves-and-subclassing) | A leaf that is an expression, such as a literal, `Coordinate`, `Function` or `MappedNormal`. |
 | [Construction free function](expressions.md#node-class-or-free-function) | A pure free function that may validate inputs and builds fixed expression compositions or canonical space descriptions. |
 | [Pass](#passes) | A pure free function that walks a graph after construction to compute a result or rewrite the graph. |
 | [Evaluation traversal](rewriting.md#evaluation-traversal) | A walk through expression operands, excluding dependencies stored in geometry, spaces and labels. |
@@ -173,7 +173,7 @@ Only leaves are subclassed. A leaf is a primitive object rather than an
 operation, such as the coordinate domain `EuclideanSpace(n)` or a function whose values an
 external library supplies. Leaves may have graph dependencies: a `Function`
 depends on its space, and a `Coordinate` on its domain. A terminal is a leaf
-that is an expression, such as a literal, `Coordinate`, `Function` or `Normal`
+that is an expression, such as a literal, `Coordinate`, `Function` or `MappedNormal`
 of the core, or a terminal of a downstream library.
 
 An operation is represented by a single core class or a construction free

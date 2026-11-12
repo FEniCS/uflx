@@ -406,7 +406,7 @@ is checked through construction dependencies, including domains and maps;
 labels are opaque. It applies also to slots inherited from `expression`.
 Spaces may depend on free geometry parameters, but differentiation in such a
 parameter requires the fixed-space representation described under
-[geometry dependence](geometry.md#geometry-dependence).
+[geometry dependence](differentiation.md#geometry-preparation).
 
 A dual argument accepts a terminal load or a symbolic form with the same
 functional signature. Substituting a symbolic form into a pairing creates

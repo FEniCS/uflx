@@ -42,6 +42,18 @@ derivatives by the same procedure. Prepared-geometry and progress requirements
 apply; local algebraic rules do not invoke whole passes. Library derivative
 rules must retain dependencies needed by later derivatives or reject them.
 
+Geometry-dependent forms require fixed argument spaces; fields on moving
+domains require an explicit identification, such as pull-back to a reference
+domain. The prepared expression must preserve its declared input signature
+and output domain. No transport or interpolation is inferred.
+Libraries must expose geometry-dependent reconstruction, including basis and
+coefficient transformations, as symbolic operands or derivative rules.
+
+Independent field data, topology, connectivity, index extents and discrete
+element choices remain fixed. Geometry must remain admissible and
+differentiable; topology changes and singular or nonsmooth configurations
+are excluded.
+
 ### Directional derivative rules
 
 | Rule | Expression $f$ | Rewrite of the derivative at $a$ |
@@ -53,6 +65,10 @@ rules must retain dependencies needed by later derivatives or reject them.
 | Rule | Applies to | Requirement |
 | --- | --- | --- |
 | D15 | Dependence on the derivative variable | First use the construction walk to detect dependencies, including geometry and spaces; apply D21–D23 before SH15 and SB22. Tuple variables vary simultaneously, including under conjugation. Dual points and directions may be symbolic forms whose applications the recipe evaluates. |
+
+Fixed-direction Hessians use independent direction functions. Mixed
+derivatives commute only under the required smoothness and fixed-direction
+hypotheses.
 
 For real scalar functions `u` and `a` in a space of constants,
 `directional_derivative(u * u, u, a, u)` rewrites to `u * a + a * u`.

@@ -94,7 +94,7 @@ expressions. Its allowed nodes are:
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Divergence`, `Curl` | A [retained Piola pattern](differentiation.md#retained-piola-patterns), under no pull-back by a cell |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `EuclideanSpace(0)` |
 | [Maps between domains](topology.md#maps-between-domains) | `PullBack` | A [retained pull-back](lowering.md#retained-pull-backs) |
-| [Fields on a mesh](geometry.md#fields-on-a-mesh) | `Normal` | Always |
+| [Fields on a mesh](geometry.md#fields-on-a-mesh) | `MappedNormal` | Always |
 | [Fields on a mesh](geometry.md#fields-on-a-mesh) | `PushForward` | Under no pull-back by a cell |
 | [Function spaces](forms.md#function-spaces) | `Function` | Always |
 | [Variational forms](forms.md#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](forms.md#form)) |
@@ -163,6 +163,6 @@ Here `u` is a scalar function on `P` and `v` a vector function on `P`.
 | A retained pull-back whose gradient operand later becomes arithmetic | Reconsider the rebuilt pull-back and apply its arithmetic rules |
 | A completed `lower(f)` passed to `lower` again | Return a structurally equal expression |
 
-[Geometry differentiation](geometry.md#geometry-dependence) may require spatial
+[Geometry differentiation](differentiation.md#geometry-preparation) may require spatial
 preparation before differentiation and cleanup afterwards. Index simplification,
 such as reducing an `Indexed` of a `ComponentTensor`, belongs to the compiler.

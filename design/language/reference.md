@@ -21,7 +21,7 @@ are in the class sections.
 | `Inverse`, `Determinant`                         | The compiler chooses the numerical algorithm; construction retains the operation |
 | `BroadcastTo` | Repeats values over explicit axes, including symbolic and empty shapes, without artificial arithmetic |
 | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | The primitives of index notation                                                                            |
-| `Coordinate`, `Function`, `Normal`               | Terminals: the coordinate function of a domain, a member of a space, the unit side conormal |
+| `Coordinate`, `Function`, `MappedNormal`               | Terminals: the coordinate function of a domain, a member of a space, the unit side conormal |
 | `Gradient`                                       | Nothing composes to differentiate                                                                             |
 | `Divergence`, `Curl` | Retain the operators so lowering can apply Piola identities before expanding them into gradients |
 | `DirectionalDerivative`                          | Nothing composes to differentiate with respect to an expression                                               |
@@ -125,7 +125,7 @@ Extend `AbstractDomain`:
 
 Extend `AbstractExpression`:
 
-[`Coordinate`](geometry.md#coordinate), [`Gradient`](geometry.md#gradient), [`Divergence`](geometry.md#divergence-and-curl), [`Curl`](geometry.md#divergence-and-curl), [`DirectionalDerivative`](geometry.md#directionalderivative), [`Integral`](geometry.md#integral).
+[`Coordinate`](geometry.md#coordinate), [`Gradient`](geometry.md#gradient), [`Divergence`](geometry.md#divergence-and-curl), [`Curl`](geometry.md#divergence-and-curl), [`Integral`](geometry.md#integral).
 
 ### Fields on a mesh
 
@@ -135,7 +135,13 @@ Extend `Base`:
 
 Extend `AbstractExpression`:
 
-[`PushForward`](geometry.md#pushforward), [`Normal`](geometry.md#normal).
+[`PushForward`](geometry.md#pushforward), [`MappedNormal`](geometry.md#mappednormal).
+
+### Differentiation with respect to functions
+
+Extend `AbstractExpression`:
+
+[`DirectionalDerivative`](geometry.md#directionalderivative).
 
 ### Function spaces
 
@@ -228,31 +234,31 @@ Extend `AbstractExpression`:
 
 ### Calculus on a domain
 
-| Function                                                                                              | Overload | Takes                                                                                                            | Returns                                                         |
-| ----------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [`coordinate(domain)`](geometry.md#coordinate)                                                        |          | `domain: AbstractDomain`                                                                                         | `Coordinate`                                                    |
-| [`gradient(expression, domain)`](geometry.md#gradient)                                                |          | `expression: AbstractExpression`, `domain: AbstractDomain`                                                       | `Gradient`                                                      |
-| [`divergence(expression, domain)`](geometry.md#divergence-and-curl)                                   |          | `expression: AbstractExpression`, `domain: AbstractDomain`                                                       | `Divergence`                                                    |
-| [`curl(expression, domain)`](geometry.md#divergence-and-curl)                                         |          | `expression: AbstractExpression`, `domain: AbstractDomain`                                                       | `Curl`                                                          |
-| [`directional_derivative(expression, variable, point, direction)`](geometry.md#directionalderivative) |          | `expression: AbstractExpression`, `variable: Function \| tuple`, `point, direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, point, direction)` |
-| [`integral(expression, integration_domain)`](geometry.md#integral)                                    |          | `expression: AbstractExpression`, `integration_domain: AbstractDomain`                                           | `Integral`                                                      |
-
-### Calculus through maps
-
-| Function                                                    | Overload | Takes                       | Returns                                                                                                                            |
-| ----------------------------------------------------------- | -------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [`jacobian(map)`](geometry.md#jacobian-and-density)         |          | `map: DomainMap \| CellMap` | `gradient(map.parameterisation, P)`, where `P` is `map.parameter_domain` for a `DomainMap` or `map.reference_cell` for a `CellMap` |
-| [`inverse_jacobian(map)`](geometry.md#jacobian-and-density) |          | `map: DomainMap \| CellMap` | `inverse(jacobian(map))`                                                                                                           |
-| [`density(map)`](geometry.md#jacobian-and-density)          |          | `map: DomainMap \| CellMap` | The density $\rho$ below                                                                                                           |
+| Function                                                            | Overload | Takes                                                                  | Returns                                                                                                                            |
+| ------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [`coordinate(domain)`](geometry.md#coordinate)                      |          | `domain: AbstractDomain`                                               | `Coordinate`                                                                                                                       |
+| [`gradient(expression, domain)`](geometry.md#gradient)              |          | `expression: AbstractExpression`, `domain: AbstractDomain`             | `Gradient`                                                                                                                         |
+| [`divergence(expression, domain)`](geometry.md#divergence-and-curl) |          | `expression: AbstractExpression`, `domain: AbstractDomain`             | `Divergence`                                                                                                                       |
+| [`curl(expression, domain)`](geometry.md#divergence-and-curl)       |          | `expression: AbstractExpression`, `domain: AbstractDomain`             | `Curl`                                                                                                                             |
+| [`jacobian(map)`](geometry.md#jacobian-and-density)                 |          | `map: DomainMap \| CellMap`                                            | `gradient(map.parameterisation, P)`, where `P` is `map.parameter_domain` for a `DomainMap` or `map.reference_cell` for a `CellMap` |
+| [`inverse_jacobian(map)`](geometry.md#jacobian-and-density)         |          | `map: DomainMap \| CellMap`                                            | `inverse(jacobian(map))`                                                                                                           |
+| [`density(map)`](geometry.md#jacobian-and-density)                  |          | `map: DomainMap \| CellMap`                                            | The density $\rho$ below                                                                                                           |
+| [`integral(expression, integration_domain)`](geometry.md#integral)  |          | `expression: AbstractExpression`, `integration_domain: AbstractDomain` | `Integral`                                                                                                                         |
 
 ### Fields on a mesh
 
-| Function                                                                 | Overload | Takes                                                                         | Returns                                                                                                         |
-| ------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| [`transformation_law(variances, weight)`](geometry.md#transformationlaw) |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                                                                                             |
-| [`push_forward(expression, mesh, law)`](geometry.md#pushforward)         |          | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw`      | `PushForward(expression, mesh, law)`                                                                            |
-| [`side_domain(parent, source, *entries)`](geometry.md#side-domains)      |          | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]`  | `mesh(pull_back(parent.coordinate_function, SideMap(parent.topology, source, entries)), parent.ambient_domain)` |
-| [`normal(side_map, *reference_conormals)`](geometry.md#normal)           |          | `side_map: SideMap`, `reference_conormals: tuple[AbstractExpression, ...]`    | `Normal`                                                                                                        |
+| Function                                                                    | Overload | Takes                                                                         | Returns                                                                                                         |
+| --------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| [`transformation_law(variances, weight)`](geometry.md#transformationlaw)    |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                                                                                             |
+| [`push_forward(expression, mesh, law)`](geometry.md#pushforward)            |          | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw`      | `PushForward(expression, mesh, law)`                                                                            |
+| [`side_domain(parent, source, *entries)`](geometry.md#side-domains)         |          | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]`  | `mesh(pull_back(parent.coordinate_function, SideMap(parent.topology, source, entries)), parent.ambient_domain)` |
+| [`mapped_normal(side_map, *reference_conormals)`](geometry.md#mappednormal) |          | `side_map: SideMap`, `reference_conormals: tuple[AbstractExpression, ...]`    | `MappedNormal`                                                                                                  |
+
+### Differentiation with respect to functions
+
+| Function                                                                                              | Overload | Takes                                                                                                            | Returns                                                         |
+| ----------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [`directional_derivative(expression, variable, point, direction)`](geometry.md#directionalderivative) |          | `expression: AbstractExpression`, `variable: Function \| tuple`, `point, direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, point, direction)` |
 
 ### Function spaces
 
@@ -308,7 +314,7 @@ and are not added to the enclosing expression's argument spaces.
 | `BroadcastTo` | Those of the value |
 | `Indexed`, `ComponentTensor`, `IndexSum` | Those of the expression                                        |
 | `Coordinate`                             | `()`                                                           |
-| `Normal`                                 | `()`                                                           |
+| `MappedNormal`                                 | `()`                                                           |
 | `Function`                               | Those of the space                                             |
 | `Form`                                   | Those of the expression, followed by the space of each entry, conjugated for a `conjugate(v)` entry |
 | `Apply`                                 | `()`              |
@@ -333,7 +339,7 @@ from the default rules of [Domain](expressions.md#domain) and [Scalar type](expr
 | `DirectionalDerivative`  | The domain of $f$                 | The scalar type of $f$            |
 | `Integral`               | None                               | The scalar type of the integrand  |
 | `PullBack`               | The parameter domain of the map | The scalar type of the expression |
-| `Normal`                 | $E$                                | Real                              |
+| `MappedNormal`                 | $E$                                | Real                              |
 | `Function`               | The domain of the space, or none   | The scalar type of the space      |
 | `PushForward`            | The mesh $D$                       | The scalar type of the expression |
 | `Form`                   | The domain of the expression      | The scalar type of the expression |

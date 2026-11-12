@@ -374,7 +374,8 @@ the reference points at which its field is read. Both inclusions respect the sou
 so the two traces read corresponding points along the edge.
 
 `side_a` and `side_b` are names for these maps. Neither chooses a normal;
-orientation is supplied separately to [Normal](geometry.md#normal).
+normal fields and their orientation are supplied separately (see
+[Normals](geometry.md#normals)).
 The same construction accepts meshes carrying physical geometry as endpoints.
 A source mesh then has its own physical geometry and measure, independently
 of either parent trace. See [Traces on a mesh](geometry.md#traces-on-a-mesh)

@@ -206,5 +206,5 @@ needed by later derivatives, or those derivatives must be rejected.
 The [cell-read contract](forms.md#functions-in-a-space) permits evaluation of
 mesh-dependent spaces but does not supply differentiable reconstruction.
 Geometry differentiation uses `DirectionalDerivative`; see
-[Geometry dependence](geometry.md#geometry-dependence) and the
+[Geometry dependence](differentiation.md#geometry-preparation) and the
 [shape-derivative example](../examples/surfaces.md#a-shape-derivative).

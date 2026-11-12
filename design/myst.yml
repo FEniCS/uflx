@@ -51,4 +51,5 @@ site:
   options:
     folders: true
     logo_text: UFLx design notes
+    favicon: favicon.svg
     outline_maxdepth: 2

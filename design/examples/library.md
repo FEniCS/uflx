@@ -192,7 +192,7 @@ def outward_conormals(relation):
 
 
 def outward_normal(relation):
-    return normal(relation, *outward_conormals(relation))
+    return mapped_normal(relation, *outward_conormals(relation))
 ```
 
 These routines assume nondegenerate affine facet inclusions. They are library
