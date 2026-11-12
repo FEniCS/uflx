@@ -35,13 +35,15 @@ The following declarations use the existing reference-library constructors:
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
 
 # One local triangle role per material, with library vertex labels.
-Ta = StaticTopology((K,), ((0, 1, 2),), ())
-Tl = StaticTopology((K,), ((1, 3, 2),), ())
-Ts = StaticTopology((K,), ((3, 4, 2),), ())
+Ta = StaticTopology((K,), ((0, 1, 2),))
+Tl = StaticTopology((K,), ((1, 3, 2),))
+Ts = StaticTopology((K,), ((3, 4, 2),))
 
 # Each interface has one local interval and two declared parent selections.
-Sal = StaticTopology((I,), ((1, 2),), ((("air", Ta, 0), ("liquid", Tl, 0)),))
-Sls = StaticTopology((I,), ((3, 2),), ((("liquid", Tl, 0), ("solid", Ts, 0)),))
+Sal = StaticTopology((I,), ((1, 2),))
+Sal_sides = static_sides(Sal, ((("air", Ta, 0), ("liquid", Tl, 0)),))
+Sls = StaticTopology((I,), ((3, 2),))
+Sls_sides = static_sides(Sls, ((("liquid", Tl, 0), ("solid", Ts, 0)),))
 ```
 
 The library supplies vector coordinate spaces `Xa`, `Xl`, `Xs` on these
@@ -53,8 +55,8 @@ Da = mesh(xa, EuclideanSpace(2))
 Dl = mesh(xl, EuclideanSpace(2))
 Ds = mesh(xs, EuclideanSpace(2))
 
-Eal = mesh(pull_back(xa, side_map(Ta, Sal, "air")), EuclideanSpace(2))
-Els = mesh(pull_back(xl, side_map(Tl, Sls, "liquid")), EuclideanSpace(2))
+Eal = mesh(pull_back(xa, side_map(Ta, Sal, *Sal_sides["air"].entries)), EuclideanSpace(2))
+Els = mesh(pull_back(xl, side_map(Tl, Sls, *Sls_sides["liquid"].entries)), EuclideanSpace(2))
 ```
 
 Let `Ua`, `Ul`, `Us` be scalar P1 temperatures pushed forward to `Da`, `Dl`,
@@ -65,8 +67,8 @@ Each temperature has three local basis DOFs.
 Finite interface conductance allows temperature jumps. For air–liquid exchange:
 
 ```python
-ma = side_map(Da, Eal, "air")
-ml = side_map(Dl, Eal, "liquid")
+ma = side_map(Da, Eal, *Sal_sides["air"].entries)
+ml = side_map(Dl, Eal, *Sal_sides["liquid"].entries)
 jump_U = pull_back(Ua, ma) - pull_back(Ul, ml)
 jump_W = pull_back(Wa, ma) - pull_back(Wl, ml)
 a_air_liquid = form(integral(hal * jump_U * jump_W, Eal), ((va, vl), (ua, ul)))

@@ -317,15 +317,14 @@ function on `square` with vertex values `((0,0), (1,0), (0,1), (1,1))`:
 
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
-square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
 D = mesh(x, EuclideanSpace(2))
-boundary = StaticTopology(
-    (I, I, I, I),
-    ((0, 1), (1, 3), (3, 2), (2, 0)),
-    tuple((("inside", square, j),) for j in (0, 1, 1, 0)),
-)
-lower = StaticTopology((K,), ((0, 1, 2),), ((("inside", square, 0),),))
-left = StaticTopology((I,), ((2, 0),), ((("inside", square, 0),),))
+boundary = StaticTopology((I, I, I, I), ((0, 1), (1, 3), (3, 2), (2, 0)))
+boundary_sides = static_sides(boundary, tuple((("inside", square, j),) for j in (0, 1, 1, 0)))
+lower = StaticTopology((K,), ((0, 1, 2),))
+lower_sides = static_sides(lower, ((("inside", square, 0),),))
+left = StaticTopology((I,), ((2, 0),))
+left_sides = static_sides(left, ((("inside", square, 0),),))
 ```
 
 The layer wraps these in a mesh and marker dictionaries. Its user code sees
@@ -347,15 +346,15 @@ from uflx.legacy import (
     inner,
 )
 
-mesh = Mesh(D, boundary)
+mesh = Mesh(D, boundary_sides["inside"])
 V = FunctionSpace(mesh, "Lagrange", 1)
 W = VectorFunctionSpace(mesh, "Lagrange", 1)
 u, v = TrialFunction(V), TestFunction(V)
 f, q = Coefficient(V, "f"), Coefficient(W, "q")
 kappa = Constant("kappa")
 n = FacetNormal(mesh)
-dx = Measure("dx", domain=mesh, subdomain_data={1: lower})
-ds = Measure("ds", domain=mesh, subdomain_data={1: left})
+dx = Measure("dx", domain=mesh, subdomain_data={1: lower_sides["inside"]})
+ds = Measure("ds", domain=mesh, subdomain_data={1: left_sides["inside"]})
 
 a = kappa * inner(grad(u), grad(v)) * dx
 L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
@@ -400,7 +399,7 @@ and a correctly shaped `Zero`.
 
 Mixed-space helpers, `derivative` and interior-facet restriction syntax are
 not implemented here. They would collect tuple arguments, bind directional
-derivatives and pull back through named sides respectively. Boundary
+derivatives and pull back through explicit relations respectively. Boundary
 conditions, assembly and solving remain outside the language.
 
 ## Complex residuals and Hessians

@@ -65,106 +65,34 @@ class Simplex(AbstractCellType):
 
 ## A static topology
 
-`StaticTopology(cell_types, cells, sides)` describes a fixed local configuration,
-mainly for examples and macro elements. `cells[j][v]` is the label of local
-vertex `v` of slot `j`. These labels identify vertices within the example;
-they are not mesh-wide cell numbers or runtime connectivity.
-
-A side `(name, T, j)` explicitly names the parent slot. The library pairs the
-side cell's vertex labels with that parent's vertex labels and builds an
-affine map through the corresponding reference vertices. This helper supports
-whole cells and sub-entities with nondegenerate affine inclusions; general
-cuts use another library implementation of `side_data`. Reference normals
-below assume planar facets of convex reference cells.
+`StaticTopology(cell_types, cells)` stores reference cells and library vertex
+labels. Labels describe local connectivity; they do not identify field DOFs.
+Side relations and orientation are constructed separately.
 
 ```python
 class StaticTopology(AbstractTopology):
     identifier = "library.StaticTopology"
 
-    def __init__(
-        self,
-        cell_types: tuple[AbstractCellType, ...],
-        cells: tuple[tuple[int, ...], ...],
-        sides: tuple[tuple[tuple[str, AbstractTopology, int], ...], ...],
-    ):
+    def __init__(self, cell_types, cells):
         if not cell_types or len(cells) != len(cell_types):
             raise ValueError("Need one vertex tuple per local cell slot.")
         if any(K.dimension != cell_types[0].dimension for K in cell_types):
             raise ValueError("All slots must have the same dimension.")
-        if any(
-            len(v) != K.num_vertices or len(set(v)) != len(v)
-            for K, v in zip(cell_types, cells)
-        ):
+        if any(len(v) != K.num_vertices or len(set(v)) != len(v)
+               for K, v in zip(cell_types, cells)):
             raise ValueError("Need distinct vertex labels for each cell's vertices.")
-        if sides and len(sides) != len(cell_types):
-            raise ValueError("Need one side tuple per local cell slot.")
-        for i, entries in enumerate(sides):
-            if len({name for name, _, _ in entries}) != len(entries):
-                raise ValueError("Side names must be distinct within a slot.")
-            for _, T, j in entries:
-                if not 0 <= j < len(T.cell_types):
-                    raise ValueError("Invalid parent slot.")
-                if not isinstance(
-                    cell_types[i], AbstractReferenceCell
-                ) or not isinstance(T.cell_types[j], AbstractReferenceCell):
-                    raise ValueError("Sides require reference cells.")
-                if not set(cells[i]) <= set(T._cells[j]):
-                    raise ValueError(
-                        "Side vertices must belong to the declared parent."
-                    )
-        self._cell_types = cell_types
-        self._cells = cells
-        self._sides = sides
+        self._cell_types, self.cells = cell_types, cells
 
     @property
-    def cell_types(self) -> tuple[AbstractCellType, ...]:
+    def cell_types(self):
         return self._cell_types
-
-    @property
-    def sides(self) -> tuple[tuple[tuple[str, AbstractTopology, int], ...], ...]:
-        return self._sides
-
-    def side_data(self, cell_slot: int, side: str):
-        return static_side_data(self, cell_slot, side)
 ```
 
-With `K = ReferenceSimplex(2)` and `I = ReferenceSimplex(1)`
-(defined below):
+### Reference inclusions
 
-```python
-# Two triangles forming a square.
-square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
-
-# Three triangles meeting at vertex 3 (an Alfeld split).
-alfeld = StaticTopology((K, K, K), ((0, 1, 3), (1, 2, 3), (2, 0, 3)), ())
-
-# Four boundary facets, each seen from one triangle.
-boundary = StaticTopology(
-    (I, I, I, I),
-    ((0, 1), (1, 3), (3, 2), (2, 0)),
-    tuple((("inside", square, j),) for j in (0, 1, 1, 0)),
-)
-
-# One diagonal facet, seen from two triangles.
-diagonal = StaticTopology((I,), ((1, 2),), ((("+", square, 0), ("-", square, 1)),))
-```
-
-The four configurations have two, three, four and one local slots,
-respectively. The parent slot is explicit in each side declaration; no
-neighbour search or table read occurs inside the symbolic kernel.
-
-### Side data of a static topology
-
-The library builds [side data](../language/topology.md#side-data) from reference
-vertices, which the core does not read. For a $k$-dimensional reference cell
-$F$ with vertices $V_v$, `affine_map(F, points)` maps the first $k+1$ vertices
-to rows $p_v$ of `points`:
-
-$$
-X \mapsto p_0 + \sum_{d < k} (p_{d+1} - p_0) \, \big(E^{-1} (X - V_0)\big)_d,
-$$
-
-Here $E$ has columns $V_{d+1}-V_0$. The implementation uses a derived index:
+For affine inclusions, the library matches source vertex labels to the selected
+parent cell. `affine_map` maps the first `F.dimension + 1` source vertices to
+`points`; these must be affinely independent and remaining vertices must agree.
 
 ```python
 def affine_map(F, points):
@@ -178,66 +106,72 @@ def affine_map(F, points):
     for d in range(k):
         total = total + (points[d + 1, l] - points[0, l]) * Y[d]
     return component_tensor(total, (l,))
+
+
+def topology(endpoint):
+    return endpoint.topology if isinstance(endpoint, Mesh) else endpoint
+
+
+def static_side_map(parent, source, *parent_slots):
+    T, S = topology(parent), topology(source)
+    entries = []
+    for i, j in enumerate(parent_slots):
+        F, K = S.cell_types[i], T.cell_types[j]
+        positions = tensor(tuple(K.vertices[T.cells[j].index(v)] for v in S.cells[i]))
+        entries.append((j, domain_map(F, affine_map(F, positions), K)))
+    return side_map(parent, source, *entries)
 ```
 
-Those $k+1$ vertices must be affinely independent; later rows of `points`
-are ignored. A sub-entity with vertex numbers $(w_0,w_1,\dots)$ in `K` uses
-row `K.vertices[w_v]` for point $v$. For example:
-
-| Parent | Sub-entity vertices | Reference cell | Inclusion |
-| ------ | ------------------- | -------------- | --------- |
-| Unit triangle | `(1, 2)` | Unit interval | $t\mapsto(1-t,t)$ |
-| Unit interval | `(1,)` | Reference point | The endpoint $1$ |
-
-The following helper constructs the pair `(inclusion, reference_normal)`.
-It uses the same vertex correspondence on both sides, so both traces are
-parameterised by the same reference point. The reference normal need not
-have unit length.
+Examples may collect reference maps in a dictionary. This convenience is outside
+the core; names do not enter the identity of a topology or map:
 
 ```python
-def static_side_data(S, i, side):
-    if not 0 <= i < len(S.cell_types):
-        raise ValueError("Invalid local slot.")
-    entries = S.sides[i] if S.sides else ()
-    matches = [(T, j) for name, T, j in entries if name == side]
-    if len(matches) != 1:
-        raise ValueError("Unknown side.")
-    T, j = matches[0]
-    F, K = S.cell_types[i], T.cell_types[j]
-    parent_vertices = T._cells[j]
-    points = tensor(tuple(K.vertices[parent_vertices.index(v)] for v in S._cells[i]))
-    inclusion = domain_map(F, affine_map(F, points), K)
-    if F.dimension != K.dimension - 1:
-        return inclusion, None
-
-    k = K.dimension
-    J = jacobian(inclusion)
-    cofactors = []
-    for r in range(k):
-        C = tensor(
-            tuple(
-                tensor(
-                    (Integer(1 if q == r else 0),)
-                    + tuple(J[q, d] for d in range(k - 1))
-                )
-                for q in range(k)
-            )
-        )
-        cofactors.append(determinant(C))
-    m0 = tensor(tuple(cofactors))
-    centroid = K.vertices[0]
-    for v in range(1, K.num_vertices):
-        centroid = centroid + K.vertices[v]
-    centroid = centroid / Integer(K.num_vertices)
-    away = m0 @ (points[0] - centroid)
-    return inclusion, away / absolute(away) * m0
+def static_sides(source, selections):
+    # selections[i] lists (name, parent_topology, parent_slot) for source slot i.
+    return {
+        name: static_side_map(parent, source, *(
+            next(j for n, T, j in row if n == name and T == parent)
+            for row in selections
+        ))
+        for name, parent, _ in selections[0]
+    }
 ```
 
-This formula assumes full-rank affine maps onto boundary facets of convex
-parents, so `away` is nonzero. Interior cuts need a supplier-chosen orientation.
-For nonsimplex cells the first `F.dimension + 1` vertices must be affinely
-independent and the remaining vertices must agree with the resulting map.
-These are assumptions of this example helper, not limitations on core side data.
+### Reference orientation
+
+For a planar facet of a convex reference cell, this library chooses the
+conormal away from the parent centroid. Interior cuts require a different
+orientation policy. The core only transports and normalises the supplied vector.
+
+```python
+def outward_conormals(relation):
+    result = []
+    for _, A in relation.entries:
+        F, K = A.parameter_domain, A.ambient_domain
+        J = jacobian(A)
+        m = tensor(tuple(
+            determinant(tensor(tuple(
+                tensor((Integer(1 if q == r else 0),
+                        *(J[q, c] for c in range(F.dimension))))
+                for q in range(K.dimension)
+            )))
+            for r in range(K.dimension)
+        ))
+        centre = K.vertices[0]
+        for v in range(1, K.num_vertices):
+            centre = centre + K.vertices[v]
+        centre = centre / Integer(K.num_vertices)
+        away = m @ (A.parameterisation - centre)
+        result.append((away / absolute(away)) * m)
+    return tuple(result)
+
+
+def outward_normal(relation):
+    return normal(relation, *outward_conormals(relation))
+```
+
+These routines assume nondegenerate affine facet inclusions. They are library
+policies, not requirements on general core relations.
 
 ## The unit simplex as a reference cell
 
@@ -273,8 +207,7 @@ class ReferenceSimplex(Simplex, AbstractReferenceCell):
 ```
 
 `vertices` is a property of the library, not of `AbstractReferenceCell`. The
-side data of a `StaticTopology` read it (see [Side data of a static
-topology](#side-data-of-a-static-topology)).
+reference-inclusion constructors read it (see [Reference inclusions](#reference-inclusions)).
 
 `ReferenceSimplex(2)` and `Simplex(2)` are different cell types, so a topology
 of `Simplex(2)` cells has no reference cells. `ReferenceSimplex(2)` and
@@ -404,19 +337,19 @@ def arguments(expression):
     return tuple(found[n] for n in sorted(found))
 
 
-def restrict(obj, E):
+def restrict(obj, E, relation):
     # The legacy apply_restrictions, at construction: the largest subtrees on the
     # mesh are pulled back to E, and the facet normal of the mesh becomes the
     # normal of E.
     if is_facet_normal(obj):
-        return normal(side_map(obj.domain, E, "inside"))
+        return outward_normal(relation)
     if isinstance(obj, tuple):
-        return tuple(restrict(item, E) for item in obj)
+        return tuple(restrict(item, E, relation) for item in obj)
     if not isinstance(obj, AbstractExpression) or obj.domain is None:
         return obj
     if not contains(obj, is_facet_normal):
-        return pull_back(obj, side_map(obj.domain, E, "inside"))
-    return obj.__class__(*restrict(obj.construction_arguments, E))
+        return pull_back(obj, relation)
+    return obj.__class__(*restrict(obj.construction_arguments, E, relation))
 
 
 class Mesh:
@@ -443,15 +376,17 @@ class Measure:
     def __rmul__(self, integrand):
         # expr * dx is a form in legacy UFL, so the measure binds the arguments.
         mesh = self.domain
+        reference = None
         if self.subdomain_id != "everywhere":
-            # The marker value names a topology with a side "inside" into the mesh.
-            E = side_domain(mesh.domain, self.subdomain_data[self.subdomain_id], "inside")
+            reference = self.subdomain_data[self.subdomain_id]
         elif self.integral_type == "ds":
-            E = side_domain(mesh.domain, mesh.boundary, "inside")
+            reference = mesh.boundary
+        if reference is not None:
+            E = side_domain(mesh.domain, reference.source, *reference.entries)
+            relation = side_map(mesh.domain, E, *reference.entries)
+            integrand = restrict(integrand, E, relation)
         else:
             E = integrand.domain if mesh is None else mesh.domain
-        if E != integrand.domain:
-            integrand = restrict(integrand, E)
         expression = integral(integrand, E)
         args = arguments(expression)
         if not args:

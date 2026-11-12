@@ -171,8 +171,8 @@ Cell maps retain explicit selection; unselected side restrictions remain.
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
 | R01 | $\psi$ a `SideMap`, $f$ with a domain and neither an `Apply` nor a `Form` | Remains until a pull-back by a cell of $P$ |
-| R02 | `PullBack(g, SideMap(X, Y, s))`, $\psi$ = `cell_map(Y, i)` | `PullBack(PullBack(g, B_i), A_i)` |
-| R03 | `Normal(SideMap(D, E, s))`, $\psi$ = `cell_map(E, i)`; the cell Jacobian has full column rank and $w \ne 0$ | $w / \lvert w \rvert$, with $w$ defined in [The pull-back of Normal](geometry.md#the-pull-back-of-normal) |
+| R02 | `PullBack(g, SideMap(X, Y, entries))`, $\psi$ = `cell_map(Y, i)` | `PullBack(PullBack(g, B_i), A_i)` |
+| R03 | `Normal(SideMap(D, E, entries), reference_conormals)`, $\psi$ = `cell_map(E, i)`; the cell Jacobian has full column rank and $w \ne 0$ | $w / \lvert w \rvert$, with $w$ defined in [The pull-back of Normal](geometry.md#the-pull-back-of-normal) |
 
 ### Retained pull-backs
 

@@ -109,7 +109,7 @@ space `W` of value shape `(2,)`, and a real scalar Lagrange space `V`, all on
 
 ```python
 K = ReferenceSimplex(2)
-square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
 i = index("i")
 s = function(W, "s")
 

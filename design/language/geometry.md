@@ -92,7 +92,7 @@ example](../examples/library.md#a-static-topology), on reference cells:
 
 ```python
 K = ReferenceSimplex(2)
-square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
 ```
 
 Let `x` be a vector Lagrange function of degree 1 on `square`, of value shape
@@ -442,7 +442,7 @@ do not implicitly select slots.
 For the local square configuration above, `integral(Integer(1), D)` is the
 area 1, the sum of two reference-cell integrals. A boundary configuration
 `B` with the side `"inside"` gives the boundary contribution
-`integral(pull_back(f, side_map(D, B, "inside")), B)`.
+`integral(pull_back(f, side_map(D, B, *boundary_sides["inside"].entries)), B)`.
 
 ```{dropdown} Legacy UFL
 The cell, boundary-facet and interior-facet contributions to `dx`, `ds` and
@@ -505,7 +505,7 @@ Their API properties depend on the map's role:
 | --------- | ------------------- | ---------- |
 | `DomainMap` | `parameter_domain` | `ambient_domain` |
 | `CellMap` | `reference_cell` | `parent` |
-| `SideMap` | `restriction_domain` | `parent` |
+| `SideMap` | `source` | `parent` |
 
 | `PullBack(expression, map)` |                                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -695,7 +695,7 @@ physical coordinate 1. The selected cell determines which value is read,
 even when cells overlap. See [Adjacent and coincident cells](../examples/integration.md#adjacent-and-coincident-cells).
 
 A fixed point configuration that must support fields and integration can
-instead be a mesh of zero-dimensional cells, with side declarations selecting
+instead be a mesh of zero-dimensional cells, with side-map entries selecting
 its parents. See [Points forming a domain](../examples/integration.md#points-forming-a-domain).
 
 Evaluation preserves symbolic dependence on both fields and points. Apply
@@ -814,26 +814,17 @@ other `Divergence` and `Curl` lowers to its composition of `Gradient`.
 
 ### Traces on a mesh
 
-[Restriction](topology.md#restriction) and [`SideMap`](topology.md#sidemap) select a side on the
-topology. On a physical mesh, a side domain also supplies the geometry.
+[Restriction](topology.md#restriction) evaluates through an explicit
+[`SideMap`](topology.md#sidemap). Its source mesh supplies integration geometry.
 
 #### Side domains
 
+The optional helper constructs source geometry from a chosen relation. This
+choice is independent of subsequent restrictions into other parents.
+
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `side_domain(parent, restriction_topology, side)` | | `parent: Mesh`, `restriction_topology: AbstractTopology`, `side: str` | `mesh(pull_back(parent.coordinate_function, side_map(parent.topology, restriction_topology, side)), parent.ambient_domain)` |
-
-`parent` is the mesh supplying the geometry, `restriction_topology` describes
-the side cells, and `side` names the parent side from which coordinates are
-read. The result is a mesh on `restriction_topology`.
-
-The coordinates are the trace of `parent.coordinate_function` from the
-chosen side, so the side domain moves when the parent coordinates change.
-The descriptions below write `D`, `S` and `s` for `parent`,
-`restriction_topology` and `side`.
-
-The chosen side supplies the integration measure. Any measure conversion
-belongs in the integrand.
+| `side_domain(parent, source, *entries)` | | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]` | `mesh(pull_back(parent.coordinate_function, side_map(parent.topology, source, *entries)), parent.ambient_domain)` |
 
 Coordinate functions may be vector-valued or tensors of scalar functions. For a
 conforming interface, the package supplies coordinates and facet correspondence
@@ -847,11 +838,11 @@ of $S$, from the side:
 - The restriction of `gradient(f, D)` is the whole gradient of `f` on the cell
   on the side, as for a normal derivative. The last axis is in the frame of
   the ambient coordinate domain from every side.
-- `gradient(pull_back(f, side_map(D, E, s)), E)` is the tangential gradient of
+- `gradient(pull_back(f, side_map(D, E, *diagonal_sides[s].entries)), E)` is the tangential gradient of
   the restriction along the cells of $E$.
 
-The unit side conormal is [`normal(side_map(D, E, s))`](#normal), outward on
-boundary pieces.
+The unit side conormal is [Normal](#normal), with orientation supplied
+independently of the evaluation map.
 
 #### Example
 
@@ -860,14 +851,17 @@ The example uses `D` and `square` of the
 function `u` on `square`, and the diagonal of `square`:
 
 ```python
-diagonal = StaticTopology((I,), ((1, 2),), ((("+", square, 0), ("-", square, 1)),))
-plus = side_map(square, diagonal, "+")
-minus = side_map(square, diagonal, "-")
+diagonal = StaticTopology((I,), ((1, 2),))
+t = coordinate(I)[0]
+A_plus = domain_map(I, tensor((Integer(1) - t, t)), K)
+A_minus = domain_map(I, tensor((Integer(0), t)), K)
+plus = side_map(square, diagonal, (0, A_plus))
+minus = side_map(square, diagonal, (1, A_minus))
 jump = pull_back(u, plus) - pull_back(u, minus)
-E = side_domain(D, diagonal, "+")
+E = side_domain(D, diagonal, (0, A_plus))
 ```
 
-The `"+"` side selects cell 0 with inclusion $A_+(t) = (1-t,t)$.
+The map `plus` selects cell 0 with inclusion $A_+(t) = (1-t,t)$.
 For a reference-cell field $u_0(X) = a_{0,0} + a_{0,1}X_0 + a_{0,2}X_1$,
 its trace is $u_+(t) = a_{0,0} + a_{0,1}(1-t) + a_{0,2}t$.
 See [Evaluating a trace](../examples/coupling.md#evaluating-a-trace) for both
@@ -879,52 +873,47 @@ The legacy UFL restriction `f('+')` is `pull_back(f, side_map(T, S, "+"))` on th
 
 ### `Normal`
 
-`Normal` is the unit side conormal: tangent to the parent cell and orthogonal
-to the selected side image in that parent, with orientation supplied by
-`reference_normal`.
-It points outward on boundary pieces.
+`Normal` transports and normalises explicitly oriented reference conormals.
+Changing orientation leaves the side map and its pull-backs unchanged.
 
-| `Normal(side_map)` |                                                                                                       |
-| ------------ | ----------------------------------------------------------------------------------------------------- |
-| Extends      | `AbstractExpression` |
-| Free function | `normal(side_map)`                                                                                         |
-| Takes        | `side_map: SideMap` |
-| Properties | `side_map`, the side relation selecting the parent and restriction domain |
-| Requires | `side_map.parent` is a mesh, and `side_map.restriction_domain.dimension == side_map.parent.dimension - 1` |
-| Static type | Real, with domain `side_map.restriction_domain` and value shape `(n,)`, where `n` is the ambient coordinate dimension of `side_map.parent` |
-| Raises       | `ValueError` if the requirement fails           |
+| `Normal(side_map, reference_conormals)` | |
+| ------------------------------------ | - |
+| Extends | `AbstractExpression` |
+| Takes | `side_map: SideMap`, `reference_conormals: tuple[AbstractExpression, ...]` |
+| Free function | `normal(side_map, *reference_conormals)` |
+| Requires | A mesh parent; codimension one; one real conormal per source slot, without arguments or free indices |
+| Static type | Vector of the parent's ambient dimension, on `side_map.source`; no free indices or argument spaces |
+| Raises | `ValueError` for an invalid count, shape, domain, scalar type or free indices |
 
-The normal of `side_map` belongs to the same side as the restriction
-`pull_back(field, side_map)`, so a form writes both from one side map.
+For entry `(j, A_i)`, conormal $\hat m_i$ has shape `(K_j.dimension,)` and
+domain `A_i.parameter_domain` or `None`. The library supplies a nonzero vector
+orthogonal to the reference inclusion with its chosen orientation. Neither
+orthogonality nor nondegeneracy is established by shape validation.
 
-Notation, for `sm` = `SideMap(D, E, s)` and the piece $i$ of $E$:
+```python
+outward = normal(plus, m_plus)
+inward = normal(plus, -m_plus)
+# Both expressions use the identical evaluation map `plus`.
+```
 
-- $B_i$ and $A_i$ are the maps of [Restriction](topology.md#restriction) for the side $s$.
-- $K_j$ is the reference cell of the cell on the side.
-- $k$ is the dimension of $D$, and $n$ is the dimension of the ambient
-  coordinate domain.
+#### The pull-back of Normal
 
-#### The pull-back of `Normal`
+For `sm.entries[i] = (j, A_i)`, let `B_i = cell_map(sm.parent, j)` and
+$K = J^+$, the left inverse of the parent cell Jacobian. Pulling back
+`Normal(sm, reference_conormals)` by `cell_map(sm.source, i)` gives
 
-The pull-back of `Normal(SideMap(D, E, s))` by `cell_map(E, i)` is
-$\nu = w / \lvert w \rvert$, with $w = m_{B_i}(\hat m)$,
-using the local maps of [Restriction](topology.md#restriction), where:
+$$
+\frac{w}{|w|}, \qquad
+w = \operatorname{pull\_back}(K^T, A_i)\,\hat m_i.
+$$
 
-- $m$ is `transformation_law(("covariant",), 0)`, applied with the Jacobian
-  of `B_i` on the side at the points of `A_i` (see
-  [`TransformationLaw`](#transformationlaw)).
-- $\hat m$ is the `reference_normal` from `E.topology.side_data(i, s)`
-  (see [Side data](topology.md#side-data)).
-
-The composition is `w / square_root(w @ w)`. It requires full column rank
-of the cell Jacobian and $w \ne 0$ wherever evaluated.
-
-The core needs no numbering of the facets and no vertices of $K_j$, because
-the library of the topology gives $\hat m$.
+This requires a full-column-rank cell Jacobian and $w\ne0$. The vector lies
+in the parent's tangent space and is orthogonal to the mapped facet. The source
+geometry does not choose its orientation.
 
 #### The direction of the normal
 
-Orientation follows the [side-data contract](topology.md#side-data). For $k=n$,
+Orientation follows the supplied reference conormals. For $k=n$,
 normals are opposite when the two regions adjoin on opposite sides of the
 interface; coincident geometry or side names alone do not imply this.
 For $k<n$, matching tangent spaces are also required. On a surface, a jump
@@ -944,14 +933,14 @@ The examples use the following objects:
 - `grad_f = gradient(f, D)` and `i = index("i")`.
 
 ```python
-inside, plus, minus = side_map(D, B, "inside"), side_map(D, E, "+"), side_map(D, E, "-")
-n_B = normal(inside)
+inside, plus, minus = side_map(D, B, *boundary_sides["inside"].entries), side_map(D, E, *diagonal_sides["+"].entries), side_map(D, E, *diagonal_sides["-"].entries)
+n_B = outward_normal(inside)
 
 # The flux of grad f out of the square, the legacy UFL dot(grad(f), n) * ds.
 flux = integral(index_sum(pull_back(grad_f, inside)[i] * n_B[i], (i,)), B)
 
 # The jump of the normal derivative across the diagonal, from the side "+".
-n_E = normal(plus)
+n_E = outward_normal(plus)
 jump = pull_back(grad_f, plus)[i] - pull_back(grad_f, minus)[i]
 penalty = integral(index_sum(jump * n_E[i], (i,)) ** Integer(2), E)
 ```

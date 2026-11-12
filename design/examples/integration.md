@@ -309,12 +309,13 @@ The physical and reference coordinates coincide, but the selected cells differ.
 ## Points forming a domain
 
 Let `D` be a mesh with topology `T` and `f` a field on `D`. A fixed local
-collection of points may have a topology `S` with one zero-dimensional slot per point and a side `("inside", T, j)` selecting
-its parent slot. Each slot's side data supply its reference position. Set
-`P = side_domain(D, S, "inside")`:
+collection of points may have a topology `S` with one zero-dimensional slot per
+point. The library relation `S_sides["inside"]` supplies each parent slot and
+reference-point inclusion. Set
+`P = side_domain(D, S, *S_sides["inside"].entries)`:
 
 ```python
-inside = side_map(D, P, "inside")
+inside = side_map(D, P, *S_sides["inside"].entries)
 values = pull_back(pull_back(f, inside), cell_map(P, 0))
 total = integral(pull_back(f, inside), P)
 ```

@@ -30,13 +30,13 @@ Use a two-triangle square, with its diagonal as the interior facet:
 
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
-square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
-diagonal = StaticTopology(
-    (I,), ((1, 2),), ((("+", square, 0), ("-", square, 1)),)
-)
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
+diagonal = StaticTopology((I,), ((1, 2),))
+diagonal_sides = static_sides(diagonal, ((("+", square, 0), ("-", square, 1)),))
 D = mesh(x, EuclideanSpace(2))
-E = side_domain(D, diagonal, "+")
-B = side_domain(D, neumann_facets, "inside")
+E = side_domain(D, diagonal, *diagonal_sides["+"].entries)
+B = side_domain(D, neumann_facets, *neumann_facets_sides["inside"].entries)
+# The library supplies neumann_facets_sides["inside"] for the selected boundary.
 ```
 
 The library supplies `x`, a degree-1 coordinate function on `square` with
@@ -79,14 +79,14 @@ lap_u = divergence(grad_u, D)
 r_cell = integral((f_D + lap_u) * v_D, D)
 
 # Interior-facet residual, shared by both cells.
-plus, minus = side_map(D, E, "+"), side_map(D, E, "-")
-n = normal(plus)
+plus, minus = side_map(D, E, *diagonal_sides["+"].entries), side_map(D, E, *diagonal_sides["-"].entries)
+n = outward_normal(plus)
 jump_n = index_sum((pull_back(grad_u, plus)[i] - pull_back(grad_u, minus)[i]) * n[i], (i,))
 r_facets = integral(-half * jump_n * (pull_back(v_D, plus) + pull_back(v_D, minus)), E)
 
 # The Neumann residual on the boundary.
-inside = side_map(D, B, "inside")
-n_B = normal(inside)
+inside = side_map(D, B, *neumann_facets_sides["inside"].entries)
+n_B = outward_normal(inside)
 dn_u = index_sum(pull_back(grad_u, inside)[i] * n_B[i], (i,))
 r_boundary = integral((pull_back(g_D, inside) - dn_u) * pull_back(v_D, inside), B)
 

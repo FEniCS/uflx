@@ -209,9 +209,10 @@ Extend `AbstractExpression`:
 
 ### Restriction
 
-| Function                                                            | Overload | Takes                                                               | Returns                                     |
-| ------------------------------------------------------------------- | -------- | ------------------------------------------------------------------- | ------------------------------------------- |
-| [`side_map(parent, restriction_domain, side)`](topology.md#sidemap) |          | `parent, restriction_domain: AbstractTopology \| Mesh`, `side: str` | `SideMap(parent, restriction_domain, side)` |
+| Function                                                    | Overload | Takes                                                                        | Returns                                                          |
+| ----------------------------------------------------------- | -------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [`side_map(parent, source, *entries)`](topology.md#sidemap) |          | `parent, source: AbstractTopology \| Mesh`, `entries: tuple[int, DomainMap]` | `SideMap(parent, source, entries)`                               |
+| [`compose(outer, inner)`](topology.md#sidemap)              |          | `outer, inner: SideMap`                                                      | The composed `SideMap`, requiring `inner.parent == outer.source` |
 
 ### Meshes
 
@@ -242,12 +243,12 @@ Extend `AbstractExpression`:
 
 ### Fields on a mesh
 
-| Function                                                                      | Overload | Takes                                                                         | Returns                                                                                                                     |
-| ----------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| [`transformation_law(variances, weight)`](geometry.md#transformationlaw)      |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                                                                                                         |
-| [`push_forward(expression, mesh, law)`](geometry.md#pushforward)              |          | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw`      | `PushForward(expression, mesh, law)`                                                                                        |
-| [`side_domain(parent, restriction_topology, side)`](geometry.md#side-domains) |          | `parent: Mesh`, `restriction_topology: AbstractTopology`, `side: str`         | `mesh(pull_back(parent.coordinate_function, side_map(parent.topology, restriction_topology, side)), parent.ambient_domain)` |
-| [`normal(side_map)`](geometry.md#normal)                                      |          | `side_map: SideMap`                                                           | `Normal`                                                                                                                    |
+| Function                                                                 | Overload | Takes                                                                         | Returns                                                                                                           |
+| ------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| [`transformation_law(variances, weight)`](geometry.md#transformationlaw) |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                                                                                               |
+| [`push_forward(expression, mesh, law)`](geometry.md#pushforward)         |          | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw`      | `PushForward(expression, mesh, law)`                                                                              |
+| [`side_domain(parent, source, *entries)`](geometry.md#side-domains)      |          | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]`  | `mesh(pull_back(parent.coordinate_function, side_map(parent.topology, source, *entries)), parent.ambient_domain)` |
+| [`normal(side_map, *reference_conormals)`](geometry.md#normal)           |          | `side_map: SideMap`, `reference_conormals: tuple[AbstractExpression, ...]`    | `Normal`                                                                                                          |
 
 ### Function spaces
 
@@ -345,6 +346,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 43    |
 | Expression node classes         | 33    |
-| Free functions                  | 51    |
+| Free functions                  | 52    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

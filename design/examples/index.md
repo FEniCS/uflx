@@ -34,4 +34,4 @@ shows the familiar UFL syntax.
   with a patch-wide multiplier and a zero-mean correction.
 
 The [reference library](library.md) collects the longer helper
-implementations: simplices, static topologies, side data and the FEniCS layer.
+implementations: simplices, static topologies, explicit side maps, orientation and the FEniCS layer.

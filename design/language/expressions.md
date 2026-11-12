@@ -136,7 +136,7 @@ with no such operand has domain `None`.
 The property always describes the resulting expression. An `Integral` stores
 its region as `integration_domain` but has domain `None`; a `PullBack` stores
 its `map` and has the domain from which that map starts: `parameter_domain`
-for a `DomainMap`, `reference_cell` for a `CellMap`, or `restriction_domain`
+for a `DomainMap`, `reference_cell` for a `CellMap`, or `source`
 for a `SideMap`. A `PushForward` stores its
 `mesh`, which is also its domain. For `Coordinate`, `Gradient`, `Divergence`
 and `Curl`, the stored domain is also the result's domain.

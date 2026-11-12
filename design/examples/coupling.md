@@ -18,8 +18,9 @@ and [StaticTopology](library.md#a-static-topology):
 
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
-square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
-diagonal = StaticTopology((I,), ((1, 2),), ((("+", square, 0), ("-", square, 1)),))
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
+diagonal = StaticTopology((I,), ((1, 2),))
+diagonal_sides = static_sides(diagonal, ((("+", square, 0), ("-", square, 1)),))
 ```
 
 The library supplies `X_space`, a vector Lagrange space of degree 1 and value
@@ -32,7 +33,7 @@ The solver gives the coordinate function `x` the vertex values
 ```python
 x = function(X_space, "x")
 D = mesh(x, EuclideanSpace(2))
-E = side_domain(D, diagonal, "+")
+E = side_domain(D, diagonal, *diagonal_sides["+"].entries)
 
 u, v = function(V, "u"), function(V, "v")
 u_D, v_D = push_forward(u, D, transformation_law(V)), push_forward(v, D, transformation_law(V))
@@ -46,7 +47,7 @@ Pulling back from either side gives an expression on `E`, so the traces can
 be subtracted at the same physical point:
 
 ```python
-plus, minus = side_map(D, E, "+"), side_map(D, E, "-")
+plus, minus = side_map(D, E, *diagonal_sides["+"].entries), side_map(D, E, *diagonal_sides["-"].entries)
 u_p, u_m = pull_back(u_D, plus), pull_back(u_D, minus)
 v_p, v_m = pull_back(v_D, plus), pull_back(v_D, minus)
 du_p, du_m = pull_back(grad_u, plus), pull_back(grad_u, minus)
@@ -59,7 +60,7 @@ usual cell-size factor $1/h$.
 
 ```python
 i = index("i")
-n = normal(plus)
+n = outward_normal(plus)
 half = Integer(1) / Integer(2)
 jump_u, jump_v = u_p - u_m, v_p - v_m
 avg_dn_u = half * index_sum((du_p[i] + du_m[i]) * n[i], (i,))
@@ -85,8 +86,8 @@ $(1,1)/\sqrt{2}$ and the facet density is $\sqrt{2}$.
 
 Use the topology `square`, diagonal and reference coordinate `X = coordinate(K)`
 above. For a scalar field `u` on `square`, set
-`plus_T = side_map(square, diagonal, "+")` and
-`minus_T = side_map(square, diagonal, "-")`. The traces are
+`plus_T = side_map(square, diagonal, *diagonal_sides["+"].entries)` and
+`minus_T = side_map(square, diagonal, *diagonal_sides["-"].entries)`. The traces are
 `pull_back(u, plus_T)` and `pull_back(u, minus_T)`.
 
 From `"+"`, the parent is slot 0 and the inclusion is
@@ -128,12 +129,13 @@ facet_cell = cell_map(E, 0)
 form(integral(pull_back(f, facet_cell) * density(facet_cell), I), (v, u))
 ```
 
-The side declarations identify the local parents. Side data supply the maps
+The relation entries identify the local parents and supply the maps
 and normals. For example, the `"+"` trace lowers through:
 
 ```python
 C_p = cell_map(square, 0)
-A_p, m_p = diagonal.side_data(0, "+")
+A_p = diagonal_sides["+"].entries[0][1]
+m_p = outward_conormals(diagonal_sides["+"])[0]
 pull_back(pull_back(u, C_p), A_p)
 ```
 
@@ -159,7 +161,7 @@ kernel. Neighbour lookup and mesh iteration are outside the expression.
   `integral(density(B_p), K)`. Alternatively supply the parent's size as
   a scalar local input.
 - Restricting values alone needs no physical mesh:
-  `pull_back(u, side_map(square, diagonal, "+"))` is a trace on the topology.
+  `pull_back(u, side_map(square, diagonal, *diagonal_sides["+"].entries))` is a trace on the topology.
 - A triangle–quadrilateral interface uses parent types `(Kt, Kq)` and an
   interval integration cell. The same facet formula applies with the
   library's corresponding local bases and reference inclusions.
@@ -179,10 +181,13 @@ library reference quadrilateral with vertices `(0,0)`, `(1,0)`, `(1,1)`,
 of each type. Their local configuration and common integration facet are:
 
 ```python
-mixed = StaticTopology((K, Q), ((0, 1, 2), (1, 3, 4, 2)), ())
-edge = StaticTopology((I,), ((1, 2),), ((("+", mixed, 0), ("-", mixed, 1)),))
-A_plus, m_plus = edge.side_data(0, "+")
-A_minus, m_minus = edge.side_data(0, "-")
+mixed = StaticTopology((K, Q), ((0, 1, 2), (1, 3, 4, 2)))
+edge = StaticTopology((I,), ((1, 2),))
+edge_sides = static_sides(edge, ((("+", mixed, 0), ("-", mixed, 1)),))
+A_plus = edge_sides["+"].entries[0][1]
+m_plus = outward_conormals(edge_sides["+"])[0]
+A_minus = edge_sides["-"].entries[0][1]
+m_minus = outward_conormals(edge_sides["-"])[0]
 ```
 
 The inclusions are $A_+(t)=(1-t,t)$ into `K` and $A_-(t)=(0,t)$ into `Q`.
@@ -215,7 +220,7 @@ values `((0,0), (1,0), (0,1), (1,1))`:
 
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
-square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
 D = mesh(x, EuclideanSpace(2))
 ```
 
@@ -223,19 +228,21 @@ Each local material cell has a side into its parent slot. Its side domain
 uses the parent coordinate map:
 
 ```python
-fluid_cells = StaticTopology((K,), ((0, 1, 2),), ((("inside", square, 0),),))
-solid_cells = StaticTopology((K,), ((1, 3, 2),), ((("inside", square, 1),),))
+fluid_cells = StaticTopology((K,), ((0, 1, 2),))
+fluid_cells_sides = static_sides(fluid_cells, ((("inside", square, 0),),))
+solid_cells = StaticTopology((K,), ((1, 3, 2),))
+solid_cells_sides = static_sides(solid_cells, ((("inside", square, 1),),))
 
-F = side_domain(D, fluid_cells, "inside")
-S = side_domain(D, solid_cells, "inside")
+F = side_domain(D, fluid_cells, *fluid_cells_sides["inside"].entries)
+S = side_domain(D, solid_cells, *solid_cells_sides["inside"].entries)
 
-interface = StaticTopology(
-    (I,), ((1, 2),), ((("fluid", fluid_cells, 0), ("solid", solid_cells, 0)),)
-)
-G = side_domain(F, interface, "fluid")
+interface = StaticTopology((I,), ((1, 2),))
+interface_sides = static_sides(interface, ((("fluid", fluid_cells, 0), ("solid", solid_cells, 0)),))
+G = side_domain(F, interface, *interface_sides["fluid"].entries)
 
-inlet = StaticTopology((I,), ((2, 0),), ((("fluid", fluid_cells, 0),),))
-G_in = side_domain(F, inlet, "fluid")
+inlet = StaticTopology((I,), ((2, 0),))
+inlet_sides = static_sides(inlet, ((("fluid", fluid_cells, 0),),))
+G_in = side_domain(F, inlet, *inlet_sides["fluid"].entries)
 ```
 
 `interface` names the fluid and solid topologies. Restricting a field from
@@ -293,7 +300,7 @@ Restrict both fields to `G` before combining them. `lam` supplies the
 traction, and `mu` tests the constraint $u=(d-d_{old})/dt$:
 
 ```python
-from_fluid, from_solid = side_map(F, G, "fluid"), side_map(S, G, "solid")
+from_fluid, from_solid = side_map(F, G, *interface_sides["fluid"].entries), side_map(S, G, *interface_sides["solid"].entries)
 u_G, v_G = pull_back(u_F, from_fluid), pull_back(v_F, from_fluid)
 d_G, w_G = pull_back(d_S, from_solid), pull_back(w_S, from_solid)
 d_old_G = pull_back(d_old_S, from_solid)
@@ -307,7 +314,7 @@ a = form(fluid + solid + coupling, ((v, q, w, mu), (u, p, d, lam)))
 The load contains the inlet traction and old displacement:
 
 ```python
-traction = integral(index_sum(g[i] * pull_back(v_F, side_map(F, G_in, "fluid"))[i], (i,)), G_in)
+traction = integral(index_sum(g[i] * pull_back(v_F, side_map(F, G_in, *inlet_sides["fluid"].entries))[i], (i,)), G_in)
 l = form(traction + integral(index_sum(mu_G[i] * d_old_G[i], (i,)) / dt, G), ((v, q, w, mu),))
 ```
 
@@ -317,10 +324,10 @@ added; tuple arguments bind functions on all three topologies. No field is
 extended by zero onto the parent mesh.
 
 The interface is the image of the coordinate trace from `F`.
-`normal(from_fluid)` points out of the fluid, and `normal(from_solid)` is
+`outward_normal(from_fluid)` points out of the fluid, and `outward_normal(from_solid)` is
 its negative. Lowering follows the [facet example](#from-the-facet-integral-to-a-kernel):
 the coupling kernel reads the fluid and solid reference bases on their
-respective cells and the multiplier basis on the facet. The package chooses the cells to pack; the side declarations distinguish
+respective cells and the multiplier basis on the facet. The package chooses the cells to pack; the side-map entries distinguish
 their local roles.
 
 ### Variations
@@ -351,14 +358,15 @@ network.
 
 The library supplies a tetrahedral topology `T3`, its coordinate function
 `x3` of value shape `(3,)`, and a topology `T1` of `ReferenceSimplex(1)`
-segments. Each segment is a tetrahedral edge, with side `(("tissue", T3, 0),)`.
+segments, and a dictionary `T1_sides` whose `"tissue"` relation selects a
+tetrahedral parent and reference-edge inclusion for each segment.
 `V3` and `V1` are real scalar continuous Lagrange spaces on `T3` and `T1`.
 The library supplies `runtime_array` for solver data with no domain and
 `runtime_extent` for sizes known at run time.
 
 ```python
 D3 = mesh(x3, EuclideanSpace(3))
-D1 = side_domain(D3, T1, "tissue")
+D1 = side_domain(D3, T1, *T1_sides["tissue"].entries)
 identity = transformation_law((), 0)
 
 p3, q3 = function(V3, "p3"), function(V3, "q3")
@@ -373,7 +381,7 @@ grad_q1 = gradient(push_forward(q1, D1, transformation_law(V1)), D1)
 tissue = integral(index_sum(grad_p3[m] * grad_q3[m], (m,)), D3)
 vessel = integral(index_sum(grad_p1[m] * grad_q1[m], (m,)), D1)
 
-from_tissue = side_map(T3, T1, "tissue")
+from_tissue = T1_sides["tissue"]
 p3_1, q3_1 = pull_back(p3, from_tissue), pull_back(q3, from_tissue)
 exchange = push_forward(beta * (p1 - p3_1) * (q1 - q3_1), D1, identity)
 coupling = integral(exchange, D1)
@@ -387,8 +395,8 @@ exchange possible; pushing it forward then gives a field on `D1`.
 The three integrals have no domain and add into one form.
 
 For one segment kernel, the package supplies a containing tetrahedron and
-its local data. The side declaration names that parent slot, and its side
-data give the reference-edge inclusion. Continuity of `p3` makes the trace
+its local data. The relation entries select the parent slots and
+reference-edge inclusions. Library-enforced continuity of `p3` makes the trace
 independent of which containing tetrahedron the package chooses.
 
 Lowering follows the [facet walkthrough](#from-the-facet-integral-to-a-kernel).
@@ -399,7 +407,7 @@ spaces' maps. The reference-edge positions have only twelve possibilities
 and select it with a runtime index.
 
 For a nonconforming network, subdivide the segments into parts lying in
-individual tetrahedra. A topology of these parts has sides into both meshes;
+individual tetrahedra. Construct relations from the topology of these parts into both meshes;
 use its side domain for integration and restrict both fields. The inclusion
 points can lie anywhere in the reference tetrahedron, so basis evaluation is
 at run time, as for a cut cell.

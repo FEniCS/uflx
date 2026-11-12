@@ -1,7 +1,7 @@
 # Topological meshes
 
 UFLx describes local kernels as mathematics. A topology describes the local
-cell configuration used by a kernel: its cell types and named side relations.
+cell configuration used by a kernel. Explicit side maps relate configurations.
 The finite element package selects concrete mesh cells and supplies their
 local coefficient and coordinate data. Mesh-wide cell counts, global cell
 numbers, neighbour lookup, iteration over a mesh and global assembly are
@@ -51,20 +51,19 @@ at evaluation is not yet covered; a library specialises kernels by cell type.
 `AbstractTopology` describes a finite local cell configuration without physical
 coordinates. Each position in `cell_types` is a distinct local cell, called a
 *cell slot*. Slots identify the mathematical inputs of a kernel, not concrete
-cells in the package's mesh.
+cells in the package's mesh. For reference cells, it is a labelled disjoint union; even a one-slot topology
+retains its identity independently of its reusable reference cell.
 
 | `AbstractTopology` | |
 | ------------------ | - |
 | Extends | `Base` |
-| Provides | `cell_types`, `sides`, and `side_data(cell_slot, side)` for declared sides |
+| Provides | `cell_types` |
 | Derived | `dimension`, the dimension of the cell types |
 | Defined by | A subclass outside the core |
 
 - `cell_types` is a nonempty `tuple` of `AbstractCellType`s of the same
   dimension. Repeated types are allowed: `(K, K)` describes two distinct
   local cells of type `K`.
-- `sides` is `()`, or one tuple of side declarations per slot, as defined
-  under [Sides of a topology](#sides-of-a-topology).
 - For a topology `topology`, a `cell_slot` is an `int` satisfying
   `0 <= cell_slot < len(topology.cell_types)`.
   Negative numbers do not select slots from the end.
@@ -218,181 +217,75 @@ The library of the field's space supplies its local representation and data
 still describe basis functions, components, quadrature points and other local
 arrays.
 
-## Sides of a topology
-
-A topology `S` can describe integration cells or pieces viewed from named
-parent cells. Side declarations identify parent slots; local side data supply
-the mathematical inclusions and normals. The package supplies the concrete
-neighbouring cells' data before kernel evaluation.
-
-### `sides`
-
-`S.sides` is `()` when there are no sides. Otherwise it has one tuple per slot
-of `S`. A tuple may be empty; its entries have distinct names. Each entry is
-`(side, parent_topology, parent_cell_slot)`:
-
-| Entry | Meaning |
-| ----- | ------- |
-| `side` | A `str` naming this side, such as `"+"` or `"inside"`. |
-| `parent_topology` | The topology containing the parent cell from which a field is read. |
-| `parent_cell_slot` | A valid integer cell slot in `parent_topology`. |
-
-Both the side cell and the selected parent cell must be reference
-cells. Side order has no meaning; names select sides. Parent dependencies
-obey the acyclic construction rules of `Base`.
-
-For a parent configuration `T` with cell types `(K, K)` and an interval `F`,
-a single interior facet has cell types `(F,)` and sides
-`((("+", T, 0), ("-", T, 1)),)`. The different parent slots preserve the two
-local fields. A boundary facet needs only `((("inside", T, 0),),)`.
-Parents may have different cell types or belong to different topologies.
-
-### The image of a cell on a side
-
-For slot `i` of `S` with reference cell $F_i$ and side `(s, T, j)`, an
-inclusion $A_i:F_i\to K_j$ describes the points at which the parent field
-is evaluated. It can describe a whole cell, a facet, part of a facet or an
-interior cut. Vertex permutations are represented by the map, including for
-whole-cell inclusions.
-
-All sides of one integration cell use the same parameter point in $F_i$.
-For an ordinary interface the parent coordinate maps composed with their
-inclusions agree. Physical coincidence is a library-supplied assumption, not
-a core check; periodic and mortar couplings may pair distinct physical points.
-
-### Side data
-
-`topology.side_data(cell_slot, side)` supplies the geometry of a declared
-side. `cell_slot` selects a cell of `topology`; `side` is the name of one of
-that cell's side declarations. The method returns
-`(inclusion, reference_normal)`.
-
-The returned objects have the following roles:
-
-- `inclusion` is a [`DomainMap`](geometry.md#domainmap) from the selected
-  reference cell into the parent reference cell, with no free indices. Its
-  real parameterisation has no argument spaces.
-- When the selected cell has dimension one less than the parent cell,
-  `reference_normal` is a real vector expression on the selected reference
-  cell or with no domain. It has one component per parent reference
-  coordinate, no free indices and no argument spaces. It is nonzero and
-  orthogonal to the image tangents wherever evaluated. Its length need not
-  be one. It points out of the parent reference cell on a boundary piece;
-  the library chooses its orientation on an interior cut.
-- In other dimensions, `reference_normal` is `None`.
-
-The inclusion maps into the parent reference cell. Its differential has full
-column rank wherever geometry formulas require it; integration uses the given
-parameterisation and counts multiplicity. The core assumes these mathematical
-conditions rather than validating concrete mesh geometry.
-
-The data may depend on supplied local coefficients. Expressing an inclusion
-in reference coordinates does not imply independence from physical geometry:
-a cut or mortar intersection can move. Libraries expose this dependence as
-symbolic operands or explicit reconstruction and derivative rules (see
-[Geometry dependence](geometry.md#geometry-dependence)). The package computes
-intersections and supplies data; UFLx describes the resulting mathematics.
-
-### Mixed cells and facet types
-
-A cell-type pair alone does not determine an interface. The configuration also
-specifies its reference integration cell and one inclusion per side. For a
-triangle and quadrilateral, take $F=[0,1]$ and, for example,
-$A_+(t)=(1-t,t)$ and $A_-(t)=(0,t)$. In three dimensions $F$ can be a reference
-triangle or quadrilateral. A library specialises the same form for the needed
-cell and interface configurations and supplies orientation-dependent local
-maps; the core does not enumerate combinations or dispatch kernels.
-
-### Cells that are pieces
-
-Hanging facets, mortar intersections and embedded network segments use the
-same side data. The package supplies each piece and its inclusions. A fixed
-local collection can be described by several slots; a runtime number of
-pieces can instead be processed by repeated kernel calls or local quadrature
-arrays. See the [network example](../examples/coupling.md#a-1d-network-in-a-3d-mesh).
-
 ## Restriction
 
-Restriction is evaluation through a named side's inclusion. For a field `f`
-on `T`, use `pull_back(f, side_map(T, S, s))`. For a field on a physical local
-mesh `D`, use `pull_back(f, side_map(D, E, s))`, where `E` is a mesh on `S`.
-Its geometry determines the integration measure, while the chosen side
-specifies where the field is read.
-
-### The inclusion
-
-For slot `i` with side `(s, T, j)`, let `(A_i, reference_normal)` be
-`S.side_data(i, s)`. Let `B_i = cell_map(T, j)` for a topology field, or
-`B_i = cell_map(D, j)` for a field on a mesh with topology `T`.
-The local restriction is
-
-```python
-pull_back(pull_back(f, B_i), A_i)
-```
-
-It has domain $F_i$ and the free indices of `f`. There is no neighbour-table
-lookup, cell-index substitution or implicit summation. Restrictions can be
-combined at the paired points. For more than two sides the core defines no
-canonical jump; the form combines the named restrictions explicitly.
+A side map is a relation from a source configuration to a parent configuration.
+Each source slot selects a parent slot and a reference inclusion. The topology
+itself stores no side declarations, names or normal data.
 
 ### `SideMap`
 
-`SideMap(parent, restriction_domain, side)` describes how to read a field on
-`parent` from a named side of `restriction_domain`. Each cell of
-`restriction_domain` uses its side declaration to select a parent cell and
-an inclusion into that cell.
-
-The map goes from `restriction_domain` into `parent`. Pulling a field back
-through it produces a field on `restriction_domain`. The restriction remains
-lazy until a cell of that domain is read.
-
-| `SideMap(parent, restriction_domain, side)` | |
-| ----------------------------------------- | - |
+| `SideMap(parent, source, entries)` | |
+| -------------------------------- | - |
 | Extends | `Base` |
-| Takes | `parent, restriction_domain: AbstractTopology \| Mesh`, `side: str` |
-| Properties | `parent`, `restriction_domain`, and `side`, as described below |
+| Takes | `parent, source: AbstractTopology \| Mesh`, `entries: tuple[tuple[int, DomainMap], ...]` |
+| Properties | `parent`, `source`, `entries` |
 | Derived | `free_indices`, always `()` |
-| Requires | The domain conditions below |
-| Raises | `ValueError` if a domain condition fails |
+| Requires | One entry per source slot; valid parent slots; inclusions without free indices and with endpoints as below |
+| Raises | `ValueError` if an entry or domain condition is invalid |
 
-| Property | Meaning |
-| -------- | ------- |
-| `parent` | The topology or mesh carrying the field to restrict. |
-| `restriction_domain` | The topology or mesh on which the restricted field is defined. |
-| `side` | The name selecting a parent cell and inclusion for each cell of `restriction_domain`. |
+For source reference cell $F_i$, entry `(j, A)` requires
+`A.parameter_domain == F_i` and `A.ambient_domain == K_j`, the selected parent
+reference cell. Both must be reference cells. Parent slots may repeat.
+Each endpoint may independently be a topology or a mesh; for a mesh, its
+topology determines its reference cells.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `side_map(parent, restriction_domain, side)` | | `parent, restriction_domain: AbstractTopology \| Mesh`, `side: str` | `SideMap(parent, restriction_domain, side)` |
+| `side_map(parent, source, *entries)` | | `parent, source: AbstractTopology \| Mesh`, `entries: tuple[int, DomainMap]` | `SideMap(parent, source, entries)` |
+| `compose(outer, inner)` | | `outer, inner: SideMap` | The composed `SideMap`, requiring `inner.parent == outer.source` |
 
-For the conditions below, the parent topology is `parent` itself when it is
-a topology, and `parent.topology` otherwise. The restriction topology is
-obtained from `restriction_domain` in the same way.
-
-| Domain condition | Requirement |
-| ---------------- | ----------- |
-| Kind of inputs | `parent` and `restriction_domain` are both topologies or both meshes. |
-| Side declarations | Every slot of the restriction topology has a side named `side`, whose declared parent topology is the parent topology. |
-| Reference cells | Every slot of the restriction topology and every selected parent slot is a reference cell. |
-
-The geometry of `restriction_domain` need not equal the selected parent's
-trace. The helper [side_domain](geometry.md#side-domains) constructs a mesh
-from a chosen side. Coupled fields share the restriction domain even when
-their parent geometries differ.
+The variadic factory collects entries into the node's tuple:
 
 ```python
-interface_side = side_map(
-    parent=volume_mesh,
-    restriction_domain=interface_mesh,
-    side="+",
-)
-restricted_field = pull_back(field, interface_side)
-# restricted_field has domain interface_side.restriction_domain.
+plus = side_map(D, E, (0, A_plus))
+minus = side_map(D, E, (1, A_minus))
+jump = pull_back(u, plus) - pull_back(u, minus)
 ```
 
-Pulling `restricted_field` back by `cell_map(interface_mesh, i)` gives
-`pull_back(pull_back(field, B_i), A_i)`, with the selected parent cell map
-`B_i` and inclusion `A_i` defined under [The inclusion](#the-inclusion).
+`E` is the shared source, with independently specified geometry. Its measure
+need not be the measure induced by either parent trace. Names such as `plus`
+or `"+"` are library aliases for constructed maps, not map properties.
+Orientation belongs to [Normal](geometry.md#normal), not to the map identity.
+
+### The inclusion
+
+For `sm = SideMap(parent, source, entries)` and `entries[i] = (j, A_i)`, define
+`B_i = cell_map(parent, j)`. Restriction satisfies
+
+```python
+pull_back(pull_back(f, sm), cell_map(source, i))
+# becomes
+pull_back(pull_back(f, B_i), A_i)
+```
+
+There is no connectivity lookup or implicit sum. The result has domain $F_i$
+and the free indices of the field.
+
+### Composition
+
+If `inner.entries[i] = (j, A)` and `outer.entries[j] = (k, B)`, the composite
+entry is `(k, C)`, where
+
+```python
+C = domain_map(A.parameter_domain, pull_back(B.parameterisation, A), B.ambient_domain)
+```
+
+The composite has `inner.source` and `outer.parent` as endpoints. Exact
+intermediate endpoint identity is required; matching reference-cell types is
+insufficient. Composition constructs another `SideMap`, without a new node or
+an implied rule for composing outward normals. It handles subconfigurations,
+permutations, repeated selections and nested inclusions uniformly.
 
 ## A field on a topological mesh
 
@@ -401,7 +294,7 @@ to describe two distinct triangle slots:
 
 ```python
 K = ReferenceSimplex(2)
-T = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)), ())
+T = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
 u0 = pull_back(u, cell_map(T, 0))
 u1 = pull_back(u, cell_map(T, 1))
 ```
