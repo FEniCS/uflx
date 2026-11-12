@@ -835,6 +835,10 @@ The descriptions below write `D`, `S` and `s` for `parent`,
 The chosen side supplies the integration measure. Any measure conversion
 belongs in the integrand.
 
+Coordinate functions may be vector-valued or tensors of scalar functions. For a
+conforming interface, the package supplies coordinates and facet correspondence
+whose physical traces agree; the coordinate element alone does not ensure this.
+
 #### Traces and normals
 
 The restriction of an expression is the value of the expression on the cell

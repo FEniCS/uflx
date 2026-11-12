@@ -23,10 +23,20 @@ The core does not specify an ABI or perform global assembly.
 | --- | --- |
 | Cell and tabulation library, such as [Basix](https://docs.fenicsproject.org/basix/main/python/index.html) | Define reference cells and finite elements; provide basis values and derivatives at requested points, quadrature rules and DOF transformations |
 | Compiler | Request the reference data needed by the form; build and optimise expressions; generate kernels and choose data layouts |
-| Solver runtime, such as DOLFINx | Supply mesh coordinates, coefficient values, constants and entity information; call kernels and assemble their contributions |
+| Solver runtime, such as DOLFINx | Bind local inputs to concrete cells and fields; gather coordinates and coefficients; supply entity correspondence and DOF transformations; call kernels and scatter their contributions |
 
 Table generation, code generation and data loading may be separate stages.
 Tables may be embedded constants, separately loaded data or runtime inputs.
+
+## Local layout
+
+Compilation preserves declared cell slots, side selections and argument spaces,
+including unused slots and zero forms. A backend may reject layouts its ABI
+cannot represent. Library gather/scatter maps establish assembled continuity
+without identifying the local tensor axes; see [function spaces](forms.md#abstractfunctionspace).
+
+Integration kernels need not correspond one-to-one with assembled matrix blocks;
+see the [three-material example](../examples/local_bindings.md).
 
 ## Compiler choices
 

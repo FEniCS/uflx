@@ -25,6 +25,12 @@ with or without a domain or topology.
 
 A space with `domain is None` has functions with no spatial argument.
 
+Ordinary finite-element spaces supply independent cell-local basis coefficients.
+The package establishes assembled continuity through DOF maps and transformations:
+it gathers inputs and scatters contributions without merging local tensor axes. Explicitly constrained or macro-element spaces may define other semantics.
+The package may bind functions in different local configurations to restrictions
+of the same field; those associations are external to the core.
+
 A library may supply `transformation_law(V)` for spaces with a
 [`TransformationLaw`](geometry.md#transformationlaw). This is not a required space property
 or a core overload; the core constructor remains `transformation_law(variances, weight)`.

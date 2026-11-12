@@ -209,9 +209,9 @@ enforces equality of their velocities over a time step.
 
 ### Domains
 
-For a minimal example, split the unit square into a fluid triangle `(0,1,2)`
-and a solid triangle `(1,3,2)`. The library supplies a degree-1 coordinate
-function `x` on `square`, with vertex values `((0,0), (1,0), (0,1), (1,1))`:
+Take one fluid triangle `(0,1,2)` and one solid triangle `(1,3,2)` as local
+input slots. One physical realisation is a unit square, with degree-1 coordinate
+values `((0,0), (1,0), (0,1), (1,1))`:
 
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
@@ -446,3 +446,7 @@ and `P = ReferenceSimplex(0)`. Each example describes a local configuration.
   containing one triangular and one quadrilateral facet, with types `(K, Q)`
   and sides `((("inside", U3, 0),), (("inside", U3, 0),))`. Each slot has
   its own inclusion; integrating this configuration adds both contributions.
+
+
+See [Local fields and library bindings](local_bindings.md) for reusing fields
+across separate volume and interface calculations.

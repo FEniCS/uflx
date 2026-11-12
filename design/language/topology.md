@@ -84,8 +84,10 @@ The package supplies the packing and local-to-patch degree-of-freedom maps;
 no runtime topology is required.
 
 A topology whose cell types are reference cells may be the domain of an
-expression or space. Its points are cell-labelled reference points; continuity
-between cells is a property of the space. A topology is not an `AbstractDomain`,
+expression or space. Its points are cell-labelled reference points; shared
+vertices or sides do not identify field coefficients across slots. See
+[local spaces and library bindings](forms.md#abstractfunctionspace).
+A topology is not an `AbstractDomain`,
 so `Coordinate`, `Gradient` and `Integral` reject it.
 
 Identity is structural. A concrete topology stores its identifying arguments,

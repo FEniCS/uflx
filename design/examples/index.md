@@ -14,6 +14,8 @@ shows the familiar UFL syntax.
 
 ## Topics
 
+- **[Local fields and library bindings](local_bindings.md).** Gather/scatter maps
+  and three-material coupling.
 - **[Tensor operations](tensors.md).** Construct tensor operations
   from indices and represent symmetry in stored data.
 - **[Geometry and integration](integration.md).** Map reference
