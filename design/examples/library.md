@@ -137,6 +137,34 @@ def static_sides(source, selections):
     }
 ```
 
+#### Worked edge inclusions
+
+The [topological-mesh walkthrough](../language/topology.md#sidemap) takes
+`A0` and `A1` as library inputs. For its two unit reference triangles, the
+library can construct them explicitly:
+
+```python
+K = ReferenceSimplex(2)
+I = ReferenceSimplex(1)
+t = coordinate(I)[0]
+
+# Source vertex order is 1 -> 2 in each parent cell.
+A0 = domain_map(I, tensor((Integer(1) - t, t)), K)  # Slot 0: diagonal edge.
+A1 = domain_map(I, tensor((Integer(0), t)), K)      # Slot 1: left edge.
+
+# Reversing the source vertex order uses this interval map.
+B = domain_map(I, tensor((Integer(1) - t,)), I)
+```
+
+At `t = 0`, `A0` reads `(1, 0)` and `A1` reads `(0, 0)` in their respective
+parent cells; both points have vertex label 1. At `t = 1`, both read `(0, 1)`,
+with label 2. The library's `static_side_map` constructs these inclusions from
+the vertex correspondence rather than requiring the caller to write formulae.
+
+For local fields $u_0(\xi,\eta)=\xi+2\eta$ and
+$u_1(\xi,\eta)=3\xi-\eta$, these inclusions give traces $1+t$ and $-t$,
+and a jump $1+2t$. Composing `A0` with `B` gives `(t, 1-t)`.
+
 ### Reference orientation
 
 For a planar facet of a convex reference cell, this library chooses the
