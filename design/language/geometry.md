@@ -1,17 +1,5 @@
 # Geometry and calculus
 
-A mesh combines a topology with a coordinate field mapping its reference cells
-into physical space. Fields can be defined on the topology or on the mesh;
-pull-back and push-forward relate their reference and physical representations.
-Changing the coordinate field changes the geometry while retaining the topology.
-
-Differentiation and integration are defined on coordinate domains and meshes.
-On a mesh they act cellwise, with the Jacobian relating reference and physical
-derivatives and integration measures. The ambient Euclidean metric defines
-tangential gradients, integration densities and unit conormals, including for
-embedded curves and surfaces. Directional differentiation accounts for
-dependence on fields and on the geometry itself.
-
 ## Meshes
 
 ### `Mesh`
@@ -19,6 +7,9 @@ dependence on fields and on the geometry itself.
 `Mesh(coordinate_function, ambient_domain)` describes cells whose physical
 coordinates are given by `coordinate_function` in `ambient_domain`. The domain
 of `coordinate_function` is the topology that specifies the cell slots.
+
+A `Mesh` describes a fixed local cell configuration, such as a cell or an
+interface pair, with physical geometry supplied by the coordinate field.
 
 | `Mesh(coordinate_function, ambient_domain)` | |
 | ------------ | - |
@@ -31,18 +22,19 @@ of `coordinate_function` is the topology that specifies the cell slots.
 | Raises | `TypeError` if the coordinate expression has no topology domain, and `ValueError` if another requirement fails |
 
 Mesh identity depends on both properties. Replacing coordinates reconstructs
-the mesh and preserves its requirements. Below, `D = mesh(x, Q)` and
-`T = x.domain`.
+the mesh and preserves its requirements. Below, `physical_mesh = mesh(coordinates, ambient_domain)` and
+`topology = coordinates.domain`.
 
 #### Mesh cell maps
 
-For a mesh `D = mesh(x, Q)` on topology `T`, `D[j]` (equivalently
-`cell_map(D, j)`) selects local slot `j`. Its reference cell is `T.cell_types[j]` and its derived
-parameterisation is `pull_back(x, T[j])`.
+For `physical_mesh = mesh(coordinates, ambient_domain)`, let
+`topology = coordinates.domain`. Indexing `physical_mesh[cell_slot]` selects
+that local cell. Its reference cell is `topology.cell_types[cell_slot]`, and
+its parameterisation is `pull_back(coordinates, topology[cell_slot])`.
 
-The cell map retains the selected cell when its coordinates change:
-substitution reconstructs it from `D` and `j`. For a field `f` on `D`,
-`pull_back(f, D[j])` is its reference-cell representation.
+The cell map retains its parent and slot when coordinates change. Lowering
+uses `pull_back(u, physical_mesh[cell_slot])` to express a mesh field on the
+selected reference cell.
 
 #### Examples
 
@@ -50,24 +42,28 @@ Use the two-triangle topology of the [static topology
 example](../examples/library.md#a-static-topology), on reference cells:
 
 ```python
-K = ReferenceSimplex(2)
-square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
+reference_triangle = ReferenceSimplex(2)
+square_topology = StaticTopology((reference_triangle, reference_triangle), ((0, 1, 2), (1, 3, 2)))
 ```
 
-Let `x` be a vector Lagrange function of degree 1 on `square`, of value shape
+Let `coordinates` be a vector Lagrange function of degree 1 on `square_topology`, of value shape
 `(2,)`, with vertex values $(0, 0)$, $(1, 0)$, $(0, 1)$ and $(1, 1)$.
-The resulting physical mesh is the square:
+Using the library's `Lagrange` space, the declarations are:
 
 ```python
-D = mesh(x, EuclideanSpace(2))
+coordinate_space = Lagrange(square_topology, 1, (2,))
+coordinates = function(coordinate_space, "coordinates")
+physical_mesh = mesh(coordinates, EuclideanSpace(2))
 ```
 
-- `D.topology` is `square`, with two triangle slots. `D[0]`
-  reads the first; `D[1]` reads the second.
-- The parameterisation `pull_back(x, square[1])` evaluates to
+- `physical_mesh.topology` is `square_topology`, with two triangle slots. `physical_mesh[0]`
+  reads the first; `physical_mesh[1]` reads the second.
+- The parameterisation `pull_back(coordinates, square_topology[1])` evaluates to
   $(1 - X_1, X_0 + X_1)$ for the supplied coordinates.
 
 ## Calculus on a domain
+
+Calculus uses the Euclidean metric of the ambient coordinate domain.
 
 ### `Coordinate`
 
@@ -84,9 +80,10 @@ coordinate domain. It is a terminal.
 
 On a coordinate domain $P$, `coordinate(P)` is the identity $X(p) = p$.
 
-On `D = mesh(x, Q)`, `coordinate(D)` is the physical coordinate field on
-`D`, whereas `x` is defined on the topology `T`. Its cell pull-back is
-`pull_back(coordinate(D), D[j]) = pull_back(x, T[j])`.
+For `physical_mesh = mesh(coordinates, ambient_domain)`,
+`coordinate(physical_mesh)` is defined on the physical mesh, whereas
+`coordinates` is defined on its topology. Pulling the physical coordinate field
+back through a cell map gives that cell's parameterisation.
 
 ### `Gradient`
 
@@ -119,31 +116,27 @@ For a domain $P$ of dimension $k$ in $n$ ambient dimensions:
   the gradient of any extension off $P$, projected orthogonally onto its
   tangent space. The result is independent of the extension.
 
-#### Pull-backs of `Gradient`
-
-Pull-back does not commute with `Gradient`: `PullBack(Gradient(f, Q), D)`
-reads the gradient in the frame of `Q` at the mapped point.
-
 #### Examples
 
 Start with a scalar expression on `EuclideanSpace(3)`:
 
 ```python
-P = EuclideanSpace(3)
-X = coordinate(P)
-x, y, z = X[0], X[1], X[2]
-f = x * y * z
+coordinate_domain = EuclideanSpace(3)
+coordinates = coordinate(coordinate_domain)
+x, y, z = coordinates[0], coordinates[1], coordinates[2]
+u = x * y * z
 ```
 
 | Expression                              | Value shape | Meaning                                       |
 | --------------------------------------- | ----------- | --------------------------------------------- |
-| `gradient(f, P)`                        | `(3,)`      | The gradient $(yz, xz, xy)$, after evaluation |
-| `gradient(gradient(f, P), P)`           | `(3, 3)`    | The Hessian of `f`                            |
-| `gradient(X, P)`                        | `(3, 3)`    | The identity matrix, after evaluation         |
+| `gradient(u, coordinate_domain)`                        | `(3,)`      | The gradient $(yz, xz, xy)$, after evaluation |
+| `gradient(gradient(u, coordinate_domain), coordinate_domain)`           | `(3, 3)`    | The Hessian of `u`                            |
+| `gradient(coordinates, coordinate_domain)`                        | `(3, 3)`    | The identity matrix, after evaluation         |
 
-For a scalar field `w` on a surface mesh `M` in `EuclideanSpace(3)`,
-`gradient(w, M)` has shape `(3,)`. `gradient(coordinate(M), M)` is the
-orthogonal projection onto the tangent plane, with shape `(3, 3)`.
+For a scalar field `u` on a surface mesh `surface_mesh` in `EuclideanSpace(3)`,
+`gradient(u, surface_mesh)` has shape `(3,)`.
+`gradient(coordinate(surface_mesh), surface_mesh)` is a `(3, 3)` matrix that
+orthogonally projects ambient vectors onto the surface's tangent plane.
 
 ### `Divergence` and `Curl`
 
@@ -233,42 +226,50 @@ on the integrand and the domain's geometry.
 | Static type      | The value shape and free indices of `expression`, with no domain |
 | Raises           | `ValueError` for `expression` if a requirement fails                         |
 
+```{note}
+`Integral` does not support partial integration that leaves a field on another spatial domain.
+```
+
 #### Integration over coordinate domains
 
 On a coordinate domain $P$, `Integral(f, P)` is the Lebesgue integral
 $\int_P f\,\mathrm{d}X$. In dimension zero it is the value at the single
 point of $R^0$. Domain-free expressions have the
 [constant-field interpretation](expressions.md#domain-free-expressions).
-For `T = UnitSimplex(2)` and `X = coordinate(T)`, `integral(X[0], T)` has
-value $1/6$ and `integral(Integer(1), T)` has value $1/2$.
+For `reference_triangle = UnitSimplex(2)` and `coordinates = coordinate(reference_triangle)`, `integral(coordinates[0], reference_triangle)` has
+value $1/6$ and `integral(Integer(1), reference_triangle)` has value $1/2$.
 
-#### Integration over mesh cells
+#### Integration over a mesh
 
-`Integral(f, D)` is the sum of the integrals over the cell slots of `D`.
-For each slot `j`, let `K_j` be its reference cell. The cell contribution is
-
-```python
-integral(pull_back(f, D[j]) * density(D[j]), K_j)
-```
-
-For a scalar field `f` on `D`, the sum can be constructed with a Python loop:
+For a field `u` on a mesh, write
 
 ```python
-sum(
-    (integral(pull_back(f, D[j]) * density(D[j]), K) for j, K in enumerate(D.topology.cell_types)),
-    Integer(0),
-)
+integral(u, physical_mesh)
 ```
 
-The loop runs when constructing the expression.
+Users do not need to write cell pull-backs for mesh integration. Lowering
+introduces them automatically; the code below explicitly writes out that expansion.
 
-For the square mesh above, `integral(Integer(1), D)` is the sum of the two triangle areas, giving 1.
+Integral lowering sums over the cell slots of `physical_mesh`. For a mesh
+with one slot and a scalar field, the expansion is one reference-cell integral:
 
-For a field on `D.ambient_domain`, the pull-back instead uses
-`domain_map(K_j, D[j].parameterisation, D.ambient_domain)`. For such fields,
-the sum equals integration over the geometric union when cell maps are
-injective almost everywhere and their images overlap only on sets of zero
-measure.
+```python
+cell = physical_mesh[0]
+reference_field = pull_back(u, cell)
+integral(reference_field * density(cell), cell.reference_cell)
+```
+
+For several cell slots, possibly of different types, the expansion is:
+
+```python
+total = Integer(0)
+for cell in physical_mesh:
+    reference_field = pull_back(u, cell)
+    total += integral(reference_field * density(cell), cell.reference_cell)
+```
+
+The resulting `pull_back` nodes are evaluated by
+[pull-back lowering](lowering.md#expanding-pull-backs).
 
 Array-valued integrands are integrated componentwise. A domain-free array
 has the same value on every cell; its indices do not select cell slots.
@@ -281,50 +282,48 @@ using operations on the parameter domain $P$.
 
 ### Coordinate-map evaluation
 
-For `D = domain_map(P, psi, Q)` and a field `f` on `Q`, `pull_back(f, D)`
-has domain `P` and value $f(\psi(X))$ at each parameter point $X$.
+Pull-back evaluates a field at the points given by a coordinate map. The
+result is a field on the map's parameter domain.
 
 For example, parameterise the diagonal edge of the unit triangle by
 $\psi(t) = (1-t,t)$:
 
 ```python
-T, S = UnitSimplex(2), UnitSimplex(1)
-X, t = coordinate(T), coordinate(S)[0]
-edge = domain_map(S, tensor((Integer(1) - t, t)), T)
-f = X[0] * X[1]
-trace = pull_back(f, edge)  # Value (1 - t) * t on S.
+reference_triangle = UnitSimplex(2)
+reference_interval = UnitSimplex(1)
+coordinates = coordinate(reference_triangle)
+t = coordinate(reference_interval)[0]
+
+edge_coordinates = tensor((Integer(1) - t, t))
+edge = domain_map(reference_interval, edge_coordinates, reference_triangle)
+u = coordinates[0] * coordinates[1]
+trace = pull_back(u, edge)  # Value (1 - t) * t on reference_interval.
 ```
 
 The map's target must match the field's domain: this `edge` reads fields on
-`T`. A map into `EuclideanSpace(2)` would instead read fields on that space.
-
-Coordinate maps compose by pulling back their parameterisations. If `E`
-maps a coordinate domain `R` into `P`, their composition is
-`domain_map(R, pull_back(psi, E), Q)`. Composition through a cell map keeps
-nested pull-backs to retain cell selection.
+`reference_triangle`. A map into `EuclideanSpace(2)` would instead read fields on that space.
 
 ### Integration through a map
 
-To integrate a scalar field `f` through `D = domain_map(P, psi, Q)`, pull it
-back to the coordinate domain `P` and multiply by the map's density:
+To integrate a scalar field `u` through `coordinate_map = domain_map(parameter_domain, parameterisation, target_domain)`, pull it
+back to the coordinate domain `parameter_domain` and multiply by the map's density:
 
 ```python
-integral(pull_back(f, D) * density(D), P)
+integral(pull_back(u, coordinate_map) * density(coordinate_map), parameter_domain)
 ```
 
-Writing $\rho$ for `density(D)`, this is the parameter-domain integral
+Writing $f$, $\psi$, $P$ and $\rho$ for the field, parameterisation,
+parameter domain and density, this is the integral
 
 $$
 \int_P f(\psi(X))\,\rho\,\mathrm{d}X.
 $$
 
 For the edge above, `density(edge)` is $\sqrt{2}$, so
-`integral(trace * density(edge), S)` is $\sqrt{2}/6$.
+`integral(trace * density(edge), reference_interval)` is $\sqrt{2}/6$.
 
-The integral equals integration over the image when the parameterisation is
-injective almost everywhere; repeated coverage is counted with multiplicity.
-Density is independent of orientation. Circulation uses the oriented tangent
-from the Jacobian, and flux uses an oriented normal field (see
+Density does not depend on orientation. Circulation uses the oriented tangent
+from the Jacobian; flux uses an oriented normal field (see
 [The flux through a surface](../examples/surfaces.md#the-flux-through-a-surface)).
 
 Integration preserves free indices in the field and the map. An explicit
@@ -332,62 +331,48 @@ Integration preserves free indices in the field and the map. An explicit
 
 ### Evaluation at points
 
-A point is a map from `EuclideanSpace(0)`, which contains a single point.
-Pull-back evaluates the field there; integration over this zero-dimensional
-domain returns the value with no spatial domain. Its density is $1$.
+#### Reference-cell evaluation
 
-#### Points in a coordinate domain
-
-For a field `f` on a coordinate domain `Q` and a domain-free coordinate vector
-`position` of shape `(Q.dimension,)`:
+Let `u` be a field on `reference_cell` and `reference_position` a supplied
+vector of reference coordinates. Point evaluation maps the single point of
+`EuclideanSpace(0)` to that position:
 
 ```python
-P0 = EuclideanSpace(0)
-point_map = domain_map(P0, position, Q)
-value = integral(pull_back(f, point_map), P0)
+point_domain = EuclideanSpace(0)
+point_map = domain_map(point_domain, reference_position, reference_cell)
+value = integral(pull_back(u, point_map), point_domain)
 ```
 
-The result preserves the field's value shape, scalar type and argument spaces.
-Its free indices are those of `f` followed by those of `point_map`, each taken
-once. Indexed positions give a family of samples; only an explicit sum combines
-them.
-
-#### Points in a mesh
-
-A mesh-field value additionally needs a cell selection. The package locates
-points in concrete cells and supplies reference positions within a known
-local slot. For a mesh `D`, local slot `j` and a domain-free array `positions`
-of reference coordinates:
-
-```python
-cell = D[j]
-local_field = pull_back(field, cell)
-point_map = domain_map(EuclideanSpace(0), positions[i], cell.reference_cell)
-values = integral(pull_back(local_field, point_map), EuclideanSpace(0))
-```
-
-`i` selects samples within one cell. The cell selection determines which
-trace is read at a shared point (see
-[Adjacent and coincident cells](../examples/integration.md#adjacent-and-coincident-cells)).
-
-Samples retain symbolic dependence on fields and positions, but define no
-field between points. Apply spatial derivatives and value transformations
-before sampling: for a mesh field, sample `gradient(field, D)` to obtain its
-physical gradient.
+`pull_back(u, point_map)` reads `u` at `reference_position`. Integration over
+`point_domain` produces `value` with no spatial domain. The density of
+`point_map` is $1$. `reference_position` is domain-free, with one component
+per reference coordinate.
 
 #### Quadrature
 
-A quadrature rule on a coordinate domain is a weighted sum of point
-evaluations. For a field `f` on `Q`, point-map family `p` into `Q` with
-parameter domain `EuclideanSpace(0)` and free index `i`, and weights `w`:
+In finite-element assembly, quadrature is applied locally after mesh integrals
+and pull-backs have been lowered. Here `reference_integrand` is scalar,
+defined on `reference_cell`, and already includes the integration density.
+Array-valued integrands are handled componentwise.
+
+The supplied reference quadrature `points` have shape `(num_points, dimension)`,
+where `dimension = reference_cell.dimension`; `weights` has shape
+`(num_points,)`. Quadrature lowering replaces
+`integral(reference_integrand, reference_cell)` with a weighted sum.
+The free index `i` in `points[i]` makes `domain_map` describe a family of
+point maps, one for each quadrature point:
 
 ```python
-index_sum(w[i] * integral(pull_back(f, p), EuclideanSpace(0)), (i,))
+point_domain = EuclideanSpace(0)
+i = index("i")
+point_maps = domain_map(point_domain, points[i], reference_cell)
+values = integral(pull_back(reference_integrand, point_maps), point_domain)
+approximation = index_sum(weights[i] * values, (i,))
 ```
 
-This approximates `integral(f, Q)` and is mathematically equal when the rule
-is exact for `f`. A quadrature pass applies a supplied rule. Integration
-through a map includes its density in the sampled integrand.
+`approximation` equals the reference-cell integral when the quadrature rule
+is exact for `reference_integrand`. Otherwise, `approximation` is a numerical
+approximation to the integral.
 
 Worked examples: [quadrature](../examples/integration.md#quadrature),
 [cut-cell integration](../examples/integration.md#integrating-over-a-cut-cell),
@@ -408,21 +393,24 @@ to a cell of a mesh.
 | Properties                             | `variances`, the transformation for each trailing value axis, and `weight`, the integer exponent of the determinant or density divisor |
 
 A law $m$ transforms a reference value $\hat f$ into the physical value
-$m_\psi(\hat f)$ using the cell map $\psi$:
+$m_\psi(\hat f)$ using the cell map $\psi$. Let $k$ be the reference-cell
+dimension and $n$ the ambient coordinate dimension:
 
 1. Transform each trailing axis listed in `variances`: multiply by $K^T$
    for `"covariant"` or by $J$ for `"contravariant"`. Leading axes are unchanged.
-2. Divide the result by $(\det J)^w$ for a full-dimensional cell, or by
-   $\rho^w$ for an embedded cell, where $w$ is `weight`.
+2. Divide the result by $(\det J)^w$ when $k=n$, or by $\rho^w$ when
+   $k<n$, where $w$ is `weight`.
 
 Here $J$, $K$ and $\rho$ are the cell map's [Jacobian, inverse Jacobian and
 density](#jacobian-and-density). Each transformed axis changes extent from
-the reference dimension to the ambient dimension. The determinant is signed.
-Variance names are checked statically.
+$k$ to $n$. Variance names are checked statically.
+
+For $k=n$, the signed determinant preserves orientation information.
+For $k<n$, the law uses the unsigned density, with orientation supplied separately.
 
 Examples of transformation laws:
 
-| Space                             | Law                                       | Legacy UFL map         |
+| Space                             | Law                                       | Mapping                |
 | --------------------------------- | ----------------------------------------- | ---------------------- |
 | Lagrange, vector Lagrange         | `((), 0)`                                 | identity               |
 | Nédélec, $H(\mathrm{curl})$       | `(("covariant",), 0)`                     | covariant Piola        |
@@ -430,11 +418,19 @@ Examples of transformation laws:
 | Discontinuous densities           | `((), 1)`                                 | $L^2$ Piola            |
 | Regge                             | `(("covariant", "covariant"), 0)`         | double covariant       |
 | Hellan–Herrmann–Johnson           | `(("contravariant", "contravariant"), 2)` | double contravariant   |
+| $H(\mathrm{curl}\,\mathrm{div})$ matrix fields | `(("covariant", "contravariant"), 1)` | [covariant–contravariant Piola](https://defelement.org/finite-elements.html) |
 
 The law has no orientation. A space of odd weight on a topology of lower
 dimension than the ambient coordinate domain gives its own signs for each pair
 of cell and facet, as the space gives the transformations of its degrees of
 freedom.
+
+#### Geometry-dependent bases
+
+`TransformationLaw` maps field-value axes. Elements such as Hermite and Argyris
+also need geometry-dependent basis transformations. The space library supplies
+these through [cell evaluation](forms.md#functions-in-a-space), without requiring
+a `TransformationLaw`.
 
 ### `PushForward`
 
@@ -442,8 +438,10 @@ freedom.
 to the physical mesh. `law` specifies how its value axes and density weight
 transform under each cell's coordinate map.
 
+`PushForward` applies a `TransformationLaw` to a topology field. Geometry-dependent basis transformations are supplied through cell evaluation by the space library.
+
 The identity law reverses pull-back cellwise; other laws also transform
-values. Push-forward is not a dual or adjoint operator.
+values.
 
 | `PushForward(expression, mesh, law)` |                                                                     |
 | ---------------------- | ------------------------------------------------------------------- |
@@ -509,53 +507,59 @@ inclusions alone ensure this.
 
 Restriction and tangential differentiation give different gradients:
 
-- Restricting `gradient(f, D)` retains the full parent-cell gradient, in the
+- Restricting `gradient(u, physical_mesh)` retains the full parent-cell gradient, in the
   ambient frame, as needed for a normal derivative.
-- For a side map `sm` from a mesh `E` to `D`,
-  `gradient(pull_back(f, sm), E)` is the tangential gradient along `E`.
+- For a side map `side_relation` from a mesh `interface_mesh` to `physical_mesh`,
+  `gradient(pull_back(u, side_relation), interface_mesh)` is the tangential gradient along `interface_mesh`.
 
 #### Example
 
-The example uses `D` and `square` of the
-[`Mesh`](#mesh) example, `I = ReferenceSimplex(1)`, a
-function `u` on `square`, and the diagonal of `square`:
+The example uses `physical_mesh` and `square_topology` of the
+[`Mesh`](#mesh) example and a function `topology_field` on `square_topology`.
+The diagonal has one interval slot, with an inclusion into each triangle:
 
 ```python
-diagonal = StaticTopology((I,), ((1, 2),))
-t = coordinate(I)[0]
-A_plus = domain_map(I, tensor((Integer(1) - t, t)), K)
-A_minus = domain_map(I, tensor((Integer(0), t)), K)
-plus = side_map(diagonal, (square[0], A_plus))
-minus = side_map(diagonal, (square[1], A_minus))
-jump = pull_back(u, plus) - pull_back(u, minus)
-E = side_domain(D, diagonal, (0, A_plus))
+reference_interval = ReferenceSimplex(1)
+diagonal = StaticTopology((reference_interval,), ((1, 2),))
+t = coordinate(reference_interval)[0]
+plus_inclusion = domain_map(reference_interval, tensor((Integer(1) - t, t)), reference_triangle)
+minus_inclusion = domain_map(reference_interval, tensor((Integer(0), t)), reference_triangle)
 ```
 
-`plus` and `minus` read the two traces; `E` takes its physical geometry from
+Use these inclusions to read the two traces and construct the physical edge:
+
+```python
+plus = side_map(diagonal, (square_topology[0], plus_inclusion))
+minus = side_map(diagonal, (square_topology[1], minus_inclusion))
+plus_trace = pull_back(topology_field, plus)
+minus_trace = pull_back(topology_field, minus)
+jump = plus_trace - minus_trace
+
+interface_mesh = side_domain(physical_mesh, diagonal, (0, plus_inclusion))
+```
+
+`plus` and `minus` read the two traces; `interface_mesh` takes its physical geometry from
 cell 0. See [Evaluating a trace](../examples/coupling.md#evaluating-a-trace)
 for their evaluation and the effect of reversing facet vertices.
 
-### Normals
+### `Conormal`
 
-A physical normal can be supplied as an ordinary real vector field on the
-integration domain, with one component per ambient coordinate direction.
-Fluxes and normal derivatives use this field directly; no reference conormal
-is required. The supplying method determines its orientation and normalisation.
-If the normal depends on geometry, that dependence must be exposed for
-[geometry differentiation](differentiation.md#geometry-preparation).
-
-### `MappedNormal`
-
-`MappedNormal` constructs a physical unit side conormal from reference
-conormals using the parent cell maps. The result is tangent to the parent cell
-and orthogonal to the side. Changing the supplied orientation leaves the side
+`Conormal` constructs the physical unit normal to a side within its parent
+cell. It maps reference conormals to vectors tangent to the parent cell and
+orthogonal to the side. Changing the supplied orientation leaves the side
 map and its pull-backs unchanged.
 
-| `MappedNormal(side_map, reference_conormals)` | |
+A method may instead supply a physical normal as a real vector field on the
+integration domain, with one component per ambient coordinate direction.
+The method supplies the orientation and normalisation. A unit normal
+perpendicular to a surface in $R^3$ is supplied this way (see
+[The flux through a surface](../examples/surfaces.md#the-flux-through-a-surface)).
+
+| `Conormal(side_map, reference_conormals)` | |
 | ------------------------------------ | - |
 | Extends | `AbstractExpression` |
 | Takes | `side_map: SideMap`, `reference_conormals: tuple[AbstractExpression, ...]` |
-| Free function | `mapped_normal(side_map, *reference_conormals)` |
+| Free function | `conormal(side_map, *reference_conormals)` |
 | Requires | A mesh parent; codimension one; one real conormal per source slot, without arguments or free indices |
 | Static type | Vector of the parent's ambient dimension, on `side_map.source`; no free indices or argument spaces |
 | Raises | `ValueError` for an invalid count, shape, domain, scalar type or free indices |
@@ -566,34 +570,37 @@ domain `A_i.parameter_domain` or `None`. The library supplies a nonzero vector
 orthogonal to the reference inclusion with its chosen orientation. Neither
 orthogonality nor nondegeneracy is established by shape validation.
 
-Using `D`, `E` and `A_plus` from the trace example, select the physical
+Using `physical_mesh`, `interface_mesh` and `plus_inclusion` from the trace example, select the physical
 parent and supply a reference conormal pointing out of its first triangle:
 
 ```python
-plus_mesh = side_map(E, (D[0], A_plus))
-m_plus = tensor((Integer(1), Integer(1)))
-outward = mapped_normal(plus_mesh, m_plus)
-inward = mapped_normal(plus_mesh, -m_plus)
+plus_side = side_map(interface_mesh, (physical_mesh[0], plus_inclusion))
+reference_conormal = tensor((Integer(1), Integer(1)))
+outward = conormal(plus_side, reference_conormal)
+inward = conormal(plus_side, -reference_conormal)
 ```
 
 Both normals use the same evaluation map; only their orientation differs.
 
-#### The pull-back of MappedNormal
+#### The pull-back of Conormal
 
-For `sm.entries[i] = (j, A_i)`, let `B_i = cell_map(sm.parent, j)` and
-$K = J^+$, the left inverse of the parent cell Jacobian. Pulling back
-`MappedNormal(sm, reference_conormals)` by `cell_map(sm.source, i)` gives
+Pulling `Conormal(side_relation, reference_conormals)` back to source cell `source_slot`
+transforms its reference conormal by the parent cell's inverse-transpose
+Jacobian, then normalises it:
 
-$$
-\frac{w}{|w|}, \qquad
-w = \operatorname{pull\_back}(K^T, A_i)\,\hat m_i.
-$$
+```python
+parent_slot, inclusion = side_relation.entries[source_slot]
+parent_jacobian = jacobian(side_relation.parent[parent_slot])
+inverse_at_side = pull_back(inverse(parent_jacobian), inclusion)
+mapped_conormal = transpose(inverse_at_side) @ reference_conormals[source_slot]
+unit_conormal = mapped_conormal / square_root(mapped_conormal @ mapped_conormal)
+```
 
-This requires a full-column-rank cell Jacobian and $w\ne0$. The vector lies
-in the parent's tangent space and is orthogonal to the mapped facet. The source
-geometry does not choose its orientation.
+The parent Jacobian must have full column rank, and `mapped_conormal` must be nonzero.
+The result lies in the parent's tangent space and is orthogonal to the mapped
+facet. Its orientation follows the reference conormal.
 
-#### The direction of the normal
+#### The direction of the conormal
 
 Let $k$ and $n$ be the parent mesh's topological and ambient dimensions.
 Orientation follows the supplied reference conormals. For $k=n$,
@@ -602,22 +609,20 @@ interface; coincident geometry or side names alone do not imply this.
 For $k<n$, matching tangent spaces are also required. On a surface, a jump
 therefore uses each side's conormal, as in `u_p * n_p + u_m * n_m`.
 
-`MappedNormal` is a side conormal. A unit normal field to a surface in $R^3$
-requires a separately supplied orientation field (see
-[The flux through a surface](../examples/surfaces.md#the-flux-through-a-surface)).
-
 #### Examples
 
-Continue with the square mesh and its diagonal. For a scalar field `f` on
-`D`, the squared jump of its normal derivative, measured in the orientation
+Continue with the square mesh and its diagonal. For a scalar field `u` on
+`physical_mesh`, the squared jump of its normal derivative, measured in the orientation
 of `outward`, is:
 
 ```python
-minus_mesh = side_map(E, (D[1], A_minus))
-grad_f = gradient(f, D)
-i = index("i")
-jump = pull_back(grad_f, plus_mesh)[i] - pull_back(grad_f, minus_mesh)[i]
-penalty = integral(index_sum(jump * outward[i], (i,)) ** Integer(2), E)
+minus_side = side_map(interface_mesh, (physical_mesh[1], minus_inclusion))
+field_gradient = gradient(u, physical_mesh)
+grad_plus = pull_back(field_gradient, plus_side)
+grad_minus = pull_back(field_gradient, minus_side)
+
+normal_jump = (grad_plus - grad_minus) @ outward
+penalty = integral(normal_jump ** Integer(2), interface_mesh)
 ```
 
 Worked examples for this chapter: [an interior facet integral](../examples/coupling.md#an-interior-facet-integral), [a Bank-Weiser error estimator](../examples/estimation.md#a-bank-weiser-error-estimator), [a fluid and a solid](../examples/coupling.md#a-fluid-and-a-solid), [a 1D network in a 3D mesh](../examples/coupling.md#a-1d-network-in-a-3d-mesh), [a deformed domain](../examples/surfaces.md#a-deformed-domain).
@@ -666,19 +671,19 @@ complex projection give [derivative forms](forms.md#derivative-forms).
 A domainless direction has zero spatial gradient, so varying `u` along it
 leaves `gradient(u, P)` unchanged when `P` is independent of `u`.
 
-For `u`, `a` and `h` in a real scalar space of constants,
-`directional_derivative(u * u, u, a, h)` has value $2 a h$.
+For `variable`, `evaluation_value` and `direction` in a real scalar space of constants,
+`directional_derivative(variable * variable, variable, evaluation_value, direction)` has value `Integer(2) * evaluation_value * direction`.
 
 An indexed direction gives a family of derivatives. For scalar constants
-`h0` and `h1` in the same space:
+`direction_0` and `direction_1` in the same space:
 
 ```python
 i = index("i")
-directions = tensor((h0, h1))
-d = directional_derivative(u * u, u, a, directions[i])
+directions = tensor((direction_0, direction_1))
+derivatives = directional_derivative(variable * variable, variable, evaluation_value, directions[i])
 ```
 
-`d` has free index `i` and value `Integer(2) * a * directions[i]`. Tensor derivatives
+`derivatives` has free index `i` and value `Integer(2) * evaluation_value * directions[i]`. Tensor derivatives
 use families of unit directions; the directions specify any symmetry. See
 [Hyperelasticity and the stress](../examples/forms.md#hyperelasticity-and-the-stress).
 

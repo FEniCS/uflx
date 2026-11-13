@@ -73,9 +73,9 @@ reads are not required. Geometry dependencies must still be exposed.
 For evaluation on a core `Mesh`, the solver locates physical points and
 supplies the selected cells and reference positions before an evaluation is
 constructed. At interfaces or overlaps, the cell selection is part of defining
-the value. A coordinate-only
-`DomainMap` into a mesh is invalid (see [A family of points in a
-mesh](geometry.md#points-in-a-mesh)).
+the value. Evaluation uses a [cell map](topology.md#cellmap) followed by
+[reference-cell evaluation](geometry.md#reference-cell-evaluation).
+A coordinate-only `DomainMap` into a mesh is invalid.
 
 The concrete subclass owns the polynomials, degrees of freedom and basis of
 the space, and stores the arguments identifying the space, such as the finite

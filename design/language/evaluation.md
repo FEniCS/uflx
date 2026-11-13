@@ -1,9 +1,9 @@
 # Rewriting and lowering
 
+## Choosing a representation
+
 Rewriting replaces expressions without changing their mathematical value.
 Lowering applies rewrites to meet the requirements of later computations.
-
-## Choosing a representation
 
 A *contract* describes a required representation, such as expanded derivatives.
 Rules give individual rewrites; recipes compose them to meet contracts.
@@ -13,6 +13,10 @@ Other recipes may reach that form or satisfy different contracts, subject to
 the [shared requirements](rewriting.md#shared-requirements).
 Core normal form leaves reference-cell integrals, terminal gradients and function
 evaluations for a library or compiler to handle.
+
+The differentiation and mapping recipes use the
+[shared rewrite procedure](rewriting.md#visiting-and-revisiting) and
+[representation contracts](#representation-contracts).
 
 | Page | Contents |
 | --- | --- |
@@ -94,7 +98,7 @@ expressions. Its allowed nodes are:
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Divergence`, `Curl` | A [retained Piola pattern](differentiation.md#retained-piola-patterns), under no pull-back by a cell |
 | [Calculus on a domain](geometry.md#calculus-on-a-domain) | `Integral` | Over a domain that is not a `Mesh`, such as a reference cell or `EuclideanSpace(0)` |
 | [Maps between domains](topology.md#maps-between-domains) | `PullBack` | A [retained pull-back](lowering.md#retained-pull-backs) |
-| [Fields on a mesh](geometry.md#fields-on-a-mesh) | `MappedNormal` | Always |
+| [Fields on a mesh](geometry.md#fields-on-a-mesh) | `Conormal` | Always |
 | [Fields on a mesh](geometry.md#fields-on-a-mesh) | `PushForward` | Under no pull-back by a cell |
 | [Function spaces](forms.md#function-spaces) | `Function` | Always |
 | [Variational forms](forms.md#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](forms.md#form)) |

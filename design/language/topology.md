@@ -1,21 +1,5 @@
 # Topological meshes
 
-A topology describes the local cell configuration of a kernel: one cell, the
-parents of an interface, or the cells of a macro element. Side maps relate
-these configurations. The library selects concrete mesh cells, supplies their
-coefficient and coordinate data, and assembles the results.
-
-Reference cells have **reference geometry**, including their own coordinates.
-A topology labels cell slots; when their types are reference cells, each slot
-carries that reference geometry. A coordinate field maps the reference cells
-into physical space, supplying **physical geometry** through
-[`Mesh`](geometry.md#mesh). “Local” describes the scope of the cell configuration;
-both its reference geometry and its physical geometry can be local.
-
-Fields whose reference representations are independent of physical geometry
-can be defined on a topology. Spaces whose bases depend on physical geometry
-are defined directly on a mesh (see [Functions in a space](forms.md#functions-in-a-space)).
-
 ## Domains
 
 Reference coordinates describe points within a reference cell. A physical
@@ -110,7 +94,7 @@ are not required by the core.
 
 `AbstractTopology` describes a finite local cell configuration without specifying
 its physical geometry. Each position in `cell_types` is a distinct local cell,
-called a *cell slot*. Slots identify the mathematical inputs of a kernel.
+called a *cell slot*.
 For reference cells, the topology is a labelled disjoint union: each slot has
 reference geometry and retains its identity even when reference cells or
 physical coordinates coincide.
@@ -129,8 +113,8 @@ physical coordinates coincide.
   `0 <= cell_slot < len(topology.cell_types)`.
   Negative numbers do not select slots from the end.
 
-For example, `(K,)` describes a single-cell kernel, `(K, K)` the parents of
-an interior-facet kernel, and `(Kt, Kq)` a triangle–quadrilateral pair.
+For example, `(K,)` describes one cell, `(K, K)` the two parents of an
+interior facet, and `(Kt, Kq)` a triangle–quadrilateral pair.
 The number of slots is fixed when the expression is constructed.
 
 A topology of reference cells may be the domain of an expression or space.
@@ -138,6 +122,9 @@ Its points are cell-labelled reference points. The library supplies field
 continuity through its [spaces and bindings](forms.md#abstractfunctionspace).
 For an `AbstractTopology`, the language exposes coordinates, gradients and
 integrals through its reference cells or through a mesh carrying physical geometry.
+
+“Local” describes the cell configuration's scope. Its reference geometry and
+its physical geometry, supplied by a [mesh](geometry.md#mesh), can both be local.
 
 Identity is structural, determined by the concrete topology's construction
 arguments, such as a label and its cell configuration. A one-slot topology is
@@ -251,8 +238,15 @@ parameterisation and reconstruction rules.
 Indexing a topology or mesh is shorthand for cell selection:
 `parent[i]` constructs exactly `cell_map(parent, i)`. It retains the parent
 and slot identity; `T.cell_types[i]` returns only the cell type. Indexing
-accepts the same nonnegative integer slots as `cell_map`, without slicing
-or implicit iteration.
+accepts the same nonnegative integer slots as `cell_map`, without slicing.
+
+Topologies and meshes define `__iter__` to yield `cell_map(parent, i)` for
+`i` from zero to the number of cell slots minus one, in order. Each yielded
+map is constructed with the same validation as explicit cell selection;
+a slot without a reference cell raises `ValueError`. Iteration ends after the
+last slot. Thus `for cell in parent` visits the cell maps, and
+`enumerate(parent)` pairs each map with its Python integer slot number.
+These slot numbers are not symbolic `Index` objects.
 
 The examples below build one configuration step by step. They use the library's
 [`ReferenceSimplex`](../examples/library.md#the-unit-simplex-as-a-reference-cell),
@@ -375,7 +369,7 @@ so the two traces read corresponding points along the edge.
 
 `side_a` and `side_b` are names for these maps. Neither chooses a normal;
 normal fields and their orientation are supplied separately (see
-[Normals](geometry.md#normals)).
+[`Conormal`](geometry.md#conormal)).
 The same construction accepts meshes carrying physical geometry as endpoints.
 A source mesh then has its own physical geometry and measure, independently
 of either parent trace. See [Traces on a mesh](geometry.md#traces-on-a-mesh)

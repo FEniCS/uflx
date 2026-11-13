@@ -1,8 +1,5 @@
 # Differentiation
 
-These reference recipes use the [shared rewrite procedure](rewriting.md#visiting-and-revisiting)
-and [representation contracts](evaluation.md#representation-contracts).
-
 ## Applying derivatives
 
 | `apply_derivatives(f)` |  |

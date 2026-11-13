@@ -4,6 +4,15 @@
 
 This page gives non-normative compiler guidance.
 
+A *kernel* is a numerical routine that evaluates compiled expressions using
+supplied data, such as coordinates, coefficients and basis tables. Outputs
+may be scalars, element vectors or matrices, or operator actions. The core
+does not specify a kernel interface or how expressions are grouped into kernels.
+
+Kernels may be split or combined, provided their combined outputs represent
+the same expression values for the same supplied data, under the chosen
+quadrature and numerical evaluation rules.
+
 [Core normal form](evaluation.md#the-core-normal-form) leaves reference-domain
 integrals, function evaluations and permitted geometric operations—such as
 terminal gradients and pull-backs—for the consumer.

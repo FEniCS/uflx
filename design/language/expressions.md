@@ -1,10 +1,5 @@
 # Expressions
 
-API signatures use descriptive parameter names. A stored property has the same
-name as its constructor parameter. API names, attribute access and literal
-values use code typography; mathematical notation describes values and
-relationships. Examples may use short local names such as `A` or `i`.
-
 ## Expressions and static type
 
 ### `AbstractExpression`

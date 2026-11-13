@@ -21,7 +21,7 @@ are in the class sections.
 | `Inverse`, `Determinant`                         | The compiler chooses the numerical algorithm; construction retains the operation |
 | `BroadcastTo` | Repeats values over explicit axes, including symbolic and empty shapes, without artificial arithmetic |
 | `Tensor`, `Indexed`, `ComponentTensor`, `IndexSum` | The primitives of index notation                                                                            |
-| `Coordinate`, `Function`, `MappedNormal`               | Terminals: the coordinate function of a domain, a member of a space, the unit side conormal |
+| `Coordinate`, `Function`, `Conormal`               | Terminals: the coordinate function of a domain, a member of a space, the unit side conormal |
 | `Gradient`                                       | Nothing composes to differentiate                                                                             |
 | `Divergence`, `Curl` | Retain the operators so lowering can apply Piola identities before expanding them into gradients |
 | `DirectionalDerivative`                          | Nothing composes to differentiate with respect to an expression                                               |
@@ -135,7 +135,7 @@ Extend `Base`:
 
 Extend `AbstractExpression`:
 
-[`PushForward`](geometry.md#pushforward), [`MappedNormal`](geometry.md#mappednormal).
+[`PushForward`](geometry.md#pushforward), [`Conormal`](geometry.md#conormal).
 
 ### Differentiation with respect to functions
 
@@ -246,12 +246,12 @@ Extend `AbstractExpression`:
 
 ### Fields on a mesh
 
-| Function                                                                    | Overload | Takes                                                                         | Returns                                                                                                         |
-| --------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| [`transformation_law(variances, weight)`](geometry.md#transformationlaw)    |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                                                                                             |
-| [`push_forward(expression, mesh, law)`](geometry.md#pushforward)            |          | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw`      | `PushForward(expression, mesh, law)`                                                                            |
-| [`side_domain(parent, source, *entries)`](geometry.md#side-domains)         |          | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]`  | `mesh(pull_back(parent.coordinate_function, SideMap(parent.topology, source, entries)), parent.ambient_domain)` |
-| [`mapped_normal(side_map, *reference_conormals)`](geometry.md#mappednormal) |          | `side_map: SideMap`, `reference_conormals: tuple[AbstractExpression, ...]`    | `MappedNormal`                                                                                                  |
+| Function                                                                 | Overload | Takes                                                                         | Returns                                                                                                         |
+| ------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| [`transformation_law(variances, weight)`](geometry.md#transformationlaw) |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                                                                                             |
+| [`push_forward(expression, mesh, law)`](geometry.md#pushforward)         |          | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw`      | `PushForward(expression, mesh, law)`                                                                            |
+| [`side_domain(parent, source, *entries)`](geometry.md#side-domains)      |          | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]`  | `mesh(pull_back(parent.coordinate_function, SideMap(parent.topology, source, entries)), parent.ambient_domain)` |
+| [`conormal(side_map, *reference_conormals)`](geometry.md#conormal)       |          | `side_map: SideMap`, `reference_conormals: tuple[AbstractExpression, ...]`    | `Conormal`                                                                                                      |
 
 ### Differentiation with respect to functions
 
@@ -313,7 +313,7 @@ and are not added to the enclosing expression's argument spaces.
 | `BroadcastTo` | Those of the value |
 | `Indexed`, `ComponentTensor`, `IndexSum` | Those of the expression                                        |
 | `Coordinate`                             | `()`                                                           |
-| `MappedNormal`                                 | `()`                                                           |
+| `Conormal`                                 | `()`                                                           |
 | `Function`                               | Those of the space                                             |
 | `Form`                                   | Those of the expression, followed by the space of each entry, conjugated for a `conjugate(v)` entry |
 | `Apply`                                 | `()`              |
@@ -338,7 +338,7 @@ from the default rules of [Domain](expressions.md#domain) and [Scalar type](expr
 | `DirectionalDerivative`  | The domain of $f$                 | The scalar type of $f$            |
 | `Integral`               | None                               | The scalar type of the integrand  |
 | `PullBack`               | The parameter domain of the map | The scalar type of the expression |
-| `MappedNormal`                 | $E$                                | Real                              |
+| `Conormal`                 | $E$                                | Real                              |
 | `Function`               | The domain of the space, or none   | The scalar type of the space      |
 | `PushForward`            | The mesh $D$                       | The scalar type of the expression |
 | `Form`                   | The domain of the expression      | The scalar type of the expression |

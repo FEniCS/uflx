@@ -1,8 +1,5 @@
 # Applications and mappings
 
-These reference recipes use the [shared rewrite procedure](rewriting.md#visiting-and-revisiting)
-and [representation contracts](evaluation.md#representation-contracts).
-
 ## Expanding applications
 
 | `expand_applications(f)` |  |
@@ -72,7 +69,7 @@ for a scalar, and set `f_K = indexed(f, K)`.
 
 $g_j$ is `pull_back(f_K, piece_j)` when $f$ has domain `D.ambient_domain`,
 and `pull_back(f_K, D_j)` otherwise, including domain-free $f$.
-No cell index is created or bound. The outer `component_tensor` restores the
+No symbolic cell index is created or bound. The outer `component_tensor` restores the
 value shape and is the identity for a scalar. All free indices of `f` remain
 free. The remaining integrals have coordinate domains. The package performs
 mesh iteration and assembly outside this rewrite.
@@ -172,7 +169,7 @@ Cell maps retain explicit selection; unselected side restrictions remain.
 | --- | --- | --- |
 | R01 | $\psi$ a `SideMap`, $f$ with a domain and neither an `Apply` nor a `Form` | Remains until a pull-back by a cell of $P$ |
 | R02 | `PullBack(g, SideMap(X, Y, entries))`, $\psi$ = `cell_map(Y, i)` | `PullBack(PullBack(g, B_i), A_i)` |
-| R03 | `MappedNormal(SideMap(D, E, entries), reference_conormals)`, $\psi$ = `cell_map(E, i)`; the cell Jacobian has full column rank and $w \ne 0$ | $w / \lvert w \rvert$, with $w$ defined in [The pull-back of MappedNormal](geometry.md#the-pull-back-of-mappednormal) |
+| R03 | `Conormal(SideMap(D, E, entries), reference_conormals)`, $\psi$ = `cell_map(E, i)`; the cell Jacobian has full column rank and $w \ne 0$ | $w / \lvert w \rvert$, with $w$ given by `mapped_conormal` in [The pull-back of Conormal](geometry.md#the-pull-back-of-conormal) |
 
 ### Retained pull-backs
 

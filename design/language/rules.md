@@ -14,6 +14,13 @@
 | **Open** | A question the authors have not decided. |
 | **Legacy UFL** dropdown | A comparison with legacy UFL, not a rule. |
 
+### API notation
+
+API signatures use descriptive parameter names. A stored property has the same
+name as its constructor parameter. API names, attribute access and literal
+values use code typography; mathematical notation describes values and
+relationships. Examples may use short local names such as `A` or `i`.
+
 ### Mathematical admissibility
 
 Static type checking establishes the documented Python argument types. Construction
@@ -26,7 +33,7 @@ through singularities.
 | Term | Meaning |
 | ---- | ------- |
 | [Leaf](#leaves-and-subclassing) | A primitive object rather than an operation; it may have graph dependencies. |
-| [Terminal](#leaves-and-subclassing) | A leaf that is an expression, such as a literal, `Coordinate`, `Function` or `MappedNormal`. |
+| [Terminal](#leaves-and-subclassing) | A leaf that is an expression, such as a literal, `Coordinate`, `Function` or `Conormal`. |
 | [Construction free function](expressions.md#node-class-or-free-function) | A pure free function that may validate inputs and builds fixed expression compositions or canonical space descriptions. |
 | [Pass](#passes) | A pure free function that walks a graph after construction to compute a result or rewrite the graph. |
 | [Evaluation traversal](rewriting.md#evaluation-traversal) | A walk through expression operands, excluding dependencies stored in geometry, spaces and labels. |
@@ -60,7 +67,8 @@ analysis or differential geometry. The core should therefore contain only the
 concepts and relations needed to write variational forms as code for later
 algorithmic transformation.
 
-The core describes local kernels. The finite element package selects concrete
+The core describes expressions on local cell configurations. The finite
+element package selects concrete
 cells and neighbours, supplies local data, and performs mesh iteration and
 assembly. Cell and interface types, reference parameterisations and local
 field transformations remain symbolic.
@@ -173,7 +181,7 @@ Only leaves are subclassed. A leaf is a primitive object rather than an
 operation, such as the coordinate domain `EuclideanSpace(n)` or a function whose values an
 external library supplies. Leaves may have graph dependencies: a `Function`
 depends on its space, and a `Coordinate` on its domain. A terminal is a leaf
-that is an expression, such as a literal, `Coordinate`, `Function` or `MappedNormal`
+that is an expression, such as a literal, `Coordinate`, `Function` or `Conormal`
 of the core, or a terminal of a downstream library.
 
 An operation is represented by a single core class or a construction free
@@ -233,8 +241,9 @@ operation-specific errors, such as inconsistent units.
 
 ### Operator overloads
 
-Only `AbstractExpression` defines arithmetic and indexing overloads, listed in
-the [table of free functions](reference.md#appendix-free-functions).
+`AbstractExpression` defines arithmetic and tensor-indexing overloads, listed
+in the [table of free functions](reference.md#appendix-free-functions).
+Topologies and meshes also support [cell selection and iteration](topology.md#cellmap).
 
 To allow external libraries to handle operations such as `expr * measure`,
 binary arithmetic overloads return `NotImplemented` for non-expression operands.

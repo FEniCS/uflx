@@ -1,7 +1,6 @@
 # Expression optimisation
 
-Expression optimisation rewrites an expression to reduce its expected evaluation
-cost, for example by removing redundant calculations or factorising terms.
+## Numerical contract
 
 Expression optimisation is optional and separate from establishing core normal
 form. It may be applied at multiple stages, including after discretisation and
