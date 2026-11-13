@@ -143,7 +143,7 @@ Extend `AbstractExpression`:
 
 [`DirectionalDerivative`](geometry.md#directionalderivative).
 
-### Function spaces
+### `Function`
 
 Extend `AbstractExpression`:
 
@@ -259,7 +259,7 @@ Extend `AbstractExpression`:
 | ----------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | [`directional_derivative(expression, variable, point, direction)`](geometry.md#directionalderivative) |          | `expression: AbstractExpression`, `variable: Function \| tuple`, `point, direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, point, direction)` |
 
-### Function spaces
+### `Function`
 
 | Function                                      | Overload | Takes                                                 | Returns    |
 | --------------------------------------------- | -------- | ----------------------------------------------------- | ---------- |

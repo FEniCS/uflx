@@ -1,19 +1,15 @@
 # Functions and forms
 
-## Function spaces
+## `AbstractFunctionSpace`
 
-A function is a member of a function space, such as a coefficient or an
-argument of a variational form.
-
-### `AbstractFunctionSpace`
-
-`AbstractFunctionSpace` describes a space of fields or multilinear maps,
-with or without a spatial argument.
+`AbstractFunctionSpace` describes a space of functions.
+It supplies the expression type of its members. Different spaces may supply
+the same type, such as scalar finite-element spaces of different degrees.
 
 | `AbstractFunctionSpace` |                                                                                                                                                       |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                 | `Base` |
-| Provides                | `domain`, an [`AbstractDomain`](topology.md#abstractdomain), an [`AbstractTopology`](topology.md#abstracttopology) or `None`, `value_shape`, `scalar_type`, and `argument_spaces`, `()` for a space of fields |
+| Provides                | `domain`, `value_shape`, `scalar_type`, and `argument_spaces`, described below |
 | Defined by              | A subclass outside the core, such as a subclass for the finite element spaces of Basix, and [`DualSpace`](#dualspace) in the core                           |
 
 | Property | Meaning |
@@ -21,88 +17,48 @@ with or without a spatial argument.
 | `domain` | Where the space's fields are defined: an `AbstractTopology`, an `AbstractDomain`, or `None` for values with no spatial argument. |
 | `value_shape` | Array shape of a function's output, with `()` for a scalar. |
 | `scalar_type` | Real or complex arithmetic for the function's expression representation. |
-| `argument_spaces` | Ordered input spaces when a function represents a multilinear map; `()` for a field. |
+| `argument_spaces` | `()` for fields and constants, which take no function inputs. Spaces of maps specify input spaces; see [`DualSpace`](#dualspace). |
 
-A space with `domain is None` has functions with no spatial argument.
+The surrounding package defines continuity and how local representations
+refer to the same field; these associations are external to the core.
 
-Ordinary finite-element spaces supply independent cell-local basis coefficients.
-The package establishes assembled continuity through DOF maps and transformations:
-it gathers inputs and scatters contributions without merging local tensor axes. Explicitly constrained or macro-element spaces may define other semantics.
-The package may bind functions in different local configurations to restrictions
-of the same field; those associations are external to the core.
+### Functions in a space
 
-A library may supply `transformation_law(V)` for spaces with a
-[`TransformationLaw`](geometry.md#transformationlaw). This is not a required space property
-or a core overload; the core constructor remains `transformation_law(variances, weight)`.
+For fields on core domains and topologies, the concrete subclass supplies
+evaluation as follows:
 
-#### Functions in a space
-
-`Function(space, label)` takes its domain, value shape, scalar type and
-argument spaces from `space`. These describe its expression
-representation; a form may represent the same space element differently
-(see [The double dual](#the-double-dual)). For fields on core domains and
-topologies, the concrete subclass supplies evaluation as follows:
-
-- A space whose values on the reference cell do not depend on the geometry is
-  on a topology $T$. The concrete subclass defines
-  `pull_back(u, cell_map(T, j))` for every local cell slot $j$, with local
-  data supplied by the package and an appropriate element for each cell
-  type. The field on a mesh is a [`PushForward`](geometry.md#pushforward).
-- A space whose values on the reference cell depend on the geometry is on a
-  mesh $D$, such as Hermite, Argyris, Morley and the other elements that are
-  not Piola equivalent. The concrete subclass defines
-  `pull_back(u, cell_map(D, j))`, and reads $x$ from the cell map.
-- For a coordinate domain, such as a reference cell, a function is a terminal
-  that the concrete subclass evaluates.
-
-A geometry-dependent cell read must expose its coordinate dependencies or
-provide a derivative rule before geometry differentiation can proceed.
-Independent data and its transport are specified by the library
-[reconstruction](extensions.md#geometry-dependent-reconstruction); a mesh-bound
-space alone does not determine that transport.
-
-The library evaluates these cell reads and their reference derivatives,
-including at supplied reference positions. It also evaluates applications of
-functional terminals and spatial transformations of their outputs. Core
-lowering leaves these reads for the library; it does not compute basis or
-coefficient values.
+- Geometry-independent reference values: the space is on a topology $T$
+  and defines `pull_back(u, cell_map(T, j))` for each local cell slot $j$.
+  A [`PushForward`](geometry.md#pushforward) gives the field on a mesh.
+- Geometry-dependent reference values, as for Hermite, Argyris or Morley
+  elements: the space is on a mesh $D$ and defines
+  `pull_back(u, cell_map(D, j))` using the cell map's coordinates.
+- A coordinate domain, such as a reference cell: the subclass evaluates
+  the function directly.
 
 Extension-defined domains use their own evaluation rules; reference-cell
 reads are not required. Geometry dependencies must still be exposed.
-
-For evaluation on a core `Mesh`, the solver locates physical points and
-supplies the selected cells and reference positions before an evaluation is
-constructed. At interfaces or overlaps, the cell selection is part of defining
-the value. Evaluation uses a [cell map](topology.md#cellmap) followed by
-[reference-cell evaluation](geometry.md#reference-cell-evaluation).
-A coordinate-only `DomainMap` into a mesh is invalid.
 
 The concrete subclass owns the polynomials, degrees of freedom and basis of
 the space, and stores the arguments identifying the space, such as the finite
 element. Space identity is structural.
 
-A library may provide [cell-local interpolation](extensions.md#cell-local-interpolation)
-using the sampling rule and basis of the target space. These are library
-data, not additional properties required by `AbstractFunctionSpace`.
+### Spaces of constants
 
-#### Spaces of constants
-
-A space with the domain `None` and the argument spaces `()` is a space of
-constants. A function in the space is an expression with no domain, a
-single array with the value shape and scalar type supplied by the space.
-
-The integrals of a form decide the cells on which a constant acts.
+A space of domain-independent constants has `domain is None` and
+`argument_spaces == ()`. Each function represents a single array with the space's value
+shape and scalar type.
 
 A constant unknown, such as a Lagrange multiplier, needs a space because form
 arguments come from spaces. Constant data needs none: a literal or kernel-input
 array with no domain is already a constant.
 
-#### Mixed problems
+### Mixed problems
 
-A mixed problem needs no mixed space, because an argument of a [form](#form)
-may be a `tuple` of functions in several spaces.
+A mixed problem needs no mixed space: a [form](#form) argument may be a
+`tuple` of functions from several spaces.
 
-#### Examples
+### Examples
 
 The examples use a topology `T` of `ReferenceSimplex(2)` cells and the mesh
 `D = mesh(x, EuclideanSpace(2))`, so $k = n = 2$.
@@ -118,11 +74,10 @@ The legacy UFL `Real` space is a space of constants, and the legacy UFL `Constan
 In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, a space may be defined on a topology, with an explicit law for its push-forward to a mesh, or on the mesh itself.
 ```
 
-### `Function`
+## `Function`
 
-`Function` is an externally supplied member of a function space. It is a
-field when its argument spaces are `()`, and otherwise a multilinear map
-with those argument spaces.
+`Function(space, label)` is a symbolic name for a member of `space`.
+A form may bind it as an argument or leave it as a free parameter.
 
 | `Function(space, label)` |                                                                                                                              |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -132,32 +87,26 @@ with those argument spaces.
 | Properties | `space`, the function space supplying its type and evaluation rules, and `label`, the identifier distinguishing functions in that space; labels follow the rules of an [`Index`](expressions.md#index) |
 | Static type          | The value shape, scalar type and argument spaces of `space`, the domain of `space`, and no free indices |
 
-The label identifies the function, so two functions are the same only if the
-spaces and the labels are equal. `Function(DualSpace(S), label)` is an
-antilinear form, such as a known load (see [DualSpace](#dualspace)).
-
-Multilinearity applies to the argument slots, not to spatial dependence.
+Two functions are equal exactly when their spaces and labels are equal.
 Evaluation follows [Functions in a space](#functions-in-a-space).
-
-The [form](#form), rather than the function, decides whether a function is an
-argument or fixed data.
 
 For a scalar space `V` on a topology `T`, `u = function(V, "u")` has domain
 `T` and value shape `()`.
 
-For a matrix, a library may provide `matrix_space(V, U)` with argument
-spaces `(conjugate_space(V), U)`, no domain, scalar value shape, and the
-common scalar type of `V` and `U`. For fields `u` in `U` and `v` in `V`:
+There are no separate test or trial function classes. A form assigns these
+roles through its bindings. For a real scalar space `V` on `D`:
 
 ```python
-A = function(matrix_space(V, U), "A")
-load = form(apply(A, (conjugate(v), u)), (conjugate(v),))
-value = apply(load, (conjugate(v),))
+u = function(V, "u")
+v = function(V, "v")
+a = form(integral(u * v, D), (v, u))
 ```
 
-`load` has argument spaces `(conjugate_space(V),)`; `value` has none and
-represents $v^H A u$ in coefficient notation. No matrix entries are stored
-in the expression.
+Here `v` serves as the test function and `u` as the trial function. In
+`form(integral(u * v, D), (v,))`, only `v` is bound; `u` is a free parameter.
+Argument order is significant. The usual matrix assembly convention assigns
+rows to the first argument (`v`) and columns to the second (`u`); this is
+an assembly convention, not a core language requirement.
 
 ```{dropdown} Legacy UFL
 The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functions. A test function and a trial function are the functions that a form states as the arguments at the positions 0 and 1.
@@ -165,51 +114,40 @@ The legacy UFL `Coefficient`, `TestFunction` and `TrialFunction` are all functio
 
 ## Variational forms
 
-A variational form abstracts an expression over functions to make a multilinear
-map. It binds functions as [`ComponentTensor`](expressions.md#componenttensor-and-indexsum)
-binds indices; application supplies their values. Partial application selects explicit
-binders by identity, not by slot number.
+A variational form binds functions in an expression to define a multilinear
+map.
 
 ### Argument spaces
 
-Every expression derives a `tuple` of argument spaces in position order, or
-`()` for a non-form. Each entry is an `AbstractFunctionSpace` for one function,
-or a `tuple` of at least two spaces with one scalar type for a product-space
-argument. Different slots may have different scalar types.
+Every expression has an ordered `argument_spaces` tuple describing its
+function inputs.
 
-Arity counts argument spaces, not functions within each argument: a functional
-has arity 0, a linear form 1 and a bilinear form 2.
+Each slot contains a space or a tuple of at least two spaces for one
+product-space argument. Members of a product share a scalar type; separate
+slots may have different scalar types.
 
-A node passes on the argument spaces of an operand in which the node is linear
-or antilinear, and every other operand must have the argument spaces `()`, or
-construction raises `ValueError`, unless its contract accepts a functional
-value with a specified signature. The [static type
-table](reference.md#appendix-static-type-table) gives the rule of each node class. A terminal
-class states the argument spaces as part of the contract of the class, as the
-value shape.
+A `Function` takes its signature from its space; a `Form` derives it from
+its body and bindings. A signature describes accepted inputs and output
+type, not membership in a particular space.
 
-Binding an argument declares linearity in $V$ or antilinearity in
-`conjugate_space(V)` (see [`Form`](#form)).
-
-Static argument spaces let construction reject incompatible arities and sums
-of linear and antilinear forms.
+Nodes propagate argument spaces through linear or antilinear operands.
+Other operands must have `argument_spaces == ()` unless the node's contract
+accepts a specified functional signature; violations raise `ValueError`.
+Terminal contracts and the [static type table](reference.md#appendix-static-type-table)
+specify each node's rule.
 
 #### Bindable functions
 
 A `Function` is bindable if its argument spaces are `()` or its space is a
-`DualSpace`. `Form` and `DirectionalDerivative` bind these functions. A dual of a product is one functional argument; a `tuple`
-of binders is one jointly linear product-space argument.
-
-The argument spaces of a functional describe the values it accepts. Binding
-that functional adds its space as one argument of the enclosing form, without
-adding its own argument spaces again. Arbitrary multilinear operator-valued
-arguments remain an open question.
+`DualSpace`. `Form` and `DirectionalDerivative` bind these functions.
+Binding a dual-space function adds one slot for its space, not separate
+slots for its inputs. A tuple of binders likewise adds one product-space
+slot, requiring joint linearity in its members.
 
 ### `ConjugateSpace`
 
-`ConjugateSpace(space)` records conjugation of a complex function space.
-It lets a form declare antilinearity in an argument. Writing $V$ for `space`,
-the resulting space is $\bar V$.
+`ConjugateSpace(space)` represents the conjugate $\bar V$ of a complex space
+$V$, allowing a form to declare antilinearity in an argument.
 
 | `ConjugateSpace(space)` |                                                                                                   |
 | ------------------- | ------------------------------------------------------------------------------------------------- |
@@ -223,9 +161,7 @@ the resulting space is $\bar V$.
 
 A linear form on $\bar V$ is an antilinear form on $V$.
 The core uses $\bar V$ only as an argument space, to record that a form
-is antilinear in an argument. The conjugate
-of an argument space is `conjugate_space(V)` for a space $V$ and $V$ for
-`ConjugateSpace(V)`, so conjugating twice gives the space back (see
+is antilinear in an argument. Conjugating twice returns the original space (see
 [`Conjugate`](expressions.md#conjugate)).
 
 For `l` with space `DualSpace(V)`, `l` has argument spaces
@@ -241,6 +177,12 @@ preserving these canonical forms.
 `DualSpace(space)` describes bounded antilinear functionals: maps that take a
 member of `space` and return a scalar. `space` may also be a tuple of spaces,
 representing one product-space argument.
+
+Unlike a field or constant, a member of a dual space takes a function as
+input, so its `argument_spaces` is nonempty. For example,
+`function(dual_space(V), "l")` names an antilinear form on `V`, with argument
+spaces `(conjugate_space(V),)`. A `Function` can name a map that a `Form`
+defines symbolically; both use the same application rules.
 
 Every space $V$ is assumed reflexive. The core identifies $V$ with its
 double dual by the canonical map defined
@@ -349,16 +291,28 @@ P = form(pairing, (l, conjugate(v)))
 `P` has argument spaces `(dual_space(V), conjugate_space(V))`: the pairing
 is linear in `l` and antilinear in `v`.
 
+More generally, a library may provide `matrix_space(V, U)` with argument
+spaces `(conjugate_space(V), U)`, no domain, scalar value shape, and the
+common scalar type of `V` and `U`. For fields `u` in `U` and `v` in `V`:
+
+```python
+A = function(matrix_space(V, U), "A")
+load = form(apply(A, (conjugate(v), u)), (conjugate(v),))
+value = apply(load, (conjugate(v),))
+```
+
+`load` has argument spaces `(conjugate_space(V),)`; `value` has none and
+represents $v^H A u$ in coefficient notation. No matrix entries are stored
+in the expression.
+
 ```{dropdown} Legacy UFL
 The legacy UFL `Cofunction` and `Coargument` are a fixed and a bound function in `dual_space(V)`. Both languages identify the double dual with the primal space.
 ```
 
 ### `Form`
 
-`Form(expression, arguments)` turns selected functions in `expression` into
-inputs of a multilinear map. `expression` is the body to evaluate;
-`arguments` declares which functions are inputs and in what order. Other
-functions remain fixed data for that form.
+`Form(expression, arguments)` binds selected functions in `expression` as
+ordered inputs of a multilinear map. Other functions remain fixed data.
 
 | `Form(expression, arguments)` |                                                                                                                                                                                                    |
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -383,8 +337,9 @@ is the arity of `expression` plus that index. An entry `v` declares
 linearity in `v`; `conjugate(v)` declares linearity in $\bar v$, hence
 antilinearity in `v`. They give the same argument space for a real space.
 A `tuple` entry declares joint linearity over its members' common scalar
-field, so a term may depend on only one member. Output scalar type does not
-determine argument linearity: a real argument may have a complex-valued output. The user is responsible for these declarations. Construction checks the
+field, so a term may depend on only one member. A real argument may have a
+complex-valued output; linearity uses the argument's scalar type.
+The user is responsible for these declarations. Construction checks the
 structural requirements above; an optional [linearity check](#checking-linearity)
 may help diagnose mistakes.
 
@@ -393,11 +348,10 @@ that binds the function, and is fixed otherwise. Thus a function may be an
 argument in one form and fixed in another. Substitution renames bound functions
 to avoid capture (see [Substitution and binding](substitution.md#substitution-and-binding)).
 
-The expression may itself be a form; new arguments follow its existing
-arguments, as in a [derivative form](#derivative-forms). No core pass
-flattens `Form(Form(e, a), b)` into `Form(e, a + b)`, because products of forms
-would require argument reordering. Assembly reads argument order from the
-static type.
+The expression may itself be a form, as in a [derivative form](#derivative-forms).
+No core pass flattens `Form(Form(e, a), b)` into `Form(e, a + b)`, because
+products of forms would require argument reordering. Assembly reads argument
+order from the static type.
 
 A form may depend nonlinearly on free parameters while remaining multilinear
 in its declared arguments: mathematically, $a(x;v,u)$. Geometry $x$ can be such
@@ -450,10 +404,9 @@ linearity check may diagnose this mistake.
 
 #### Checking linearity
 
-Linearity is a mathematical requirement of a form declaration, not a property
-that construction must prove. For an entry `v`, the expression must be linear
-in `v`; for `conjugate(v)`, it must be antilinear in `v`. Zero satisfies either
-convention. A tuple entry declares joint dependence in its members.
+Construction need not prove the declared linearity. Zero satisfies both
+linear and antilinear declarations; tuple entries require joint linearity
+in the declared values.
 
 A library may provide a structural check of these declarations (see [New
 questions](extensions.md#new-questions)). The core does not require a checking pass or a
@@ -473,10 +426,9 @@ In legacy UFL, the arguments of a form are the test functions and the trial func
 
 ### `Apply`
 
-`Apply(form, arguments)` represents evaluation of a multilinear expression by supplying a
-value for every argument slot. `form` may be a `Form`, a compatible sum or
-product, or an externally supplied multilinear function. `arguments` contains
-the input values in the order given by `form.argument_spaces`.
+`Apply(form, arguments)` supplies a value for every slot of a multilinear
+expression, in `form.argument_spaces` order. `form` may be a `Form`, a
+compatible sum or product, or an externally supplied multilinear function.
 
 The name `arguments` has different roles in `Form` and `Apply`: `Form.arguments`
 declares bound functions; `Apply.arguments` stores the values supplied to them.
@@ -532,10 +484,9 @@ $(\nabla A)(g)=\nabla(a g)$, including the spatial derivative of $g$.
 
 ### Partial application
 
-`partial(form, mapping)` supplies values for selected arguments of an explicit
-outer `Form`, leaving the others open. `form` is the binder to partially
-apply; `mapping` associates each selected binding declaration with its supplied
-value. Substitution is simultaneous. This is a transformation pass, not a lazy node.
+`partial(form, mapping)` simultaneously supplies values for selected arguments
+of an explicit outer `Form`, leaving the others open. `mapping` maps binding
+declarations to values. This is a transformation pass, not a lazy node.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -570,11 +521,10 @@ For `stokes = form(e, ((v, q), (u, p)))`,
 
 ### Rebinding
 
-`rebind(binder, mapping)` renames selected declarations and their bound
-occurrences. `binder` is a form or index-binding node; `mapping` associates
-existing declarations with their replacement declarations. Renaming is
-simultaneous and preserves the meaning of the bound map. This is a
-transformation pass.
+`rebind(binder, mapping)` simultaneously renames selected declarations and
+their bound occurrences in a form or index-binding node. `mapping` maps
+existing declarations to replacements. This transformation pass preserves
+the meaning of the bound map.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
@@ -616,10 +566,9 @@ function constructs the corresponding derivative form:
 J = form(directional_derivative(F, x, a, w), (w,))
 ```
 
-The form represents the map from a direction `w` to the derivative of `F`
-with respect to `x` at `a` in that direction. Declaring it as a form assumes
-linearity in `w`; existence of directional derivatives alone does not
-establish this.
+The form maps `w` to the derivative of `F` with respect to `x` at `a` in
+direction `w`. This declaration assumes linearity in `w`; existence of
+directional derivatives alone does not establish it.
 
 The new slot follows `F`'s existing slots. The direction must be admissible
 for `x` and fresh in `F` and `a` under the construction walk. Complex

@@ -100,7 +100,7 @@ expressions. Its allowed nodes are:
 | [Maps between domains](topology.md#maps-between-domains) | `PullBack` | A [retained pull-back](lowering.md#retained-pull-backs) |
 | [Fields on a mesh](geometry.md#fields-on-a-mesh) | `Conormal` | Always |
 | [Fields on a mesh](geometry.md#fields-on-a-mesh) | `PushForward` | Under no pull-back by a cell |
-| [Function spaces](forms.md#function-spaces) | `Function` | Always |
+| [Functions](forms.md#function) | `Function` | Always |
 | [Variational forms](forms.md#variational-forms) | `Form` | Always, including a form whose expression is a form (see [`Form`](forms.md#form)) |
 | [Variational forms](forms.md#variational-forms) | `Apply` | Its form is a `Function`, a downstream terminal, a `Gradient`, or a `PullBack`, with each operand in the core normal form |
 | | A terminal of a downstream library | Always |
