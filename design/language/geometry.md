@@ -642,11 +642,8 @@ $$
 \mathrm{D}(f, x, a, h) = \frac{d}{d\varepsilon} f[x := a + \varepsilon h] \Big|_{\varepsilon = 0},
 $$
 
-with $\varepsilon$ real. Substitute free occurrences of $x$ in a compatible
-fixed-space representation of $f$ with [geometry dependence](differentiation.md#geometry-preparation) exposed.
-For tuple variables, matching tuples $a$ and $h$ supply all replacements
-$x_k:=a_k+\varepsilon h_k$ simultaneously. Members may mix real and complex
-spaces. The functions of $x$ are bound in $f$, not in $a$ or $h$.
+with $\varepsilon$ real. `variable` is bound only in `expression`.
+For tuple variables, all members vary simultaneously.
 
 | `DirectionalDerivative(expression, variable, point, direction)` |                                                                                                       |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -661,37 +658,26 @@ spaces. The functions of $x$ are bound in $f$, not in $a$ or $h$.
 | ------------- | -------- | ----- | ------- |
 | `directional_derivative(expression, variable, point, direction)` | | `expression: AbstractExpression`, `variable: Function \| tuple`, `point, direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, point, direction)` |
 
-A real-linear differential is assumed, even for complex variables and
-directions. Real points and directions enter complex spaces by
-[complex embedding](rewriting.md#type-compatibility-of-rewrites).
-Dual variables accept symbolic forms with matching functional signatures.
+`directional_derivative` covers differentiation with respect to parameters,
+fields and geometry through the choice of variable and direction:
 
-This is the sole derivative primitive for function variables. Binding and
-complex projection give [derivative forms](forms.md#derivative-forms).
-A domainless direction has zero spatial gradient, so varying `u` along it
-leaves `gradient(u, P)` unchanged when `P` is independent of `u`.
+| Differentiation | Construction |
+| --------------- | ------------ |
+| Energy variation or residual linearisation | Vary the field in a supplied direction. |
+| Coupled fields | Supply tuples of variables, evaluation values and directions. |
+| Second and higher variations | Nest directional derivatives; see the [derivative rules](differentiation.md#directional-derivative-rules). |
+| Scalar parameter derivative | Vary the parameter in the unit direction. |
+| Vector or tensor derivatives | Use a family of unit directions; see [Hyperelasticity and the stress](../examples/forms.md#hyperelasticity-and-the-stress). |
+| Geometry variation | Vary the coordinate function; see [Geometry preparation](differentiation.md#geometry-preparation). |
+| Complex derivatives | Use real perturbations and combine directions to obtain [Wirtinger derivatives](forms.md#complex-and-wirtinger-derivatives). |
 
-For `variable`, `evaluation_value` and `direction` in a real scalar space of constants,
-`directional_derivative(variable * variable, variable, evaluation_value, direction)` has value `Integer(2) * evaluation_value * direction`.
-
-An indexed direction gives a family of derivatives. For scalar constants
-`direction_0` and `direction_1` in the same space:
+For an energy `energy` depending on a real field `u`, evaluated at `a`:
 
 ```python
-i = index("i")
-directions = tensor((direction_0, direction_1))
-derivatives = directional_derivative(variable * variable, variable, evaluation_value, directions[i])
+variation = directional_derivative(energy, u, a, v)
+linearisation = directional_derivative(variation, a, a, h)
 ```
 
-`derivatives` has free index `i` and value `Integer(2) * evaluation_value * directions[i]`. Tensor derivatives
-use families of unit directions; the directions specify any symmetry. See
-[Hyperelasticity and the stress](../examples/forms.md#hyperelasticity-and-the-stress).
-
-Differentiation includes dependence through geometry and spaces, with
-independent field data held fixed. Moving domains require a fixed-space
-representation or an explicit library derivative rule; see
-[Geometry preparation](differentiation.md#geometry-preparation).
-
-Nested derivatives are evaluated inside out. The inner derivative's point and
-direction remain subject to outer differentiation; see the
-[directional derivative rules](differentiation.md#directional-derivative-rules).
+Here `v` is a test direction and `h` is an increment, both independent of `a`.
+Binding the directions constructs the corresponding
+[derivative forms](forms.md#derivative-forms).
