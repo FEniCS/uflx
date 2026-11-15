@@ -383,6 +383,11 @@ by entry.
 [`Form`](forms.md#form) binds `conjugate(v)` even for a vector argument. Its entrywise
 meaning is `conjugate(f)[e]` = `conjugate(f[e])` in value.
 
+For a map, conjugation also conjugates its input representation, as in
+[L05](lowering.md#application-rules). For a real-linear map, bind the
+conjugate of its application in a `Form` to conjugate only the output while
+keeping the input spaces.
+
 ### `RealPart` and `ImaginaryPart`
 
 `RealPart` and `ImaginaryPart` give the real and imaginary parts of a scalar.

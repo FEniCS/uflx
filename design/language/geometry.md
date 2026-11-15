@@ -650,7 +650,7 @@ For tuple variables, all members vary simultaneously.
 | Extends                          | `AbstractExpression` |
 | Takes                            | `expression: AbstractExpression`, `variable: Function \| tuple[Function, ...]`, `point, direction: AbstractExpression \| tuple[AbstractExpression, ...]` |
 | Properties | `expression`, the body to differentiate; `variable`, the function or tuple of functions bound in that body; `point`, their evaluation values; and `direction`, their perturbations |
-| Requires                         | `variable` is a [bindable function](forms.md#bindable-functions), or a `tuple` of at least two distinct bindable functions; member by member, `point` and `direction` admissible values for the space of `variable` as in [argument admissibility](forms.md#admissible-argument-values); variable spaces independent of all variable members |
+| Requires                         | `variable` is a `Function`, or a `tuple` of at least two distinct functions; member by member, `point` and `direction` admissible values for the space of `variable` as in [argument admissibility](forms.md#admissible-argument-values); variable spaces independent of all variable members |
 | Static type                      | The value shape of `expression`, the free indices of `expression` followed by those of the members of `point` and `direction`, each `Index` taken once, and the argument spaces and the scalar type of `expression` |
 | Raises                           | `ValueError` if another requirement fails |
 

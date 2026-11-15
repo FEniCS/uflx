@@ -32,6 +32,26 @@ uses the retained-name rejection rule in [Partial application](forms.md#partial-
 | L05 | `Conjugate(e)` | `conjugate(apply(e, conjugated_G))`, where `conjugated_G` conjugates every supplied member, preserving the tuple grouping of `G` |
 | L07 | `Zero` | Zero with the type of the application |
 
+L05 conjugates both the input representation and the output, even for
+spaces over real scalars. For a complex-valued space `V`, let
+`R = real_space(V)`, `h = function(R, "h")` and `k` be admissible for `R`:
+
+| Expression | Argument spaces | Application |
+| ---------- | --------------- | ----------- |
+| `I = form(h, (h,))` | `(R,)` | `apply(I, (k,)) = k` |
+| `conjugate(I)` | `(conjugate_space(R),)` | `apply(conjugate(I), (conjugate(k),)) = conjugate(k)` |
+| `J = form(conjugate(h), (h,))` | `(R,)` | `apply(J, (k,)) = conjugate(k)` |
+
+`J` conjugates only the output of the identity map; it is not `conjugate(I)`.
+Likewise, if `l` is in `dual_space(R)`, `conjugate(l)` accepts an input in
+`conjugate_space(R)`, even though its output is real.
+
+For a map-valued `A` in `real_space(M)`, with `G` its complete input tuple,
+let `F = form(apply(A, G), (conjugate(A),))`. Its slot is
+`conjugate_space(real_space(M))`. Supplying `conjugate(B)` substitutes `B`
+for `A`, so `apply(F, (conjugate(B),))` gives `apply(B, G)` with the original
+input signature. Here `B` has `A`'s signature and `G` is independent of `A`.
+
 | Rule | Applies to | Requirement |
 | --- | --- | --- |
 | SB17 | Binding during application | Preserve enclosing and inserted binders. Before commuting an application through a derivative or index binder, make its bound names fresh for every supplied value; inserted values are not captured or differentiated by that inner operation. |

@@ -61,7 +61,7 @@ are excluded.
 
 | Rule | Applies to | Requirement |
 | --- | --- | --- |
-| D15 | Dependence on the derivative variable | First use the construction walk to detect dependencies, including geometry and spaces; apply D21–D23 before SH15 and SB22. Tuple variables vary simultaneously, including under conjugation. Dual points and directions may be symbolic forms whose applications the recipe evaluates. |
+| D15 | Dependence on the derivative variable | First use the construction walk to detect dependencies, including geometry and spaces; apply D21–D23 before SH15 and SB22. Tuple variables vary simultaneously, including under conjugation. Map-valued points and directions may be symbolic forms with admissible signatures whose applications the recipe evaluates. |
 
 Fixed-direction Hessians use independent direction functions. Mixed
 derivatives commute only under the required smoothness and fixed-direction

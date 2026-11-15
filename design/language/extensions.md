@@ -36,7 +36,7 @@ of concrete core classes (see [Leaves and subclassing](rules.md#leaves-and-subcl
 | Semantics | Its mathematical value |
 | Traversal | Expression operands distinguished from metadata |
 | Lowering, where one exists | A mathematically equal expression of core nodes |
-| Argument spaces, if nonempty | Full application rules; dual arguments alone need no new node class |
+| Argument spaces, if nonempty | Full application rules; binding map-valued functions needs no new node class |
 
 #### Rule tables
 
@@ -87,12 +87,12 @@ library expressions or rules needed before core differentiation can proceed.
 A linear preconditioner maps residuals in $V^\star$ to corrections in $V$.
 An auxiliary-space construction is $P B_W P^\star$, with $P: W \to V$ and
 $B_W: W^\star \to W$. Dual arguments and typed operator composition could
-express this construction. It is open whether arbitrary operator-valued
-arguments are also useful, or composition belongs in the solver layer.
+express this construction. It is open whether preconditioner composition
+belongs in the symbolic language or in the solver layer.
 
 A concrete finite element implementation should establish how the symbolic
 operations connect to assembly, matrix-free application and auxiliary solves
-before extending `Form` further. Preconditioner construction need not be
+before adding a dedicated composition API. Preconditioner construction need not be
 linear in its operator inputs, even when its residual-to-correction action is
 linear.
 ```
