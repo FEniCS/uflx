@@ -423,6 +423,74 @@ Repeated differentiation gives higher derivatives; complex projection remains
 explicit. The real Hessian is symmetric for a twice continuously differentiable
 functional with independent directions; the graph does not record symmetry.
 
+## Interpolation into H(curl)
+
+On an affine physical triangle `D` with topology `T`, let `V` be vector
+Lagrange degree one and `S` lowest-order first-kind Nédélec, both on `T`.
+The library's [interpolation helper](../language/extensions.md#cell-local-interpolation)
+uses the target element's sampling rule and spatial transformation:
+
+```python
+u = function(V, "u")
+u_D = push_forward(u, D, transformation_law(V))
+Ru = interpolate(u_D, S)
+```
+
+Here the tangential traces are linear, so Basix's edge-midpoint rule computes
+their moments exactly. `Ru` is a field on `D` and retains its dependence on `u`.
+The runnable example in `scratch/experiments/hcurl_interpolation.py` checks
+the result against Basix's interpolation matrix and differentiates its energy.
+
+## MITC shear reduction
+
+The Durán–Liberman reduction in
+[Hale et al., §§3.3–3.4](https://orbilu.uni.lu/bitstream/10993/35450/1/fenics-shells-v3.pdf)
+reduces the Reissner–Mindlin shear strain $\gamma=\nabla w-\theta$ into the
+lowest-order first-kind Nédélec space, preserving tangential edge moments:
+
+$$
+\ell_e(R_K\gamma)=\ell_e(\gamma),\qquad
+\ell_e(f)=\int_e f\cdot t_e\,ds.
+$$
+
+Use [cell-local interpolation](../language/extensions.md#cell-local-interpolation)
+on a reference triangle `K`, taken here as the physical cell. The library
+supplies real spaces `W` (scalar degree one), `Theta` (vector degree two)
+and `S` (lowest-order Nédélec), with a sampling rule exact for quadratic edge
+traces and its basis. This exact-moment reduction requires more quadrature
+than the target element's default midpoint rule.
+For constant shear stiffness `c`:
+
+```python
+w, theta = function(W, "w"), function(Theta, "theta")
+v, eta = function(W, "v"), function(Theta, "eta")
+dw, dtheta = function(W, "dw"), function(Theta, "dtheta")
+i = index("i")
+
+gamma = gradient(w, K) - theta
+reduced_gamma = interpolate(gamma, S)
+Pi_s = integral(
+    c * index_sum(reduced_gamma[i] * reduced_gamma[i], (i,)) / Integer(2), K
+)
+q, test, increment = (w, theta), (v, eta), (dw, dtheta)
+residual = directional_derivative(Pi_s, q, q, test)
+F_s = form(residual, (test,))
+J_s = form(directional_derivative(residual, q, q, increment), (test, increment))
+```
+
+The shear contribution to the bilinear form is
+
+$$
+J_s((v,\eta),(\delta w,\delta\theta))
+=c\int_K R_K(\nabla v-\eta)\cdot
+R_K(\nabla\delta w-\delta\theta)\,dx.
+$$
+
+For other affine cells, interpolation uses the covariant Piola law.
+At fixed geometry, $D(R_K\gamma(q))[h]=R_K(D\gamma(q)[h])$ also for
+nonlinear strains. Interpolation expands into sampling and reconstruction;
+its output is a field.
+
 ## Dual transfer through interpolation
 
 Use the library [cell-local interpolation](../language/extensions.md#cell-local-interpolation)

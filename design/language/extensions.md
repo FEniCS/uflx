@@ -151,6 +151,20 @@ of [point evaluations](geometry.md#evaluation-at-points), including any quadratu
 moments. The supplied rule defines interpolation even when the moments are
 not exact. Interpolation is linear for a fixed rule and geometry.
 
+Interpolation constructs a symbolic expression, not a new independent
+`Function`. If $\phi_a$ is the target basis dual to the sampling functionals
+$\ell_a$, its construction is
+
+$$
+I_V f = \sum_a \ell_a(f)\phi_a.
+$$
+
+Each $\ell_a(f)$ expands into weighted point evaluations of `f`. The result
+retains its dependence on functions occurring in `f`, including functions
+subsequently bound by a form. Such dependence does not give `f` nonempty
+argument spaces. With the sampling rule, basis and geometry fixed,
+$D(I_V f)[h] = I_V(Df[h])$, also when `f` depends nonlinearly on the variable.
+
 For a target obtained from a reference element by a
 [transformation law](geometry.md#transformationlaw), interpolation on a physical cell
 applies the target's inverse law to the pulled-back input, then maps the
@@ -160,7 +174,11 @@ and are outside this description.
 A `PullBack` alone does not transform value components.
 
 See [Dual transfer through interpolation](../examples/forms.md#dual-transfer-through-interpolation)
-for a pairing with a target load.
+for a pairing with a target load,
+[Interpolation into H(curl)](../examples/forms.md#interpolation-into-hcurl) for
+interpolation between known finite-element spaces, and
+[MITC shear reduction](../examples/forms.md#mitc-shear-reduction) for interpolation
+inside an energy and its derivatives.
 
 Only value sampling and affine, invertible cell maps between equal dimensions
 are covered. Derivative sampling is not yet covered.
