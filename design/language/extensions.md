@@ -15,7 +15,7 @@ The core supports five kinds of extension:
 - [New operations](#new-operations), such as the trace or the cross product.
 - [New transformations](#new-transformations), such as compiler lowering of
   index notation.
-- [Language extensions](#language-extensions), such as external operators.
+- [Language extensions](#language-extensions), such as [external operators](#external-operators).
 
 A property that the rules of the core depend on is part of the core, not an
 extension. For example, the scalar type is part of the core, because
@@ -55,15 +55,88 @@ Extension rules use the core's [rules, recipes and contracts](rewriting.md#trans
 Identities that depend on a composition need nodes retaining that composition,
 as `Divergence` and `Curl` do for [Piola identities](geometry.md#pushforward).
 
+#### External operators
+
+##### `ExternalOperator`
+
+`ExternalOperator(operation, operands, output)` denotes output $j$ of
+$f(e_1,\ldots,e_k)$, where `operation` identifies $f$, `operands` is
+$(e_1,\ldots,e_k)$ and `output` is the zero-based index $j$. The library
+defines $f$ and its derivative actions. An operand may be a whole field.
+
+| `ExternalOperator(operation, operands, output)` | |
+| ----------------------------------------------- | --- |
+| Extends | `AbstractExpression` |
+| Free function | `external_operator(operation, operands, output)` |
+| Takes | `operation: Base`, `operands: tuple[AbstractExpression, ...]`, `output: int` |
+| Properties | `operation`, the library's identifier for the mathematical operation, `operands`, its ordered value operands including repetitions, and `output`, the selected output position |
+| Requires | `operation` is a non-expression library object. The operands match its signature. For an operation with `n` outputs, `0 <= output < n`. |
+| Static type | The value shape, scalar type, domain and argument spaces specified by `operation` for this output and these operands. Free indices follow the [usual operand order and extent checks](expressions.md#free-indices). |
+| Raises | `ValueError` for an inadmissible operand signature or conflicting index extents, and `IndexError` for an output position outside the declared range |
+
+The operation and its construction dependencies obey the [base object rules](rules.md#the-base-object-base).
+For example, a projection onto a chosen space includes that space among its construction
+dependencies. [Substitution and binding](substitution.md#substitution-and-binding)
+visit the value operands in order.
+
+A library construction function returns one expression for a single output and
+a Python tuple of expressions in declaration order for multiple outputs. For
+library operation identifiers `F` and `G`, the construction functions are
+written as follows.
+
+```python
+def f(u, m):
+    return external_operator(F, (u, m), 0)
+
+def g(u):
+    return external_operator(G, (u,), 0), external_operator(G, (u,), 1)
+
+y = f(u, m)
+a, b = g(u)
+```
+
+##### Rewrite rules
+
+For a directional derivative, $p_i$ is operand $e_i$ evaluated at the
+differentiation point and $h_i$ is its directional derivative. Write $p$ and
+$h$ for their ordered tuples. [Geometry preparation and independence](differentiation.md#geometry-preparation)
+precede the chain rule, including the typed zero rule L10.
+
+| Rule | Expression and condition | Result |
+| ---- | ------------------------ | ------ |
+| EO01 | Directional derivative of output $j$ of $f(e_1,\ldots,e_k)$ | Output $j$ of the opaque action $Df(p)[h]$. Both $p$ and $h$ are value operands of the action. At fixed $p$ the action is jointly real-linear in $h$ and retains the open argument slots of output $j$. |
+| EO02 | Full `Apply` of an output with open argument slots | The value of that output at the supplied arguments, given by the library's full application rule. This also applies to tangent outputs. |
+| EO03 | Pull-back of a pointwise operation on field values, with all spatial dependence supplied through its operands | The same output of the operation on the pulled-back operands. Other spatial rewrites require a law for the operation. |
+
+For `directional_derivative(f(u, u), u, p, h)`, EO01 gives $Df(p,p)[h,h]$.
+For `directional_derivative(b, u, p, h)` it selects the second output of
+$Dg(p)[h]$. Subsequent derivatives follow both the point values and the
+directions in EO01. A required derivative action with no applicable rule
+raises `TypeError` under the [extension rule contract](#rule-tables).
+
+With one open linear slot, `apply(N(m), (v,))` denotes $N(m;v)$.
+When both `m` and `v` vary, [D12](differentiation.md#directional-derivative-rules)
+differentiates the operation and the supplied argument. For real fields, a
+fixed dual load `l`, fixed `m` and a fresh direction `h`, the adjoint
+derivative action on `l` is the form
+
+```python
+dy = directional_derivative(f(u, m), u, p, h)
+input_load = form(apply(l, (dy,)), (h,))
+```
+
+Complex fields use the [dual pairing](forms.md#dualspace) and
+[complex derivative rules](forms.md#complex-and-wirtinger-derivatives).
+A consumer retaining an external operator or its tangent supplies its
+evaluation. A recipe requiring core normal form must eliminate the node or
+report failure.
+
+```{dropdown} Legacy UFL
+The UFL external operator admits a function-space formulation and an equivalent dual pairing. See [Bouziani and Ham, §3–4](https://arxiv.org/pdf/2111.00945#page=3).
+```
+
 #### Examples
 
-- A language extension for local external operators adds a node class for an
-  operation known only by name, such as `exp`, a material law or a neural
-  network. The node class has no lowering. The table of the extension for a
-  derivative gives the derivative of the operation, and the table for a
-  pull-back gives the node of the pulled-back operands, because the operation
-  is pointwise. A recipe requiring its derivative or pull-back raises `TypeError`
-  if the corresponding extension rule is absent.
 - An interpolation node may retain the target space or delay expansion into
   sampling and basis reconstruction. Its lowering is the library operation
   of [Cell-local interpolation](#cell-local-interpolation). Forward
