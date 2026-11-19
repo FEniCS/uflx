@@ -71,7 +71,7 @@ defines $f$ and its derivative actions. An operand may be a whole field.
 | Takes | `operation: Base`, `operands: tuple[AbstractExpression, ...]`, `output: int` |
 | Properties | `operation`, the library's identifier for the mathematical operation, `operands`, its ordered value operands including repetitions, and `output`, the selected output position |
 | Requires | `operation` is a non-expression library object. The operands match its signature. For an operation with `n` outputs, `0 <= output < n`. |
-| Static type | The value shape, scalar type, domain and argument spaces specified by `operation` for this output and these operands. Free indices follow the [usual operand order and extent checks](expressions.md#free-indices). |
+| Static type | The value shape, scalar type and domain specified by `operation` for this output and these operands. Argument spaces are `()`. Free indices follow the [usual operand order and extent checks](expressions.md#free-indices). |
 | Raises | `ValueError` for an inadmissible operand signature or conflicting index extents, and `IndexError` for an output position outside the declared range |
 
 The operation and its construction dependencies obey the [base object rules](rules.md#the-base-object-base).
@@ -95,7 +95,7 @@ y = f(u, m)
 a, b = g(u)
 ```
 
-##### Rewrite rules
+##### Directional derivative
 
 For a directional derivative, $p_i$ is operand $e_i$ evaluated at the
 differentiation point and $h_i$ is its directional derivative. Write $p$ and
@@ -104,9 +104,7 @@ precede the chain rule, including the typed zero rule L10.
 
 | Rule | Expression and condition | Result |
 | ---- | ------------------------ | ------ |
-| EO01 | Directional derivative of output $j$ of $f(e_1,\ldots,e_k)$ | Output $j$ of the opaque action $Df(p)[h]$. Both $p$ and $h$ are value operands of the action. At fixed $p$ the action is jointly real-linear in $h$ and retains the open argument slots of output $j$. |
-| EO02 | Full `Apply` of an output with open argument slots | The value of that output at the supplied arguments, given by the library's full application rule. This also applies to tangent outputs. |
-| EO03 | Pull-back of a pointwise operation on field values, with all spatial dependence supplied through its operands | The same output of the operation on the pulled-back operands. Other spatial rewrites require a law for the operation. |
+| EO01 | Directional derivative of output $j$ of $f(e_1,\ldots,e_k)$ | Output $j$ of the opaque action $Df(p)[h]$. Both $p$ and $h$ are value operands of the action. At fixed $p$ the action is jointly real-linear in $h$. |
 
 For `directional_derivative(f(u, u), u, p, h)`, EO01 gives $Df(p,p)[h,h]$.
 For `directional_derivative(b, u, p, h)` it selects the second output of
@@ -114,11 +112,39 @@ $Dg(p)[h]$. Subsequent derivatives follow both the point values and the
 directions in EO01. A required derivative action with no applicable rule
 raises `TypeError` under the [extension rule contract](#rule-tables).
 
-With one open linear slot, `apply(N(m), (v,))` denotes $N(m;v)$.
-When both `m` and `v` vary, [D12](differentiation.md#directional-derivative-rules)
-differentiates the operation and the supplied argument. For real fields, a
-fixed dual load `l`, fixed `m` and a fresh direction `h`, the adjoint
-derivative action on `l` is the form
+To vary an intermediate result independently, write the outer expression in
+terms of a fresh `Function` and use the result as the
+[differentiation point](geometry.md#directionalderivative). For example,
+suppose `y = f(u, m)` is a real scalar field and the outer expression squares
+it. Choose a real scalar space `V` for which `y` and its direction `h` are
+admissible.
+
+```python
+z = function(V, "z")
+d_outer = directional_derivative(z * z, z, y, h)
+```
+
+The value is $2yh$. To vary `u` in direction `k` with `m` fixed, supply
+`directional_derivative(y, u, u, k)` as `h`. This gives the same value as
+`directional_derivative(y * y, u, u, k)`.
+
+##### Multilinear forms
+
+Suppose the library guarantees that `n(m, v)` is linear in the real field
+`v` for fixed `m`. Binding `v` gives a map with one open slot. For an
+admissible `w` and independent `m`, [full application](lowering.md#application-rules)
+substitutes `w` for `v` in the operands.
+
+```python
+L = form(n(m, v), (v,))
+at_w = apply(L, (w,))  # n(m, w)
+```
+
+A fixed multilinear map may itself be a library-supplied `Function`. Its
+action on the tuple `values` is `apply(A, values)`.
+
+For real fields, a fixed dual load `l`, fixed `m` and a fresh direction
+`h`, the adjoint derivative action on `l` is the form
 
 ```python
 dy = directional_derivative(f(u, m), u, p, h)
@@ -137,6 +163,10 @@ The UFL external operator admits a function-space formulation and an equivalent 
 
 #### Examples
 
+- Suppose `f(u, v)` has value $F(u(x), v(x))$ at each point $x$, for a fixed
+  function $F$. A library may then rewrite `pull_back(f(u, v), phi)` as
+  `f(pull_back(u, phi), pull_back(v, phi))`. Both sides have value
+  $F(u(\phi(s)), v(\phi(s)))$ at $s$.
 - An interpolation node may retain the target space or delay expansion into
   sampling and basis reconstruction. Its lowering is the library operation
   of [Cell-local interpolation](#cell-local-interpolation). Forward
