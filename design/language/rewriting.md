@@ -10,6 +10,9 @@ The lazy nodes are `Apply`, `DirectionalDerivative`, mesh `Integral`,
 `PullBack`, `Gradient`, `Divergence`, `Curl` and `PushForward`. They store
 operations to evaluate later.
 
+Rewriting visits a conditional's predicate and both branches. Branch rewrites
+apply under the corresponding selection condition.
+
 ### Transformations, recipes and contracts
 
 | Component | Responsibility |
@@ -155,7 +158,7 @@ one gives one for every `i`. Type completion retains that family index.
 
 *Type completion* restores scalar type and free indices lost in a rewrite.
 Apply it before returning a table's result `r` or rebuilding its parent.
-For the replaced expression `e`, let
+For a numerical replaced expression `e`, let
 
 ```python
 z = Zero(e.value_shape, e.free_indices, e.argument_spaces, e.scalar_type)
@@ -177,6 +180,9 @@ actual zero results use `z`.
 | ---- | ---------- | ----------- |
 | SH07 | Result before type completion | The raw result must already have the required shape and argument spaces, matching extents for retained indices and no extra free indices. A real `e` requires a real result. A row giving zero uses `z`; this is what the tables mean by zero with the type of an expression. |
 | SH08 | Promotion and completion order | `Apply`, `partial` and `DirectionalDerivative` promote real values before substitution for complex functions, member by member for tuples; `replace` does not. Promotion precedes evaluation, for example of a square root at a negative real point. Index completion precedes rebuilding a binder. |
+
+For a Boolean replacement, SH07 requires a Boolean result. SH06 applies to
+Boolean values unchanged; `Zero` and numerical promotion are not used.
 
 ### Grammars
 

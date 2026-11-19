@@ -18,7 +18,7 @@ rewriting under the common procedure.
 | Geometry preparation and inner derivatives | D21–D23, D13 |
 | Independent expression | L10 |
 | Variable and application derivatives | D11–D12 |
-| Derivative fallback | D01–D02, D19–D20, D03–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \mathrm{D} b$ |
+| Derivative fallback | B02, D01–D02, D19–D20, D03–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \mathrm{D} b$ |
 
 ### Geometry preparation
 
@@ -156,7 +156,7 @@ gradient. The request has `b`’s shape and an additional free index `j`.
 | Constants and coordinates | L11, D17 |
 | Components of retained gradients | ST09 |
 | Chain rule and applications | CC01, ST10 |
-| Shared derivative fallback | D01–D02, D19–D20, D03–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \partial_j b$ |
+| Shared derivative fallback | B02, D01–D02, D19–D20, D03–D10, L04, L01, ST01, L02–L03, in order, with $\delta b = \partial_j b$ |
 
 | Rule | Expression or operation | Rewrite |
 | --- | --- | --- |
@@ -177,12 +177,16 @@ pull-back to a cell.
 
 ## Derivatives of the node classes
 
+Boolean values have no directional or spatial derivative. Numerical
+conditionals differentiate branchwise; the predicate is not differentiated.
+
 Directional and spatial derivatives share these rules. Their specific rules
 take precedence. The linear derivative rules are in [Linearity](rewriting.md#linearity).
 Extensions can add derivative rules to either group.
 
 | Rule | Expression | Derivative |
 | --- | --- | --- |
+| B02 | `Conditional(p, a, b)`, numerical | `conditional(p_at, delta_a, delta_b)`; for a directional derivative, `p_at` is `p` with the differentiation point substituted under SB18; for a spatial derivative it is `p` unchanged |
 | D01 | `Product(b, c)` | $\delta b \, c + b \, \delta c$ |
 | D02 | `Division(b, c)` | $\delta b / c - (b \, \delta c) / (c c)$ |
 | D19 | `Power(b, c)`, $c$ an `Integer`, `Float` or `Complex` literal with value zero, or a scalar `Zero` | Zero with the type of the derivative |

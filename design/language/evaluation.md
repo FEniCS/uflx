@@ -88,6 +88,7 @@ expressions. Its allowed nodes are:
 
 | Chapter | Node class | Allowed in the core normal form |
 | ------- | ---------- | ------------------------------- |
+| [Boolean values and selection](expressions.md#boolean-values-and-selection) | `Boolean`, `LessThan`, `Conditional` | Always |
 | [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Integer`, `Float`, `Complex`, `Zero` | Always |
 | [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Sum`, `Product`, `Division` | Scalar value shape |
 | [Numbers and scalar operations](expressions.md#numbers-and-scalar-operations) | `Power`, `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm` | Always |

@@ -16,7 +16,7 @@ describes the result of an expression without evaluating it.
 | -------- | ------- |
 | `value_shape` | Length of each array axis, in order; `()` for a scalar. |
 | `free_indices` | Unbound indices on which the value depends, paired with their extents in first-occurrence order. |
-| `scalar_type` | Real or complex arithmetic used to evaluate the expression. |
+| `scalar_type` | Boolean, real or complex scalar values of the expression. |
 | `domain` | Where the expression is defined; `None` when it has no spatial argument. |
 | `argument_spaces` | Spaces of the multilinear arguments on which the expression depends; `()` when there are none. |
 
@@ -105,15 +105,25 @@ the free indices `i` and `j` and denotes the outer sum.
 
 ### Scalar type
 
-The scalar type is real or complex. Unless the [static type
-table](reference.md#appendix-static-type-table) states otherwise, an expression is complex
-if and only if at least one edge is a complex expression.
+The scalar type is Boolean, real or complex. Boolean is distinct from both
+numerical types: no Boolean-to-number conversion or promotion is implicit.
+Unless the [static type table](reference.md#appendix-static-type-table) states
+otherwise, numerical operands give a complex result if and only if at least
+one operand is complex; all-Boolean operands give a Boolean result. Mixing
+Boolean and numerical operands raises `ValueError`.
+
+Boolean expressions support `Tensor`, `BroadcastTo`, `Indexed`,
+`ComponentTensor`, `PullBack`, and the logic and selection operations below.
+They have argument spaces `()`. Arithmetic, `Zero`, `IndexSum`, numerical
+tensor operations, complex operations, calculus and `Form` require numerical
+values; Boolean operands raise `ValueError`. Function spaces remain over
+real or complex scalars. A library may supply Boolean expression terminals.
 
 The Python representation of the scalar types is implementation-defined. When
 stored as a construction argument, it must satisfy rule 1.
 
-The scalar type is the arithmetic in which the expression is evaluated, not a
-statement about the value. A real `SquareRoot`, `Logarithm` or `Power` whose
+For numerical expressions, the scalar type is the arithmetic in which the
+expression is evaluated, not a statement about the value. A real `SquareRoot`, `Logarithm` or `Power` whose
 value is not a real number, such as `square_root(Integer(-1))`, is undefined.
 
 ### Domain
@@ -185,12 +195,88 @@ For example, transpose is the fixed composition
 A construction free function belongs to the core only if a core definition,
 rule or Python overload uses it. A node class belongs to the core only if
 another core definition or rule needs it, or it is an operation of the scalar
-field. Its own rules do not establish that need.
+field or the Boolean comparison and selection basis. Its own rules do not
+establish that need.
 
 Other compositions belong to libraries; other node classes belong to
 [language extensions](extensions.md#language-extensions). The
 [node-class rationale](reference.md#appendix-node-class-rationale) explains
 individual choices.
+
+## Boolean values and selection
+
+### `Boolean`
+
+`Boolean` is an explicit Boolean terminal.
+
+| `Boolean(value)` | |
+| ---------------- | - |
+| Extends | `AbstractExpression` |
+| Takes | `value: bool` |
+| Properties | `value`, of exact Python type `bool` |
+| Static type | Value shape `()`, Boolean, no free indices, no domain and argument spaces `()` |
+| Raises | `TypeError` if `value` is not exactly a Python `bool` |
+
+`Boolean(True)` and `Boolean(False)` are valid. `Boolean(1)` and
+`Integer(True)` raise `TypeError`. A Boolean array can be constructed with
+`Tensor` or `BroadcastTo`; there is no Boolean `Zero`.
+
+### `LessThan`
+
+`LessThan` compares real scalar values for each assignment of its free
+indices, using mathematical real ordering.
+
+| `LessThan(first, second)` | |
+| ------------------------ | - |
+| Extends | `AbstractExpression` |
+| Free function | `less_than(first, second)` |
+| Takes | `first, second: AbstractExpression` |
+| Properties | `first` and `second`, the values to compare |
+| Requires | Both operands real, of value shape `()` and with argument spaces `()` |
+| Static type | Value shape `()`, Boolean, argument spaces `()`; free indices and domain by the default rules |
+| Value | True exactly when `first` is less than `second` |
+
+### `Conditional`
+
+`Conditional` selects a whole value using a scalar Boolean predicate.
+Free indices describe families of selections, without a separate mask type.
+
+| `Conditional(predicate, true_value, false_value)` | |
+| ------------------------------------------------ | - |
+| Extends | `AbstractExpression` |
+| Free function | `conditional(predicate, true_value, false_value)` |
+| Takes | `predicate, true_value, false_value: AbstractExpression` |
+| Properties | `predicate`, `true_value` and `false_value`, in that order |
+| Requires | `predicate` Boolean with value shape `()` and argument spaces `()`; branches have equal value shapes and equal ordered argument spaces; both branches Boolean or both numerical |
+| Static type | Branch value shape and argument spaces; Boolean for Boolean branches, otherwise real or complex by numerical promotion of the branches; free indices and domain from all three operands by the default rules |
+| Value | `true_value` when `predicate` is true, otherwise `false_value` |
+
+Only the predicate and the selected branch must be defined.
+Boolean branches must have argument spaces `()`; numerical branches can
+represent multilinear maps with a common
+signature. The predicate is fixed with respect to those inherited slots.
+Binding a function occurring in the predicate still requires the user's
+linearity guarantee for `Form`.
+
+A real branch is evaluated in real arithmetic before its result is promoted
+if the other branch is complex.
+
+### Library logic
+
+Conditional selection is the sole core logical operation. Libraries can
+provide the following fixed compositions; these names introduce no core
+nodes or core free functions.
+
+| Library operation | Composition |
+| ----------------- | ----------- |
+| `logical_not(p)` | `conditional(p, Boolean(False), Boolean(True))` |
+| `logical_and(p, q)` | `conditional(p, q, Boolean(False))` |
+| `logical_or(p, q)` | `conditional(p, Boolean(True), q)` |
+| `greater_than(a, b)` | `less_than(b, a)` |
+| `less_equal(a, b)` | `logical_not(less_than(b, a))` |
+| Real numerical equality | `logical_and(logical_not(less_than(a, b)), logical_not(less_than(b, a)))` |
+
+Numerical equality is distinct from structural `==`.
 
 ## Numbers and scalar operations
 

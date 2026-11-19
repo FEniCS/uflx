@@ -7,6 +7,9 @@ are in the class sections.
 
 | Node class                                       | Why a node class                                                                                              |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `Boolean` | An explicit Boolean literal is a terminal |
+| `LessThan` | Connects real scalar values to Boolean expressions |
+| `Conditional` | Primitive selection of Boolean or numerical values; composes the other logical operations |
 | `Integer`, `Float`                                | A number written down is a terminal |
 | `Complex`                                        | A scalar complex constant retains its two real literals without arithmetic construction |
 | `Zero`                                           | A zero carries its shape, free indices, argument spaces and scalar type without expression operands |
@@ -64,6 +67,12 @@ classDiagram
 Extend `Base`:
 
 [`Index`](expressions.md#index).
+
+### Boolean values and selection
+
+Extend `AbstractExpression`:
+
+[`Boolean`](expressions.md#boolean), [`LessThan`](expressions.md#lessthan), [`Conditional`](expressions.md#conditional).
 
 ### Numbers and scalar operations
 
@@ -168,6 +177,13 @@ Extend `AbstractFunctionSpace`:
 | Function                               | Overload | Takes                 | Returns |
 | -------------------------------------- | -------- | --------------------- | ------- |
 | [`index(label)`](expressions.md#index) |          | `label: str \| tuple` | `Index` |
+
+### Boolean values and selection
+
+| Function                                                                        | Overload | Takes                                                    | Returns       |
+| ------------------------------------------------------------------------------- | -------- | -------------------------------------------------------- | ------------- |
+| [`less_than(first, second)`](expressions.md#lessthan)                           |          | `first, second: AbstractExpression`                      | `LessThan`    |
+| [`conditional(predicate, true_value, false_value)`](expressions.md#conditional) |          | `predicate, true_value, false_value: AbstractExpression` | `Conditional` |
 
 ### Numbers and scalar operations
 
@@ -299,6 +315,8 @@ and are not added to the enclosing expression's argument spaces.
 
 | Class                                    | Argument spaces of the node                                    |
 | ---------------------------------------- | -------------------------------------------------------------- |
+| `Boolean`, `LessThan` | `()` |
+| `Conditional` | Those of the branches, which must be equal; the predicate has none |
 | `Integer`, `Float`                        | `()` |
 | `Complex`                                | Those of the parts, which must be equal |
 | `Zero`                                   | The stored argument spaces                                     |
@@ -329,6 +347,9 @@ from the default rules of [Domain](expressions.md#domain) and [Scalar type](expr
 
 | Class                    | Domain of the node                | Scalar type of the node           |
 | ------------------------ | ---------------------------------- | --------------------------------- |
+| `Boolean` | None | Boolean |
+| `LessThan` | Default operand-domain rule | Boolean |
+| `Conditional` | Default operand-domain rule, including the predicate | Boolean for Boolean branches; otherwise numerical promotion of the branches |
 | `Complex`          | None                               | Complex                           |
 | `Zero`                   | None                               | The stored scalar type            |
 | `Absolute`               | The domain of the operand         | Real                              |
@@ -351,10 +372,10 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 53    |
+| Classes                         | 56    |
 | Abstract classes                | 10    |
-| Concrete classes                | 43    |
-| Expression node classes         | 33    |
-| Free functions                  | 50    |
+| Concrete classes                | 46    |
+| Expression node classes         | 36    |
+| Free functions                  | 52    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

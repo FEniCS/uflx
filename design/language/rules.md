@@ -120,7 +120,7 @@ recoverable from the graph.
 Objects must satisfy the following rules:
 
 1. A construction argument must be one of a small curated set of types: a base
-   object, or exactly an `int`, a finite `float`, a `str`, or a `tuple` whose
+   object, or exactly a `bool`, an `int`, a finite `float`, a `str`, or a `tuple` whose
    items are of these types. A subclass of these Python types is not accepted,
    so a `bool` is not an `int` and a named tuple is not a `tuple`. Construction
    arguments are deeply immutable. Their hashes must be deterministic across
@@ -129,6 +129,8 @@ Objects must satisfy the following rules:
    value is equal to itself. The permitted argument types are checked statically
    under rule 8. Construction raises `TypeError` for a subclass where an exact
    built-in type is required, and `ValueError` for a `float` that is not finite.
+   Type tags distinguish built-in values in hashing and serialisation; Python's
+   equality of `True`, `1` and `1.0` does not identify construction arguments.
 2. Construction and all results depend only on the class and construction
    arguments, never on global state.
 3. Objects are immutable after construction.
@@ -265,7 +267,15 @@ Python passes `f[i]` to `__getitem__` as `i`, but `f[i, j]` as `(i, j)`.
 expressions are not iterable and Python otherwise iterates through
 `__getitem__`.
 
+`AbstractExpression` defines `__bool__` to raise `TypeError`. Python `if`,
+`and`, `or` and `not` cannot evaluate symbolic truth. Structural equality
+still returns a Python `bool` under rule 7.
+
 ### Numbers in expressions
+
+Every Boolean value is written with `Boolean(True)` or `Boolean(False)`;
+Python `bool` values are construction data, never implicitly converted to
+expressions. Numerical literals likewise remain explicit.
 
 Every number in an expression is written with literals, such as `Integer(2)`,
 `Float(0.5)`, `Integer(1) / Integer(3)` or `Complex(Integer(0), Integer(1))`. A Python `int`, `float`,

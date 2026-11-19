@@ -11,6 +11,7 @@
 | Selection | Rules |
 | --------- | ----- |
 | Apply explicit forms | SB16 |
+| Conditional forms | B01 |
 | Conjugation and products | L05, ST02 |
 | Keep spatially transformed forms | ST03 |
 | Commute into operands | L01, ST01, L02–L03 |
@@ -25,6 +26,7 @@ uses the retained-name rejection rule in [Partial application](forms.md#partial-
 | Rule | Form $f$ | Rewrite of `Apply(f, G)` |
 | --- | --- | --- |
 | SB16 | `Form(e, entries)`, with $n=$ `len(e.argument_spaces)` | In `Apply(Form(e, entries), G)`, substitute `G[n:]` for `entries` simultaneously in `e`, yielding `e_new`, then return `apply(e_new, G[:n])`. For a conjugated entry substitute the conjugate value for its function; handle product-space members simultaneously. Promote before substitution and preserve binding by SB07–SB14. Inserted values are not substituted into one another. |
+| B01 | `Conditional(p, a, b)` | `conditional(p, apply(a, G), apply(b, G))`; both branches receive the same arguments; the predicate has no argument slots |
 | ST02 | `Product(a, b)`, with $n$ the arity of $a$ | `Product(apply(a, G[:n]), apply(b, G[n:]))` |
 | ST03 | `Gradient`, `PullBack` | Remains; the operation transforms the form's output |
 | ST04 | `Function` or a downstream terminal | Remains, for the supplying library |
@@ -127,6 +129,8 @@ procedure. Leave new gradients to a later call to `apply_gradients`.
 | PB06 operand class | Operands to pull back |
 | ------------------ | --------------------- |
 | `Sum`, `Product`, `Division`, `Power` | Both expression operands |
+| `LessThan` | Both expression operands |
+| `Conditional` | Predicate and both branches |
 | `Absolute`, `Conjugate`, `RealPart`, `ImaginaryPart`, `SquareRoot`, `Logarithm`, `Inverse`, `Determinant` | The expression operand |
 | `Tensor` | Each entry |
 | `BroadcastTo` | `value`; keep the target shape |
