@@ -384,9 +384,7 @@ by entry.
 meaning is `conjugate(f)[e]` = `conjugate(f[e])` in value.
 
 For a map, conjugation also conjugates its input representation, as in
-[L05](lowering.md#application-rules). For a real-linear map, bind the
-conjugate of its application in a `Form` to conjugate only the output while
-keeping the input spaces.
+[L05](lowering.md#application-rules).
 
 ### `RealPart` and `ImaginaryPart`
 

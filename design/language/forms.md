@@ -9,15 +9,14 @@ the same type, such as scalar finite-element spaces of different degrees.
 | `AbstractFunctionSpace` |                                                                                                                                                       |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                 | `Base` |
-| Provides                | `domain`, `value_shape`, `scalar_type`, `scalar_field`, and `argument_spaces`, described below |
+| Provides                | `domain`, `value_shape`, `scalar_type`, and `argument_spaces`, described below |
 | Defined by              | Library subclasses and the core space constructions below |
 
 | Property | Meaning |
 | -------- | ------- |
 | `domain` | Where the space's fields are defined: an `AbstractTopology`, an `AbstractDomain`, or `None` for values with no spatial argument. |
 | `value_shape` | Array shape of a function's output, with `()` for a scalar. |
-| `scalar_type` | Real or complex arithmetic for the function's expression representation. |
-| `scalar_field` | Real or complex scalars over which the space is a vector space; determines argument linearity. It agrees with `scalar_type` for ordinary field and constant spaces. |
+| `scalar_type` | Real or complex arithmetic for the function's expression representation; also specifies the scalars over which the space is linear. |
 | `argument_spaces` | `()` for fields and constants, which take no function inputs. Spaces of maps specify input spaces; see [`DualSpace`](#dualspace). |
 
 The surrounding package defines continuity and how local representations
@@ -124,8 +123,8 @@ Every expression has an ordered `argument_spaces` tuple describing its
 function inputs.
 
 Each slot contains a space or a tuple of at least two spaces for one
-product-space argument. The member spaces of a product share a scalar field;
-their value scalar types may differ. Separate slots may have different scalar fields.
+product-space argument. The member spaces of a product have the same scalar type.
+Separate slots may have different scalar types.
 
 A `Function` takes its signature from its space; a `Form` derives it from
 its body and bindings. A signature describes accepted inputs and output
@@ -160,15 +159,15 @@ in another, or occur nonlinearly as a free parameter.
 | Free function                 | `form(expression, arguments)`                                                                                                                                                                      |
 | Takes                         | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]` |
 | Properties | `expression`, the body of the form, and `arguments`, the ordered binding declarations described below |
-| Requires                      | Every function in `arguments` distinct; each tuple entry has one scalar field; no bound function occurs free in any resulting argument space, including inherited slots |
+| Requires                      | Every function in `arguments` distinct; each tuple entry has one scalar type; no bound function occurs free in any resulting argument space, including inherited slots |
 | Static type                   | That of the expression, with the argument spaces of the expression followed by the space `V` of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
-| Raises                        | `ValueError` for a conjugated expression that is not a function, a repeated function, a tuple with fewer than two members or mixed scalar fields, or an argument space depending on a bound function |
+| Raises                        | `ValueError` for a conjugated expression that is not a function, a repeated function, a tuple with fewer than two members or mixed scalar types, or an argument space depending on a bound function |
 
 Each entry of `arguments` declares one new argument slot:
 
 | Entry | Meaning |
 | ----- | ------- |
-| A `Function` | The form is linear over the scalar field of this function's space. |
+| A `Function` | The form is linear over the real or complex scalars specified by this function's space. |
 | `conjugate(function)` for a `Function` | The form is antilinear in this function. |
 | A tuple of at least two functions or conjugated functions | One product-space argument; the form is jointly linear in the declared values. |
 
@@ -176,11 +175,10 @@ An entry's binder index is its index in `arguments`; its argument position
 is the arity of `expression` plus that index. An entry `v` declares
 linearity in `v`; `conjugate(v)` declares linearity in $\bar v$, hence
 antilinearity in `v`. They give the same argument space only when the space
-has trivial conjugation. For `RealSpace` both declarations are real-linear,
-but a conjugated declaration accepts conjugated values.
+has trivial conjugation.
 A `tuple` entry declares joint linearity over its members' common scalar
-field, so a term may depend on only one member. A real argument may have a
-complex-valued output; linearity uses the argument space's scalar field.
+type, so a term may depend on only one member. A real argument may have a
+complex-valued output; linearity uses the argument space's scalar type.
 The user guarantees the declared linearity. Construction checks structural
 requirements; an optional [linearity check](#checking-linearity) may help
 diagnose mistakes.
@@ -301,10 +299,10 @@ The spaces remain distinct even if they contain the same values:
 $v\mapsto\bar v$ is antilinear over complex scalars. Over real scalars
 it is linear, but can still change values and input signatures.
 
-Conjugation is *trivial* for a space when its `scalar_field` and `scalar_type`
-are real and conjugation is trivial for every space in its `argument_spaces`,
+Conjugation is *trivial* for a space when its `scalar_type`
+is real and conjugation is trivial for every space in its `argument_spaces`,
 recursively through tuples. Ordinary real-valued field and constant spaces
-satisfy this condition; `real_space(V)` for complex-valued `V` does not.
+satisfy this condition.
 
 | `ConjugateSpace(space)` |                                                                                                   |
 | ------------------- | ------------------------------------------------------------------------------------------------- |
@@ -313,7 +311,7 @@ satisfy this condition; `real_space(V)` for complex-valued `V` does not.
 | Takes               | `space: AbstractFunctionSpace` |
 | Returns             | `space.space` for a `ConjugateSpace`, `space` when conjugation is trivial as defined above, and `ConjugateSpace(space)` otherwise |
 | Properties | `space`, the original function space; it must not itself be a `ConjugateSpace` or have trivial conjugation |
-| Derived             | `domain`, `value_shape`, `scalar_type` and `scalar_field`, those of `space`; `argument_spaces`, those of `space` with each space conjugated, member by member for a `tuple` |
+| Derived             | `domain`, `value_shape` and `scalar_type`, those of `space`; `argument_spaces`, those of `space` with each space conjugated, member by member for a `tuple` |
 | Raises | The node constructor raises `ValueError` for a space with trivial conjugation or a `ConjugateSpace`; the factory handles these cases as stated above |
 
 Conjugating twice returns the original space (see
@@ -322,70 +320,10 @@ Conjugating twice returns the original space (see
 Space substitution rebuilds conjugate spaces through `conjugate_space`,
 preserving these canonical forms.
 
-### `RealSpace`
-
-`RealSpace(space)` is the underlying real vector space of `space`.
-It keeps the same members, addition and evaluation rules, but uses only
-real scalars when declaring linearity. A value such as $2+3i$ is unchanged.
-
-A real-linear map need only satisfy the linearity equation above for
-$\alpha,\beta\in\mathbb R$. It need not satisfy $L(iv)=iL(v)$.
-For example, $z\mapsto\operatorname{Re}z$ is real-linear but not complex-linear.
-
-For a complex scalar constant space `V`:
-
-```python
-h = function(real_space(V), "h")
-L = form(real_part(h), (h,))
-```
-
-`L` accepts a complex value in `real_space(V)` and returns its real part:
-supplying $2+3i$ gives $2$. Binding a function in `V` instead would
-incorrectly declare complex linearity.
-
-This distinction matters for derivatives. The derivative of $|z|^2$ in
-direction $h$ is $2\operatorname{Re}(\bar z h)$: real-linear in $h$, but
-generally neither complex-linear nor antilinear. `RealSpace` lets a form
-bind that full direction without splitting it into real and imaginary parts.
-
-| `RealSpace(space)` | |
-| ---------------------- | - |
-| Extends | `AbstractFunctionSpace` |
-| Free function | `real_space(space)` |
-| Takes | `space: AbstractFunctionSpace` |
-| Returns | `space` when `space.scalar_field` is real, otherwise `RealSpace(space)` |
-| Properties | `space`, the original space over complex scalars |
-| Derived | `scalar_field`, real; `domain`, `value_shape`, `scalar_type` and `argument_spaces`, those of `space` |
-| Raises | The node constructor raises `ValueError` when `space.scalar_field` is real; the factory returns that space unchanged |
-
-Applying `real_space` twice returns the same space. Space substitution
-rebuilds it through this factory. `conjugate_space(real_space(V))` retains
-the conjugate representation of complex-valued members; its scalar field
-is still real. It is not identified structurally with `real_space(V)` or
-`real_space(conjugate_space(V))`.
-
-For a complex space `V`, the distinction is:
-
-| Space | Input representation | Scalars used for linearity |
-| ----- | -------------------- | -------------------------- |
-| `V` | `v` | Complex |
-| `conjugate_space(V)` | `conjugate(v)` | Complex |
-| `real_space(V)` | `v`, unchanged | Real |
-
-Realification also lets complex and real functions share one product-space
-argument; see [Mixed real and complex variables](#mixed-real-and-complex-variables).
-
-```{dropdown} Legacy UFL
-`RealSpace` is unrelated to legacy UFL's `Real` space or element, which
-represents spatially constant unknowns. `RealSpace` changes the scalar
-field of an existing space; its functions may remain spatially varying and
-complex-valued.
-```
-
 ### `DualSpace`
 
 `DualSpace(space)` describes bounded antilinear functionals: maps that take a
-member of `space` and return a scalar in its scalar field. Over real scalars,
+member of `space` and return a scalar of its scalar type. Over real scalars,
 these are real-valued linear functionals. `space` may also be a tuple of spaces,
 representing one product-space argument.
 
@@ -403,8 +341,8 @@ double dual by the canonical map defined
 | -------------- | - |
 | Extends | `AbstractFunctionSpace` |
 | Takes | `space: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` |
-| Properties | `space`, the space on whose members the functionals act, or a `tuple` of at least two spaces with the same scalar field; a single space must not be a `DualSpace` |
-| Derived | `domain`, `value_shape`, `scalar_type`, `scalar_field` and `argument_spaces`, below |
+| Properties | `space`, the space on whose members the functionals act, or a `tuple` of at least two spaces with the same scalar type; a single space must not be a `DualSpace` |
+| Derived | `domain`, `value_shape`, `scalar_type` and `argument_spaces`, below |
 | Raises | `ValueError` for a `DualSpace` or an invalid tuple |
 
 | Free function | Overload | Takes | Returns |
@@ -417,14 +355,10 @@ The derived properties describe a function in the dual space:
 | -------- | ------- |
 | `domain` | `None`; a functional has no spatial argument. |
 | `value_shape` | `()`; applying a functional produces a scalar. |
-| `scalar_type`, `scalar_field` | The scalar field of `space`, shared by all member spaces when it is a tuple. |
+| `scalar_type` | That of `space`, shared by all member spaces when it is a tuple. |
 | `argument_spaces` | One slot: `space` over real scalars; its conjugate over complex scalars, member by member for a tuple. |
 
 The descriptions below write `S` for `space`.
-
-The dual of `real_space(V)` therefore contains real-valued real-linear
-functionals. A complex-valued real-linear form can be expressed with `Form`,
-but is not a member of this real dual.
 
 Space substitution rebuilds a dual through `dual_space`, preserving its
 canonical form. For a `tuple` $S$, taking the dual twice returns that tuple;
@@ -448,8 +382,7 @@ are not identified structurally.
 For `l` with space `DualSpace(S)` and `w` in $S$, the pairing is
 `apply(l, (conjugate(w),))`: the argument space of `l` is conjugated, and
 [applications](#apply) are linear in their arguments.
-When $S$ has a real scalar field, use `apply(l, (w,))` instead, even if
-its members are complex-valued as in `RealSpace`.
+When $S$ has real scalar type, use `apply(l, (w,))` instead.
 The library supplying `l` evaluates the pairing.
 
 #### The double dual
@@ -463,8 +396,7 @@ $$
 with the conjugation absent over real scalars. Thus
 `form(conjugate(apply(l, (conjugate(u),))), (conjugate(l),))`
 represents $u$ in the double dual.
-Over real scalars this is `form(apply(l, (u,)), (l,))`, including when
-`V` is a `RealSpace`.
+Over real scalars this is `form(apply(l, (u,)), (l,))`.
 
 Space membership and expression representation are separate. A
 `Function` in the double dual is a `Function` in `V`. A scalar form with
@@ -570,7 +502,6 @@ declares bound functions; `Apply.arguments` stores the values supplied to them.
 | -------------- | ------------------- |
 | A space `space` | Same value shape and argument spaces as a function in `space`; scalar type `space.scalar_type` or real; domain `space.domain` or no domain |
 | `ConjugateSpace(space)` | The conjugate type of an admissible value for `space`, including argument spaces; supplies the conjugated function value |
-| `RealSpace(space)` | An admissible value for `space`, with no change to its values |
 | Tuple of spaces | A tuple with one admissible member per space |
 
 A product-space argument occupies one slot. Free indices give families of
@@ -701,9 +632,9 @@ directional derivatives alone does not establish it.
 
 The new slot follows `F`'s existing slots. The direction must be admissible
 for `x` and fresh in `F` and `a` under the construction walk. A complex-valued
-direction in `real_space(V)` binds the full real differential. Directions in
-`V` require the projections below unless the differential already has the
-declared complex linearity.
+direction requires the projections below unless the differential already has
+the declared complex linearity. The full differential can also be represented
+using real and imaginary direction blocks.
 
 #### Complex and Wirtinger derivatives
 
@@ -739,24 +670,8 @@ provide these compositions.
 #### Mixed real and complex variables
 
 Derivative variables may mix real and complex spaces; each point and direction
-member must be admissible for its variable. To bind their combined direction
-in one real-linear slot, use `real_space` for the complex direction spaces.
-
-For a complex field `u` in `V` and a real scalar multiplier `lam` in `R`, let
-`F` be an expression depending on both. Its derivative at `(u, lam)` is:
-
-```python
-h = function(real_space(V), "h")
-eta = function(R, "eta")
-J = form(directional_derivative(F, (u, lam), (u, lam), (h, eta)), ((h, eta),))
-```
-
-`J` has one new argument slot `(real_space(V), R)`. It is jointly real-linear
-in the complex correction `h` and the real correction `eta`, assuming `F`
-has a real-linear differential. Separate slots `(h, eta)` would instead
-declare bilinearity.
-
-Alternatively, split a complex direction into real and imaginary blocks.
+member must be admissible for its variable. To form real direction blocks,
+split each complex direction into real and imaginary parts.
 For complex `z`, choose a fresh real-valued direction `q` in a compatible
 library space, with `i` as above:
 

@@ -157,7 +157,7 @@ Extend `AbstractExpression`:
 
 Extend `AbstractFunctionSpace`:
 
-[`ConjugateSpace`](forms.md#conjugatespace), [`RealSpace`](forms.md#realspace), [`DualSpace`](forms.md#dualspace).
+[`ConjugateSpace`](forms.md#conjugatespace), [`DualSpace`](forms.md#dualspace).
 <!-- end generated: class-hierarchy -->
 
 ## Appendix: Free functions
@@ -271,7 +271,6 @@ Extend `AbstractFunctionSpace`:
 | -------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | [`form(expression, arguments)`](forms.md#form)           |          | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]` | `Form`                                                                                                                            |
 | [`conjugate_space(space)`](forms.md#conjugatespace)      |          | `space: AbstractFunctionSpace`                                                                                        | `space.space` for a `ConjugateSpace`, `space` when conjugation is trivial as defined above, and `ConjugateSpace(space)` otherwise |
-| [`real_space(space)`](forms.md#realspace)                |          | `space: AbstractFunctionSpace`                                                                                        | `space` when `space.scalar_field` is real, otherwise `RealSpace(space)`                                                           |
 | [`dual_space(space)`](forms.md#dualspace)                |          | `space: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]`                                                   | `space.space` for a `DualSpace`, otherwise `DualSpace(space)`                                                                     |
 | [`apply(form, arguments)`](forms.md#apply)               |          | `form: AbstractExpression`, `arguments: tuple[AbstractExpression \| tuple[AbstractExpression, ...], ...]`             | `form` for `apply(form, ())` when `form.argument_spaces == ()`, otherwise `Apply(form, arguments)`                                |
 | [`partial(form, mapping)`](forms.md#partial-application) |          | `form: Form`, `mapping: dict`                                                                                         | The form with selected outer entries supplied, or its body when none remain                                                       |
@@ -352,10 +351,10 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 54    |
+| Classes                         | 53    |
 | Abstract classes                | 10    |
-| Concrete classes                | 44    |
+| Concrete classes                | 43    |
 | Expression node classes         | 33    |
-| Free functions                  | 51    |
+| Free functions                  | 50    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->
