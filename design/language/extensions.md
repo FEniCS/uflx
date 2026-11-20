@@ -154,9 +154,9 @@ input_load = form(apply(l, (dy,)), (h,))
 ```
 
 For every admissible direction $k$, this input load has value
-$\ell(D_1 f(p,m)[k])$ at $k$. A backend may evaluate the load directly
-using a library reverse derivative action that returns $D_1 f(p,m)^*\ell$.
-EO01 alone supplies the forward action.
+$\ell(D_1 f(p,m)[k])$ at $k$. A backend may compute $D_1 f(p,m)^*\ell$
+by reverse-mode automatic differentiation of the library implementation of
+$u\mapsto f(u,m)$, with $\ell$ as the output cotangent.
 
 Complex fields use the [dual pairing](forms.md#dualspace) and
 [complex derivative rules](forms.md#complex-and-wirtinger-derivatives).
