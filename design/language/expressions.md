@@ -975,6 +975,6 @@ Domain, free indices and scalar type follow the operand.
 
 The node remains in the core normal form. The compiler chooses its evaluation,
 such as an explicit formula for a small matrix or a factorisation. The
-[derivative rule](differentiation.md#derivatives-of-the-node-classes) uses cofactors.
+[derivative rule](differentiation.md#derivatives-of-the-node-classes) applies at singular matrices as well.
 
 Worked examples for this chapter: [transpose](../examples/tensors.md#transpose), [tensor algebra](../examples/tensors.md#tensor-algebra).
