@@ -83,11 +83,11 @@ eps_w = (grad_w[i, j] + grad_w[j, i]) / two
 e = integral(
     two * push_forward(mu_s, S, transformation_law(R_S)) * index_sum(eps_d * eps_w, (i, j)), S
 )
-de_dmu = form(directional_derivative(e, mu_s, mu_s, Integer(1)), (w, d))
+de_dmu = form(directional_derivative(e, mu_s, Integer(1)), (w, d))
 
 grad_u = gradient(push_forward(u, F, transformation_law(V)), F)
 dissipation = integral(nu * index_sum(grad_u[i, j] * grad_u[i, j], (i, j)), F)
-g_nu = form(directional_derivative(dissipation, nu, nu, h), (h,))
+g_nu = form(directional_derivative(dissipation, nu, h), (h,))
 ```
 
 `de_dmu` is the solid form's sensitivity to `mu_s`. `g_nu` is a linear form
@@ -293,8 +293,8 @@ Binding the energy's directional derivatives gives the residual and tangent:
 
 ```python
 Pi = integral(psi, D)
-residual = form(directional_derivative(Pi, u, u, v), (v,))
-tangent = form(directional_derivative(residual, u, u, w), (w,))
+residual = form(directional_derivative(Pi, u, v), (v,))
+tangent = form(directional_derivative(residual, u, w), (w,))
 ```
 
 Since `V` is real, the first derivative binds `v`; the second binds `w`
@@ -473,9 +473,9 @@ Pi_s = integral(
     c * index_sum(reduced_gamma[i] * reduced_gamma[i], (i,)) / Integer(2), K
 )
 q, test, increment = (w, theta), (v, eta), (dw, dtheta)
-residual = directional_derivative(Pi_s, q, q, test)
+residual = directional_derivative(Pi_s, q, test)
 F_s = form(residual, (test,))
-J_s = form(directional_derivative(residual, q, q, increment), (test, increment))
+J_s = form(directional_derivative(residual, q, increment), (test, increment))
 ```
 
 The shear contribution to the bilinear form is

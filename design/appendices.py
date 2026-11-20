@@ -341,13 +341,14 @@ def summary(lang: Document) -> str:
     abstract = [c for c in classes if c.abstract]
     nodes = [c for c in classes if not c.abstract and is_expression(lang, c.name)]
     functions = [f for f in lang.functions if f.chapter not in EXCLUDED_CHAPTERS]
-    overloads = [f for f in functions if f.overload]
+    names = {f.signature.partition("(")[0] for f in functions}
+    overloads = {f.signature.partition("(")[0] for f in functions if f.overload}
     counts = [
         ["Classes", str(len(classes))],
         ["Abstract classes", str(len(abstract))],
         ["Concrete classes", str(len(classes) - len(abstract))],
         ["Expression node classes", str(len(nodes))],
-        ["Free functions", str(len(functions))],
+        ["Free functions", str(len(names))],
         ["Free functions with an overload", str(len(overloads))],
     ]
     return table(["Quantity", "Count"], counts)

@@ -656,7 +656,11 @@ For tuple variables, all members vary simultaneously.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
+| `directional_derivative(expression, variable, direction)` | | `expression: AbstractExpression`, `variable: Function \| tuple`, `direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, variable, direction)` |
 | `directional_derivative(expression, variable, point, direction)` | | `expression: AbstractExpression`, `variable: Function \| tuple`, `point, direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, point, direction)` |
+
+The three-argument form evaluates the derivative at `variable`. Supply an explicit
+`point` as the third argument, followed by `direction`, to evaluate it elsewhere.
 
 `directional_derivative` covers differentiation with respect to parameters,
 fields and geometry through the choice of variable and direction:
@@ -675,7 +679,7 @@ For an energy `energy` depending on a real field `u`, evaluated at `a`:
 
 ```python
 variation = directional_derivative(energy, u, a, v)
-linearisation = directional_derivative(variation, a, a, h)
+linearisation = directional_derivative(variation, a, h)
 ```
 
 Here `v` is a test direction and `h` is an increment, both independent of `a`.

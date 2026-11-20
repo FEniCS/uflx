@@ -271,9 +271,10 @@ Extend `AbstractFunctionSpace`:
 
 ### Differentiation with respect to functions
 
-| Function                                                                                              | Overload | Takes                                                                                                            | Returns                                                         |
-| ----------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [`directional_derivative(expression, variable, point, direction)`](geometry.md#directionalderivative) |          | `expression: AbstractExpression`, `variable: Function \| tuple`, `point, direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, point, direction)` |
+| Function                                                                                              | Overload | Takes                                                                                                            | Returns                                                            |
+| ----------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| [`directional_derivative(expression, variable, direction)`](geometry.md#directionalderivative)        |          | `expression: AbstractExpression`, `variable: Function \| tuple`, `direction: AbstractExpression \| tuple`        | `DirectionalDerivative(expression, variable, variable, direction)` |
+| [`directional_derivative(expression, variable, point, direction)`](geometry.md#directionalderivative) |          | `expression: AbstractExpression`, `variable: Function \| tuple`, `point, direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, point, direction)`    |
 
 ### `Function`
 

@@ -225,5 +225,5 @@ with `a`, `b`, `h` and `k` independent of `u`.
 
 | Input | Rule trace and result |
 | ----- | --------------------- |
-| `directional_derivative(directional_derivative(u * u, u, u, h), u, a, k)` | The inner derivative gives `h * u + u * h` by D01, D11 and SB18. Its point `u` is free under SB04. The outer derivative gives `h * k + k * h`. |
+| `directional_derivative(directional_derivative(u * u, u, h), u, a, k)` | The inner derivative gives `h * u + u * h` by D01, D11 and SB18. Its point `u` is free under SB04. The outer derivative gives `h * k + k * h`. |
 | `directional_derivative(directional_derivative(u * u, u, b, h), u, a, k)` | The inner derivative gives `h * b + b * h`. SH15 then finds no free `u`, so L10 gives the typed zero. |

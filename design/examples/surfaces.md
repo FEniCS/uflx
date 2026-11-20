@@ -175,8 +175,8 @@ grad_u = gradient(push_forward(function(V, "u"), D, transformation_law(V)), D)
 i = index("i")
 energy = integral(index_sum(grad_u[i] * grad_u[i], (i,)), D)
 
-d_energy = directional_derivative(energy, x, x, h)
-g_energy = form(directional_derivative(energy, x, x, v), (v,))
+d_energy = directional_derivative(energy, x, h)
+g_energy = form(directional_derivative(energy, x, v), (v,))
 ```
 
 `d_energy` is the derivative in the fixed direction `h`; `g_energy` binds an

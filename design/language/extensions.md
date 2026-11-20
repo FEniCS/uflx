@@ -127,8 +127,8 @@ d_outer = directional_derivative(z * z, z, y, h)
 ```
 
 The value is $2yh$. To vary `u` in direction `k` with `m` fixed, supply
-`directional_derivative(y, u, u, k)` as `h`. This gives the same value as
-`directional_derivative(y * y, u, u, k)`.
+`directional_derivative(y, u, k)` as `h`. This gives the same value as
+`directional_derivative(y * y, u, k)`.
 
 ##### Multilinear forms
 
