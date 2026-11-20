@@ -404,10 +404,10 @@ raise `ValueError`. Free indices follow the [default rule](#free-indices).
 | Other defined powers | The real power for real operands, or the principal complex value consistent with `Logarithm` |
 | Either operand undefined | Undefined, including an undefined base raised to zero |
 
-For example, constructor keywords and property access use the same names:
+The parameters of the `power` free function have the same names as the properties of the resulting `Power` node.
 
 ```python
-squared = Power(base=expression, exponent=Integer(2))
+squared = power(base=expression, exponent=Integer(2))
 squared.base == expression
 squared.exponent == Integer(2)
 ```
