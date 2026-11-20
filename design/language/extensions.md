@@ -59,40 +59,36 @@ as `Divergence` and `Curl` do for [Piola identities](geometry.md#pushforward).
 
 ##### `ExternalOperator`
 
-`ExternalOperator(operation, operands, output)` denotes output $j$ of
-$f(e_1,\ldots,e_k)$, where `operation` identifies $f$, `operands` is
-$(e_1,\ldots,e_k)$ and `output` is the zero-based index $j$. The library
+`ExternalOperator(operation, operands)` denotes the value $f(e_1,\ldots,e_k)$,
+where `operation` identifies $f$ and `operands` is $(e_1,\ldots,e_k)$. The library
 defines $f$ and its derivative actions. An operand may be a whole field.
 
-| `ExternalOperator(operation, operands, output)` | |
-| ----------------------------------------------- | --- |
+| `ExternalOperator(operation, operands)` | |
+| --------------------------------------- | --- |
 | Extends | `AbstractExpression` |
-| Free function | `external_operator(operation, operands, output)` |
-| Takes | `operation: Base`, `operands: tuple[AbstractExpression, ...]`, `output: int` |
-| Properties | `operation`, the library's identifier for the mathematical operation, `operands`, its ordered value operands including repetitions, and `output`, the selected output position |
-| Requires | `operation` is a non-expression library object. The operands match its signature. For an operation with `n` outputs, `0 <= output < n`. |
-| Static type | The value shape, scalar type and domain specified by `operation` for this output and these operands. Argument spaces are `()`. Free indices follow the [usual operand order and extent checks](expressions.md#free-indices). |
-| Raises | `ValueError` for an inadmissible operand signature or conflicting index extents, and `IndexError` for an output position outside the declared range |
+| Free function | `external_operator(operation, operands)` |
+| Takes | `operation: Base`, `operands: tuple[AbstractExpression, ...]` |
+| Properties | `operation`, the library's identifier for the mathematical operation, and `operands`, its ordered value operands including repetitions |
+| Requires | `operation` is a non-expression library object. The operands match its signature. |
+| Static type | The value shape, scalar type and domain specified by `operation` for these operands. Argument spaces are `()`. Free indices follow the [usual operand order and extent checks](expressions.md#free-indices). |
+| Raises | `ValueError` for an inadmissible operand signature or conflicting index extents |
 
 The operation and its construction dependencies obey the [base object rules](rules.md#the-base-object-base).
 For example, a projection onto a chosen space includes that space among its construction
 dependencies. [Substitution and binding](substitution.md#substitution-and-binding)
 visit the value operands in order.
 
-A library construction function returns one expression for a single output and
-a Python tuple of expressions in declaration order for multiple outputs. For
-library operation identifiers `F` and `G`, the construction functions are
-written as follows.
+A library construction function can return several expressions in a Python
+tuple. For example, let `S` identify a tensor-valued stress law and `E` a
+scalar-valued energy law on the same operands.
 
 ```python
-def f(u, m):
-    return external_operator(F, (u, m), 0)
+def response(u, m):
+    stress = external_operator(S, (u, m))
+    energy = external_operator(E, (u, m))
+    return stress, energy
 
-def g(u):
-    return external_operator(G, (u,), 0), external_operator(G, (u,), 1)
-
-y = f(u, m)
-a, b = g(u)
+stress, energy = response(u, m)
 ```
 
 ##### Directional derivative
@@ -104,11 +100,17 @@ precede the chain rule, including the typed zero rule L10.
 
 | Rule | Expression and condition | Result |
 | ---- | ------------------------ | ------ |
-| EO01 | Directional derivative of output $j$ of $f(e_1,\ldots,e_k)$ | Output $j$ of the opaque action $Df(p)[h]$. Both $p$ and $h$ are value operands of the action. At fixed $p$ the action is jointly real-linear in $h$. |
+| EO01 | Directional derivative of $f(e_1,\ldots,e_k)$ | The opaque action $Df(p)[h]$. Both $p$ and $h$ are value operands of the action. At fixed $p$ the action is jointly real-linear in $h$. |
+
+An extension recipe for [applying derivatives](differentiation.md#applying-derivatives)
+adds EO01 to the core rules. It represents the action as
+`external_operator(df, p + h)`, where `df` identifies the derivative action
+of `f` and `+` concatenates the operand tuples. The recipe expands derivatives
+in those operands. The resulting external call can remain for evaluation.
 
 For `directional_derivative(f(u, u), u, p, h)`, EO01 gives $Df(p,p)[h,h]$.
-For `directional_derivative(b, u, p, h)` it selects the second output of
-$Dg(p)[h]$. Subsequent derivatives follow both the point values and the
+For `directional_derivative(energy, u, p, h)` with fixed `m`, it gives
+$DE(p,m)[h,0]$. Subsequent derivatives follow both the point values and the
 directions in EO01. A required derivative action with no applicable rule
 raises `TypeError` under the [extension rule contract](#rule-tables).
 
@@ -150,6 +152,11 @@ For real fields, a fixed dual load `l`, fixed `m` and a fresh direction
 dy = directional_derivative(f(u, m), u, p, h)
 input_load = form(apply(l, (dy,)), (h,))
 ```
+
+For every admissible direction $k$, this input load has value
+$\ell(D_1 f(p,m)[k])$ at $k$. A backend may evaluate the load directly
+using a library reverse derivative action that returns $D_1 f(p,m)^*\ell$.
+EO01 alone supplies the forward action.
 
 Complex fields use the [dual pairing](forms.md#dualspace) and
 [complex derivative rules](forms.md#complex-and-wirtinger-derivatives).
