@@ -61,7 +61,7 @@ remaining applications.
 
 | Selection | Rules |
 | --------- | ----- |
-| Mesh integration | I01 with the notation and index construction in [Integration](#integration) |
+| Mesh integration | [I01](#integration) |
 
 ### Integration
 
@@ -70,19 +70,18 @@ its statically known cell slots. For slot $j$ of `D.topology`, set
 `K_j = D.topology.cell_types[j]`, `D_j = cell_map(D, j)` and
 `piece_j = domain_map(K_j, D_j.parameterisation, D.ambient_domain)`.
 
-Let `K` contain one derived `Index` for each value axis of `f`, with `()`
-for a scalar, and set `f_K = indexed(f, K)`.
+The reference-cell contribution for slot $j$ is `integral(g_j * density(D_j), K_j)`.
+Use `g_j = pull_back(f, piece_j)` when `f.domain == D.ambient_domain`.
+For a mesh field or a domain-free integrand, use `g_j = pull_back(f, D_j)`.
 
 | Rule | Integral | Rewrite |
 | ---- | -------- | ------- |
-| I01 | `Integral(f, D)`, $D$ a `Mesh` | `component_tensor(sum_j, K)`, where `sum_j` adds `integral(g_j * density(D_j), K_j)` over the fixed local slots $j$, in tuple order |
+| I01 | `Integral(f, D)`, $D$ a `Mesh` | Add the reference-cell contributions in slot order. A single slot gives its contribution directly. |
 
-$g_j$ is `pull_back(f_K, piece_j)` when $f$ has domain `D.ambient_domain`,
-and `pull_back(f_K, D_j)` otherwise, including domain-free $f$.
-No symbolic cell index is created or bound. The outer `component_tensor` restores the
-value shape and is the identity for a scalar. All free indices of `f` remain
-free. The remaining integrals have coordinate domains. The package performs
-mesh iteration and assembly outside this rewrite.
+Each contribution has the value shape and free indices of `f`. Reference-cell
+integration acts componentwise for every tensor shape. The slot number $j$ is
+a fixed integer. The package performs mesh iteration and assembly outside this
+rewrite.
 
 ## Expanding pull-backs
 

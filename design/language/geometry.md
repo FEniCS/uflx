@@ -259,13 +259,17 @@ reference_field = pull_back(u, cell)
 integral(reference_field * density(cell), cell.reference_cell)
 ```
 
-For several cell slots, possibly of different types, the expansion is:
+For several cell slots, possibly of different types, add their contributions
+in slot order for any value shape of `u`.
 
 ```python
-total = Integer(0)
-for cell in physical_mesh:
-    reference_field = pull_back(u, cell)
-    total += integral(reference_field * density(cell), cell.reference_cell)
+from functools import reduce
+
+contributions = (
+    integral(pull_back(u, cell) * density(cell), cell.reference_cell)
+    for cell in physical_mesh
+)
+total = reduce(add, contributions)
 ```
 
 The resulting `pull_back` nodes are evaluated by
