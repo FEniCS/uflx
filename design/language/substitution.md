@@ -9,6 +9,7 @@ Here `j` is fresh:
 | ------------ | ------ |
 | `replace(index_sum(a[i] * c, (i,)), {c: b[i]})` | `index_sum(a[j] * b[i], (j,))`; `i` remains free |
 | `replace(form(a, (v,)), {v: w})` | The original form; `v` is bound |
+| `replace(form(v, (v,)), {w: v})` with `w` absent from the form | The original form with argument `v` |
 | `replace(DirectionalDerivative(f, u, u, h), {u: u0})` | `DirectionalDerivative(f, u, u0, h)`; the point is outside the binding scope |
 
 ### Free occurrences
@@ -66,12 +67,14 @@ simultaneously. Within a binding scope, follow these steps.
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
 | SB07 | Within a binding scope, step 1 | Drop each pair whose key $r_k$ has a bound name free in it under SB20–SB21. |
-| SB08 | Within a binding scope, step 2 | Make the binding node fresh for the remaining replacement values $s_k$. |
-| SB09 | Within a binding scope, step 3 | Substitute the remaining pairs into the operands in that scope. |
+| SB08 | Within a binding scope, step 2 | Collect the keys of winning matches (SB13) in the scoped operands, respecting nested scopes. Exclude matches inside labels, whose contents add no free occurrences (SB20–SB21). Make the binding node fresh for the corresponding replacement values in SB14 order. |
+| SB09 | Within a binding scope, step 3 | Substitute at the matches in the original operands and apply the bound-name renaming to the original bound occurrences. |
 | SB10 | Outside the binding scope | Operands outside the binding scope use the original pairs. |
 
 `replace(e, mapping)` substitutes each key of the dictionary `mapping` with
-its value, simultaneously.
+its value, simultaneously. A key with no eligible match has no effect. For example,
+if only one term in a sum needs a fresh form argument to avoid capture, the other
+term keeps its argument name.
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
