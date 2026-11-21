@@ -8,18 +8,20 @@ UFLx is an experimental, minimal reimplementation of UFL (Unified Form Language)
 symbolic language embedded in Python for writing finite-element variational forms
 (e.g. `inner(grad(v), grad(u)) * dx`). It does not own meshes, boundary markers,
 coefficient values, or assembly — those belong to a surrounding solver environment
-(e.g. DOLFIN/DOLFINx). See [LANGUAGE.md](LANGUAGE.md) for the full language spec and
-[DESIGN_CHOICES.md](DESIGN_CHOICES.md) for naming/API conventions — read both before
-adding to the object model.
+(e.g. DOLFIN/DOLFINx). See [design/DESIGN.md](design/DESIGN.md) for the argument behind the language, [design/LANGUAGE.md](design/LANGUAGE.md)
+for the full language spec and [design/DESIGN_CHOICES.md](design/DESIGN_CHOICES.md) for naming/API
+conventions — read all three before adding to the object model.
 
 ## Commands
 
 Install for development (editable):
+
 ```
 pip install -e ".[ci,lint,docs]"
 ```
 
 Lint (must pass with zero diff/errors, matches CI):
+
 ```
 ruff check .
 ruff format --check .          # use `ruff format .` to auto-fix
@@ -27,6 +29,7 @@ pyrefly check                  # type checker, config in [tool.pyrefly]
 ```
 
 Run the core test suite:
+
 ```
 pytest test/
 pytest test/test_forms.py::test_name    # single test
@@ -35,14 +38,43 @@ pytest -n auto test/                    # parallel, matches CI (needs pytest-xdi
 
 `external/basix_uflx` is a separate installable package excluded from the main `uflx`
 package; install and test it independently:
+
 ```
 pip install external/basix_uflx
 pytest external/basix_uflx/test
 ```
 
 Build docs:
+
 ```
 cd doc && make html
+```
+
+Build the design notes in `design/`. The site uses Jupyter Book
+(`pip install jupyter-book`, configured in `design/myst.yml`, output in
+`design/_build/html/`, landing page `design/README.md`). The PDFs use pandoc
+and xelatex (output in `design/build/`):
+
+```
+cd design && jupyter-book build --html   # the site
+cd design && jupyter-book start          # serve the site locally
+design/build-pdf.sh                      # every PDF
+design/build-pdf.sh LANGUAGE.md
+design/build-pdf.sh --proof LANGUAGE.md  # wide margins, line numbers, commit in footer
+```
+
+Asides in the notes, such as the "Legacy UFL" notes, are MyST dropdowns,
+```` ```{dropdown} Title ```` closed by ```` ``` ````. Use `~~~` fences when the title
+contains backticks. The site shows a dropdown collapsed and the PDF prints it
+open.
+
+The class hierarchy, free functions and summary appendices of
+`design/LANGUAGE.md` are generated from the class tables, the rule tables and
+the pass table. Edit the sections, then regenerate (the PDF build runs `--check`):
+
+```
+python3 design/appendices.py
+python3 design/appendices.py --summary   # print the summary tables only
 ```
 
 ## Architecture
@@ -89,10 +121,10 @@ consumers, e.g. `test/conftest.py`'s `LagrangeElement`, or the `basix_uflx` exte
   `Form` is a sum/combination of integrals whose integrand must be scalar with no
   free indices.
 
-Symbolic (Gateaux) differentiation and expression/integral transformation between
-domain configurations are the two core transformation procedures UFLx provides on top
-of this object model (see LANGUAGE.md §4) — both are lazy, expressed as graph
-operators rather than eagerly evaluated.
+design/LANGUAGE.md states the value of each lazy node class and, in its
+Evaluation chapter, the passes of the core that evaluate them, down to the core
+normal form. design/PASSES_DRAFT.md keeps the notes of the redesign of the
+passes, and is not normative.
 
 ## Python style
 
@@ -105,14 +137,18 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
   flake8-import-conventions, NumPy-specific rules, and a few more (`RUF`, `FLY`,
   `LOG`, `ISC`). Run the formatter/linter locally before calling a change done —
   don't rely on CI to catch formatting.
+
 - **Import order** (ruff's isort, default grouping): future → standard-library →
   third-party (`networkx`, `pytest`) → first-party (`uflx`) → local-folder.
+
 - **Docstrings**: Google style (`Args:`, `Returns:`, etc.), required on modules,
   classes and methods (`D` rules are enforced, `__init__.py` is exempted from unused
   imports only — not docstrings).
+
 - **Type hints**: used throughout and checked with `pyrefly` (`[tool.pyrefly]` in
   `pyproject.toml`); not currently enforced by a ruff annotation rule, but new public
   functions/methods should still be annotated to match the rest of the codebase.
+
 - **File header**: most files under `uflx/` (the core object-model layer —
   `entities.py`, `finite_elements.py`, `domains.py`, `function_spaces.py`,
   `functions.py`, `expressions.py`, `operators.py`, `integrals.py`,
@@ -133,7 +169,7 @@ Follows FEniCS project conventions (see [dolfinx](https://github.com/FEniCS/dolf
   than replacing existing authors when making a substantive change to a file that has
   one.
 
-## Conventions (see DESIGN_CHOICES.md)
+## Conventions (see design/DESIGN_CHOICES.md)
 
 - Module files are named as the plural of what they contain (e.g. `domains.py`)
   precisely so the module (`uflx.domains`) and a same-named factory function

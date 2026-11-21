@@ -1,0 +1,73 @@
+name: Design notes
+
+on:
+  push:
+    branches:
+      - main
+      - jhale/base-language-specification-work
+    paths:
+      - "design/**"
+      - ".github/workflows/design-pages.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "design/**"
+      - ".github/workflows/design-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build design notes
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Install Jupyter Book
+        run: pip install "jupyter-book>=2"
+      - name: Check generated appendices
+        run: python3 design/appendices.py --check
+      - name: Configure Pages
+        id: pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v6
+      - name: Build site
+        working-directory: design
+        env:
+          BASE_URL: ${{ steps.pages.outputs.base_path }}
+        run: jupyter-book build --html
+      - name: Upload site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: design/_build/html
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-26.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

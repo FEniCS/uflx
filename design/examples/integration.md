@@ -1,0 +1,338 @@
+# Geometry and integration
+
+These examples use the core names from [language.md](../language.md) without
+imports. Shared helper definitions are in the
+[reference library](library.md).
+
+## An affinely mapped triangle
+
+Map the unit triangle to the triangle with vertices $(1,0)$, $(3,1)$ and
+$(2,3)$:
+
+$$\psi(X) = (1 + 2X_0 + X_1,\; X_0 + 3X_1).$$
+
+Using the library's [UnitSimplex](library.md#the-unit-simplex):
+
+```python
+T = UnitSimplex(2)
+X = coordinate(T)
+one, two, three = Integer(1), Integer(2), Integer(3)
+psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
+K = domain_map(T, psi, EuclideanSpace(2))
+```
+
+The geometric quantities evaluate to:
+
+| Expression | Value |
+| ---------- | ----- |
+| `jacobian(K)` | $\begin{pmatrix}2 & 1 \\ 1 & 3\end{pmatrix}$ |
+| `determinant(jacobian(K))` | $5$ |
+| `density(K)` | $5$ |
+
+The physical area is therefore $5/2$. Swapping the last two vertices negates
+the determinant but leaves the density and area unchanged.
+
+## Circulation along an edge
+
+Reversing an edge changes circulation's sign but leaves a scalar arc-length
+integral unchanged. Take the field $F=(0,x)$ on the unit triangle and its
+hypotenuse, traversed in both directions:
+
+```python
+T, S = UnitSimplex(2), UnitSimplex(1)
+X, t = coordinate(T), coordinate(S)[0]
+one = Integer(1)
+e = domain_map(S, tensor((one - t, t)), T)
+e_reversed = domain_map(S, tensor((t, one - t)), T)
+F = tensor((Integer(0), X[0]))
+l = index("l")
+
+
+def circulation(edge):
+    return integral(index_sum(pull_back(F, edge)[l] * jacobian(edge)[l, 0], (l,)), S)
+```
+
+| Expression | Value after evaluation |
+| ---------- | ---------------------- |
+| `circulation(e)` | $1/2$ |
+| `circulation(e_reversed)` | $-1/2$ |
+| `integral(pull_back(X[0], e) * density(e), S)` | $\sqrt{2}/2$ |
+| `integral(pull_back(X[0], e_reversed) * density(e_reversed), S)` | $\sqrt{2}/2$ |
+
+The tangent is $(-1,1)$ on `e` and $(1,-1)$ on `e_reversed`. The circulation
+integrands are respectively $1-t$ and $-t$, while both densities are
+$\sqrt{2}$.
+
+## Integrating over an edge
+
+Flux uses a directed normal; arc length uses its magnitude. On the hypotenuse
+of the unit triangle, the outward normal scaled by the edge length is
+$(\psi'_1,-\psi'_0)$:
+
+```python
+T, S = UnitSimplex(2), UnitSimplex(1)
+X, t = coordinate(T), coordinate(S)[0]
+e = domain_map(S, tensor((Integer(1) - t, t)), T)
+J = jacobian(e)
+
+flux = integral(pull_back(X[0], e) * J[1, 0] - pull_back(X[1], e) * J[0, 0], S)
+length = integral(density(e), S)
+weighted_length = integral(pull_back(X[0] * X[1], e) * density(e), S)
+```
+
+The values are `flux` $=1$, `length` $=\sqrt{2}$ and `weighted_length`
+$=\sqrt{2}/6$. The position field $X$ is tangent to the other two edges, so
+all its outward flux passes through the hypotenuse. This agrees with the
+divergence theorem: $\operatorname{div}X=2$ and the triangle has area $1/2$.
+
+Here `density(e)` is $\sqrt{\det(J^T J)}$ with a $1\times1$ Gram matrix.
+For a mesh, `expand_integrals` inserts this density automatically.
+
+## Integrating over the boundary of a triangle
+
+Represent the three directed edges as one family, then sum their circulations:
+
+```python
+T, S = UnitSimplex(2), UnitSimplex(1)
+X, t = coordinate(T), coordinate(S)[0]
+zero, one = Integer(0), Integer(1)
+F = tensor((zero, X[0]))
+i, k = index("i"), index("k")
+
+starts = tensor((tensor((zero, zero)), tensor((one, zero)), tensor((zero, one))))
+ends = tensor((tensor((one, zero)), tensor((zero, one)), tensor((zero, zero))))
+psi_edges = component_tensor(starts[i, k] + t * (ends[i, k] - starts[i, k]), (k,))
+edges = domain_map(S, psi_edges, T)
+
+integrand = index_sum(pull_back(F, edges)[k] * jacobian(edges)[k, 0], (k,))
+result = index_sum(integral(integrand, S), (i,))
+```
+
+`result` evaluates to $1/2$, the circulation of $(0,x)$ around the triangle,
+as Green's theorem predicts. Without the outer `index_sum`, the result has
+free index `i`: one circulation per edge. All edges share the parameter domain
+`S`; the order of `starts` and `ends` sets their directions.
+
+## The centroid of a triangle
+
+An integral is an expression, so a centroid can be written as a ratio of
+integrals. For the triangle with vertices $(1,0)$, $(3,1)$ and $(2,3)$:
+
+```python
+T = UnitSimplex(2)
+X = coordinate(T)
+one, two, three = Integer(1), Integer(2), Integer(3)
+psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
+K = domain_map(T, psi, EuclideanSpace(2))
+Y = coordinate(EuclideanSpace(2))
+k = index("k")
+
+area = integral(density(K), T)
+centroid = component_tensor(integral(pull_back(Y[k], K) * density(K), T) / area, (k,))
+```
+
+The density is $5$, the area is $5/2$ and the centroid is $(2,4/3)$.
+Since the map is affine, evaluating `psi` at the reference centroid
+$(1/3,1/3)$ gives the same value through a different graph.
+
+The vector form can also be written directly on the reference triangle:
+
+```python
+centroid_vector = integral(pull_back(Y, K) * density(K), T) / area
+```
+
+For a topology-backed mesh `D`, the analogous expression is
+`integral(coordinate(D), D) / integral(Integer(1), D)`.
+
+## Quadrature
+
+An edge-midpoint rule integrates $f(x,y)=xy$ exactly on the unit triangle:
+
+```python
+T = UnitSimplex(2)
+X = coordinate(T)
+f = X[0] * X[1]
+zero, half = Integer(0), Integer(1) / Integer(2)
+sixth = Integer(1) / Integer(6)
+i = index("i")
+
+points = tensor((tensor((half, zero)), tensor((half, half)), tensor((zero, half))))
+weights = tensor((sixth, sixth, sixth))
+xs = domain_map(EuclideanSpace(0), points[i], T)
+q = index_sum(weights[i] * integral(pull_back(f, xs), EuclideanSpace(0)), (i,))
+```
+
+The points form one family with free index `i`, so `f` occurs once in `q`.
+The value is $1/24$, mathematically equal to `integral(f, T)`. Replacing the
+integral by quadrature changes its graph and is a pass, with the rule supplied
+as an argument.
+
+### From quadrature to a loop
+
+After lowering, evaluating the point integrals and reducing component tensors,
+the expression is:
+
+```python
+index_sum(weights[i] * (points[i, 0] * points[i, 1]), (i,))
+```
+
+`expand_pull_backs` substitutes the points for `X`; the integral over `EuclideanSpace(0)`
+returns its integrand. The compiler's `reduce_component_tensors` changes
+`points[i][0]` to `points[i, 0]`, and similarly for component 1. A generated
+kernel could be:
+
+```python
+weights = (1 / 6, 1 / 6, 1 / 6)
+points = ((1 / 2, 0.0), (1 / 2, 1 / 2), (0.0, 1 / 2))
+
+
+def kernel() -> float:
+    q = 0.0
+    for i in range(3):
+        q += weights[i] * (points[i][0] * points[i][1])
+    return q
+```
+
+The `IndexSum` becomes the loop, and literals become tables. Runtime arrays
+of shapes `(q, 2)` and `(q,)` use the same construction, with an
+`AbstractExtent` `q` as the kernel's loop bound, as in the next example.
+
+## Integrating over a cut cell
+
+For a cell cut by $\phi<0$, the solver supplies quadrature points and weights
+for the retained region. The number of points is known only at assembly.
+These examples use the following library inputs, none of which belongs to the
+core:
+
+| Input | Meaning |
+| ----- | ------- |
+| `RuntimeExtent(label)` | An `AbstractExtent` known at run time. |
+| `RuntimeArray(label, value_shape)` | An expression with no domain holding quadrature data, coefficients or constants. |
+| `RuntimeIndex(label, extent)` | An `AbstractIndexTable` of shape `()`, such as a local facet number; read with `gathered_index(value, ())`. |
+
+With their lower-case construction functions, the cut-cell integral is:
+
+```python
+T = UnitSimplex(2)
+X = coordinate(T)
+f = X[0] * X[1]
+i = index("i")
+q = runtime_extent("q")
+points = runtime_array("points", (q, 2))
+weights = runtime_array("weights", (q,))
+
+xs = domain_map(EuclideanSpace(0), points[i], T)
+a = index_sum(weights[i] * integral(pull_back(f, xs), EuclideanSpace(0)), (i,))
+```
+
+The level set determines the solver's quadrature data; it does not appear in
+the expression, since the core has no conditional. Point counts may differ
+between kernel calls; the package binds `q` and supplies each local array.
+No topology-wide ragged array is needed.
+
+## A quadrature-point coefficient
+
+Material data can be stored at quadrature points without interpolating a field
+across the cell. For a weighted mass form, supply one scalar coefficient value
+per cell and quadrature point.
+
+The library supplies a topology `T` with one `ReferenceSimplex(2)` slot, its
+coordinate function `x` of value shape `(2,)`, a real scalar Lagrange space `V`
+on `T`, and `runtime_array` for solver data. Use a three-point rule shared by
+all cells; `points` and `weights` are reference-cell data, and `c` holds the
+material values at the corresponding physical points:
+
+```python
+K = ReferenceSimplex(2)
+D = mesh(x, EuclideanSpace(2))
+cells = cell_map(D, 0)
+q = index("q")
+points = runtime_array("points", (3, 2))
+weights = runtime_array("weights", (3,))
+c = runtime_array("c", (3,))
+
+u, v = function(V, "u"), function(V, "v")
+sample = domain_map(EuclideanSpace(0), points[q], K)
+u_q = pull_back(pull_back(push_forward(u, D, transformation_law(V)), cells), sample)
+v_q = pull_back(pull_back(push_forward(v, D, transformation_law(V)), cells), sample)
+rho_q = pull_back(density(cells), sample)
+
+a = form(
+    index_sum(integral(weights[q] * c[q] * u_q * v_q * rho_q, EuclideanSpace(0)), (q,)),
+    (v, u),
+)
+```
+
+The inner pull-backs select a cell; the outer pull-backs sample on its reference points.
+The density converts the reference weights to physical volume weights. The
+sum over `q` forms the local cell contribution. The package supplies a new
+array `c` and new local field data for each kernel call.
+
+`c[q]` plays the role of a UFL quadrature-element coefficient. It has no
+implied value between the points: changing their positions or ordering requires
+matching data.
+
+## Adjacent and coincident cells
+
+Let a configuration contain two interval slots with reference cell $K = [0, 1]$.
+On a mesh $D$ with cells $[0, 1]$ and $[1, 2]$, let $f$ equal 2 on cell 0
+and 7 on cell 1. These snippets describe symbolic values, not numerical
+execution by the core:
+
+```python
+f0 = pull_back(f, cell_map(D, 0))
+f1 = pull_back(f, cell_map(D, 1))
+midpoint = domain_map(EuclideanSpace(0), tensor((Float(0.5),)), K)
+left_endpoint = domain_map(EuclideanSpace(0), tensor((Integer(0),)), K)
+right_endpoint = domain_map(EuclideanSpace(0), tensor((Integer(1),)), K)
+
+pull_back(f0, midpoint)  # Physical coordinate 0.5; value 2.
+pull_back(f0, right_endpoint)  # Physical coordinate 1; value 2.
+pull_back(f1, left_endpoint)  # Physical coordinate 1; value 7.
+```
+
+The last two expressions are the two traces at the interface. Physical
+coordinate 1 alone does not choose between them.
+
+For a mesh `D_overlap` whose two cells both occupy $[0, 1]$, let $g$ again
+have values 2 and 7 on the respective cells:
+
+```python
+g0 = pull_back(g, cell_map(D_overlap, 0))
+g1 = pull_back(g, cell_map(D_overlap, 1))
+pull_back(g0, midpoint)  # Physical coordinate 0.5; value 2.
+pull_back(g1, midpoint)  # Physical coordinate 0.5; value 7.
+```
+
+The physical and reference coordinates coincide, but the selected cells differ.
+
+## Points forming a domain
+
+Let `D` be a mesh with topology `T` and `f` a field on `D`. A fixed local
+collection of points may have a topology `S` with one zero-dimensional slot per
+point. The library relation `S_sides["inside"]` supplies each parent slot and
+reference-point inclusion. Set
+`P = side_domain(D, S, *S_sides["inside"].entries)`:
+
+```python
+inside = SideMap(D, P, S_sides["inside"].entries)
+values = pull_back(pull_back(f, inside), cell_map(P, 0))
+total = integral(pull_back(f, inside), P)
+```
+
+This supports fields and integration on a fixed point configuration. A
+runtime-sized sampling or quadrature array instead uses the indexed
+[point evaluations](../language/geometry.md#evaluation-at-points).
+
+## Point evaluation in a triangle
+
+For the unit triangle `T = UnitSimplex(2)`, let `X = coordinate(T)` and
+`f = X[0] * X[1]`. Evaluate `f` at the centroid:
+
+```python
+third = Integer(1) / Integer(3)
+point_map = domain_map(EuclideanSpace(0), tensor((third, third)), T)
+value = integral(pull_back(f, point_map), EuclideanSpace(0))
+```
+
+The value is `1/9`, with value shape `()` and no spatial domain.
