@@ -2,16 +2,27 @@
 
 ## Applying derivatives
 
+Differentiate the expression at the supplied point in the supplied direction.
+For a real scalar function `u`, the product rule gives
+
+```python
+directional_derivative(u * u, u, a, h)  # h * a + a * h
+```
+
+Both undifferentiated copies of `u` take the value `a`. The direction
+`h` enters as supplied.
+
 | `apply_derivatives(f)` |  |
 | ---------------------- | - |
 | Evaluates              | `DirectionalDerivative` and applications created by its evaluation |
 | Input contract         | Core expressions; applications expanded |
 | Output contract        | Applications and derivatives expanded |
 
-Prepare each derivative body under D21–D23 before selecting algebraic rules.
-Substitution and dependence follow SB18, D15, SH15 and SB20–SB22 throughout.
-Run `expand_applications` on exposed applications, then continue derivative
-rewriting under the common procedure.
+First resolve inner derivatives and expose any dependence on geometry. Then
+check for independence and apply the algebraic rules in the order below.
+Expand any applications they expose and continue rewriting. The
+[directional derivative rules](#directional-derivative-rules) specify
+which operands take the value at the differentiation point.
 
 | Selection | Rules |
 | --------- | ----- |
@@ -22,11 +33,14 @@ rewriting under the common procedure.
 
 ### Geometry preparation
 
-A variable may occur in a map’s parameterisation even when absent from the
-mapped expression’s value operands. Check construction dependencies before
-selecting constant or commuting rules.
-Prepare the derivative's body, preserving its type under SH02–SH04; its
-variable declaration, point and direction are not preparation targets.
+An integral of the constant field `Integer(1)` can depend on the variable
+being differentiated. If the coordinates of mesh `D` depend on `u`,
+then `integral(Integer(1), D)` measures a length, area or volume that
+can change with `u`. Check the stored geometry before declaring the
+derivative zero.
+
+Prepare only the derivative body, preserving its [type](rewriting.md#type-compatibility-of-rewrites).
+Its variable declaration, point and direction stay as supplied.
 
 | Rule | Condition | Requirement |
 | ---- | --------- | ----------- |
@@ -53,6 +67,10 @@ are excluded.
 
 ### Directional derivative rules
 
+Only occurrences of the variable in the body are bound. The direction can
+even be `u` itself. For real scalars in a constant space,
+`directional_derivative(u * u, u, a, u)` becomes `u * a + a * u`.
+
 | Rule | Expression $f$ | Rewrite of the derivative at $a$ |
 | --- | --- | --- |
 | D11 | $f=x$ for a single function, or $f=x_k$ for a tuple variable | $h$ for a single function, or $h_k$ for the matching tuple member |
@@ -63,12 +81,13 @@ are excluded.
 | --- | --- | --- |
 | D15 | Dependence on the derivative variable | First use the construction walk to detect dependencies, including geometry and spaces; apply D21–D23 before SH15 and SB22. Tuple variables vary simultaneously, including under conjugation. Map-valued points and directions may be symbolic forms with admissible signatures whose applications the recipe evaluates. |
 
+For a fixed bilinear map $B$ and fixed $v$, varying $u$ in direction $h$
+in $B(u,v)$ gives $B(h,v)$. If both slots vary, D12 adds one term for
+each slot.
+
 Fixed-direction Hessians use independent direction functions. Mixed
 derivatives commute only under the required smoothness and fixed-direction
 hypotheses.
-
-For real scalar functions `u` and `a` in a space of constants,
-`directional_derivative(u * u, u, a, u)` rewrites to `u * a + a * u`.
 
 For a real scalar function `u` in a space of constants and a constant array
 `a` of shape `(m,)`, `directional_derivative(u, u, a[i], Integer(1))` lowers
@@ -109,7 +128,10 @@ that call in its next spatial round.
 
 ### Whole spatial operations
 
-Choose among these cases before requesting any component derivatives.
+Process the whole operator first. For example,
+`gradient(apply(A, G), P)` becomes `apply(gradient(A, P), G)`.
+A cell pull-back can also use a whole divergence or curl directly.
+Expand into components only after checking these cases.
 
 | Selection, in order | Rules |
 | --- | --- |
@@ -129,7 +151,9 @@ Gradient reconstruction uses derived indices `A` and `j`, with one index in
 
 ### Retained gradients
 
-ST12 defines the retained gradients admitted by the gradient contract.
+Leave the gradient whole when the remaining operation belongs to the
+field's library or needs a map. For example, `gradient(u, P)` stays as
+written for a terminal function `u` on `P`.
 
 | Rule | Expression or operation | Rewrite |
 | --- | --- | --- |
@@ -137,7 +161,10 @@ ST12 defines the retained gradients admitted by the gradient contract.
 
 ### Retained Piola patterns
 
-These divergence and curl patterns take precedence over generic expansion.
+A mapped field can carry a divergence or curl by a Piola identity. For
+example, retain the divergence of a contravariant Piola field so a cell
+pull-back can use its reference divergence directly. These patterns take
+precedence over generic expansion.
 Here `k` and `n` are the topological and ambient dimensions of the mesh `D`.
 Their cell pull-backs use [Piola identities](lowering.md#piola-identities).
 
@@ -148,8 +175,12 @@ Their cell pull-backs use [Piola identities](lowering.md#piola-identities).
 
 ### Component derivatives
 
-Resolve $\partial_j b$ recursively using these cases; ST09 stops at a retained
-gradient. The request has `b`’s shape and an additional free index `j`.
+Compute a spatial derivative in direction `j` and keep `j` free. In the
+full-dimensional coordinate field `X = coordinate(P)`, the derivative of
+`X[i]` in direction `j` is the identity entry $I_{ij}$. For a scalar
+terminal field `u`, the derivative in direction `j` is `gradient(u, P)[j]`.
+The component request has the shape of its operand and one additional
+free index `j`.
 
 | Selection, in order | Rules |
 | --- | --- |
@@ -177,25 +208,71 @@ pull-back to a cell.
 
 ## Derivatives of the node classes
 
-Boolean values have no directional or spatial derivative. Numerical
-conditionals differentiate branchwise; the predicate is not differentiated.
-
-Directional and spatial derivatives share these rules. Their specific rules
-take precedence. The linear derivative rules are in [Linearity](rewriting.md#linearity).
+Directional and spatial differentiation use the same algebraic identities
+after their specific rules have been tried. The symbol $\delta b$ stands
+for the derivative of operand $b$. In a directional derivative, evaluate
+undifferentiated operands at the supplied point. The
+[linearity rules](rewriting.md#linearity) cover linear operations.
 Extensions can add derivative rules to either group.
+
+### Products, quotients and conditionals
+
+A numerical conditional takes the derivative of the selected branch. For
+example, differentiating `conditional(p, u, v)` selects between the
+derivatives of `u` and `v`. Boolean values have no directional or spatial
+derivative, and the predicate itself stays undifferentiated.
 
 | Rule | Expression | Derivative |
 | --- | --- | --- |
 | B02 | `Conditional(p, a, b)`, numerical | `conditional(p_at, delta_a, delta_b)`; for a directional derivative, `p_at` is `p` with the differentiation point substituted under SB18; for a spatial derivative it is `p` unchanged |
 | D01 | `Product(b, c)` | $\delta b \, c + b \, \delta c$ |
 | D02 | `Division(b, c)` | $\delta b / c - (b \, \delta c) / (c c)$ |
+
+### Powers
+
+For a fixed exponent, use $c b^{c-1}\,\delta b$ wherever that formula is
+defined. A literal zero exponent gives one at every defined base, including
+zero, so its derivative is zero there. For a symbolic exponent whose
+independence has been established, the same formula assumes
+[mathematical admissibility](rules.md#mathematical-admissibility). If the
+base and this exponent both evaluate to zero, it contains $0^{-1}$.
+
+| Rule | Expression | Derivative |
+| --- | --- | --- |
 | D19 | `Power(b, c)`, $c$ an `Integer`, `Float` or `Complex` literal with value zero, or a scalar `Zero` | Zero with the type of the derivative |
 | D20 | `Power(b, c)`, $c$ an `Integer`, `Float` or `Complex` literal with value one | $\delta b$, with type completion against the derivative |
 | D03 | `Power(b, c)`, independence of $c$ established by SH15 or SH16, or an analysis under SH18; exclude D19 and D20 | $c \, b^{c - 1} \, \delta b$ |
 | D04 | `Power(b, c)`, independence of $c$ not established | $b^c (\log(b) \, \delta c + c \, \delta b / b)$ |
+
+Literal values in D19 and D20 are compared exactly, including signed zero;
+`Complex` has that value when its imaginary part is zero. These cases apply
+before substituting the differentiation point. A variable exponent that happens
+to be zero or one at that point still uses D04. An undefined base remains
+undefined under mathematical admissibility.
+
+The constant-exponent power rule avoids a logarithm, permitting negative real
+bases where differentiable. Results are core expressions.
+
+### Absolute value, square root and logarithm
+
+For real $b>0$, differentiating $\sqrt b$ gives $\delta b/(2\sqrt b)$.
+Each identity assumes the derivative and the quantities in its formula are defined.
+
+| Rule | Expression | Derivative |
+| --- | --- | --- |
 | D05 | `Absolute(b)` | $\operatorname{Re}(\bar b \, \delta b) / \lvert b \rvert$, with `real_part`, so the derivative is real |
 | D06 | `SquareRoot(b)` | $\delta b / (2 \sqrt b)$ |
 | D07 | `Logarithm(b)` | $\delta b / b$ |
+
+### Determinant and inverse
+
+The determinant can have a nonzero derivative at a singular matrix. For
+$A(t)=\operatorname{diag}(t,1)$, the determinant is $t$, so its derivative
+at $t=0$ is one. Cofactors give this derivative directly. The inverse
+rules have their own rank requirements.
+
+| Rule | Expression | Derivative |
+| --- | --- | --- |
 | D08 | `Determinant(A)`, shape `(n, n)` | $\sum_{i,j=0}^{n-1} C_{ij}(A)\,\delta A_{ij}$, including at singular matrices |
 | D09 | `Inverse(A)`, equal axis extents, and $A$ invertible | `-inverse(A) @ delta_A @ inverse(A)`, with `delta_A` = $\delta A$ |
 | D10 | `Inverse(A)`, $A$ real with shape `(n, k)`, $k<n$, and full column rank | $-A^+ \, \delta A \, A^+ + A^+ (A^+)^T (\delta A^T - \delta A^T A A^+)$, with `@`, `transpose` and `-` |
@@ -208,15 +285,6 @@ $i$ of the latter sum, replace row $i$ of $A$ with row $i$ of $\delta A$ and
 keep the other rows of $A$. For a directional derivative, evaluate those
 other rows at the differentiation point. For `n == 1`, the result is
 `delta_A[0, 0]`. For `n == 0`, it is zero with the type of the derivative.
-
-Literal values in D19 and D20 are compared exactly, including signed zero;
-`Complex` has that value when its imaginary part is zero. These cases apply
-before substituting the differentiation point. A variable exponent that happens
-to be zero or one at that point still uses D04. An undefined base remains
-undefined under mathematical admissibility.
-
-The constant-exponent power rule avoids a logarithm, permitting negative real
-bases where differentiable. Results are core expressions.
 
 ## Nested derivative examples
 

@@ -2,107 +2,121 @@
 
 ## Substitution and binding
 
-Substitution preserves bound names and keeps inserted free names free.
-Here `j` is fresh:
+If a substitution would insert a free `x` inside a form that binds `x`,
+give the form argument a fresh name first. If nothing is inserted there,
+keep the argument name.
 
-| Substitution | Result |
-| ------------ | ------ |
-| `replace(index_sum(a[i] * c, (i,)), {c: b[i]})` | `index_sum(a[j] * b[i], (j,))`; `i` remains free |
-| `replace(form(a, (v,)), {v: w})` | The original form; `v` is bound |
-| `replace(form(v, (v,)), {w: v})` with `w` absent from the form | The original form with argument `v` |
-| `replace(DirectionalDerivative(f, u, u, h), {u: u0})` | `DirectionalDerivative(f, u, u0, h)`; the point is outside the binding scope |
+Take distinct scalar functions `w` and `x` in the same constant space.
+
+| Expression | Result of `replace(expression, {w: x})` |
+| ---------- | --------------------------------------- |
+| `form(x, (x,))` | The original form. There is no `w` to replace. |
+| `form(w * x, (x,))` | `form(x * y, (y,))` for fresh `y`. The inserted `x` stays free. |
+
+The same rule protects an index. Replacing `c` by `b[i]` in
+`index_sum(a[i] * c, (i,))` gives `index_sum(a[j] * b[i], (j,))`
+for fresh `j`. The sum still runs over the entries of `a`.
 
 ### Free occurrences
 
-A name is an `Index` or a `Function`. Free occurrence uses the same binding
-rules for two walks, chosen by the operation.
+A name (an `Index` or a `Function`) is free at an occurrence outside the
+scope of its declaration. In `DirectionalDerivative(f, u, u, h)`, the
+derivative binds `u` in `f`, but the evaluation point is a free use of
+`u`. If `h` is independent of `u`, replacing `u` by `u0` changes the
+point and gives `DirectionalDerivative(f, u, u0, h)` for a fresh `u0`
+in the same space.
+
+Which occurrences can be seen depends on which edges of the graph are
+followed. For example, `u` might appear only in the parameterisation of
+the map in `pull_back(f, φ)`. The construction walk sees that dependency.
+Directional differentiation must expose it before using the value walk.
 
 | Rule | Walk or condition | Definition |
 | ---- | ----------------- | ---------- |
-| SB20 | Free occurrence of a name | Encounter a structurally equal name on the chosen walk with no enclosing binder binding it in that operand. Binding declarations do not themselves count as free occurrences. Names mentioned only in labels do not count. |
-| SB21 | Construction walk, used by substitution and capture checks | Follow construction dependencies, including domains, maps, spaces and the spaces of declared functions, respecting SB02–SB04. A declaration is not a free use of its own name; its space dependencies remain free. Label reconstruction follows [Derived indices](expressions.md#derived-indices), but label contents add no free occurrences. |
-| SB22 | Value walk, used after differentiation dependencies are exposed | Follow expression value operands SB01 and index operands, respecting SB02–SB04. A `Function` contributes itself; do not enter its space or label. Do not enter domains, maps or other non-expression dependencies. |
+| SB20 | Free occurrence | Look for a structurally equal name on the chosen walk. Ignore occurrences bound in that operand, the declaration of the name itself, and names mentioned only inside labels. |
+| SB21 | Construction walk | Follow construction dependencies, including domains, maps, spaces and the spaces of declared functions. Respect the scopes below. Rebuild [derived labels](expressions.md#derived-indices) even though their contents add no free occurrences. |
+| SB22 | Value walk | Follow expression value operands and index operands within their scopes. A `Function` contributes itself. Leave spaces, labels, domains, maps and other non-expression metadata untouched. |
 
-Tuples are walked member by member. A name may be bound in one operand and
-free in another. Unless stated otherwise, substitution and capture avoidance
-use the construction walk. Directional differentiation uses it to detect
-hidden dependence before using the value walk on the prepared expression.
-
-| Example | Free occurrences |
-| ------- | ---------------- |
-| `form(e, (u,))` | Occurrences of `u` in `e` are bound |
-| `DirectionalDerivative(f, u, u, h)` | `u` is bound in `f` but free in the point operand |
-| `Function(V, ("label", u))` | The label introduces no free `u` in either walk |
-| `pull_back(f, φ)`, with `u` absent from `f` but free in `φ.parameterisation` | `u` occurs in the construction walk but not the value walk |
-
-The static `free_indices` attribute retains its definition in
-[Free indices](expressions.md#free-indices). The value walk is a dependency
-check, not a replacement for that attribute.
+The space of a declared function can depend on other free names.
+Both walks visit tuples member by member. Unless otherwise stated, substitution
+and capture checks use the construction walk. The static
+[`free_indices` attribute](expressions.md#free-indices) has its own definition.
 
 ### Scopes and substitution
 
+A binder declares which names it owns and where it binds them. For example,
+`replace(form(v, (v,)), {v: w})` leaves the form alone because the `v`
+in its body is bound.
+
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
-| SB01 | Value operands and labels | Value operands are `AbstractExpression` construction arguments, including those in tuples. Terminals have none. Labels identify objects and follow [Derived indices](expressions.md#derived-indices). Only these nodes bind names. |
+| SB01 | Value operands and labels | Value operands are `AbstractExpression` construction arguments, including tuple members. Terminals have none. Labels identify objects and follow [Derived indices](expressions.md#derived-indices). Only the nodes below bind names. |
 
 | Rule | Binding node | Value operands | Bound names | Bound in |
 | ---- | ------------ | -------------- | ----------- | -------- |
-| SB02 | [`ComponentTensor(e, indices)`, `IndexSum(e, indices)`](expressions.md#componenttensor-and-indexsum) | `e` | The indices of `indices` | `e` and `indices` |
-| SB03 | [`Form(e, arguments)`](forms.md#form) | `e` | The functions of `arguments` | `e` and `arguments` |
+| SB02 | [`ComponentTensor(e, indices)`, `IndexSum(e, indices)`](expressions.md#componenttensor-and-indexsum) | `e` | The declared indices | `e` and `indices` |
+| SB03 | [`Form(e, arguments)`](forms.md#form) | `e` | The functions in `arguments` | `e` and `arguments` |
 | SB04 | [`DirectionalDerivative(f, x, a, h)`](geometry.md#directionalderivative) | `f`, `a`, `h` | $x$ | $f$ and $x$ |
 
-All binders use lexical scope. Renaming preserves their ordered signatures
-(function spaces or index extents). Declarations contribute type dependencies,
-not free uses of their names. Alpha-equivalence compares declarations while
-preserving free identities, for both functions and indices.
+Renaming a bound name updates occurrences in its lexical scope and preserves
+the ordered binding signature (function spaces or index extents).
+Alpha-equivalence allows consistent renaming of bound functions and indices
+while preserving free identities.
 
-| Rule | Applies to | Requirement |
-| ---- | ---------- | ----------- |
-| SB05 | Substitution traversal | Use the construction walk SB21 and the binding scopes SB02–SB04. Rebuild derived labels under [Derived indices](expressions.md#derived-indices). Each pass states which operands it transforms. |
-| SB06 | Fresh bound names | Making a binding node *fresh* for expressions $s_1, \dots, s_n$ means renaming each bound name that occurs free in any $s_k$ under SB20–SB21. Rename it only within its binding scope. This prevents an inserted free name from becoming bound accidentally. |
+#### Matching the original expression
 
-Substitution replaces $r_1, \dots, r_n$ by $s_1, \dots, s_n$
-simultaneously. Within a binding scope, follow these steps.
-
-| Rule | Applies to | Requirement |
-| ---- | ---------- | ----------- |
-| SB07 | Within a binding scope, step 1 | Drop each pair whose key $r_k$ has a bound name free in it under SB20–SB21. |
-| SB08 | Within a binding scope, step 2 | Collect the keys of winning matches (SB13) in the scoped operands, respecting nested scopes. Exclude matches inside labels, whose contents add no free occurrences (SB20–SB21). Make the binding node fresh for the corresponding replacement values in SB14 order. |
-| SB09 | Within a binding scope, step 3 | Substitute at the matches in the original operands and apply the bound-name renaming to the original bound occurrences. |
-| SB10 | Outside the binding scope | Operands outside the binding scope use the original pairs. |
-
-`replace(e, mapping)` substitutes each key of the dictionary `mapping` with
-its value, simultaneously. A key with no eligible match has no effect. For example,
-if only one term in a sum needs a fresh form argument to avoid capture, the other
-term keeps its argument name.
-
-| Rule | Applies to | Requirement |
-| ---- | ---------- | ----------- |
-| SB13 | Matching | Match whole original nodes before their dependencies, respecting binding scopes and label rules. The outermost eligible match wins, even when keys overlap. Do not search inserted values or rebuilt nodes. |
-| SB14 | Replacement order | Order replacement pairs by the structural key order of [`Base`](rules.md#the-base-object-base), preserving that order through scope filtering and in fresh-name labels. Dictionary insertion order has no effect. |
+`replace(e, mapping)` makes all replacements simultaneously. Test a whole
+node before looking inside it. Once it matches, insert the supplied value
+and finish with that occurrence.
 
 ```python
 replace(a + b, {a + b: c, a: d})  # c
-replace(a + b, {a: d, d + b: c})  # d + b; no match after rebuilding
-replace(a, {a: b, b: c})  # b; inserted values are not searched
+replace(a + b, {a: d, d + b: c})  # d + b
+replace(a, {a: b, b: c})          # b
 ```
 
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
-| SB15 | Compositions | Substitution commutes with a fixed composition when the static-type choice is unchanged. For example, replacing `A` by `B` in `transpose(A)` gives `transpose(B)`, with the derived indices of `B`. |
+| SB13 | Overlapping keys | The outermost eligible match in the original graph wins. Respect scopes and label rules. Inserted values and rebuilt nodes are never searched for further matches. |
+| SB14 | Order | Keep pairs in the [structural order of their keys](rules.md#the-base-object-base), including when filtering by scope or constructing fresh-name labels. Dictionary insertion order has no effect. |
+
+#### Substituting under a binder
+
+When replacing `w` by `x` in a sum of forms, decide separately for each term
+whether an insertion would capture `x`. The example at the start of the
+chapter shows the two possible outcomes.
+
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| SB05 | Traversal | Use the construction walk and the binding scopes above. Rebuild derived labels. Each pass states which operands it transforms. |
+| SB06 | Making a binder fresh for given values | Rename each bound name that occurs free in any of those values on the construction walk. Rename it only within its scope. |
+| SB07 | Choose eligible keys | In this scope, drop any key that contains a free use of a name declared by this binder. |
+| SB08 | Choose fresh names | Find the eligible keys that actually match in this scope, respecting outermost matches and nested scopes. Ignore matches inside labels for this step. Make the binder fresh for the corresponding values in structural key order. |
+| SB09 | Rebuild the scope | Apply the eligible substitutions to the original scoped operands, including label reconstruction under SB05. Rename the original bound occurrences. |
+| SB10 | Visit operands outside the scope | Use the original mapping, including pairs dropped for the scoped operands. |
+
+A key with no eligible match has no effect. For a fixed composition such as
+`transpose(A)`, replacement also updates indices derived from the original
+operands.
+
+| Rule | Applies to | Requirement |
+| ---- | ---------- | ----------- |
+| SB15 | Compositions | When the static-type choice stays the same, substitution commutes with the composition. Replacing `A` by `B` in `transpose(A)` gives `transpose(B)`, including its derived indices. |
 
 ### Constructing fresh names
 
-To make names fresh for $s_1, \ldots, s_n$, let `body` be the tuple of operands
-in the binder's scope. Use these names.
+The `y` in the opening example stands for a reproducible function in the
+same space as `x`. Its label records the old name, the tuple `body` of
+operands in the binder's scope and the ordered values $s_1,\ldots,s_n$
+for which the name must be fresh.
 
 | Rule | Bound name | Fresh name |
 | ---- | ---------- | ---------- |
 | SB11 | Index `i` | `Index(("uflx.rename", i, body, (s_1, ..., s_n)))` |
 | SB12 | Function `v` in $V$ | `Function(V, ("uflx.rename", v, body, (s_1, ..., s_n)))` |
 
-The [derived labels](expressions.md#derived-indices) keep these names distinct
-and absent from `body` and the inserted expressions.
+The [derived labels](expressions.md#derived-indices) keep the fresh names
+distinct and absent from `body` and the inserted expressions.
 
 ## Capture avoidance example
 

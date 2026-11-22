@@ -2,21 +2,18 @@
 
 ## Numerical contract
 
-Expression optimisation is optional and separate from establishing core normal
-form. It may be applied at multiple stages, including after discretisation and
-substitution of values supplied by a cell and tabulation library.
+An optimisation must preserve the mathematical result and the inputs on
+which it is defined. For example, `x/x` can become one if `x` is known to
+be nonzero. If zero is an admissible input, keep the division.
 
-Optimisation keeps the same mathematical result. Where the original expression
-is undefined, the result must also be undefined. The order and rounding of
-floating-point operations may change.
+An optimiser can establish a condition from a known value, a type or a
+guarantee supplied by the caller. Such guarantees restrict the admissible
+inputs and are optional. The language leaves open how to supply or check
+them. Reordering floating-point operations may change their rounding.
 
-Some simplifications need extra information. For example, `x/x` can become `1`
-only when `x` is known to be nonzero. This may follow from a known value, the
-expression's type, or a guarantee supplied by the caller. Such guarantees
-restrict the inputs for which the optimiser promises to preserve the result.
-Without enough information, the expression is left unchanged. Callers need not
-supply guarantees, and the language does not yet prescribe how to supply or check
-them.
+Optimisation is optional. It may run at several stages, including after a
+cell and tabulation library supplies values and after discretisation.
+Reaching core normal form is a separate operation.
 
 The defined domain means admissible input values, not the expression's spatial
 domain. The examples below are grouped by the node classes involved; they are
@@ -26,6 +23,8 @@ The examples assume IEEE 754 arithmetic, with real scalars unless stated otherwi
 
 ## `Sum` and `Product`
 
+Folding two integer literals can be exact. Regrouping a sum or factoring out a common term can change the order of rounding.
+
 | Rewrite | Permitted? | Floating-point effect |
 | ------- | ---------- | --------------------- |
 | $(x + y) + z \to x + (y + z)$ | Yes | **FP**: rounding or intermediate overflow |
@@ -34,6 +33,8 @@ The examples assume IEEE 754 arithmetic, with real scalars unless stated otherwi
 
 ## `Division`
 
+Check every denominator that a rewrite would remove. A factor of zero in front of a reciprocal still requires the reciprocal to exist.
+
 | Rewrite | Permitted? | Floating-point effect |
 | ------- | ---------- | --------------------- |
 | $x/x \to 1$ | Only if $x \ne 0$ | None for finite nonzero real inputs |
@@ -41,6 +42,8 @@ The examples assume IEEE 754 arithmetic, with real scalars unless stated otherwi
 | $1/3 \to 0.333$ | No: an approximation changes the mathematical value | Not applicable: forbidden by the contract |
 
 ## `Power`
+
+The literal identities follow the defined value of a power. Combining powers with different exponents also needs a condition on the base.
 
 | Rewrite | Condition | Floating-point effect |
 | ------- | --------- | --------------------- |
@@ -51,6 +54,8 @@ The examples assume IEEE 754 arithmetic, with real scalars unless stated otherwi
 
 ## `Absolute` and `SquareRoot`
 
+For real $x$, the square root of $x^2$ is its magnitude. At $x=-1$, this gives $1$.
+
 | Rewrite | Condition | Floating-point effect |
 | ------- | --------- | --------------------- |
 | $\lvert\lvert z\rvert\rvert \to \lvert z\rvert$ | `z` may be complex | None |
@@ -60,12 +65,16 @@ The examples assume IEEE 754 arithmetic, with real scalars unless stated otherwi
 
 ## `Logarithm`
 
+A logarithm of one can be folded directly. Combining two logarithms also requires checking their domains.
+
 | Rewrite | Condition | Floating-point effect |
 | ------- | --------- | --------------------- |
 | $\log(1) \to 0$ | Preserve the logarithm's scalar type | None for real input |
 | $\log(x)+\log(y) \to \log(xy)$ | $x>0$, $y>0$; not a general principal-complex-logarithm identity | **FP**: rounding, intermediate overflow or underflow |
 
 ## `Indexed`, `Tensor`, `ComponentTensor`, `BroadcastTo` and `Zero`
+
+A known component selection can be performed symbolically. For example, selecting entry zero of `tensor((a, b))` yields `a` when both entries have scalar value shape.
 
 | Rewrite | Condition | Floating-point effect |
 | ------- | --------- | --------------------- |
@@ -76,12 +85,16 @@ The examples assume IEEE 754 arithmetic, with real scalars unless stated otherwi
 
 ## `IndexSum`
 
+An empty sum has no terms to evaluate. This matters when factoring out an expression that could be undefined.
+
 | Rewrite | Condition | Floating-point effect |
 | ------- | --------- | --------------------- |
 | $\sum_i c a_i \to c\sum_i a_i$ | `c` independent of `i`; nonempty sum | **FP**: rounding or intermediate overflow |
 | Sum over an index of extent zero → `Zero` | Preserve the result's static type; do not evaluate the summand | None: the specified value of an empty sum |
 
 ## `Conjugate`, `RealPart` and `ImaginaryPart`
+
+Conjugating a value twice recovers it. When extracting a real or imaginary part, preserve the result's static type.
 
 | Rewrite | Condition | Floating-point effect |
 | ------- | --------- | --------------------- |
@@ -90,6 +103,9 @@ The examples assume IEEE 754 arithmetic, with real scalars unless stated otherwi
 | `imaginary_part(x)` → `Zero` | `x` real; preserve the result's static type | None |
 
 ## `Inverse` and `Determinant`
+
+For an invertible square matrix $A$, taking its inverse twice gives back $A$.
+At a singular matrix, even the first inverse is undefined.
 
 | Rewrite | Condition | Floating-point effect |
 | ------- | --------- | --------------------- |

@@ -2,8 +2,10 @@
 
 ## Choosing a representation
 
-Rewriting replaces expressions without changing their mathematical value.
-Lowering applies rewrites to meet the requirements of later computations.
+A rewrite gives the same mathematical value in another representation.
+For example, a mesh integral becomes a sum of reference-cell integrals
+that a compiler can evaluate by quadrature. Lowering chooses and orders
+the rewrites needed to reach such a representation.
 
 A *contract* describes a required representation, such as expanded derivatives.
 Rules give individual rewrites; recipes compose them to meet contracts.
@@ -28,6 +30,11 @@ The differentiation and mapping recipes use the
 
 ## Standard lowering recipe
 
+Expand forms and derivatives, move mesh integrals onto reference cells,
+then resolve gradients and pull-backs before expanding tensor arithmetic.
+For example, pulling a physical gradient back to a cell can introduce a
+reference gradient. The spatial passes take another turn to process it.
+
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `lower(f)` | | `f: AbstractExpression` | An equivalent expression in core normal form |
@@ -39,9 +46,8 @@ The differentiation and mapping recipes use the
 | Stable output violates core normal form | `ValueError`, identifying offending nodes |
 | A complete spatial round returns to an earlier state | `ValueError`; a cycle is not completion |
 
-Run these passes in order. Derivative preparation may expand integrals and
-spatial mappings locally (D21–D23). Spatial passes repeat because pull-backs
-can expose new gradients.
+Run these passes in order. Derivative preparation may also expand integrals
+and spatial mappings locally (D21–D23).
 
 | Recipe step | Required result |
 | ----------- | --------------- |
@@ -65,6 +71,10 @@ including bound names and labels. Fresh naming alone is not progress.
 
 ### Representation contracts
 
+Check what remains in the graph. For the mesh-integral check,
+`integral(f, D)` still needs work when `D` is a mesh. An integral over
+its reference cell `K` passes that check.
+
 | Contract | Required representation |
 | -------- | ----------------------- |
 | Core expressions | Structurally valid concrete core nodes and downstream terminals |
@@ -83,8 +93,10 @@ separate contracts.
 
 ### The core normal form
 
-Core normal form combines all the expansion contracts above with core
-expressions. Its allowed nodes are:
+Core normal form combines the expansion contracts with the core-expression
+contract. It can contain `gradient(u, K)` for a terminal field on a
+reference cell. The field's library can supply that gradient when it
+evaluates the expression. The following table gives the allowed nodes.
 
 | Chapter | Node class | Allowed in the core normal form |
 | ------- | ---------- | ------------------------------- |

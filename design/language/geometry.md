@@ -259,18 +259,9 @@ reference_field = pull_back(u, cell)
 integral(reference_field * density(cell), cell.reference_cell)
 ```
 
-For several cell slots, possibly of different types, add their contributions
-in slot order for any value shape of `u`.
-
-```python
-from functools import reduce
-
-contributions = (
-    integral(pull_back(u, cell) * density(cell), cell.reference_cell)
-    for cell in physical_mesh
-)
-total = reduce(add, contributions)
-```
+For multiple slots, add their contributions in slot order. The
+[mesh-integration loop](lowering.md#integration) shows the complete rewrite,
+including ambient fields and tensor-valued integrands.
 
 The resulting `pull_back` nodes are evaluated by
 [pull-back lowering](lowering.md#expanding-pull-backs).

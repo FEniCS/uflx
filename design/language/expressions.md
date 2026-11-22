@@ -90,6 +90,11 @@ Every `AbstractExpression` derives the free indices, a `tuple` of pairs. Each
 pair is an `Index` and an extent. The order is the order of first occurrence, never the
 order of a `set`.
 
+Summation is never implicit. `a[i] * b[i]` has the free index `i` and denotes
+the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], (i,))`.
+The operands of a node may have different free indices, so `a[i] + b[j]` has
+the free indices `i` and `j` and denotes the outer sum.
+
 Unless a node class states otherwise, the free indices of a node are derived
 from the edges of the node that are expressions:
 
@@ -97,11 +102,6 @@ from the edges of the node that are expressions:
   taken once, at the first occurrence.
 - An `Index` that occurs in two edges must have the same extent in both edges,
   or construction raises `ValueError`.
-
-Summation is never implicit. `a[i] * b[i]` has the free index `i` and denotes
-the component-wise product. The sum over `i` is `index_sum(a[i] * b[i], (i,))`.
-The operands of a node may have different free indices, so `a[i] + b[j]` has
-the free indices `i` and `j` and denotes the outer sum.
 
 ### Scalar type
 
@@ -613,6 +613,9 @@ indices](#derived-indices)).
 `Indexed` selects one component of a tensor. The overload `[]` calls
 [`component`](#partial-indexing), which also supports partial indexing.
 
+For a matrix `A` of value shape `(2, 2)`, `A[1, 0]` has value shape `()`,
+whereas `indexed(A, (1,))` raises `IndexError` because one axis is unindexed.
+
 | `Indexed(expression, indices)` |                                                                                   |
 | ------------------------------ | --------------------------------------------------------------------------------- |
 | Extends                        | `AbstractExpression` |
@@ -656,9 +659,6 @@ Static checking rejects entries of another kind. Construction raises
 or in an entry and the expression, and `IndexError` if the entries do not
 cover exactly the rank. An expression with value shape `()` has rank 0.
 
-For a matrix `A` of value shape `(2, 2)`, `A[1, 0]` has value shape `()`,
-whereas `indexed(A, (1,))` raises `IndexError` because one axis is unindexed.
-
 #### Partial indexing
 
 The overload `[]` calls the free function `component`, which also takes fewer
@@ -679,8 +679,8 @@ A free function of the core calls `indexed`, never `component`, so a
 composition in this document that writes `f[K]` is `indexed(f, K)`, and an
 operand of the wrong rank raises from `Indexed`.
 
-For the same matrix `A`, `A[1]` is row 1, of value shape `(2,)`. With `k`
-the derived index, its construction is:
+For a matrix `A` of shape `(2, 2)`, `A[1]` is row 1 and has shape `(2,)`.
+It uses the derived index `k` in the following construction.
 
 ```python
 entry = indexed(A, (1, k))
@@ -690,6 +690,10 @@ row = component_tensor(entry, (k,))
 ### `ComponentTensor` and `IndexSum`
 
 `ComponentTensor` binds free indices as tensor axes; `IndexSum` sums over them.
+
+For a square matrix `A`, `index_sum(A[i, i], (i,))` is its trace, and
+`component_tensor(A[i, i], (i,))` is its diagonal. Both work when the extent is
+an `AbstractExtent`, without knowing its value during construction.
 
 If any summed index has extent zero, `IndexSum` has value zero with the
 result's static type, without evaluating its summand. This also applies when
@@ -727,10 +731,6 @@ to the bound `i` inside `p`.
 A pass that substitutes into the expression of a binder renames the bound
 indices that would capture a free index of the substituted expression (see
 [Substitution and binding](substitution.md#substitution-and-binding)).
-
-For a square matrix `A`, `index_sum(A[i, i], (i,))` is its trace, and
-`component_tensor(A[i, i], (i,))` is its diagonal. Both work when the extent is
-an `AbstractExtent`, without knowing its value during construction.
 
 ### `AbstractIndexTable`
 

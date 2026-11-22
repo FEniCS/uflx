@@ -2,6 +2,11 @@
 
 ## Shared requirements
 
+A rewrite changes how a value is expressed. Applying the identity form
+`form(v, (v,))` to `w`, for example, can replace the whole application
+by `w`. Anything using that result must still see the same value, shape,
+argument slots and free indices on the original domain.
+
 | Rule | Applies to | Requirement |
 | ---- | ---------- | ----------- |
 | SH01 | Every rewrite | For a valid input expression, a rewrite preserves its mathematical value and [binding](substitution.md#substitution-and-binding) and must have a [compatible type](#type-compatibility-of-rewrites). Floating-point evaluation of the original and rewritten expressions may differ. Algebraic simplification is not required. The [mathematical admissibility](rules.md#mathematical-admissibility) convention applies. Zero times an undefined value remains undefined. |
@@ -14,6 +19,11 @@ Rewriting visits a conditional's predicate and both branches. Branch rewrites
 apply under the corresponding selection condition.
 
 ### Transformations, recipes and contracts
+
+For mesh integration, a rule replaces one mesh integral with cell
+contributions. The recipe applies it wherever a mesh integral occurs.
+The output contract can then be checked by looking for any remaining
+`Integral` over a mesh.
 
 | Component | Responsibility |
 | --------- | -------------- |
@@ -58,6 +68,11 @@ Contracts can be combined and apply to the nodes visited by the
 
 ### Evaluation traversal
 
+Visit the expressions that supply the value of the current operation. In
+`pull_back(f, ψ)` this visits `f`. If a rule replaces the pull-back of
+a coordinate by `ψ.parameterisation`, that coordinate expression becomes
+a root for evaluation in its own right.
+
 | Rule | Dependency | Evaluation |
 | ---- | ---------- | ---------- |
 | SH09 | Root and value operands | Visit recursively in construction order; tuples member by member, including the form and all supplied arguments of `Apply` |
@@ -75,9 +90,14 @@ dependencies, as described in [Substitution and binding](substitution.md#substit
 
 ### Visiting and revisiting
 
-Reference recipes use the procedure below. Try selection rows top to bottom
-and rules left to right; the first match wins, including retained cases.
-Binding and dependence requirements apply throughout.
+Process a node's operands first, then try the rules on the rebuilt node.
+For example, expanding an application inside a divergence can expose a
+Piola field. Inspect that new operand before deciding how to handle the
+divergence.
+
+Try selection rows top to bottom and rules left to right. The first match
+wins, even when it says to keep the node. Retaining an unchanged node
+creates no new indices. Binding and dependence requirements apply throughout.
 
 | Rule | Event | Required application |
 | ---- | ----- | --------------- |
@@ -87,15 +107,18 @@ Binding and dependence requirements apply throughout.
 | SH22 | A rule exposes work for another recipe | Leave that work for the stated recipe. After it changes an operand, rebuild and reconsider affected ancestors. Exposed geometry follows SH12–SH13. |
 | SH23 | A recipe stops | No work belonging to that recipe remains. Check its output contract. An unchanged replacement is not progress; an unmatched required operation, repeated state or resource limit is not successful completion. |
 
-For example, reconsider a retained `PullBack` when gradient expansion changes
-its operand into arithmetic. Retaining an unchanged node creates no new indices.
-
 ## Shared mathematical rules
 
 ### Independence
 
-Independence concerns the operation being applied, not an expression in isolation.
-The reference recipes use the checks below.
+Ask what varies in the operation. An integral has no spatial argument
+after integration. Its value can still depend on a coefficient.
+
+| Example | Consequence |
+| ------- | ----------- |
+| `u - u` | Still contains a free `u`; cancellation requires a separate proof or rewrite |
+| `integral(u, P)` | Has no spatial domain, but a free `u` remains for directional differentiation |
+| Two argument slots with the same space | Remain distinct slots for an application |
 
 | Rule | Operation or question | Meaning or check |
 | ---- | --------------------- | ---------------- |
@@ -105,21 +128,20 @@ The reference recipes use the checks below.
 | SH17 | `Apply(f, G)` | Each unchanged expression operand has no argument slots, according to the node's argument-space definition. Ordered slots determine how `G` is distributed; equality of spaces never identifies slots. Binding declarations and fixed non-expression data do not contribute slots. |
 | SH18 | Stronger independence checks | A strategy may use an explicit analysis proving SH14. Reference recipes use SH15–SH17 only. Failure of a check means independence is unknown, not that dependence is proved. Any constant replacement must preserve mathematical admissibility and type. |
 
-| Example | Consequence |
-| ------- | ----------- |
-| `u - u` | Still contains a free `u`; cancellation requires a separate proof or rewrite |
-| `integral(u, P)` | Has no spatial domain, but a free `u` remains for directional differentiation |
-| Two argument slots with the same space | Remain distinct slots for an application |
-
 ### Commuting rules
 
-Commuting uses SH15–SH17 for unchanged operands and capture-avoiding renaming
-([Substitution](substitution.md)). Specific rules take precedence. Before holding
-binding declarations or non-expression data fixed, check derivative dependencies
-under D21–D23. Directional differentiation uses a real parameter;
-`RealPart` and `ImaginaryPart` have no argument spaces.
+To commute an operation through a node, apply it to the relevant operands
+and rebuild the node. Hold the other operands fixed only when the
+independence checks above allow it. Protect inserted values from capture
+under [Substitution](substitution.md). Specific rules take precedence.
+Before treating a declaration or other metadata as fixed in a derivative,
+check its geometry dependencies (D21–D23).
 
 ### Structural rules
+
+Selecting a component commutes with differentiating its value. For a
+vector field `u`, differentiating `u[0]` in direction `h` gives
+`h[0]`. The entry `0` stays in place when the node is rebuilt.
 
 | Rule | Node class | Operands | Operations that commute |
 | --- | --- | --- | --- |
@@ -127,8 +149,11 @@ under D21–D23. Directional differentiation uses a real parameter;
 
 ### Linearity
 
-The commuting conditions apply. `Tensor` collects the component results;
-conjugation uses a real differentiation parameter.
+Differentiate a sum term by term. For example, the derivative of `u + w`
+in direction `h` with independent `w` has terms `h` and a zero of the
+appropriate type. For a `Tensor`, collect the component results in order.
+The commuting conditions above apply. Conjugation uses a real differentiation
+parameter, and `RealPart` and `ImaginaryPart` have no argument spaces.
 
 | Rule | Node class | Operands | Operations that commute |
 | --- | --- | --- | --- |
@@ -141,8 +166,11 @@ conjugation uses a real differentiation parameter.
 
 ### Type compatibility of rewrites
 
-A replacement $r$ must preserve the value of $e$ on its original domain and
-satisfy these conditions.
+A replacement must fit back into the surrounding expression. For example,
+the derivative of a real scalar constant-space function `u` at `a[i]`
+in direction one has value one for *each* `i`. A parent that sums over
+`i` still needs its extent. The replacement $r$ must preserve the value
+of $e$ on its original domain and satisfy the following conditions.
 
 | Rule | Attribute | Compatibility |
 | ---- | --------- | ------------- |
@@ -152,9 +180,6 @@ satisfy these conditions.
 
 For example, a constant pull-back or the gradient of coordinates may lose its
 domain. Code that needs the original domain must keep it separately.
-
-Differentiating a real scalar constant-space function `u` at `a[i]` in direction
-one gives one for every `i`. Type completion retains that family index.
 
 *Type completion* restores scalar type and free indices lost in a rewrite.
 Apply it before returning a table's result `r` or rebuilding its parent.
@@ -186,8 +211,10 @@ Boolean values unchanged; `Zero` and numerical promotion are not used.
 
 ### Grammars
 
-A grammar is a set of allowed expressions. A contract check tests membership
-of that set (see [New questions](extensions.md#new-questions)).
+A grammar is a set of allowed expressions. For instance, reference
+integration allows an integral on a reference cell and excludes an
+integral on a mesh. A contract check tests membership by inspecting
+nodes (see [New questions](extensions.md#new-questions)).
 
 A grammar pattern inspects a node and objects within a bounded number of links,
 without running a pass. It may classify a domain or map without adding that
@@ -238,6 +265,9 @@ This does not make `square_root(Integer(-1))` a defined real value. Symbolic
 traversal under SH19 is distinct from evaluating an array member.
 
 ## Maintaining rule references
+
+Introduce a rule family with the operation in words and a small input and
+result. Keep the precise conditions and rewrites in the rows with rule IDs.
 
 Rule IDs identify rewrite and shared-requirement rows, including retained cases.
 They stay with their rules across moves and are never renumbered or reused.

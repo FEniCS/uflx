@@ -40,6 +40,10 @@ of concrete core classes (see [Leaves and subclassing](rules.md#leaves-and-subcl
 
 #### Rule tables
 
+An extension supplies a local rule for each operation it supports. For
+example, a library can supply its derivative action to a particular
+recipe so that differentiating its stress law calls the library's tangent.
+
 Extension rules use the core's [rules, recipes and contracts](rewriting.md#transformations-recipes-and-contracts).
 
 | Concern | Requirement |
@@ -93,6 +97,11 @@ stress, energy = response(u, m)
 
 ##### Directional derivative
 
+Differentiate a library call by passing the operand values and their
+directions to the library's derivative action. If the same function
+occupies two input slots, both slots vary. For example,
+`directional_derivative(f(u, u), u, p, h)` calls $Df(p,p)[h,h]$.
+
 For a directional derivative, $p_i$ is operand $e_i$ evaluated at the
 differentiation point and $h_i$ is its directional derivative. Write $p$ and
 $h$ for their ordered tuples. [Geometry preparation and independence](differentiation.md#geometry-preparation)
@@ -108,8 +117,7 @@ adds EO01 to the core rules. It represents the action as
 of `f` and `+` concatenates the operand tuples. The recipe expands derivatives
 in those operands. The resulting external call can remain for evaluation.
 
-For `directional_derivative(f(u, u), u, p, h)`, EO01 gives $Df(p,p)[h,h]$.
-For `directional_derivative(energy, u, p, h)` with fixed `m`, it gives
+For `directional_derivative(energy, u, p, h)` with fixed `m`, EO01 gives
 $DE(p,m)[h,0]$. Subsequent derivatives follow both the point values and the
 directions in EO01. A required derivative action with no applicable rule
 raises `TypeError` under the [extension rule contract](#rule-tables).

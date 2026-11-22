@@ -211,6 +211,8 @@ Pull-backs of terminals remain for their supplying libraries to evaluate
 topology or a mesh carrying physical geometry. The map goes from that cell's reference
 cell into the labelled local cell of `parent`. Pulling a field back through
 it gives the field's reference-cell representation on the selected slot.
+For example, `pull_back(u, D[1])` reads `u` on the second cell slot of `D`,
+even if its reference-cell type is the same as that of the first slot.
 
 | `CellMap(parent, cell_slot)` | |
 | --------------------------- | - |
@@ -282,6 +284,10 @@ A side map is a relation from a source configuration to a parent configuration.
 Each source slot selects a parent slot and a reference inclusion.
 
 ### `SideMap`
+
+On an interior facet, two side maps can share a source facet mesh
+and select different parent cells. Pulling a discontinuous field back by
+those maps gives its two traces.
 
 | `SideMap(parent, source, entries)` | |
 | -------------------------------- | - |

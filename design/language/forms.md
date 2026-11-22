@@ -146,7 +146,8 @@ adds one product-space slot, requiring joint linearity in its members.
 ### `Form`
 
 `Form(expression, arguments)` binds selected functions in `expression` as
-ordered inputs of a multilinear map. Other functions remain fixed data.
+ordered inputs of a multilinear map. For real scalar functions, `form(u * v, (v,))`
+represents the map $w \mapsto u w$ with `u` held fixed.
 
 Each binding declares a mathematical guarantee about how this form depends
 on the bound function. It does not change the function or make the body
@@ -548,6 +549,14 @@ multilinear map or obtains the functional by partial application.
 of an explicit outer `Form`, leaving the others open. `mapping` maps binding
 declarations to values. This is a transformation pass, not a lazy node.
 
+```python
+F = form(integral(u * v, D), (v, u))
+partial(F, {u: w})  # form(integral(w * v, D), (v,))
+partial(F, {u: v})  # ValueError: retained-argument capture
+partial(rebind(F, {v: p}), {u: v})  # form(integral(v * p, D), (p,))
+apply(F, (w, p))  # integral(p * w, D)
+```
+
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `partial(form, mapping)` | | `form: Form`, `mapping: dict` | The form with selected outer entries supplied, or its body when none remain |
@@ -568,14 +577,6 @@ inherited slots followed by retained entries. Combine the free indices of `form`
 and all supplied values, requiring matching extents. Complete the body's type
 before rebuilding the binder, retaining indices even from unused values.
 
-```python
-F = form(integral(u * v, D), (v, u))
-partial(F, {u: w})  # form(integral(w * v, D), (v,))
-partial(F, {u: v})  # ValueError: retained-argument capture
-partial(rebind(F, {v: p}), {u: v})  # form(integral(v * p, D), (p,))
-apply(F, (w, p))  # integral(p * w, D)
-```
-
 For `stokes = form(e, ((v, q), (u, p)))`,
 `partial(stokes, {(u, p): (w, r)})` supplies one complete product-space entry.
 
@@ -584,7 +585,8 @@ For `stokes = form(e, ((v, q), (u, p)))`,
 `rebind(binder, mapping)` simultaneously renames selected declarations and
 their bound occurrences in a form or index-binding node. `mapping` maps
 existing declarations to replacements. This transformation pass preserves
-the meaning of the bound map.
+the meaning of the bound map. For fresh `p` in the same space as `v`,
+`rebind(form(u * v, (v,)), {v: p})` gives `form(u * p, (p,))`.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |

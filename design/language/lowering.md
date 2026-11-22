@@ -2,6 +2,10 @@
 
 ## Expanding applications
 
+Applying an explicit form fills its argument slots. For real scalar functions
+`u`, `v` and a compatible `w`, `apply(form(u * v, (v,)), (w,))`
+becomes `u * w`.
+
 | `expand_applications(f)` |  |
 | ------------------ | - |
 | Evaluates          | `Apply` |
@@ -19,13 +23,15 @@
 
 ### Application rules
 
-An application supplies every argument of a form. Substitution and commuting
-preserve binding under SB01–SB15 and SB20–SB21. The separate `partial` operation
-uses the retained-name rejection rule in [Partial application](forms.md#partial-application).
+A form can inherit slots from its body. For
+`form(form(u * v, (u,)), (v,))`, the argument tuple `(a, b)` supplies
+`a` for the inner `u` and `b` for the outer `v`. Substitute the outer
+values first, then apply the resulting body to its inherited values.
+To fill selected outer slots, use [partial application](forms.md#partial-application).
 
 | Rule | Form $f$ | Rewrite of `Apply(f, G)` |
 | --- | --- | --- |
-| SB16 | `Form(e, entries)`, with $n=$ `len(e.argument_spaces)` | In `Apply(Form(e, entries), G)`, substitute `G[n:]` for `entries` simultaneously in `e`, yielding `e_new`, then return `apply(e_new, G[:n])`. For a conjugated entry substitute the conjugate value for its function; handle product-space members simultaneously. Promote before substitution and preserve binding by SB07–SB14. Inserted values are not substituted into one another. |
+| SB16 | `Form(e, entries)`, with $n=$ `len(e.argument_spaces)` | Promote the values in `G[n:]` and substitute them simultaneously for `entries` in `e` (SB07–SB14). For conjugated entries use the conjugate value for the function. Handle product-space members together. Apply the resulting body to `G[:n]`. |
 | B01 | `Conditional(p, a, b)` | `conditional(p, apply(a, G), apply(b, G))`; both branches receive the same arguments; the predicate has no argument slots |
 | ST02 | `Product(a, b)`, with $n$ the arity of $a$ | `Product(apply(a, G[:n]), apply(b, G[n:]))` |
 | ST03 | `Gradient`, `PullBack` | Remains; the operation transforms the form's output |
@@ -42,6 +48,9 @@ space `V`, let `h = function(V, "h")` and `k` be admissible for `V`:
 | `I = form(h, (h,))` | `(V,)` | `apply(I, (k,)) = k` |
 | `conjugate(I)` | `(conjugate_space(V),)` | `apply(conjugate(I), (conjugate(k),)) = conjugate(k)` |
 
+A supplied value may use an index that a form sums over internally. In that
+case, rename the summation index before moving the application inside the sum.
+
 | Rule | Applies to | Requirement |
 | --- | --- | --- |
 | SB17 | Binding during application | Preserve enclosing and inserted binders. Before commuting an application through a derivative or index binder, make its bound names fresh for every supplied value; inserted values are not captured or differentiated by that inner operation. |
@@ -53,37 +62,52 @@ remaining applications.
 
 ## Expanding integrals
 
+Integrate over each local cell slot and add the contributions in order.
+On a mesh with two slots, a vector integrand gives a sum of two vector
+integrals, one on each reference cell.
+
 | `expand_integrals(f)` |  |
 | --------------------- | - |
 | Evaluates             | `Integral` over a mesh |
 | Input contract        | Core expressions |
 | Output contract       | Mesh integrals expanded |
 
-| Selection | Rules |
-| --------- | ----- |
-| Mesh integration | [I01](#integration) |
-
 ### Integration
 
-Mesh integration produces a local contribution by adding the integrals over
-its statically known cell slots. For slot $j$ of `D.topology`, set
-`K_j = D.topology.cell_types[j]`, `D_j = cell_map(D, j)` and
-`piece_j = domain_map(K_j, D_j.parameterisation, D.ambient_domain)`.
+The cell map tells us where to read a mesh field and how to scale its
+integral. An ambient field is read at the physical coordinates given by the
+cell's parameterisation. For `integral(f, D)` on a mesh `D`, the loop is
 
-The reference-cell contribution for slot $j$ is `integral(g_j * density(D_j), K_j)`.
-Use `g_j = pull_back(f, piece_j)` when `f.domain == D.ambient_domain`.
-For a mesh field or a domain-free integrand, use `g_j = pull_back(f, D_j)`.
+```python
+from functools import reduce
+
+pieces = []
+for cell in D:
+    K = cell.reference_cell
+    mapping = cell
+    if f.domain == D.ambient_domain:
+        mapping = domain_map(K, cell.parameterisation, D.ambient_domain)
+    g = pull_back(f, mapping)
+    pieces.append(integral(g * density(cell), K))
+result = reduce(add, pieces)
+```
 
 | Rule | Integral | Rewrite |
 | ---- | -------- | ------- |
-| I01 | `Integral(f, D)`, $D$ a `Mesh` | Add the reference-cell contributions in slot order. A single slot gives its contribution directly. |
+| I01 | `Integral(f, D)` over a mesh | Add the reference-cell contributions in slot order. A single slot gives its contribution directly. |
 
-Each contribution has the value shape and free indices of `f`. Reference-cell
-integration acts componentwise for every tensor shape. The slot number $j$ is
-a fixed integer. The package performs mesh iteration and assembly outside this
-rewrite.
+The loop visits the statically known slots `D[j]` with reference cells
+`D.topology.cell_types[j]`. Mesh fields and domain-free integrands both
+use the cell map itself. Each integral preserves the value shape and free
+indices of `f`. The finite element package iterates over mesh entities
+and assembles the contributions.
 
 ## Expanding pull-backs
+
+A pull-back reads a field at the points of a map. For instance, if a
+one-dimensional map sends $t$ to $2t$, pulling back the coordinate of its
+target gives $2t$. For a field supplied by a library, a pull-back may
+remain as a request to read that field on a particular cell.
 
 | `expand_pull_backs(f)` |  |
 | ---------------------- | - |
@@ -109,12 +133,22 @@ procedure. Leave new gradients to a later call to `apply_gradients`.
 
 ### Applications and forms under pull-back
 
+Pulling back an applied form transforms its output field and keeps its
+supplied arguments. Thus `pull_back(apply(A, (u,)), ψ)` becomes
+`apply(pull_back(A, ψ), (u,))`.
+
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
 | ST11 | `Apply(A, G)` | `Apply(PullBack(A, ψ), G)`, with every supplied value unchanged |
 | SB19 | `Form(e, arguments)` | Make the form fresh for $\psi$, obtaining `Form(e_new, arguments_new)`; return `Form(PullBack(e_new, ψ), arguments_new)`, preserving argument spaces |
 
 ### Pull-back algebra
+
+Read a pointwise expression by reading its operands at the same point.
+For fields `a` and `b` and a coordinate map `ψ`, pulling back `a + b`
+gives `pull_back(a, ψ) + pull_back(b, ψ)`. In a nested pull-back, the
+kind of the inner map determines whether the maps compose or a cell
+selection must be kept.
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
@@ -143,6 +177,10 @@ the [geometry preparation contract](rewriting.md#evaluation-traversal).
 
 ### Change of coordinates
 
+To read a pushed-forward field on a physical cell, read the original field
+on the corresponding topology cell and apply its transformation law. With
+the identity law, the two cell values agree component by component.
+
 For a mesh cell $\psi = D_j =$ `cell_map(D, j)` with topology $T$, let
 $K_j$ be its reference cell, $\hat f$ = `pull_back(f, cell_map(T, j))`,
 and $m_\psi$ be the law $m$ on $\psi$ (see
@@ -161,8 +199,12 @@ Libraries evaluate remaining cell reads under
 
 ### Piola identities
 
-These cell pull-back rules consume the [retained Piola patterns](differentiation.md#retained-piola-patterns)
-without differentiating the Jacobian.
+For a contravariant Piola field, compute divergence on the reference cell
+and apply the density scaling. For example, a reference divergence of $2$
+on a cell with positive Jacobian determinant $6$ gives physical divergence
+$1/3$. This is why gradient expansion keeps the
+[Piola patterns](differentiation.md#retained-piola-patterns) intact until
+the cell is known.
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
@@ -171,10 +213,13 @@ without differentiating the Jacobian.
 
 ### Restriction
 
-For $\psi =$ `cell_map(Y, i)` of a topology or mesh $Y$ and a side $s$,
-`B_i` and `A_i` are the maps of
-[Restriction](topology.md#restriction).
-Cell maps retain explicit selection; unselected side restrictions remain.
+A side restriction keeps track of which parent field to read. Selecting
+slot $i$ on the side supplies two maps, the chosen parent cell $B_i$ and
+the inclusion $A_i$ into its reference cell. First read the field on
+$B_i$, then read that result along $A_i$.
+
+Here $\psi$ is `cell_map(Y, i)` for a topology or mesh $Y$. The entries
+of the side map are defined in [Restriction](topology.md#restriction).
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
@@ -184,8 +229,8 @@ Cell maps retain explicit selection; unselected side restrictions remain.
 
 ### Retained pull-backs
 
-For the pull-back representation contract, `PullBack` is allowed in exactly
-these cases:
+A library may still need to evaluate `pull_back(u, D[0])` for a terminal
+field `u`. The representation contract allows the following pull-backs.
 
 - By a `SideMap` of an expression other than an `Apply` or `Form`.
 - Of a terminal.
@@ -197,6 +242,11 @@ These checks do not override rule exclusions or precedence.
 
 ## Expanding tensor arithmetic
 
+Write tensor arithmetic one scalar component at a time. For a scalar
+`c` and vector `v`, `c * v` becomes
+`component_tensor(c * v[i], (i,))` with a fresh `i`. The result still
+has the shape of `v`.
+
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
 | `expand_arithmetic(f)` | | `f: AbstractExpression` | An equivalent expression with tensor arithmetic expanded |
@@ -206,8 +256,6 @@ These checks do not override rule exclusions or precedence.
 | Evaluates | Tensor-valued `Sum`, `Product` and `Division` |
 | Input contract | Core expressions |
 | Output contract | Tensor arithmetic expanded |
-
-Apply ST13–ST16 to tensor arithmetic; retain scalar arithmetic.
 
 ### Tensor arithmetic components
 

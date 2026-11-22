@@ -23,10 +23,14 @@ relationships. Examples may use short local names such as `A` or `i`.
 
 ### Mathematical admissibility
 
-Static type checking establishes the documented Python argument types. Construction
-checks the remaining structural and value constraints. Values and rewrites assume the required
-mathematical hypotheses; the core neither verifies them nor extends formulas
-through singularities.
+A caller supplies values on which the mathematical operation and the
+formula used to evaluate it are defined. For example, evaluating the
+inverse of a square matrix assumes that the matrix is nonsingular.
+
+Static typing checks Python argument types. Construction checks the
+remaining structural and value constraints. The core assumes the mathematical
+hypotheses without checking them. Each formula keeps its stated domain,
+including any exclusions at singularities.
 
 ### Glossary
 
@@ -108,18 +112,20 @@ TSFC lowers a UFL form to GEM, which repeats much of the algebra of UFL, partly 
 
 ### The base object `Base`
 
-Every object in the directed acyclic graph (DAG) must extend `Base`. A graph
-edge means "is defined from"; geometric edges are explicitly called edges of
-a triangle or cell. Everything defining the variational problem must be
+Each object in the directed acyclic graph (DAG) extends `Base`. Its class
+and construction arguments determine its identity. For example,
+`Sum(a, b)` records `(a, b)` in that order. Reconstructing it with those
+arguments gives an equal object.
+
+A graph edge means “is defined from”. Geometric edges are identified as edges
+of a triangle or cell. Everything defining the variational problem must be
 recoverable from the graph.
 
 | `Base`     |                                                                    |
 | ---------- | ------------------------------------------------------------------ |
 | Properties | `construction_arguments`, the construction arguments, as in rule 4 |
 
-Objects must satisfy the following rules:
-
-1. A construction argument must be one of a small curated set of types: a base
+1. **Permitted data.** A construction argument must be one of a small curated set of types: a base
    object, or exactly a `bool`, an `int`, a finite `float`, a `str`, or a `tuple` whose
    items are of these types. A subclass of these Python types is not accepted,
    so a `bool` is not an `int` and a named tuple is not a `tuple`. Construction
@@ -131,29 +137,29 @@ Objects must satisfy the following rules:
    built-in type is required, and `ValueError` for a `float` that is not finite.
    Type tags distinguish built-in values in hashing and serialisation; Python's
    equality of `True`, `1` and `1.0` does not identify construction arguments.
-2. Construction and all results depend only on the class and construction
+2. **Determinism.** Construction and all results depend only on the class and construction
    arguments, never on global state.
-3. Objects are immutable after construction.
-4. Reconstructing an object from its class and construction arguments must give
+3. **Immutability.** Objects are immutable after construction.
+4. **Reconstruction.** Reconstructing an object from its class and construction arguments must give
    an equal object. `construction_arguments` records those arguments in order
    as a `tuple`. A constructor may also store derived data.
-5. The edges of an object must be exactly the base objects among its
+5. **Edges.** The edges of an object must be exactly the base objects among its
    construction arguments, including the base objects nested in `tuple`s, in
    order.
-6. Any order that the core or a pass relies on must be deterministic across
+6. **Traversal order.** Any order that the core or a pass relies on must be deterministic across
    processes. A pass, and any other walk of the graph such as hashing,
    serialisation or printing, follows the edges it visits in order (rule 5).
    A pass states which edges it visits. Where unrelated objects must be sorted,
    the sort uses a total order defined by the class and the construction
    arguments alone.
-7. Equality (`==`) returns a `bool`: objects are equal exactly when their
+7. **Equality.** Equality (`==`) returns a `bool`: objects are equal exactly when their
    classes and construction arguments are equal. Whether `is` is structural
    is implementation dependent. An implementation in which `is` is
    structural must intern objects, so that equal objects are the same object.
    Structural equality does not decide mathematical equality: $a + b$ and
    $b + a$ are not structurally equal. Mathematical equalities are applied
    in later graph algorithms.
-8. Requirements expressible to a static type checker must be checked statically
+8. **Validation.** Requirements expressible to a static type checker must be checked statically
    and must not be duplicated by runtime validation. This includes argument
    classes, container member types, fixed tuple structure and permitted literal
    alternatives. Callers must satisfy the documented types; runtime behaviour
@@ -164,9 +170,9 @@ Objects must satisfy the following rules:
    requirement raises `ValueError`. Class tables list additional details or
    exceptions. Exact built-in types, including the exclusion of `bool` and
    named tuples in rule 1, and finite floats still require runtime checks.
-9. A constructor has no default values, so every construction argument is
+9. **Constructor arguments.** A constructor has no default values, so every construction argument is
    written at construction.
-10. A concrete class states an `identifier`, a `str` with the public name of
+10. **Class identifiers.** A concrete class states an `identifier`, a `str` with the public name of
     the class qualified by the package name, such as `"uflx.Sum"` for the core
     or `"library.UnitSimplex"` for a library. The hash of rule 1, the total
     order of rule 6 and serialisation use the identifier and the construction
@@ -197,6 +203,10 @@ A parent class never constructs a subclass, though its properties may return
 existing subclass instances. A subclass may narrow a property's return type.
 
 ### Construction policy
+
+A factory builds the expression the user asked for. For example,
+`add(a, b)` builds `Sum(a, b)`. A later pass can inspect the sum and
+decide whether to rewrite it.
 
 | Kind | Role and permitted inspection | Validation and exceptions |
 | ---- | ----------------------------- | ------------------------- |
