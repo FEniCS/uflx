@@ -638,11 +638,13 @@ the following kinds:
 | ------------------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------ |
 | An `int` $k$                         | One axis, of extent $n_j$             | $k \ge 0$; if $n_j$ is an `int`, $k < n_j$; otherwise the caller ensures the upper bound, as below | `IndexError` |
 | An [`Index`](#index)                 | One axis, of extent $n_j$             | The `Index` takes the extent $n_j$                                                                 |              |
-| A [`GatheredIndex`](#gatheredindex)  | One axis, of extent $n_j$             | The extent of the `GatheredIndex` equals $n_j$                                                     | `IndexError` |
+| A [`GatheredIndex`](#gatheredindex)  | One axis, of extent $n_j$             | If the `GatheredIndex` declares an extent, it must equal $n_j$                                     | `IndexError` |
 
-For a symbolic extent, construction cannot check the upper bound. The caller
-must ensure that an integer entry is smaller than the supplied extent.
-Construction checks nonnegativity and any known upper bound.
+For an integer literal, construction checks nonnegativity and any known upper
+bound. If the axis extent is symbolic, the caller must supply an extent larger
+than the literal. For a gathered entry without a declared extent, the caller
+must supply a value $k$ satisfying $0 \le k < n_j$ at each use. A backend may
+assume this bound at evaluation.
 
 The free indices of the `Indexed` are the free indices of the expression,
 followed by each `Index` entry with the extent that the
@@ -742,12 +744,12 @@ or the local facet number selecting a pretabulated reference map. The values are
 | `AbstractIndexTable` |                                                        |
 | -------------------- | ------------------------------------------------------ |
 | Extends              | `Base` |
-| Provides             | `extent`, an extent giving the exclusive upper bound on each stored index value, and `shape`, a `tuple` of extents giving the table dimensions |
+| Provides             | `shape`, a `tuple` of extents giving the table dimensions, and `extent`, the declared target axis extent or `None` |
 | Defined by           | A subclass outside the core                            |
 
-The table has the shape `shape`. Each stored value is a nonnegative `int`
-smaller than `extent`. An `AbstractIndexTable` with the shape `()` is one
-value. An expression reads the table only through a
+Each stored value is a nonnegative `int`. If the table declares an `extent`,
+every stored value must be smaller than it. An `AbstractIndexTable` with the
+shape `()` is one value. An expression reads the table only through a
 [`GatheredIndex`](#gatheredindex), so one value is read as
 `gathered_index(table, ())`.
 
@@ -763,15 +765,14 @@ nor a free index; its table indices determine its free indices.
 | Takes                           | `table: AbstractIndexTable`, `indices: tuple` |
 | Properties                      | `table`, the index table to read, and `indices`, a `tuple` selecting one entry per table axis using an `int`, `Index` or `GatheredIndex` |
 | Derived                         | `extent` and `free_indices`, below |
-| Raises                          | `IndexError` for an incorrect number of entries or invalid bounds or gather extent, and `ValueError` for inconsistent extents of a repeated index |
+| Raises                          | `IndexError` for an incorrect number of entries or invalid bounds or a mismatched declared gather extent, and `ValueError` for inconsistent extents of a repeated index |
 
 `indices` contains one `int`, `Index` or `GatheredIndex` per table axis, with
 the same bounds and extent checks as [`Indexed`](#indexed). A scalar table
 therefore takes `()`. Both constructor and factory follow this rule.
-Gathers may nest. The result has the table's
-extent, and its free indices are the `Index` entries with their axis extents,
-followed by the free indices of the `GatheredIndex` entries, taking each index
-once.
+Gathers may nest. The result inherits `table.extent`, including `None`. Its
+free indices are the `Index` entries with their axis extents, followed by the
+free indices of the `GatheredIndex` entries, taking each index once.
 
 #### Examples
 
@@ -790,6 +791,19 @@ raises `IndexError`, because the gather extent 3 differs from the axis extent 4.
 A second local permutation `p` can be composed as
 `gathered_index(p, (g,))`. These operations index local arrays; they do not
 select cells from a mesh.
+
+For a triangle and a quadrilateral sharing a facet, the solver can supply
+both local facet numbers in a table `local_facets` of shape `(2,)` with
+`extent` set to `None`.
+
+```python
+plus_facet = gathered_index(local_facets, (0,))
+minus_facet = gathered_index(local_facets, (1,))
+```
+
+If the solver supplies `(2, 3)`, `plus_facet` selects row 2 of the triangle's
+three-row facet table and `minus_facet` selects row 3 of the quadrilateral's
+four-row facet table.
 
 ### Derived indices
 
