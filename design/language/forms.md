@@ -122,9 +122,14 @@ map.
 Every expression has an ordered `argument_spaces` tuple describing its
 function inputs.
 
-Each slot contains a space or a tuple of at least two spaces for one
-product-space argument. The member spaces of a product have the same scalar type.
-Separate slots may have different scalar types.
+Each slot describes one argument. Write `Argument[T]` for either a leaf of type
+`T` or an ordered tuple of at least two such arguments, recursively. An argument
+space is an `Argument[AbstractFunctionSpace]`. All leaf spaces of a product
+share one scalar type. Separate slots may have different scalar types.
+
+For example, a velocity–pressure state and a control can vary together in the
+single slot `((v, q), h)`. Its space is `((V, Q), M)`. Applying the form supplies
+the same grouping. The outer tuple in `form(e, (((v, q), h),))` lists the slots.
 
 A `Function` takes its signature from its space; a `Form` derives it from
 its body and bindings. A signature describes accepted inputs and output
@@ -158,7 +163,7 @@ in another, or occur nonlinearly as a free parameter.
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Extends                       | `AbstractExpression` |
 | Free function                 | `form(expression, arguments)`                                                                                                                                                                      |
-| Takes                         | `expression: AbstractExpression`, `arguments: tuple[Function \| Conjugate \| tuple[Function \| Conjugate, ...], ...]` |
+| Takes                         | `expression: AbstractExpression`, `arguments: tuple[Argument[Function \| Conjugate], ...]` |
 | Properties | `expression`, the body of the form, and `arguments`, the ordered binding declarations described below |
 | Requires                      | Every function in `arguments` distinct; each tuple entry has one scalar type; no bound function occurs free in any resulting argument space, including inherited slots |
 | Static type                   | That of the expression, with the argument spaces of the expression followed by the space `V` of each entry `v`, `conjugate_space(V)` of each entry `conjugate(v)`, or the `tuple` of the spaces of the members of a `tuple` entry, in order |
@@ -170,7 +175,7 @@ Each entry of `arguments` declares one new argument slot:
 | ----- | ------- |
 | A `Function` | The form is linear over the real or complex scalars specified by this function's space. |
 | `conjugate(function)` for a `Function` | The form is antilinear in this function. |
-| A tuple of at least two functions or conjugated functions | One product-space argument; the form is jointly linear in the declared values. |
+| A tuple of at least two binding entries | One product-space argument; the form is jointly linear in the declared values. |
 
 An entry's binder index is its index in `arguments`; its argument position
 is the arity of `expression` plus that index. An entry `v` declares
@@ -341,14 +346,14 @@ double dual by the canonical map defined
 | `DualSpace(space)` | |
 | -------------- | - |
 | Extends | `AbstractFunctionSpace` |
-| Takes | `space: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` |
-| Properties | `space`, the space on whose members the functionals act, or a `tuple` of at least two spaces with the same scalar type; a single space must not be a `DualSpace` |
+| Takes | `space: Argument[AbstractFunctionSpace]` |
+| Properties | `space`, the space on whose members the functionals act, or a product of spaces with the same scalar type; a single space must not be a `DualSpace` |
 | Derived | `domain`, `value_shape`, `scalar_type` and `argument_spaces`, below |
 | Raises | `ValueError` for a `DualSpace` or an invalid tuple |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `dual_space(space)` | | `space: AbstractFunctionSpace \| tuple[AbstractFunctionSpace, ...]` | `space.space` for a `DualSpace`, otherwise `DualSpace(space)` |
+| `dual_space(space)` | | `space: Argument[AbstractFunctionSpace]` | `space.space` for a `DualSpace`, otherwise `DualSpace(space)` |
 
 The derived properties describe a function in the dual space:
 
@@ -490,7 +495,7 @@ declares bound functions; `Apply.arguments` stores the values supplied to them.
 | -------------------- | - |
 | Extends | `AbstractExpression` |
 | Free function | `apply(form, arguments)` |
-| Takes | `form: AbstractExpression`, `arguments: tuple[AbstractExpression \| tuple[AbstractExpression, ...], ...]` |
+| Takes | `form: AbstractExpression`, `arguments: tuple[Argument[AbstractExpression], ...]` |
 | Properties | `form`, the multilinear expression to evaluate, and `arguments`, the ordered tuple of supplied values |
 | Requires | `len(arguments) == len(form.argument_spaces) > 0`; each supplied value admissible for the corresponding space below |
 | Returns | `form` for `apply(form, ())` when `form.argument_spaces == ()`, otherwise `Apply(form, arguments)` |
@@ -503,7 +508,7 @@ declares bound functions; `Apply.arguments` stores the values supplied to them.
 | -------------- | ------------------- |
 | A space `space` | Same value shape and argument spaces as a function in `space`; scalar type `space.scalar_type` or real; domain `space.domain` or no domain |
 | `ConjugateSpace(space)` | The conjugate type of an admissible value for `space`, including argument spaces; supplies the conjugated function value |
-| Tuple of spaces | A tuple with one admissible member per space |
+| Product of spaces | A tuple with the same grouping at every level and an admissible value for each leaf space |
 
 A product-space argument occupies one slot. Free indices give families of
 applications. Admissibility checks static signatures, not discrete-space

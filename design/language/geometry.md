@@ -638,21 +638,23 @@ $$
 $$
 
 with $\varepsilon$ real. `variable` is bound only in `expression`.
-For tuple variables, all members vary simultaneously.
+For a tuple variable, all leaf functions vary simultaneously. The variable,
+point and direction have the same [argument structure](forms.md#argument-spaces)
+at every level. Variables in different leaf spaces may have different scalar types.
 
 | `DirectionalDerivative(expression, variable, point, direction)` |                                                                                                       |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Extends                          | `AbstractExpression` |
-| Takes                            | `expression: AbstractExpression`, `variable: Function \| tuple[Function, ...]`, `point, direction: AbstractExpression \| tuple[AbstractExpression, ...]` |
+| Takes                            | `expression: AbstractExpression`, `variable: Argument[Function]`, `point, direction: Argument[AbstractExpression]` |
 | Properties | `expression`, the body to differentiate; `variable`, the function or tuple of functions bound in that body; `point`, their evaluation values; and `direction`, their perturbations |
-| Requires                         | `variable` is a `Function`, or a `tuple` of at least two distinct functions; member by member, `point` and `direction` admissible values for the space of `variable` as in [argument admissibility](forms.md#admissible-argument-values); variable spaces independent of all variable members |
+| Requires                         | `variable` is an argument of distinct functions; at each leaf, `point` and `direction` admissible values for the space of `variable` as in [argument admissibility](forms.md#admissible-argument-values); variable spaces independent of all variable members |
 | Static type                      | The value shape of `expression`, the free indices of `expression` followed by those of the members of `point` and `direction`, each `Index` taken once, and the argument spaces and the scalar type of `expression` |
 | Raises                           | `ValueError` if another requirement fails |
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `directional_derivative(expression, variable, direction)` | | `expression: AbstractExpression`, `variable: Function \| tuple`, `direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, variable, direction)` |
-| `directional_derivative(expression, variable, point, direction)` | | `expression: AbstractExpression`, `variable: Function \| tuple`, `point, direction: AbstractExpression \| tuple` | `DirectionalDerivative(expression, variable, point, direction)` |
+| `directional_derivative(expression, variable, direction)` | | `expression: AbstractExpression`, `variable: Argument[Function]`, `direction: Argument[AbstractExpression]` | `DirectionalDerivative(expression, variable, variable, direction)` |
+| `directional_derivative(expression, variable, point, direction)` | | `expression: AbstractExpression`, `variable: Argument[Function]`, `point, direction: Argument[AbstractExpression]` | `DirectionalDerivative(expression, variable, point, direction)` |
 
 The three-argument form evaluates the derivative at `variable`. Supply an explicit
 `point` as the third argument, followed by `direction`, to evaluate it elsewhere.
