@@ -32,7 +32,7 @@ The solver gives the coordinate function `x` the vertex values
 
 ```python
 x = function(X_space, "x")
-D = mesh(x, EuclideanSpace(2))
+D = create_mesh(x, euclidean_space(2))
 E = side_domain(D, diagonal, *diagonal_sides["+"].entries)
 
 u, v = function(V, "u"), function(V, "v")
@@ -221,7 +221,7 @@ values `((0,0), (1,0), (0,1), (1,1))`:
 ```python
 K, I = ReferenceSimplex(2), ReferenceSimplex(1)
 square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
-D = mesh(x, EuclideanSpace(2))
+D = create_mesh(x, euclidean_space(2))
 ```
 
 Each local material cell has a side into its parent slot. Its side domain
@@ -338,7 +338,7 @@ their local roles.
   local configurations.
 - A material coefficient varying by cell is supplied as local field data;
   a single-cell kernel can receive a scalar `nu` directly.
-- For a moving fluid mesh, use `mesh(F.coordinate_function + m, EuclideanSpace(2))`,
+- For a moving fluid mesh, use `create_mesh(F.coordinate_function + m, euclidean_space(2))`,
   where the mesh displacement `m` on `fluid_cells` extends the solid motion.
   Functions on that topology push forward to the moved mesh unchanged.
 
@@ -365,7 +365,7 @@ The library supplies `runtime_array` for solver data with no domain and
 `runtime_extent` for sizes known at run time.
 
 ```python
-D3 = mesh(x3, EuclideanSpace(3))
+D3 = create_mesh(x3, euclidean_space(3))
 D1 = side_domain(D3, T1, *T1_sides["tissue"].entries)
 identity = transformation_law((), 0)
 
@@ -420,7 +420,7 @@ constructs the ring quadrature, locates its points in concrete tissue cells,
 and supplies their reference positions. A local sampling kernel evaluates:
 
 ```python
-R = domain_map(EuclideanSpace(0), positions[l], K3)
+R = domain_map(euclidean_space(0), positions[l], K3)
 p_samples = pull_back(pull_back(p3, cell_map(T3, 0)), R)
 weighted_samples = weights[l] * p_samples
 ```

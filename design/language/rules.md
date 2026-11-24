@@ -186,7 +186,7 @@ Construction validates immutable objects once; every existing object is structur
 ### Leaves and subclassing
 
 Only leaves are subclassed. A leaf is a primitive object rather than an
-operation, such as the coordinate domain `EuclideanSpace(n)` or a function whose values an
+operation, such as the coordinate domain `euclidean_space(n)` or a function whose values an
 external library supplies. Leaves may have graph dependencies: a `Function`
 depends on its space, and a `Coordinate` on its domain. A terminal is a leaf
 that is an expression, such as a literal, `Coordinate`, `Function` or `Conormal`
@@ -204,7 +204,8 @@ existing subclass instances. A subclass may narrow a property's return type.
 
 ### Construction policy
 
-A factory builds the expression the user asked for. For example,
+Form authors construct domains and expressions through public factories and operator
+overloads. Class signatures in this specification describe the resulting graph. For example,
 `add(a, b)` builds `Sum(a, b)`. A later pass can inspect the sum and
 decide whether to rewrite it.
 
@@ -222,7 +223,7 @@ under their documented substitution rules; none evaluates unrelated lazy nodes.
 Free functions and passes are pure. A class method immediately calls a free
 function. Constructor arguments are positional only; the type checker rejects
 named arguments. Free functions may take named arguments, such as
-`domain_map(parameter_domain=T, parameterisation=psi, ambient_domain=EuclideanSpace(2))`.
+`domain_map(parameter_domain=T, parameterisation=psi, ambient_domain=euclidean_space(2))`.
 
 A stored property returns a construction argument; a derived property depends
 on the class and those arguments. Concrete classes inherit the derived
@@ -292,6 +293,6 @@ Every number in an expression is written with literals, such as `Integer(2)`,
 `complex`, `Fraction` or NumPy scalar is never converted and is rejected by
 static type checking.
 
-With `X = coordinate(EuclideanSpace(2))`, `X[0]**Integer(2)` is accepted, but `X[0]**2`
+With `X = coordinate(euclidean_space(2))`, `X[0]**Integer(2)` is accepted, but `X[0]**2`
 is a static type error. The same rule applies inside containers:
 `tensor((Integer(1), Integer(2)))` is accepted, but `tensor((1, 2))` is not.

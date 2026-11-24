@@ -61,7 +61,7 @@ A mixed problem needs no mixed space: a [form](#form) argument may be a
 ### Examples
 
 The examples use a topology `T` of `ReferenceSimplex(2)` cells and the mesh
-`D = mesh(x, EuclideanSpace(2))`, so $k = n = 2$.
+`D = create_mesh(x, euclidean_space(2))`, so $k = n = 2$.
 
 - The Lagrange space of polynomial degree 1 on `T` has the value shape `()`.
 - The Nédélec and the Raviart–Thomas spaces on `T` both have the value shape

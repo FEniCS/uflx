@@ -51,14 +51,16 @@ Examples:
 
 ### `EuclideanSpace`
 
-`EuclideanSpace(dimension)` is the whole coordinate space with `dimension` axes.
-Writing $n$ for `dimension`, this is $\mathbb{R}^n$.
+`euclidean_space(dimension)` returns the coordinate domain $\mathbb{R}^n$,
+where $n$ is `dimension`. In particular, `euclidean_space(0)` is a single point.
 
-| `EuclideanSpace(dimension)`    |                                                                 |
-| ---------- | --------------------------------------------------------------- |
-| Extends    | `AbstractCoordinateDomain` |
-| Properties | `dimension`, the nonnegative number of coordinate axes as an `int`                                 |
-| Raises     | `ValueError` if `dimension` is negative |
+| `EuclideanSpace(dimension)` | |
+| --------------------------- | - |
+| Extends | `AbstractCoordinateDomain` |
+| Free function | `euclidean_space(dimension)` |
+| Takes | `dimension: int` |
+| Properties | `dimension`, the number of coordinate axes |
+| Raises | `ValueError` if `dimension` is negative |
 
 Worked examples for this chapter: [the unit simplex](../examples/library.md#the-unit-simplex).
 
@@ -424,5 +426,5 @@ The domains of the resulting expressions are:
 Reference derivatives such as `gradient(u_a, K)` are defined on `K`.
 Selecting a cell is what exposes those coordinates; `gradient(u, T)` is
 not defined. A coordinate field `x` on `T` supplies physical geometry through
-`D = mesh(x, Q)`, where `Q` is the physical coordinate space.
+`D = create_mesh(x, Q)`, where `Q` is the physical coordinate space.
 See [Geometry](geometry.md) for this construction.

@@ -18,7 +18,7 @@ T = UnitSimplex(2)
 X = coordinate(T)
 one, two, three = Integer(1), Integer(2), Integer(3)
 psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
-K = domain_map(T, psi, EuclideanSpace(2))
+K = domain_map(T, psi, euclidean_space(2))
 ```
 
 The geometric quantities evaluate to:
@@ -123,8 +123,8 @@ T = UnitSimplex(2)
 X = coordinate(T)
 one, two, three = Integer(1), Integer(2), Integer(3)
 psi = tensor((one + two * X[0] + X[1], X[0] + three * X[1]))
-K = domain_map(T, psi, EuclideanSpace(2))
-Y = coordinate(EuclideanSpace(2))
+K = domain_map(T, psi, euclidean_space(2))
+Y = coordinate(euclidean_space(2))
 k = index("k")
 
 area = integral(density(K), T)
@@ -158,8 +158,8 @@ i = index("i")
 
 points = tensor((tensor((half, zero)), tensor((half, half)), tensor((zero, half))))
 weights = tensor((sixth, sixth, sixth))
-xs = domain_map(EuclideanSpace(0), points[i], T)
-q = index_sum(weights[i] * integral(pull_back(f, xs), EuclideanSpace(0)), (i,))
+xs = domain_map(euclidean_space(0), points[i], T)
+q = index_sum(weights[i] * integral(pull_back(f, xs), euclidean_space(0)), (i,))
 ```
 
 The points form one family with free index `i`, so `f` occurs once in `q`.
@@ -176,7 +176,7 @@ the expression is:
 index_sum(weights[i] * (points[i, 0] * points[i, 1]), (i,))
 ```
 
-`expand_pull_backs` substitutes the points for `X`; the integral over `EuclideanSpace(0)`
+`expand_pull_backs` substitutes the points for `X`; the integral over `euclidean_space(0)`
 returns its integrand. The compiler's `reduce_component_tensors` changes
 `points[i][0]` to `points[i, 0]`, and similarly for component 1. A generated
 kernel could be:
@@ -221,8 +221,8 @@ q = runtime_extent("q")
 points = runtime_array("points", (q, 2))
 weights = runtime_array("weights", (q,))
 
-xs = domain_map(EuclideanSpace(0), points[i], T)
-a = index_sum(weights[i] * integral(pull_back(f, xs), EuclideanSpace(0)), (i,))
+xs = domain_map(euclidean_space(0), points[i], T)
+a = index_sum(weights[i] * integral(pull_back(f, xs), euclidean_space(0)), (i,))
 ```
 
 The level set determines the solver's quadrature data; it does not appear in
@@ -244,7 +244,7 @@ material values at the corresponding physical points:
 
 ```python
 K = ReferenceSimplex(2)
-D = mesh(x, EuclideanSpace(2))
+D = create_mesh(x, euclidean_space(2))
 cells = cell_map(D, 0)
 q = index("q")
 points = runtime_array("points", (3, 2))
@@ -252,13 +252,13 @@ weights = runtime_array("weights", (3,))
 c = runtime_array("c", (3,))
 
 u, v = function(V, "u"), function(V, "v")
-sample = domain_map(EuclideanSpace(0), points[q], K)
+sample = domain_map(euclidean_space(0), points[q], K)
 u_q = pull_back(pull_back(push_forward(u, D, transformation_law(V)), cells), sample)
 v_q = pull_back(pull_back(push_forward(v, D, transformation_law(V)), cells), sample)
 rho_q = pull_back(density(cells), sample)
 
 a = form(
-    index_sum(integral(weights[q] * c[q] * u_q * v_q * rho_q, EuclideanSpace(0)), (q,)),
+    index_sum(integral(weights[q] * c[q] * u_q * v_q * rho_q, euclidean_space(0)), (q,)),
     (v, u),
 )
 ```
@@ -282,9 +282,9 @@ execution by the core:
 ```python
 f0 = pull_back(f, cell_map(D, 0))
 f1 = pull_back(f, cell_map(D, 1))
-midpoint = domain_map(EuclideanSpace(0), tensor((Float(0.5),)), K)
-left_endpoint = domain_map(EuclideanSpace(0), tensor((Integer(0),)), K)
-right_endpoint = domain_map(EuclideanSpace(0), tensor((Integer(1),)), K)
+midpoint = domain_map(euclidean_space(0), tensor((Float(0.5),)), K)
+left_endpoint = domain_map(euclidean_space(0), tensor((Integer(0),)), K)
+right_endpoint = domain_map(euclidean_space(0), tensor((Integer(1),)), K)
 
 pull_back(f0, midpoint)  # Physical coordinate 0.5; value 2.
 pull_back(f0, right_endpoint)  # Physical coordinate 1; value 2.
@@ -331,8 +331,8 @@ For the unit triangle `T = UnitSimplex(2)`, let `X = coordinate(T)` and
 
 ```python
 third = Integer(1) / Integer(3)
-point_map = domain_map(EuclideanSpace(0), tensor((third, third)), T)
-value = integral(pull_back(f, point_map), EuclideanSpace(0))
+point_map = domain_map(euclidean_space(0), tensor((third, third)), T)
+value = integral(pull_back(f, point_map), euclidean_space(0))
 ```
 
 The value is `1/9`, with value shape `()` and no spatial domain.

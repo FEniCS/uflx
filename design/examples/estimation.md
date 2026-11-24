@@ -33,7 +33,7 @@ K, I = ReferenceSimplex(2), ReferenceSimplex(1)
 square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
 diagonal = StaticTopology((I,), ((1, 2),))
 diagonal_sides = static_sides(diagonal, ((("+", square, 0), ("-", square, 1)),))
-D = mesh(x, EuclideanSpace(2))
+D = create_mesh(x, euclidean_space(2))
 E = side_domain(D, diagonal, *diagonal_sides["+"].entries)
 B = side_domain(D, neumann_facets, *neumann_facets_sides["inside"].entries)
 # The library supplies neumann_facets_sides["inside"] for the selected boundary.
@@ -150,7 +150,7 @@ of value shape `(2,)`, and these real spaces on `T`:
 For advection–diffusion, build the primal form, goal and adjoint:
 
 ```python
-D = mesh(x, EuclideanSpace(2))
+D = create_mesh(x, euclidean_space(2))
 u, v, u_h, z_h = function(V, "u"), function(V, "v"), function(V, "u_h"), function(V, "z_h")
 z = function(W, "z")
 f, psi = (

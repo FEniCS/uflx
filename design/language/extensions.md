@@ -223,9 +223,9 @@ library. A pass that meets a node class of a language extension also has a
 table for that class before the table of the core, such as the lowering table
 (see [Rule tables](#rule-tables)).
 
-For example, a units library assigns metres to `X = coordinate(EuclideanSpace(2))`
+For example, a units library assigns metres to `X = coordinate(euclidean_space(2))`
 and treats unlisted terminals as dimensionless. Its pass derives square
-metres for `X[0] * X[1]`, a dimensionless value for `gradient(X[0], EuclideanSpace(2))`,
+metres for `X[0] * X[1]`, a dimensionless value for `gradient(X[0], euclidean_space(2))`,
 and an error for `X[0] + X[0] * X[1]`. The library calls the pass when needed.
 
 ### New operations

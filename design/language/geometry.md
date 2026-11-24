@@ -4,7 +4,7 @@
 
 ### `Mesh`
 
-`Mesh(coordinate_function, ambient_domain)` describes cells whose physical
+`create_mesh(coordinate_function, ambient_domain)` builds a mesh whose physical
 coordinates are given by `coordinate_function` in `ambient_domain`. The domain
 of `coordinate_function` is the topology that specifies the cell slots.
 
@@ -14,7 +14,7 @@ interface pair, with physical geometry supplied by the coordinate field.
 | `Mesh(coordinate_function, ambient_domain)` | |
 | ------------ | - |
 | Extends | `AbstractDomain` |
-| Free function | `mesh(coordinate_function, ambient_domain)` |
+| Free function | `create_mesh(coordinate_function, ambient_domain)` |
 | Takes | `coordinate_function: AbstractExpression`, `ambient_domain: AbstractCoordinateDomain` |
 | Properties | `coordinate_function`, the coordinate expression on the topology, and `ambient_domain`, the coordinate domain containing its physical points |
 | Requires | `coordinate_function` has a topology domain whose cell types are reference cells; it is real, has value shape `(n,)` with `n = ambient_domain.dimension`, and has free indices `()` and argument spaces `()`; `topology.dimension <= n` |
@@ -22,12 +22,12 @@ interface pair, with physical geometry supplied by the coordinate field.
 | Raises | `TypeError` if the coordinate expression has no topology domain, and `ValueError` if another requirement fails |
 
 Mesh identity depends on both properties. Replacing coordinates reconstructs
-the mesh and preserves its requirements. Below, `physical_mesh = mesh(coordinates, ambient_domain)` and
+the mesh and preserves its requirements. Below, `physical_mesh = create_mesh(coordinates, ambient_domain)` and
 `topology = coordinates.domain`.
 
 #### Mesh cell maps
 
-For `physical_mesh = mesh(coordinates, ambient_domain)`, let
+For `physical_mesh = create_mesh(coordinates, ambient_domain)`, let
 `topology = coordinates.domain`. Indexing `physical_mesh[cell_slot]` selects
 that local cell. Its reference cell is `topology.cell_types[cell_slot]`, and
 its parameterisation is `pull_back(coordinates, topology[cell_slot])`.
@@ -53,7 +53,7 @@ Using the library's `Lagrange` space, the declarations are:
 ```python
 coordinate_space = Lagrange(square_topology, 1, (2,))
 coordinates = function(coordinate_space, "coordinates")
-physical_mesh = mesh(coordinates, EuclideanSpace(2))
+physical_mesh = create_mesh(coordinates, euclidean_space(2))
 ```
 
 - `physical_mesh.topology` is `square_topology`, with two triangle slots. `physical_mesh[0]`
@@ -80,7 +80,7 @@ coordinate domain. It is a terminal.
 
 On a coordinate domain $P$, `coordinate(P)` is the identity $X(p) = p$.
 
-For `physical_mesh = mesh(coordinates, ambient_domain)`,
+For `physical_mesh = create_mesh(coordinates, ambient_domain)`,
 `coordinate(physical_mesh)` is defined on the physical mesh, whereas
 `coordinates` is defined on its topology. Pulling the physical coordinate field
 back through a cell map gives that cell's parameterisation.
@@ -118,10 +118,10 @@ For a domain $P$ of dimension $k$ in $n$ ambient dimensions:
 
 #### Examples
 
-Start with a scalar expression on `EuclideanSpace(3)`:
+Start with a scalar expression on `euclidean_space(3)`:
 
 ```python
-coordinate_domain = EuclideanSpace(3)
+coordinate_domain = euclidean_space(3)
 coordinates = coordinate(coordinate_domain)
 x, y, z = coordinates[0], coordinates[1], coordinates[2]
 u = x * y * z
@@ -133,7 +133,7 @@ u = x * y * z
 | `gradient(gradient(u, coordinate_domain), coordinate_domain)`           | `(3, 3)`    | The Hessian of `u`                            |
 | `gradient(coordinates, coordinate_domain)`                        | `(3, 3)`    | The identity matrix, after evaluation         |
 
-For a scalar field `u` on a surface mesh `surface_mesh` in `EuclideanSpace(3)`,
+For a scalar field `u` on a surface mesh `surface_mesh` in `euclidean_space(3)`,
 `gradient(u, surface_mesh)` has shape `(3,)`.
 `gradient(coordinate(surface_mesh), surface_mesh)` is a `(3, 3)` matrix that
 orthogonally projects ambient vectors onto the surface's tangent plane.
@@ -296,7 +296,7 @@ trace = pull_back(u, edge)  # Value (1 - t) * t on reference_interval.
 ```
 
 The map's target must match the field's domain: this `edge` reads fields on
-`reference_triangle`. A map into `EuclideanSpace(2)` would instead read fields on that space.
+`reference_triangle`. A map into `euclidean_space(2)` would instead read fields on that space.
 
 ### Integration through a map
 
@@ -330,10 +330,10 @@ Integration preserves free indices in the field and the map. An explicit
 
 Let `u` be a field on `reference_cell` and `reference_position` a supplied
 vector of reference coordinates. Point evaluation maps the single point of
-`EuclideanSpace(0)` to that position:
+`euclidean_space(0)` to that position:
 
 ```python
-point_domain = EuclideanSpace(0)
+point_domain = euclidean_space(0)
 point_map = domain_map(point_domain, reference_position, reference_cell)
 value = integral(pull_back(u, point_map), point_domain)
 ```
@@ -358,7 +358,7 @@ The free index `i` in `points[i]` makes `domain_map` describe a family of
 point maps, one for each quadrature point:
 
 ```python
-point_domain = EuclideanSpace(0)
+point_domain = euclidean_space(0)
 i = index("i")
 point_maps = domain_map(point_domain, points[i], reference_cell)
 values = integral(pull_back(reference_integrand, point_maps), point_domain)
@@ -485,7 +485,7 @@ choice is independent of subsequent restrictions into other parents.
 
 | Free function | Overload | Takes | Returns |
 | ------------- | -------- | ----- | ------- |
-| `side_domain(parent, source, *entries)` | | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]` | `mesh(pull_back(parent.coordinate_function, SideMap(parent.topology, source, entries)), parent.ambient_domain)` |
+| `side_domain(parent, source, *entries)` | | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]` | `create_mesh(pull_back(parent.coordinate_function, SideMap(parent.topology, source, entries)), parent.ambient_domain)` |
 
 Coordinate functions may be vector-valued or tensors of scalar functions.
 For a conforming interface, the library supplies parent-cell parameterisations

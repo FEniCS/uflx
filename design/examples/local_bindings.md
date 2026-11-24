@@ -51,12 +51,12 @@ one-cell topologies, each with value shape `(2,)`. Their functions stay symbolic
 
 ```python
 xa, xl, xs = function(Xa, "xa"), function(Xl, "xl"), function(Xs, "xs")
-Da = mesh(xa, EuclideanSpace(2))
-Dl = mesh(xl, EuclideanSpace(2))
-Ds = mesh(xs, EuclideanSpace(2))
+Da = create_mesh(xa, euclidean_space(2))
+Dl = create_mesh(xl, euclidean_space(2))
+Ds = create_mesh(xs, euclidean_space(2))
 
-Eal = mesh(pull_back(xa, SideMap(Ta, Sal, Sal_sides["air"].entries)), EuclideanSpace(2))
-Els = mesh(pull_back(xl, SideMap(Tl, Sls, Sls_sides["liquid"].entries)), EuclideanSpace(2))
+Eal = create_mesh(pull_back(xa, SideMap(Ta, Sal, Sal_sides["air"].entries)), euclidean_space(2))
+Els = create_mesh(pull_back(xl, SideMap(Tl, Sls, Sls_sides["liquid"].entries)), euclidean_space(2))
 ```
 
 Let `Ua`, `Ul`, `Us` be scalar P1 temperatures pushed forward to `Da`, `Dl`,

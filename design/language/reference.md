@@ -223,6 +223,12 @@ Extend `AbstractFunctionSpace`:
 | [`inverse(matrix)`](expressions.md#inverse)                          |          | `matrix: AbstractExpression`                 | `Inverse`                                                                             |
 | [`determinant(matrix)`](expressions.md#determinant)                  |          | `matrix: AbstractExpression`                 | `Determinant`                                                                         |
 
+### Domains
+
+| Function                                                   | Overload | Takes            | Returns          |
+| ---------------------------------------------------------- | -------- | ---------------- | ---------------- |
+| [`euclidean_space(dimension)`](topology.md#euclideanspace) |          | `dimension: int` | `EuclideanSpace` |
+
 ### Maps between domains
 
 | Function                                                                                  | Overload | Takes                                                                                                                                                | Returns     |
@@ -244,9 +250,9 @@ Extend `AbstractFunctionSpace`:
 
 ### Meshes
 
-| Function                                                        | Overload | Takes                                                                                 | Returns |
-| --------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------- | ------- |
-| [`mesh(coordinate_function, ambient_domain)`](geometry.md#mesh) |          | `coordinate_function: AbstractExpression`, `ambient_domain: AbstractCoordinateDomain` | `Mesh`  |
+| Function                                                               | Overload | Takes                                                                                 | Returns |
+| ---------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------- | ------- |
+| [`create_mesh(coordinate_function, ambient_domain)`](geometry.md#mesh) |          | `coordinate_function: AbstractExpression`, `ambient_domain: AbstractCoordinateDomain` | `Mesh`  |
 
 ### Calculus on a domain
 
@@ -262,12 +268,12 @@ Extend `AbstractFunctionSpace`:
 
 ### Fields on a mesh
 
-| Function                                                                 | Overload | Takes                                                                         | Returns                                                                                                         |
-| ------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| [`transformation_law(variances, weight)`](geometry.md#transformationlaw) |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                                                                                             |
-| [`push_forward(expression, mesh, law)`](geometry.md#pushforward)         |          | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw`      | `PushForward(expression, mesh, law)`                                                                            |
-| [`side_domain(parent, source, *entries)`](geometry.md#side-domains)      |          | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]`  | `mesh(pull_back(parent.coordinate_function, SideMap(parent.topology, source, entries)), parent.ambient_domain)` |
-| [`conormal(side_map, *reference_conormals)`](geometry.md#conormal)       |          | `side_map: SideMap`, `reference_conormals: tuple[AbstractExpression, ...]`    | `Conormal`                                                                                                      |
+| Function                                                                 | Overload | Takes                                                                         | Returns                                                                                                                |
+| ------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| [`transformation_law(variances, weight)`](geometry.md#transformationlaw) |          | `variances: tuple[Literal["covariant", "contravariant"], ...]`, `weight: int` | `TransformationLaw`                                                                                                    |
+| [`push_forward(expression, mesh, law)`](geometry.md#pushforward)         |          | `expression: AbstractExpression`, `mesh: Mesh`, `law: TransformationLaw`      | `PushForward(expression, mesh, law)`                                                                                   |
+| [`side_domain(parent, source, *entries)`](geometry.md#side-domains)      |          | `parent: Mesh`, `source: AbstractTopology`, `entries: tuple[int, DomainMap]`  | `create_mesh(pull_back(parent.coordinate_function, SideMap(parent.topology, source, entries)), parent.ambient_domain)` |
+| [`conormal(side_map, *reference_conormals)`](geometry.md#conormal)       |          | `side_map: SideMap`, `reference_conormals: tuple[AbstractExpression, ...]`    | `Conormal`                                                                                                             |
 
 ### Differentiation with respect to functions
 
@@ -377,6 +383,6 @@ Counts of the core, from the sections.
 | Abstract classes                | 10    |
 | Concrete classes                | 46    |
 | Expression node classes         | 36    |
-| Free functions                  | 52    |
+| Free functions                  | 53    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->
