@@ -159,10 +159,12 @@ recoverable from the graph.
    Structural equality does not decide mathematical equality: $a + b$ and
    $b + a$ are not structurally equal. Mathematical equalities are applied
    in later graph algorithms.
-8. **Validation.** Requirements expressible to a static type checker must be checked statically
-   and must not be duplicated by runtime validation. This includes argument
-   classes, container member types, fixed tuple structure and permitted literal
-   alternatives. Callers must satisfy the documented types; runtime behaviour
+8. **Validation.** Python implementations, libraries and programs claiming UFLx
+   conformance must pass a static type checker against the documented UFLx interfaces.
+   Requirements expressible in the type system must be checked statically and must
+   not be duplicated by runtime validation.
+   These include argument classes, container member types, fixed tuple structure and
+   permitted literal alternatives. Callers must satisfy the documented types; runtime behaviour
    for a statically invalid call is not specified. Constructors and construction
    free functions check the remaining structural and value requirements, such
    as compatible shapes, matching extents and distinct binders. They never
