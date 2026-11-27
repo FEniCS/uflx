@@ -29,7 +29,7 @@ evaluation as follows:
 
 - Geometry-independent reference values: the space is on a topology $T$
   and defines `pull_back(u, cell_map(T, j))` for each local cell slot $j$.
-  A [`PushForward`](geometry.md#pushforward) gives the field on a mesh.
+  A [`MappedSpace`](#mappedspace) gives the corresponding space on a physical mesh.
 - Geometry-dependent reference values, as for Hermite, Argyris or Morley
   elements: the space is on a mesh $D$ and defines
   `pull_back(u, cell_map(D, j))` using the cell map's coordinates.
@@ -73,6 +73,30 @@ The legacy UFL `Real` space is a space of constants, and the legacy UFL `Constan
 
 In legacy UFL, a `FunctionSpace` holds a mesh and an element, and the element states the value shape, the map to the reference cell and the Sobolev space. In UFLx, a space may be defined on a topology, with an explicit law for its push-forward to a mesh, or on the mesh itself.
 ```
+
+## `MappedSpace`
+
+For a reference space $U$ on the topology of $D$, the fields in its mapped
+space on $D$ have cell values $u(\psi(X))=m_\psi(\hat u(X))$. The reference
+space supplies the basis and coefficient layout. The surrounding package
+identifies shared DOFs and supplies orientation transformations.
+
+| `MappedSpace(reference_space, mesh, law)` | |
+| --- | --- |
+| Extends | `AbstractFunctionSpace` |
+| Takes | `reference_space: AbstractFunctionSpace`, `mesh: Mesh`, `law: TransformationLaw` |
+| Requires | The reference space is on `mesh.topology`, takes no function inputs, and each mapped trailing axis has extent `mesh.dimension` |
+| Properties | `reference_space`, `mesh`, `law` |
+| Static type | Domain `mesh`, the reference scalar type and empty argument spaces. Each mapped value axis has ambient extent. |
+
+A library constructor such as `function_space(D, element)` can return
+`MappedSpace(U, D, m)` for an element with reference space `U` and value law
+`m`. An element with geometry-dependent nodal reconstruction can supply its
+own physical space through the same interface. Declare, bind, substitute and
+differentiate the physical function `u = function(V, "u")` directly.
+A coefficient input for `u` supplies a single set of DOFs in the layout of
+`U`. Varying the mesh coordinates holds these DOFs fixed while the value
+transformation, spatial derivatives and integration measure vary.
 
 ## `Function`
 

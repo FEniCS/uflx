@@ -144,13 +144,19 @@ Extend `Base`:
 
 Extend `AbstractExpression`:
 
-[`PushForward`](geometry.md#pushforward), [`Conormal`](geometry.md#conormal).
+[`ReferenceValue`](geometry.md#referencevalue), [`PushForward`](geometry.md#pushforward), [`Conormal`](geometry.md#conormal).
 
 ### Differentiation with respect to functions
 
 Extend `AbstractExpression`:
 
 [`DirectionalDerivative`](geometry.md#directionalderivative).
+
+### `MappedSpace`
+
+Extend `AbstractFunctionSpace`:
+
+[`MappedSpace`](forms.md#mappedspace).
 
 ### `Function`
 
@@ -343,7 +349,7 @@ and are not added to the enclosing expression's argument spaces.
 | `Form`                                   | Those of the expression, followed by the space of each entry, conjugated for a `conjugate(v)` entry |
 | `Apply`                                 | `()`              |
 | `Gradient`, `Divergence`, `Curl`         | Those of the operand                                           |
-| `PushForward`                            | Those of the expression                                        |
+| `PushForward`, `ReferenceValue`          | Those of the expression                                        |
 | `DirectionalDerivative`                  | Those of the expression                                        |
 | `Integral`                               | Those of the integrand                                         |
 | `PullBack`                               | Those of the expression                                        |
@@ -368,6 +374,7 @@ from the default rules of [Domain](expressions.md#domain) and [Scalar type](expr
 | `PullBack`               | The parameter domain of the map | The scalar type of the expression |
 | `Conormal`                 | $E$                                | Real                              |
 | `Function`               | The domain of the space, or none   | The scalar type of the space      |
+| `ReferenceValue` | The mesh topology | The scalar type of the expression |
 | `PushForward`            | The mesh $D$                       | The scalar type of the expression |
 | `Form`                   | The domain of the expression      | The scalar type of the expression |
 | `Apply`                 | The domain of the form            | The scalar type of the form       |
@@ -379,10 +386,10 @@ Counts of the core, from the sections.
 <!-- generated: summary, run design/appendices.py to update -->
 | Quantity                        | Count |
 | ------------------------------- | ----- |
-| Classes                         | 56    |
+| Classes                         | 58    |
 | Abstract classes                | 10    |
-| Concrete classes                | 46    |
-| Expression node classes         | 36    |
+| Concrete classes                | 48    |
+| Expression node classes         | 37    |
 | Free functions                  | 53    |
 | Free functions with an overload | 9     |
 <!-- end generated: summary -->

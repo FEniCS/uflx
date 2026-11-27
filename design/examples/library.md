@@ -6,6 +6,11 @@ LLM-generated-content designation; the centroid example was also LLM-proposed.
 
 ## Transformation laws
 
+The examples use the finite element library's `function_space(mesh, element)`
+to declare physical spaces. For the reference spaces supplied in these examples,
+`V.element` denotes the element description, including its value shape and
+scalar type. The library selects the cell evaluation rule from this description.
+
 The examples use the library overload `transformation_law(V)` to obtain a
 law for a supported space. It derives the law from the space's definition
 and raises `TypeError` for an unsupported space. The two-argument form
@@ -265,17 +270,18 @@ from uflx import (
     integral,
     normal,
     pull_back,
-    push_forward,
     side_domain,
     side_map,
 )
 
 
+# function_space is supplied by the finite element library.
 class FunctionSpace:
-    # A space on the topology of the mesh, with the mesh that its functions are pushed to.
+    # The physical space uses the reference element on the mesh topology.
     def __init__(self, mesh, family, degree, shape=()):
         self.mesh = mesh
-        self.space = Lagrange(mesh.domain.topology, degree, shape)
+        reference = Lagrange(mesh.domain.topology, degree, shape)
+        self.space = function_space(mesh.domain, reference.element)
 
 
 def VectorFunctionSpace(mesh, family, degree):
@@ -283,19 +289,15 @@ def VectorFunctionSpace(mesh, family, degree):
 
 
 def TestFunction(V):
-    return push_forward(
-        function(V.space, ("argument", 0)), V.mesh.domain, transformation_law(V.space)
-    )
+    return function(V.space, ("argument", 0))
 
 
 def TrialFunction(V):
-    return push_forward(
-        function(V.space, ("argument", 1)), V.mesh.domain, transformation_law(V.space)
-    )
+    return function(V.space, ("argument", 1))
 
 
 def Coefficient(V, name):
-    return push_forward(function(V.space, name), V.mesh.domain, transformation_law(V.space))
+    return function(V.space, name)
 
 
 def Constant(name, shape=()):
@@ -344,7 +346,7 @@ def contains(obj, predicate):
 
 def arguments(expression):
     # The legacy extract_arguments: the functions labelled ("argument", n), by n,
-    # which the walk finds inside the push-forwards.
+    # which the walk finds in the physical form.
     found = {}
 
     def visit(obj):

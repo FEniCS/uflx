@@ -72,15 +72,16 @@ selecting the stored value for each tensor entry:
 
 ```python
 D = create_mesh(x, euclidean_space(2))
-u, v = function(V, "u"), function(V, "v")
+V_D = function_space(D, V.element)
+u, v = function(V_D, "u"), function(V_D, "v")
 i, j, k, l = index("i"), index("j"), index("k"), index("l")
 two = Integer(2)
 c = function(K, "c")
 stiffness = component_tensor(c[gathered_index(packed, (i, j, k, l))], (i, j, k, l))
 
 grad_u, grad_v = (
-    gradient(push_forward(u, D, transformation_law(V)), D),
-    gradient(push_forward(v, D, transformation_law(V)), D),
+    gradient(u, D),
+    gradient(v, D),
 )
 eps_u = (grad_u + transpose(grad_u)) / two
 eps_v = (grad_v + transpose(grad_v)) / two

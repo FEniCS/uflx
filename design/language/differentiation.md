@@ -53,10 +53,15 @@ derivatives by the same procedure. Prepared-geometry and progress requirements
 apply; local algebraic rules do not invoke whole passes. Library derivative
 rules must retain dependencies needed by later derivatives or reject them.
 
-Geometry-dependent forms require fixed argument spaces; fields on moving
-domains require an explicit identification, such as pull-back to a reference
-domain. The prepared expression must preserve its declared input signature
-and output domain. No transport or interpolation is inferred.
+Geometry-dependent forms require an explicit identification of their
+argument spaces across mesh motion. Preparation preserves the input
+signature and output domain. Mapped spaces identify their argument DOFs through the fixed
+reference space. A coordinate variation changes the physical basis.
+CC10 exposes the mapping and CC11 reads the independent reference data.
+For a space with physical nodal data and geometry-dependent basis
+reconstruction, hold the supplied nodal data fixed and differentiate the
+reconstruction.
+
 Libraries must expose geometry-dependent reconstruction, including basis and
 coefficient transformations, as symbolic operands or derivative rules.
 

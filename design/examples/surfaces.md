@@ -14,19 +14,14 @@ The library supplies the topology, space and coordinate values:
 ```python
 M = create_mesh(x, euclidean_space(3))
 
-u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
-u_M, v_M, f_M = (
-    push_forward(u, M, transformation_law(V)),
-    push_forward(v, M, transformation_law(V)),
-    push_forward(f, M, transformation_law(V)),
-)
-
+V_M = function_space(M, V.element)
+u, v, f = function(V_M, "u"), function(V_M, "v"), function(V_M, "f")
 i = index("i")
-grad_u = gradient(u_M, M)
-grad_v = gradient(v_M, M)
+grad_u = gradient(u, M)
+grad_v = gradient(v, M)
 
 a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), M), (v, u))
-L = form(integral(f_M * v_M, M), (v,))
+L = form(integral(f * v, M), (v,))
 ```
 
 `M` has dimension 2 in `euclidean_space(3)`, so `grad_u` and `grad_v` are tangential
@@ -117,11 +112,9 @@ D_s = create_mesh(x + s, euclidean_space(2))
 
 volume = integral(Integer(1), D_s)
 
-u, v = function(V, "u"), function(V, "v")
-grad_u, grad_v = (
-    gradient(push_forward(u, D_s, transformation_law(V)), D_s),
-    gradient(push_forward(v, D_s, transformation_law(V)), D_s),
-)
+V_s = function_space(D_s, V.element)
+u, v = function(V_s, "u"), function(V_s, "v")
+grad_u, grad_v = gradient(u, D_s), gradient(v, D_s)
 a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D_s), (v, u))
 ```
 
@@ -171,7 +164,9 @@ Use ordinary directional differentiation:
 ```python
 x, h, v = function(X, "x"), function(X, "h"), function(X, "v")
 D = create_mesh(x, euclidean_space(2))
-grad_u = gradient(push_forward(function(V, "u"), D, transformation_law(V)), D)
+V_D = function_space(D, V.element)
+u = function(V_D, "u")
+grad_u = gradient(u, D)
 i = index("i")
 energy = integral(index_sum(grad_u[i] * grad_u[i], (i,)), D)
 

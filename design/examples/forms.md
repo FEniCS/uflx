@@ -12,21 +12,16 @@ of value shape `(2,)`, and a real scalar continuous Lagrange space `V` on `T`:
 
 ```python
 D = create_mesh(x, euclidean_space(2))
-u, v, f = function(V, "u"), function(V, "v"), function(V, "f")
-u_D, v_D, f_D = (
-    push_forward(u, D, transformation_law(V)),
-    push_forward(v, D, transformation_law(V)),
-    push_forward(f, D, transformation_law(V)),
-)
-grad_u, grad_v = gradient(u_D, D), gradient(v_D, D)
+V_D = function_space(D, V.element)
+u, v, f = function(V_D, "u"), function(V_D, "v"), function(V_D, "f")
+grad_u, grad_v = gradient(u, D), gradient(v, D)
 i = index("i")
 
 a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))
-L = form(integral(f_D * v_D, D), (v,))
+L = form(integral(f * v, D), (v,))
 ```
 
-The functions live on `T`; pushing them forward gives fields on the physical
-mesh `D`. The entries `(v, u)` bind the test and trial arguments of `a`, in
+The functions live on the physical mesh `D` and use the reference DOFs of `V`. The entries `(v, u)` bind the test and trial arguments of `a`, in
 that order. `L` binds only `v`, leaving `f` as the source coefficient.
 The package supplies local values for each kernel call, assembles the
 contributions, applies boundary conditions and solves the resulting system.
@@ -47,21 +42,21 @@ on `S.topology`.
 Use multipliers for the mean pressure on `F` and mean volume change on `S`:
 
 ```python
-p, q = function(Q, "p"), function(Q, "q")
-d, w = function(W, "d"), function(W, "w")
-p_F, q_F = push_forward(p, F, transformation_law(Q)), push_forward(q, F, transformation_law(Q))
-d_S, w_S = push_forward(d, S, transformation_law(W)), push_forward(w, S, transformation_law(W))
-div_d, div_w = divergence(d_S, S), divergence(w_S, S)
+Q_F = function_space(F, Q.element)
+p, q = function(Q_F, "p"), function(Q_F, "q")
+W_S = function_space(S, W.element)
+d, w = function(W_S, "d"), function(W_S, "w")
+div_d, div_w = divergence(d, S), divergence(w, S)
 
 r, s = function(R, "r"), function(R, "s")
-k, z = function(R_S, "k"), function(R_S, "z")
-k_S, z_S = push_forward(k, S, transformation_law(R_S)), push_forward(z, S, transformation_law(R_S))
-means = integral(p_F * s + q_F * r, F) + integral(k_S * div_w + z_S * div_d, S)
+constants_on_S = function_space(S, R_S.element)
+k, z = function(constants_on_S, "k"), function(constants_on_S, "z")
+means = integral(p * s + q * r, F) + integral(k * div_w + z * div_d, S)
 mean_form = form(means, ((q, w, s, z), (p, d, r, k)))
 ```
 
-`r` and `s` have no domain; the integrals decide where they act. `k_S` and
-`z_S` have domain `S`, so `k_S * q_F` raises `ValueError`. A coefficient
+`r` and `s` have no domain; the integrals decide where they act. `k` and
+`z` have domain `S`, so `k * q` raises `ValueError`. A coefficient
 that varies by cell marker instead belongs to a library space constant on
 each cell.
 
@@ -72,20 +67,21 @@ what a directional derivative accepts as its variable. With the same spaces:
 
 ```python
 nu, h = function(R, "nu"), function(R, "h")
-mu_s = function(R_S, "mu_s")
-u = function(V, "u")
+mu_s = function(constants_on_S, "mu_s")
+V_F = function_space(F, V.element)
+u = function(V_F, "u")
 i, j = index("i"), index("j")
 two = Integer(2)
-grad_d, grad_w = gradient(d_S, S), gradient(w_S, S)
+grad_d, grad_w = gradient(d, S), gradient(w, S)
 eps_d = (grad_d[i, j] + grad_d[j, i]) / two
 eps_w = (grad_w[i, j] + grad_w[j, i]) / two
 
 e = integral(
-    two * push_forward(mu_s, S, transformation_law(R_S)) * index_sum(eps_d * eps_w, (i, j)), S
+    two * mu_s * index_sum(eps_d * eps_w, (i, j)), S
 )
 de_dmu = form(directional_derivative(e, mu_s, Integer(1)), (w, d))
 
-grad_u = gradient(push_forward(u, F, transformation_law(V)), F)
+grad_u = gradient(u, F)
 dissipation = integral(nu * index_sum(grad_u[i, j] * grad_u[i, j], (i, j)), F)
 g_nu = form(directional_derivative(dissipation, nu, h), (h,))
 ```
@@ -111,28 +107,22 @@ The solver sets `sigma_x` and `sigma_y` to zero outside the layer:
 ```python
 D = create_mesh(x, euclidean_space(2))
 k0 = function(C, "k0")
-sigma_x, sigma_y = (
-    push_forward(function(F, "sigma_x"), D, transformation_law(F)),
-    push_forward(function(F, "sigma_y"), D, transformation_law(F)),
-)
+F_D = function_space(D, F.element)
+sigma_x, sigma_y = function(F_D, "sigma_x"), function(F_D, "sigma_y")
 one, i_unit = Integer(1), Complex(Integer(0), Integer(1))
 s_x = one + i_unit * sigma_x / k0
 s_y = one + i_unit * sigma_y / k0
 
-u, v, f = function(V, "u"), function(V, "v"), function(F, "f")
-u_D, v_D, f_D = (
-    push_forward(u, D, transformation_law(V)),
-    push_forward(v, D, transformation_law(V)),
-    push_forward(f, D, transformation_law(F)),
-)
-grad_u, grad_v = gradient(u_D, D), gradient(v_D, D)
+V_D = function_space(D, V.element)
+u, v, f = function(V_D, "u"), function(V_D, "v"), function(F_D, "f")
+grad_u, grad_v = gradient(u, D), gradient(v, D)
 j = index("j")
 
 A = tensor((s_y / s_x, s_x / s_y))
 stiffness = index_sum(A[j] * grad_u[j] * conjugate(grad_v[j]), (j,))
-mass = k0 * k0 * s_x * s_y * u_D * conjugate(v_D)
+mass = k0 * k0 * s_x * s_y * u * conjugate(v)
 a = form(integral(stiffness - mass, D), (conjugate(v), u))
-L = form(integral(f_D * conjugate(v_D), D), (conjugate(v),))
+L = form(integral(f * conjugate(v), D), (conjugate(v),))
 ```
 
 The entries `(conjugate(v), u)` make `a` antilinear in `v` and linear in `u`;
@@ -162,33 +152,26 @@ Lagrange space `DG` of degree 0, both on `T`:
 
 ```python
 D = create_mesh(x, euclidean_space(2))
-sigma, tau = function(RT, "sigma"), function(RT, "tau")
-u, v, f = function(DG, "u"), function(DG, "v"), function(DG, "f")
-sigma_D, tau_D = (
-    push_forward(sigma, D, transformation_law(RT)),
-    push_forward(tau, D, transformation_law(RT)),
-)
-u_D, v_D, f_D = (
-    push_forward(u, D, transformation_law(DG)),
-    push_forward(v, D, transformation_law(DG)),
-    push_forward(f, D, transformation_law(DG)),
-)
+RT_D = function_space(D, RT.element)
+sigma, tau = function(RT_D, "sigma"), function(RT_D, "tau")
+DG_D = function_space(D, DG.element)
+u, v, f = function(DG_D, "u"), function(DG_D, "v"), function(DG_D, "f")
 i = index("i")
 
 e = (
-    index_sum(sigma_D[i] * tau_D[i], (i,))
-    + u_D * divergence(tau_D, D)
-    + divergence(sigma_D, D) * v_D
+    index_sum(sigma[i] * tau[i], (i,))
+    + u * divergence(tau, D)
+    + divergence(sigma, D) * v
 )
 a = form(integral(e, D), ((tau, v), (sigma, u)))
-L = form(integral(-f_D * v_D, D), ((tau, v),))
+L = form(integral(-f * v, D), ((tau, v),))
 ```
 
 Each tuple is one argument in a product space. Thus `a` has argument spaces
-`((RT, DG), (RT, DG))`; no mixed-space class is needed. `L` depends on only
+`((RT_D, DG_D), (RT_D, DG_D))`; no mixed-space class is needed. `L` depends on only
 the `v` member, which joint linearity permits. Replacing `sigma` and `v` by
 `Zero` in the integrand isolates the `tau`–`u` block,
-`u_D * divergence(tau_D, D)`.
+`u * divergence(tau, D)`.
 
 The library's `transformation_law` selects these laws:
 
@@ -237,11 +220,10 @@ one, zero, two = Integer(1), Integer(0), Integer(2)
 I = tensor((tensor((one, zero)), tensor((zero, one))))
 i, j, k, l, a = index("i"), index("j"), index("k"), index("l"), index("a")
 
-u, v, w = function(V, "u"), function(V, "v"), function(V, "w")
-mu, lmbda = (
-    push_forward(function(M, "mu"), D, transformation_law(M)),
-    push_forward(function(M, "lambda"), D, transformation_law(M)),
-)
+V_D = function_space(D, V.element)
+u, v, w = function(V_D, "u"), function(V_D, "v"), function(V_D, "w")
+M_D = function_space(D, M.element)
+mu, lmbda = function(M_D, "mu"), function(M_D, "lambda")
 
 
 def strain_energy(C):
@@ -249,7 +231,7 @@ def strain_energy(C):
     return lmbda / two * index_sum(E[a, a], (a,)) ** two + mu * index_sum(E[i, j] * E[i, j], (i, j))
 
 
-F = I + gradient(push_forward(u, D, transformation_law(V)), D)
+F = I + gradient(u, D)
 C = transpose(F) @ F
 psi = strain_energy(C)
 ```
@@ -423,6 +405,7 @@ Repeated differentiation gives higher derivatives; complex projection remains
 explicit. The real Hessian is symmetric for a twice continuously differentiable
 functional with independent directions; the graph does not record symmetry.
 
+(interpolation-into-hcurl)=
 ## Interpolation into H(curl)
 
 On an affine physical triangle `D` with topology `T`, let `V` be vector
@@ -431,9 +414,10 @@ The library's [interpolation helper](../language/extensions.md#cell-local-interp
 uses the target element's sampling rule and spatial transformation:
 
 ```python
-u = function(V, "u")
-u_D = push_forward(u, D, transformation_law(V))
-Ru = interpolate(u_D, S)
+V_D = function_space(D, V.element)
+S_D = function_space(D, S.element)
+u = function(V_D, "u")
+Ru = interpolate(u, S_D)
 ```
 
 Here the tangential traces are linear, so Basix's edge-midpoint rule computes
@@ -454,7 +438,7 @@ $$
 $$
 
 Use [cell-local interpolation](../language/extensions.md#cell-local-interpolation)
-on a reference triangle `K`, taken here as the physical cell. The library
+on an affine physical triangle `D`. Its mapped spaces refer to the same mesh. The library
 supplies real spaces `W` (scalar degree one), `Theta` (vector degree two)
 and `S` (lowest-order Nédélec), with a sampling rule exact for quadratic edge
 traces and its basis. This exact-moment reduction requires more quadrature
@@ -467,10 +451,10 @@ v, eta = function(W, "v"), function(Theta, "eta")
 dw, dtheta = function(W, "dw"), function(Theta, "dtheta")
 i = index("i")
 
-gamma = gradient(w, K) - theta
+gamma = gradient(w, D) - theta
 reduced_gamma = interpolate(gamma, S)
 Pi_s = integral(
-    c * index_sum(reduced_gamma[i] * reduced_gamma[i], (i,)) / Integer(2), K
+    c * index_sum(reduced_gamma[i] * reduced_gamma[i], (i,)) / Integer(2), D
 )
 q, test, increment = (w, theta), (v, eta), (dw, dtheta)
 residual = directional_derivative(Pi_s, q, test)

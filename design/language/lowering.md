@@ -125,7 +125,7 @@ procedure. Leave new gradients to a later call to `apply_gradients`.
 | Constants and coordinates | PB01–PB02 |
 | Select the cell on a side | R02 |
 | Nested maps | PB03–PB04 |
-| Mapped values | CC02 |
+| Mapped values | CC02, CC10–CC11 |
 | Piola identities | CC08–CC09 |
 | Remaining mapped derivatives | CC03–CC05 |
 | Side normal | R03 |
@@ -188,6 +188,8 @@ and $m_\psi$ be the law $m$ on $\psi$ (see
 
 | Rule | Operand of `PullBack(·, ψ)` and conditions | Rewrite |
 | --- | --- | --- |
+| CC10 | `Function(V, label)` with `V: MappedSpace`, by a cell of `V.mesh` | Apply CC02 to `PushForward(ReferenceValue(f, V), V.mesh, V.law)`. CC08 and CC09 use the same representation for divergence and curl. |
+| CC11 | `ReferenceValue(g, V)`, by a topology cell | For a function in `V`, read its coefficients in the reference basis. Otherwise apply the inverse of the cell value transformation to the physical cell restriction of `g`. |
 | CC02 | `PushForward(f, D, m)`, $\psi$ a cell of $D$ | $m_\psi(\hat f)$ |
 | CC03 | `PushForward`, `Divergence` or `Curl` not matching CC02, CC08 or CC09; exclude R01 | Remains, read at the points of $P$ |
 | CC04 | `Gradient(g, Q)`, $\psi$ a cell of $Q$ | $m_\psi(\nabla_P(\psi^* g))$, with $m$ = `transformation_law(("covariant",), 0)` |

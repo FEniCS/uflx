@@ -425,7 +425,28 @@ freedom.
 `TransformationLaw` maps field-value axes. Elements such as Hermite and Argyris
 also need geometry-dependent basis transformations. The space library supplies
 these through [cell evaluation](forms.md#functions-in-a-space), without requiring
-a `TransformationLaw`.
+a `TransformationLaw`. For cubic Hermite on an interval of length $h$,
+a physical endpoint derivative $d$ contributes $h d$ to the reference
+polynomial on the unit interval. A shape derivative at fixed physical
+nodal data differentiates that factor of $h$. A scalar identity value
+law alone would omit it. [Kirby, *A general approach to transforming finite elements*](https://doi.org/10.5802/smai-jcm.33)
+
+### `ReferenceValue`
+
+Lowering reads the reference components of a field using its mapped space.
+
+| `ReferenceValue(expression, space)` | |
+| --- | --- |
+| Extends | `AbstractExpression` |
+| Takes | `expression: AbstractExpression`, `space: MappedSpace` |
+| Requires | The expression has the physical value shape of the space and has its mesh domain or no domain |
+| Static type | Domain `space.mesh.topology`, value shape of `space.reference_space`, scalar type, free indices and argument spaces of the expression |
+
+For a function declared in this space, evaluation reads its reference DOFs.
+If an action replaces the bound function with another expression, cell
+evaluation converts the supplied physical values to the specified reference
+components. It applies the inverse value transformation on that cell, using
+the pseudoinverse on embedded cells.
 
 ### `PushForward`
 
@@ -457,10 +478,10 @@ $m_\psi(\hat f)$, with $\psi$ the cell and $\hat f$ =
 `pull_back(f, cell_map(T, j))`. The push-forward of the coordinate function
 $x$ of $D$ by `transformation_law((), 0)` is `coordinate(D)`.
 
-The law is explicit. Libraries may supply it from a space and wrap
-`push_forward`, as in the [classic FEniCS layer](../examples/forms.md#a-classic-fenics-layer-for-the-poisson-problem).
-Form arguments, derivative variables and directions, and data keys remain
-functions on the topology $T$.
+Physical finite-element functions are declared in a [mapped space](forms.md#mappedspace).
+Expression transport also applies to computed topology fields and tabulated
+weights. A function in a mapped space has the cell value obtained by
+transporting its `ReferenceValue` with the space's mesh and law.
 
 The identity of Piola holds on each cell of $D$, with no derivative of $J$:
 

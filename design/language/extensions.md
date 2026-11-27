@@ -261,7 +261,7 @@ sampling rule to `f`.
 | `interpolate(f, V)` | |
 | ------------------- | --- |
 | Takes | `f: AbstractExpression`, `V: AbstractFunctionSpace` |
-| Requires | `V` a finite element space on a reference cell, `f` with that domain or no domain and the value shape and scalar type of `V`, both with argument spaces `()`, and `f` defined at every sampling point |
+| Requires | `V` a finite element space on a reference cell or a physical mesh, `f` with that domain or no domain and the value shape and scalar type of `V`, both with argument spaces `()`, and `f` defined at every sampling point |
 | Static type | The domain, value shape and scalar type of `V`, the free indices of `f`, and argument spaces `()` |
 
 The library of `V` defines each degree of freedom as a weighted combination

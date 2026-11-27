@@ -54,19 +54,17 @@ on `square`:
 ### Local forms
 
 ```python
-u_h, f, g = function(V, "u_h"), function(F, "f"), function(F, "g")
-e, v = function(W, "e"), function(W, "v")
-f_D, g_D, v_D = (
-    push_forward(f, D, transformation_law(F)),
-    push_forward(g, D, transformation_law(F)),
-    push_forward(v, D, transformation_law(W)),
-)
+V_D = function_space(D, V.element)
+F_D = function_space(D, F.element)
+u_h, f, g = function(V_D, "u_h"), function(F_D, "f"), function(F_D, "g")
+W_D = function_space(D, W.element)
+e, v = function(W_D, "e"), function(W_D, "v")
 i = index("i")
 half = Integer(1) / Integer(2)
 
 # Local bilinear form.
-grad_e = gradient(push_forward(e, D, transformation_law(W)), D)
-grad_v = gradient(v_D, D)
+grad_e = gradient(e, D)
+grad_v = gradient(v, D)
 a = form(integral(index_sum(grad_e[i] * grad_v[i], (i,)), D), (v, e))
 ```
 
@@ -74,21 +72,21 @@ The right-hand side combines the cell residual with facet contributions:
 
 ```python
 # Cell residual; lap_u vanishes for degree 1.
-grad_u = gradient(push_forward(u_h, D, transformation_law(V)), D)
+grad_u = gradient(u_h, D)
 lap_u = divergence(grad_u, D)
-r_cell = integral((f_D + lap_u) * v_D, D)
+r_cell = integral((f + lap_u) * v, D)
 
 # Interior-facet residual, shared by both cells.
 plus, minus = SideMap(D, E, diagonal_sides["+"].entries), SideMap(D, E, diagonal_sides["-"].entries)
 n = outward_normal(plus)
 jump_n = index_sum((pull_back(grad_u, plus)[i] - pull_back(grad_u, minus)[i]) * n[i], (i,))
-r_facets = integral(-half * jump_n * (pull_back(v_D, plus) + pull_back(v_D, minus)), E)
+r_facets = integral(-half * jump_n * (pull_back(v, plus) + pull_back(v, minus)), E)
 
 # The Neumann residual on the boundary.
 inside = SideMap(D, B, neumann_facets_sides["inside"].entries)
 n_B = outward_normal(inside)
 dn_u = index_sum(pull_back(grad_u, inside)[i] * n_B[i], (i,))
-r_boundary = integral((pull_back(g_D, inside) - dn_u) * pull_back(v_D, inside), B)
+r_boundary = integral((pull_back(g, inside) - dn_u) * pull_back(v, inside), B)
 
 r = form(r_cell + r_facets + r_boundary, (v,))
 ```
@@ -151,48 +149,44 @@ For advection–diffusion, build the primal form, goal and adjoint:
 
 ```python
 D = create_mesh(x, euclidean_space(2))
-u, v, u_h, z_h = function(V, "u"), function(V, "v"), function(V, "u_h"), function(V, "z_h")
-z = function(W, "z")
-f, psi = (
-    push_forward(function(F, "f"), D, transformation_law(F)),
-    push_forward(function(F, "psi"), D, transformation_law(F)),
-)
-b = push_forward(function(B, "b"), D, transformation_law(B))
+V_D = function_space(D, V.element)
+u, v, u_h, z_h = function(V_D, "u"), function(V_D, "v"), function(V_D, "u_h"), function(V_D, "z_h")
+W_D = function_space(D, W.element)
+z = function(W_D, "z")
+F_D = function_space(D, F.element)
+f, psi = function(F_D, "f"), function(F_D, "psi")
+B_D = function_space(D, B.element)
+b = function(B_D, "b")
 i = index("i")
-identity = transformation_law((), 0)
 
 def a_expr(w, y):
-    w_D, y_D = push_forward(w, D, identity), push_forward(y, D, identity)
-    grad_w, grad_y = gradient(w_D, D), gradient(y_D, D)
-    return index_sum(grad_w[i] * grad_y[i], (i,)) + index_sum(b[i] * grad_w[i], (i,)) * y_D
+    grad_w, grad_y = gradient(w, D), gradient(y, D)
+    return index_sum(grad_w[i] * grad_y[i], (i,)) + index_sum(b[i] * grad_w[i], (i,)) * y
 
-v_D = push_forward(v, D, transformation_law(V))
 a = form(integral(a_expr(u, v), D), (v, u))
-L = form(integral(f * v_D, D), (v,))
-goal = form(integral(psi * v_D, D), (v,))
+L = form(integral(f * v, D), (v,))
+goal = form(integral(psi * v, D), (v,))
 a_adjoint = form(integral(a_expr(u, v), D), (u, v))
 ```
 
 The adjoint swaps the arguments of the real bilinear form. With `u_h` the
 computed primal solution, `z` the enriched adjoint solution and `z_h` its
-interpolant into `V`, the estimator is:
+interpolant into `V_D`, the estimator is:
 
 ```python
 R = L - partial(a, {u: u_h})
 eta = apply(R, (z - z_h,))
 ```
 
-`R` has one argument in `V`. An application accepts any expression with the static
-type of a function in `V`, so `z-z_h` from the richer space is allowed.
-Substitution into `push_forward(v, D, transformation_law(V))` retains the
-explicit law.
+`R` has one argument in `V_D`. An application accepts any expression with the static
+type of a function in `V_D`, so `z-z_h` from the richer space is allowed.
 Galerkin orthogonality makes the application to `z_h` zero in value; `eta` is a
 local functional contribution, summed by the package after evaluation.
 
 A local load can also be represented in the dual space:
 
 ```python
-l = function(dual_space(V), "l")
+l = function(dual_space(V_D), "l")
 R_h = l - partial(a, {u: u_h})
 ```
 

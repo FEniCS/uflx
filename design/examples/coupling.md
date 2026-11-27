@@ -35,9 +35,9 @@ x = function(X_space, "x")
 D = create_mesh(x, euclidean_space(2))
 E = side_domain(D, diagonal, *diagonal_sides["+"].entries)
 
-u, v = function(V, "u"), function(V, "v")
-u_D, v_D = push_forward(u, D, transformation_law(V)), push_forward(v, D, transformation_law(V))
-grad_u, grad_v = gradient(u_D, D), gradient(v_D, D)
+V_D = function_space(D, V.element)
+u, v = function(V_D, "u"), function(V_D, "v")
+grad_u, grad_v = gradient(u, D), gradient(v, D)
 ```
 
 ### Traces and the facet form
@@ -48,8 +48,8 @@ be subtracted at the same physical point:
 
 ```python
 plus, minus = SideMap(D, E, diagonal_sides["+"].entries), SideMap(D, E, diagonal_sides["-"].entries)
-u_p, u_m = pull_back(u_D, plus), pull_back(u_D, minus)
-v_p, v_m = pull_back(v_D, plus), pull_back(v_D, minus)
+u_p, u_m = pull_back(u, plus), pull_back(u, minus)
+v_p, v_m = pull_back(v, plus), pull_back(v, minus)
 du_p, du_m = pull_back(grad_u, plus), pull_back(grad_u, minus)
 dv_p, dv_m = pull_back(grad_v, plus), pull_back(grad_v, minus)
 ```
@@ -71,7 +71,7 @@ f = -avg_dn_u * jump_v - jump_u * avg_dn_v + alpha * jump_u * jump_v
 a_facet = form(integral(f, E), (v, u))
 ```
 
-`a_facet` binds the functions `v` and `u` on `square`. Its integrand has
+`a_facet` binds the functions `v` and `u` on `D`. Its integrand has
 domain `E` and no free indices. The package supplies the two cells' local
 inputs and the facet penalty for each kernel call. Swapping the sides negates the normal and both jumps,
 leaving every term unchanged.
@@ -85,10 +85,10 @@ $(1,1)/\sqrt{2}$ and the facet density is $\sqrt{2}$.
 ### Evaluating a trace
 
 Use the topology `square`, diagonal and reference coordinate `X = coordinate(K)`
-above. For a scalar field `u` on `square`, set
+above. Write `u_ref = ReferenceValue(u, V_D)` for its scalar reference field on `square` and set
 `plus_T = SideMap(square, diagonal, diagonal_sides["+"].entries)` and
 `minus_T = SideMap(square, diagonal, diagonal_sides["-"].entries)`. The traces are
-`pull_back(u, plus_T)` and `pull_back(u, minus_T)`.
+`pull_back(u_ref, plus_T)` and `pull_back(u_ref, minus_T)`.
 
 From `"+"`, the parent is slot 0 and the inclusion is
 $A_+(t) = (1 - t, t)$, through the local vertices 1 and 2 of `K`. From
@@ -136,7 +136,7 @@ and normals. For example, the `"+"` trace lowers through:
 C_p = cell_map(square, 0)
 A_p = diagonal_sides["+"].entries[0][1]
 m_p = outward_conormals(diagonal_sides["+"])[0]
-pull_back(pull_back(u, C_p), A_p)
+pull_back(pull_back(u_ref, C_p), A_p)
 ```
 
 The coordinate trace is `pull_back(pull_back(x, C_p), A_p)`; its Jacobian
@@ -261,17 +261,14 @@ The library supplies these real Lagrange spaces and the
 | `L` | `interface` | `(2,)` |
 
 ```python
-u, v = function(V, "u"), function(V, "v")
-p, q = function(Q, "p"), function(Q, "q")
-d, w, d_old = function(W, "d"), function(W, "w"), function(W, "d_old")
-lam, mu = function(L, "lam"), function(L, "mu")
-
-u_F, v_F, p_F, q_F = (push_forward(f, F, transformation_law(f.space)) for f in (u, v, p, q))
-d_S, w_S, d_old_S = (push_forward(f, S, transformation_law(f.space)) for f in (d, w, d_old))
-lam_G, mu_G = (
-    push_forward(lam, G, transformation_law(L)),
-    push_forward(mu, G, transformation_law(L)),
-)
+V_F = function_space(F, V.element)
+u, v = function(V_F, "u"), function(V_F, "v")
+Q_F = function_space(F, Q.element)
+p, q = function(Q_F, "p"), function(Q_F, "q")
+W_S = function_space(S, W.element)
+d, w, d_old = function(W_S, "d"), function(W_S, "w"), function(W_S, "d_old")
+L_G = function_space(G, L.element)
+lam, mu = function(L_G, "lam"), function(L_G, "mu")
 
 nu, mu_s, lam_s = runtime_array("nu", ()), runtime_array("mu_s", ()), runtime_array("lam_s", ())
 dt, g = runtime_array("dt", ()), runtime_array("g", (2,))
@@ -282,15 +279,15 @@ half, two = Integer(1) / Integer(2), Integer(2)
 The bulk terms are the usual Stokes and linear-elasticity integrals:
 
 ```python
-grad_u = gradient(u_F, F)
-grad_v = gradient(v_F, F)
-div_u, div_v = divergence(u_F, F), divergence(v_F, F)
-fluid = integral(nu * index_sum(grad_u[i, j] * grad_v[i, j], (i, j)) - p_F * div_v - q_F * div_u, F)
+grad_u = gradient(u, F)
+grad_v = gradient(v, F)
+div_u, div_v = divergence(u, F), divergence(v, F)
+fluid = integral(nu * index_sum(grad_u[i, j] * grad_v[i, j], (i, j)) - p * div_v - q * div_u, F)
 
-grad_d = gradient(d_S, S)
-grad_w = gradient(w_S, S)
+grad_d = gradient(d, S)
+grad_w = gradient(w, S)
 eps_d, eps_w = half * (grad_d[i, j] + grad_d[j, i]), half * (grad_w[i, j] + grad_w[j, i])
-div_d, div_w = divergence(d_S, S), divergence(w_S, S)
+div_d, div_w = divergence(d, S), divergence(w, S)
 solid = integral(two * mu_s * index_sum(eps_d * eps_w, (i, j)) + lam_s * div_d * div_w, S)
 ```
 
@@ -301,12 +298,12 @@ traction, and `mu` tests the constraint $u=(d-d_{old})/dt$:
 
 ```python
 from_fluid, from_solid = SideMap(F, G, interface_sides["fluid"].entries), SideMap(S, G, interface_sides["solid"].entries)
-u_G, v_G = pull_back(u_F, from_fluid), pull_back(v_F, from_fluid)
-d_G, w_G = pull_back(d_S, from_solid), pull_back(w_S, from_solid)
-d_old_G = pull_back(d_old_S, from_solid)
+u_G, v_G = pull_back(u, from_fluid), pull_back(v, from_fluid)
+d_G, w_G = pull_back(d, from_solid), pull_back(w, from_solid)
+d_old_G = pull_back(d_old, from_solid)
 
 coupling = integral(
-    index_sum(lam_G[i] * (w_G[i] / dt - v_G[i]) + mu_G[i] * (d_G[i] / dt - u_G[i]), (i,)), G
+    index_sum(lam[i] * (w_G[i] / dt - v_G[i]) + mu[i] * (d_G[i] / dt - u_G[i]), (i,)), G
 )
 a = form(fluid + solid + coupling, ((v, q, w, mu), (u, p, d, lam)))
 ```
@@ -314,8 +311,8 @@ a = form(fluid + solid + coupling, ((v, q, w, mu), (u, p, d, lam)))
 The load contains the inlet traction and old displacement:
 
 ```python
-traction = integral(index_sum(g[i] * pull_back(v_F, SideMap(F, G_in, inlet_sides["fluid"].entries))[i], (i,)), G_in)
-l = form(traction + integral(index_sum(mu_G[i] * d_old_G[i], (i,)) / dt, G), ((v, q, w, mu),))
+traction = integral(index_sum(g[i] * pull_back(v, SideMap(F, G_in, inlet_sides["fluid"].entries))[i], (i,)), G_in)
+l = form(traction + integral(index_sum(mu[i] * d_old_G[i], (i,)) / dt, G), ((v, q, w, mu),))
 ```
 
 The fields on `F` and `S` cannot combine directly: their domains differ.
@@ -367,31 +364,31 @@ The library supplies `runtime_array` for solver data with no domain and
 ```python
 D3 = create_mesh(x3, euclidean_space(3))
 D1 = side_domain(D3, T1, *T1_sides["tissue"].entries)
-identity = transformation_law((), 0)
+V3_D = function_space(D3, V3.element)
+V1_D = function_space(D1, V1.element)
 
-p3, q3 = function(V3, "p3"), function(V3, "q3")
-p1, q1 = function(V1, "p1"), function(V1, "q1")
+p3, q3 = function(V3_D, "p3"), function(V3_D, "q3")
+p1, q1 = function(V1_D, "p1"), function(V1_D, "q1")
 beta = runtime_array("beta", ())
 m = index("m")
 
-grad_p3 = gradient(push_forward(p3, D3, transformation_law(V3)), D3)
-grad_q3 = gradient(push_forward(q3, D3, transformation_law(V3)), D3)
-grad_p1 = gradient(push_forward(p1, D1, transformation_law(V1)), D1)
-grad_q1 = gradient(push_forward(q1, D1, transformation_law(V1)), D1)
+grad_p3 = gradient(p3, D3)
+grad_q3 = gradient(q3, D3)
+grad_p1 = gradient(p1, D1)
+grad_q1 = gradient(q1, D1)
 tissue = integral(index_sum(grad_p3[m] * grad_q3[m], (m,)), D3)
 vessel = integral(index_sum(grad_p1[m] * grad_q1[m], (m,)), D1)
 
-from_tissue = T1_sides["tissue"]
+from_tissue = SideMap(D3, D1, T1_sides["tissue"].entries)
 p3_1, q3_1 = pull_back(p3, from_tissue), pull_back(q3, from_tissue)
-exchange = push_forward(beta * (p1 - p3_1) * (q1 - q3_1), D1, identity)
+exchange = beta * (p1 - p3_1) * (q1 - q3_1)
 coupling = integral(exchange, D1)
 a = form(tissue + vessel + coupling, ((q3, q1), (p3, p1)))
 ```
 
 The gradient on `D1` is tangential, of value shape `(3,)`, so the vessel
 term uses the same construction as the tissue term. `p3` and `p1` cannot
-combine on their different domains. Restricting `p3` to `T1` makes the
-exchange possible; pushing it forward then gives a field on `D1`.
+combine on their different domains. The physical side map restricts the tissue pressure to `D1`, where it can be paired with the vessel pressure.
 The three integrals have no domain and add into one form.
 
 For one segment kernel, the package supplies a containing tetrahedron and
