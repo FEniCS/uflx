@@ -1,0 +1,55 @@
+version: 1
+project:
+  title: UFLx design notes
+  authors:
+    - name: Jack S. Hale
+    - name: Matthew Scroggs
+  github: https://github.com/FEniCS/uflx
+  toc:
+    - file: readme.md
+    - file: language.md
+      children:
+        - file: language/rules.md
+        - file: language/expressions.md
+        - file: language/topology.md
+        - file: language/geometry.md
+        - file: language/forms.md
+        - file: language/evaluation.md
+          children:
+            - file: language/rewriting.md
+            - file: language/substitution.md
+            - file: language/differentiation.md
+            - file: language/lowering.md
+            - file: language/optimisation.md
+        - file: language/compiler.md
+        - file: language/extensions.md
+        - file: language/reference.md
+    - file: examples/index.md
+      children:
+        - file: examples/tensors.md
+        - file: examples/integration.md
+        - file: examples/physical_meshes.md
+        - file: examples/coupling.md
+        - file: examples/local_bindings.md
+        - file: examples/forms.md
+        - file: examples/surfaces.md
+        - file: examples/estimation.md
+        - file: examples/patches.md
+        - file: examples/library.md
+  error_rules:
+    - rule: reference-target-explicit
+      severity: ignore
+  exclude:
+    - scratch/**
+    - build/**
+    - design.md
+    - design_choices.md
+    - passes_draft.md
+    - coordinate_functions_draft.md
+site:
+  template: book-theme
+  options:
+    folders: true
+    logo_text: UFLx design notes
+    favicon: favicon.svg
+    outline_maxdepth: 2

@@ -1,0 +1,495 @@
+# Variational forms
+
+These examples use the core names from [language.md](../language.md) without
+imports. Shared helper definitions are in the
+[reference library](library.md).
+
+## Poisson
+
+For Poisson's equation $-\Delta u=f$ with homogeneous Dirichlet conditions,
+the library supplies a one-triangle local topology `T`, its coordinate function `x`
+of value shape `(2,)`, and a real scalar continuous Lagrange space `V` on `T`:
+
+```python
+D = create_mesh(x, euclidean_space(2))
+V_D = function_space(D, V.element)
+u, v, f = function(V_D, "u"), function(V_D, "v"), function(V_D, "f")
+grad_u, grad_v = gradient(u, D), gradient(v, D)
+i = index("i")
+
+a = form(integral(index_sum(grad_u[i] * grad_v[i], (i,)), D), (v, u))
+L = form(integral(f * v, D), (v,))
+```
+
+The functions live on the physical mesh `D` and use the reference DOFs of `V`. The entries `(v, u)` bind the test and trial arguments of `a`, in
+that order. `L` binds only `v`, leaving `f` as the source coefficient.
+The package supplies local values for each kernel call, assembles the
+contributions, applies boundary conditions and solves the resulting system.
+
+## Constants on a domain
+
+A constant can have no domain, or belong to a space on one domain. The
+first can act wherever it is integrated; the second retains that domain's
+domain.
+
+Let `F` and `S` be two meshes in `euclidean_space(2)`. The library supplies real spaces
+`Q` (scalar) and `V` (shape `(2,)`) on `F.topology`, `W` (shape `(2,)`) on `S.topology`,
+`R` of scalar constants with no domain, and `R_S` of scalar functions constant
+on `S.topology`.
+
+### Mean constraints
+
+Use multipliers for the mean pressure on `F` and mean volume change on `S`:
+
+```python
+Q_F = function_space(F, Q.element)
+p, q = function(Q_F, "p"), function(Q_F, "q")
+W_S = function_space(S, W.element)
+d, w = function(W_S, "d"), function(W_S, "w")
+div_d, div_w = divergence(d, S), divergence(w, S)
+
+r, s = function(R, "r"), function(R, "s")
+constants_on_S = function_space(S, R_S.element)
+k, z = function(constants_on_S, "k"), function(constants_on_S, "z")
+means = integral(p * s + q * r, F) + integral(k * div_w + z * div_d, S)
+mean_form = form(means, ((q, w, s, z), (p, d, r, k)))
+```
+
+`r` and `s` have no domain; the integrals decide where they act. `k` and
+`z` have domain `S`, so `k * q` raises `ValueError`. A coefficient
+that varies by cell marker instead belongs to a library space constant on
+each cell.
+
+### Sensitivities
+
+A constant whose sensitivity is needed must be a `Function`, because that is
+what a directional derivative accepts as its variable. With the same spaces:
+
+```python
+nu, h = function(R, "nu"), function(R, "h")
+mu_s = function(constants_on_S, "mu_s")
+V_F = function_space(F, V.element)
+u = function(V_F, "u")
+i, j = index("i"), index("j")
+two = Integer(2)
+grad_d, grad_w = gradient(d, S), gradient(w, S)
+eps_d = (grad_d[i, j] + grad_d[j, i]) / two
+eps_w = (grad_w[i, j] + grad_w[j, i]) / two
+
+e = integral(
+    two * mu_s * index_sum(eps_d * eps_w, (i, j)), S
+)
+de_dmu = form(directional_derivative(e, mu_s, Integer(1)), (w, d))
+
+grad_u = gradient(u, F)
+dissipation = integral(nu * index_sum(grad_u[i, j] * grad_u[i, j], (i, j)), F)
+g_nu = form(directional_derivative(dissipation, nu, h), (h,))
+```
+
+`de_dmu` is the solid form's sensitivity to `mu_s`. `g_nu` is a linear form
+on `R`, a function in `dual_space(R)`. Data that needs no differentiation can
+instead be a `runtime_array`.
+
+## Helmholtz with a perfectly matched layer
+
+A perfectly matched layer absorbs outgoing waves by stretching the
+Helmholtz equation into the complex plane. For
+$s_x=1+i\sigma_x/k_0$ and $s_y=1+i\sigma_y/k_0$, the equation is
+
+$$-\nabla\cdot(A\nabla u)-k_0^2s_xs_yu=f,
+\qquad A=\operatorname{diag}(s_y/s_x,\;s_x/s_y).$$
+
+The library supplies a triangle topology `T`, its coordinate function `x` of
+value shape `(2,)`, a complex scalar Lagrange space `V`, a real scalar data
+space `F` on `T`, and a real scalar space of constants `C` with no domain.
+The solver sets `sigma_x` and `sigma_y` to zero outside the layer:
+
+```python
+D = create_mesh(x, euclidean_space(2))
+k0 = function(C, "k0")
+F_D = function_space(D, F.element)
+sigma_x, sigma_y = function(F_D, "sigma_x"), function(F_D, "sigma_y")
+one, i_unit = Integer(1), Complex(Integer(0), Integer(1))
+s_x = one + i_unit * sigma_x / k0
+s_y = one + i_unit * sigma_y / k0
+
+V_D = function_space(D, V.element)
+u, v, f = function(V_D, "u"), function(V_D, "v"), function(F_D, "f")
+grad_u, grad_v = gradient(u, D), gradient(v, D)
+j = index("j")
+
+A = tensor((s_y / s_x, s_x / s_y))
+stiffness = index_sum(A[j] * grad_u[j] * conjugate(grad_v[j]), (j,))
+mass = k0 * k0 * s_x * s_y * u * conjugate(v)
+a = form(integral(stiffness - mass, D), (conjugate(v), u))
+L = form(integral(f * conjugate(v), D), (conjugate(v),))
+```
+
+The entries `(conjugate(v), u)` make `a` antilinear in `v` and linear in `u`;
+`L` has the matching test argument. Binding `(v, u)` would declare the wrong
+linearity, which a linearity check rejects. Replacing both stretch factors
+by one gives the ordinary
+Helmholtz form, real when `V` is real.
+
+`DomainMap` is real, so the complex coordinate change is performed
+analytically and enters through `A` and $s_xs_y$. The adjoint conjugates the
+integrated expression and swaps the arguments:
+
+```python
+a_adjoint = form(conjugate(integral(stiffness - mass, D)), (conjugate(u), v))
+```
+
+A first-order absorbing boundary condition adds
+$\int_{\partial D} i k_0 u\bar v$, using restrictions to the boundary.
+
+## Mixed Poisson with Raviart-Thomas elements
+
+Mixed Poisson couples a flux $\sigma$ and a potential $u$, with
+$\sigma=\nabla u$ and $\operatorname{div}\sigma=-f$. The library supplies a
+triangle topology `T`, its coordinate function `x` of value shape `(2,)`, a
+real Raviart–Thomas space `RT` of value shape `(2,)`, and a real discontinuous
+Lagrange space `DG` of degree 0, both on `T`:
+
+```python
+D = create_mesh(x, euclidean_space(2))
+RT_D = function_space(D, RT.element)
+sigma, tau = function(RT_D, "sigma"), function(RT_D, "tau")
+DG_D = function_space(D, DG.element)
+u, v, f = function(DG_D, "u"), function(DG_D, "v"), function(DG_D, "f")
+i = index("i")
+
+e = (
+    index_sum(sigma[i] * tau[i], (i,))
+    + u * divergence(tau, D)
+    + divergence(sigma, D) * v
+)
+a = form(integral(e, D), ((tau, v), (sigma, u)))
+L = form(integral(-f * v, D), ((tau, v),))
+```
+
+Each tuple is one argument in a product space. Thus `a` has argument spaces
+`((RT_D, DG_D), (RT_D, DG_D))`; no mixed-space class is needed. `L` depends on only
+the `v` member, which joint linearity permits. Replacing `sigma` and `v` by
+`Zero` in the integrand isolates the `tau`–`u` block,
+`u * divergence(tau, D)`.
+
+The library's `transformation_law` selects these laws:
+
+| Space | Law | Cell value |
+| ----- | --- | ---------- |
+| `RT` | `transformation_law(("contravariant",), 1)` | $J\hat\sigma/\det J$ |
+| `DG` | `transformation_law((), 0)` | The reference value. |
+
+`expand_pull_backs` applies the Piola identity to the divergence, giving
+$\widehat{\operatorname{div}}\hat\sigma/\det J$ even on curved cells, without
+differentiating $J$. For a Nédélec space, the corresponding covariant law of
+weight 0 makes `curl` transform by the contravariant law of weight 1.
+
+## A scalar constitutive derivative
+
+Let `c` be a real scalar field on `D`, and `R` a real scalar space of
+constants with no domain. For the local energy $\psi(c)=c^4/4$, differentiate
+a constant increment at zero:
+
+```python
+def energy(c):
+    return c ** Integer(4) / Integer(4)
+
+
+h = function(R, "h")
+dpsi = directional_derivative(energy(c + h), h, Integer(0), Integer(1))
+```
+
+`dpsi` is the field $c^3$ on `D`. The field `c` stays in the expression;
+only the constant increment `h` is varied.
+
+## Hyperelasticity and the stress
+
+Differentiate a strain energy to obtain both a stress field and variational
+forms. For a Saint Venant–Kirchhoff material,
+$S=2\operatorname{sym}(\partial\psi/\partial C)$.
+
+The library supplies a triangle topology `T`, its coordinate function `x` of
+value shape `(2,)`, a real vector Lagrange space `V` of value shape `(2,)`, a
+real scalar space `M` for the Lamé parameters, both on `T`, and a real space
+`R` of constant matrices of value shape `(2,2)` with no domain.
+
+```python
+D = create_mesh(x, euclidean_space(2))
+one, zero, two = Integer(1), Integer(0), Integer(2)
+I = tensor((tensor((one, zero)), tensor((zero, one))))
+i, j, k, l, a = index("i"), index("j"), index("k"), index("l"), index("a")
+
+V_D = function_space(D, V.element)
+u, v, w = function(V_D, "u"), function(V_D, "v"), function(V_D, "w")
+M_D = function_space(D, M.element)
+mu, lmbda = function(M_D, "mu"), function(M_D, "lambda")
+
+
+def strain_energy(C):
+    E = (C - I) / two
+    return lmbda / two * index_sum(E[a, a], (a,)) ** two + mu * index_sum(E[i, j] * E[i, j], (i, j))
+
+
+F = I + gradient(u, D)
+C = transpose(F) @ F
+psi = strain_energy(C)
+```
+
+Differentiate a constant matrix increment at zero, using symmetrised coordinate
+directions:
+
+```python
+H = function(R, "H")
+zero = Zero((2, 2), (), (), real)
+N = component_tensor((I[i, k] * I[j, l] + I[i, l] * I[j, k]) / two, (i, j))
+dpsi = directional_derivative(strain_energy(C + H), H, zero, N)
+S = two * component_tensor(dpsi, (k, l))
+sigma = F @ S @ transpose(F) / determinant(F)
+```
+
+The free indices `k, l` select the direction `N`. For example,
+
+$$
+N^{00}=\begin{pmatrix}1&0\\0&0\end{pmatrix},
+\qquad
+N^{01}=N^{10}=\tfrac12\begin{pmatrix}0&1\\1&0\end{pmatrix}.
+$$
+
+With $G=\partial\psi/\partial C$, differentiation along `N` gives
+$(G_{kl}+G_{lk})/2$. Binding `k, l` collects these symmetric entries into a
+matrix; multiplying by two gives $S=2\operatorname{sym}G$. The halves prevent
+doubling the off-diagonal entries.
+
+These are symmetrised coordinate directions, not an orthonormal basis. The
+field `C` stays in the expression while the constant increment `H` is varied.
+If `psi` is already built, form the perturbation as
+`psi_perturbed = replace(psi, {C: C + H})`. For the full derivative without
+symmetrisation, replace `N` by `component_tensor(I[i, k] * I[j, l], (i, j))`.
+
+`S` evaluates to $\lambda\operatorname{tr}(E)I+2\mu E$. Both `S` and the
+Cauchy stress `sigma` are fields on `D`, which the solver can interpolate or
+evaluate for output.
+
+Binding the energy's directional derivatives gives the residual and tangent:
+
+```python
+Pi = integral(psi, D)
+residual = form(directional_derivative(Pi, u, v), (v,))
+tangent = form(directional_derivative(residual, u, w), (w,))
+```
+
+Since `V` is real, the first derivative binds `v`; the second binds `w`
+after `v`.
+
+## A classic FEniCS layer for the Poisson problem
+
+A convenience layer can recover the familiar
+`inner(grad(u), grad(v)) * dx` syntax while producing ordinary core graphs.
+The hypothetical `uflx.legacy` module below is an
+[implementation sketch](library.md#implementation-of-the-fenics-layer), not an existing
+module. It adds no core subclasses. This sketch wraps a fixed local
+configuration; a package-level layer would additionally specialise recipes
+and dispatch kernels for the concrete mesh.
+
+### Mesh and markers
+
+Use a two-triangle square. The library supplies `x`, a degree-1 coordinate
+function on `square` with vertex values `((0,0), (1,0), (0,1), (1,1))`:
+
+```python
+K, I = ReferenceSimplex(2), ReferenceSimplex(1)
+square = StaticTopology((K, K), ((0, 1, 2), (1, 3, 2)))
+D = create_mesh(x, euclidean_space(2))
+boundary = StaticTopology((I, I, I, I), ((0, 1), (1, 3), (3, 2), (2, 0)))
+boundary_sides = static_sides(boundary, tuple((("inside", square, j),) for j in (0, 1, 1, 0)))
+lower = StaticTopology((K,), ((0, 1, 2),))
+lower_sides = static_sides(lower, ((("inside", square, 0),),))
+left = StaticTopology((I,), ((2, 0),))
+left_sides = static_sides(left, ((("inside", square, 0),),))
+```
+
+The layer wraps these in a mesh and marker dictionaries. Its user code sees
+the familiar spaces, coefficients and measures:
+
+```python
+from uflx.legacy import (
+    Coefficient,
+    Constant,
+    FacetNormal,
+    FunctionSpace,
+    Measure,
+    Mesh,
+    TestFunction,
+    TrialFunction,
+    VectorFunctionSpace,
+    div,
+    grad,
+    inner,
+)
+
+mesh = Mesh(D, boundary_sides["inside"])
+V = FunctionSpace(mesh, "Lagrange", 1)
+W = VectorFunctionSpace(mesh, "Lagrange", 1)
+u, v = TrialFunction(V), TestFunction(V)
+f, q = Coefficient(V, "f"), Coefficient(W, "q")
+kappa = Constant("kappa")
+n = FacetNormal(mesh)
+dx = Measure("dx", domain=mesh, subdomain_data={1: lower_sides["inside"]})
+ds = Measure("ds", domain=mesh, subdomain_data={1: left_sides["inside"]})
+
+a = kappa * inner(grad(u), grad(v)) * dx
+L = inner(f, v) * dx(1) - inner(div(q), v) * dx + inner(inner(q, n), v) * ds(1)
+```
+
+`a` is the Poisson stiffness form with conductivity `kappa`. `L` combines a
+source on the lower triangle, a volume source from `div(q)` and a Neumann
+flux on the left edge.
+
+### What the layer supplies
+
+| Legacy operation | Construction over the core |
+| ---------------- | -------------------------- |
+| Test and trial functions | Functions labelled by argument number, pushed forward to the mesh. |
+| `inner` | Conjugation of the second operand; this sketch handles scalars and vectors. |
+| `expr * dx` | An integral that binds the numbered arguments found in `expr`. |
+| `dx(1)`, `ds(1)` | Integrals over side domains of marked topologies. |
+| `FacetNormal(mesh)` | A placeholder replaced by the normal of each integration facet. |
+| `grad`, `div`, `curl` | Core operations using the expression's domain. |
+
+For a real space `S = V.space`, `a` has argument spaces `(S, S)` and `L`
+has `(S,)`. For complex `S`, conjugating `inner`'s second operand and binding
+the test function as `conjugate(v)` gives `(conjugate_space(S), S)` and
+`(conjugate_space(S),)`. An unconjugated test expression bound this way fails
+a linearity check. A measure with no arguments returns an `Integral`.
+
+The layer infers an unspecified `dx` domain from the integrand's domain;
+a constant integrand needs an explicit domain. `ds` needs a mesh because its
+boundary is library data. The four measure slots are integral type, domain,
+subdomain id and subdomain data; calling a measure fills them.
+
+Restriction pulls back the largest subtrees on the mesh, so `grad(u)` becomes
+a restricted gradient, not the derivative of a trace. Subtrees containing the
+facet-normal placeholder are rebuilt with the facet's normal. This uses the
+core's reconstruction contract.
+
+The compiler receives only core graphs, and all core passes apply unchanged.
+For Raviart–Thomas and Nédélec fields, `div` and `curl` retain the Piola
+identities; on a surface, `grad` is tangential. A domainless `Constant` has
+no gradient in this sketch: matching legacy behaviour would require a mesh
+and a correctly shaped `Zero`.
+
+Mixed-space helpers, `derivative` and interior-facet restriction syntax are
+not implemented here. They would collect tuple arguments, bind directional
+derivatives and pull back through explicit relations respectively. Boundary
+conditions, assembly and solving remain outside the language.
+
+## Complex residuals and Hessians
+
+For a real functional $\Pi$ on a complex space $V$, bind its
+[antilinear differential](../language/forms.md#complex-and-wirtinger-derivatives)
+$D_-[h]$ with `conjugate(h)` to obtain an element of `dual_space(V)`.
+
+For a residual $R$, let $J_+$ and $J_-$ be its Wirtinger blocks. Newton's method
+solves
+
+$$
+J_+\,\delta u + J_-\,\overline{\delta u} = -R.
+$$
+
+Equivalently, use real direction blocks $(J_++J_-)p+i(J_+-J_-)q$ for
+$\delta u=p+iq$, adding real-variable blocks for mixed systems. Real and
+imaginary projections with real test functions give a real matrix.
+
+Repeated differentiation gives higher derivatives; complex projection remains
+explicit. The real Hessian is symmetric for a twice continuously differentiable
+functional with independent directions; the graph does not record symmetry.
+
+(interpolation-into-hcurl)=
+## Interpolation into H(curl)
+
+On an affine physical triangle `D` with topology `T`, let `V` be vector
+Lagrange degree one and `S` lowest-order first-kind Nédélec, both on `T`.
+The library's [interpolation helper](../language/extensions.md#cell-local-interpolation)
+uses the target element's sampling rule and spatial transformation:
+
+```python
+V_D = function_space(D, V.element)
+S_D = function_space(D, S.element)
+u = function(V_D, "u")
+Ru = interpolate(u, S_D)
+```
+
+Here the tangential traces are linear, so Basix's edge-midpoint rule computes
+their moments exactly. `Ru` is a field on `D` and retains its dependence on `u`.
+The runnable example in `scratch/experiments/hcurl_interpolation.py` checks
+the result against Basix's interpolation matrix and differentiates its energy.
+
+## MITC shear reduction
+
+The Durán–Liberman reduction in
+[Hale et al., §§3.3–3.4](https://orbilu.uni.lu/bitstream/10993/35450/1/fenics-shells-v3.pdf)
+reduces the Reissner–Mindlin shear strain $\gamma=\nabla w-\theta$ into the
+lowest-order first-kind Nédélec space, preserving tangential edge moments:
+
+$$
+\ell_e(R_K\gamma)=\ell_e(\gamma),\qquad
+\ell_e(f)=\int_e f\cdot t_e\,ds.
+$$
+
+Use [cell-local interpolation](../language/extensions.md#cell-local-interpolation)
+on an affine physical triangle `D`. Its mapped spaces refer to the same mesh. The library
+supplies real spaces `W` (scalar degree one), `Theta` (vector degree two)
+and `S` (lowest-order Nédélec), with a sampling rule exact for quadratic edge
+traces and its basis. This exact-moment reduction requires more quadrature
+than the target element's default midpoint rule.
+For constant shear stiffness `c`:
+
+```python
+w, theta = function(W, "w"), function(Theta, "theta")
+v, eta = function(W, "v"), function(Theta, "eta")
+dw, dtheta = function(W, "dw"), function(Theta, "dtheta")
+i = index("i")
+
+gamma = gradient(w, D) - theta
+reduced_gamma = interpolate(gamma, S)
+Pi_s = integral(
+    c * index_sum(reduced_gamma[i] * reduced_gamma[i], (i,)) / Integer(2), D
+)
+q, test, increment = (w, theta), (v, eta), (dw, dtheta)
+residual = directional_derivative(Pi_s, q, test)
+F_s = form(residual, (test,))
+J_s = form(directional_derivative(residual, q, increment), (test, increment))
+```
+
+The shear contribution to the bilinear form is
+
+$$
+J_s((v,\eta),(\delta w,\delta\theta))
+=c\int_K R_K(\nabla v-\eta)\cdot
+R_K(\nabla\delta w-\delta\theta)\,dx.
+$$
+
+For other affine cells, interpolation uses the covariant Piola law.
+At fixed geometry, $D(R_K\gamma(q))[h]=R_K(D\gamma(q)[h])$ also for
+nonlinear strains. Interpolation expands into sampling and reconstruction;
+its output is a field.
+
+## Dual transfer through interpolation
+
+Use the library [cell-local interpolation](../language/extensions.md#cell-local-interpolation)
+with spaces `U` and `V` on the same reference cell. The library supplies the
+target sampling rule and basis.
+
+For a source field `u` in `U` and `l` in `dual_space(V)`, the dual pairing is:
+
+```python
+B = form(apply(l, (conjugate(interpolate(u, V)),)), (l, conjugate(u)))
+```
+
+`B` has argument spaces `(dual_space(V), conjugate_space(U))`. Supplying a
+target load with `partial(B, {l: L})` gives its dual transfer to `U`.
+`partial(B, {conjugate(u): conjugate(u0)})` leaves a linear functional of
+the target load.
+Its conjugate represents `interpolate(u0, V)` through the double-dual
+identification; pointwise evaluation uses the interpolant itself.
