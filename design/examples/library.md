@@ -6,8 +6,9 @@ LLM-generated-content designation; the centroid example was also LLM-proposed.
 
 ## Transformation laws
 
-The examples use the finite element library's `function_space(mesh, element)`
-to declare physical spaces. For the reference spaces supplied in these examples,
+The examples use the finite element library's `function_space(domain, element)`. A topology
+or reference cell gives a reference space, and a mesh gives a physical space.
+Use `V.on_cell(mesh[i])` to bind a reference space to a particular cell. For the reference spaces supplied in these examples,
 `V.element` denotes the element description, including its value shape and
 scalar type. The library selects the cell evaluation rule from this description.
 
